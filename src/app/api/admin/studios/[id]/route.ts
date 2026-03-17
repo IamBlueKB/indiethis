@@ -49,16 +49,8 @@ export async function GET(
           lastLoginAt: true,
         },
       },
-      _count: {
-        select: {
-          artists: true,
-          sessions: true,
-          contacts: true,
-          emailCampaigns: true,
-        },
-      },
       sessions: {
-        take: 5,
+        take: 10,
         orderBy: { dateTime: "desc" },
         select: {
           id: true,
@@ -81,8 +73,38 @@ export async function GET(
           createdAt: true,
         },
       },
+      // Content fields (read-only in admin view)
+      services: true,
+      servicesJson: true,
+      testimonials: true,
+      galleryImages: true,
+      // Override _count to include intake
+      _count: {
+        select: {
+          artists: true,
+          sessions: true,
+          contacts: true,
+          emailCampaigns: true,
+          intakeSubmissions: true,
+          intakeLinks: true,
+        },
+      },
+      intakeSubmissions: {
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          artistName: true,
+          genre: true,
+          createdAt: true,
+          convertedToBookingId: true,
+          depositPaid: true,
+        },
+      },
       contacts: {
-        select: { source: true },
+        select: { source: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
       },
     },
   });
@@ -95,10 +117,17 @@ export async function GET(
     contactSources[c.source] = (contactSources[c.source] ?? 0) + 1;
   }
 
+  // Intake conversion rate
+  const converted = studio.intakeSubmissions.filter((s) => s.convertedToBookingId).length;
+  const intakeConversionRate =
+    studio.intakeSubmissions.length > 0
+      ? Math.round((converted / studio.intakeSubmissions.length) * 100)
+      : 0;
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { contacts: _contacts, ...studioData } = studio;
 
-  return NextResponse.json({ ...studioData, contactSources });
+  return NextResponse.json({ ...studioData, contactSources, intakeConversionRate });
 }
 
 export async function PATCH(
@@ -122,6 +151,9 @@ export async function PATCH(
     phone?: string;
     email?: string;
     instagram?: string;
+    tiktok?: string;
+    youtube?: string;
+    facebook?: string;
     studioTier?: string;
     tierOverride?: string | null;
     isPublished?: boolean;

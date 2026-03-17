@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Save, ExternalLink } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, AlertTriangle, CheckCircle, Image as ImageIcon } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,10 @@ type StudioDetail = {
   customDomain: string | null;
   stripePaymentsEnabled: boolean;
   generationsUsedThisMonth: number;
+  services: string[];
+  servicesJson: unknown;
+  testimonials: string | null;
+  galleryImages: unknown;
   owner: {
     id: string;
     name: string;
@@ -45,6 +49,8 @@ type StudioDetail = {
     sessions: number;
     contacts: number;
     emailCampaigns: number;
+    intakeSubmissions: number;
+    intakeLinks: number;
   };
   sessions: Array<{
     id: string;
@@ -63,7 +69,20 @@ type StudioDetail = {
     createdAt: string;
   }>;
   contactSources: Record<string, number>;
+  intakeSubmissions: Array<{
+    id: string;
+    artistName: string;
+    genre: string | null;
+    createdAt: string;
+    convertedToBookingId: string | null;
+    depositPaid: boolean;
+  }>;
+  intakeConversionRate: number;
 };
+
+type GalleryImage = { url?: string; src?: string; alt?: string; caption?: string };
+type Testimonial = { name?: string; text?: string; body?: string; rating?: number };
+type ServiceItem = { name?: string; title?: string; price?: number | string; duration?: number | string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,60 +114,139 @@ const CONTACT_SOURCE_LABEL: Record<string, string> = {
   WALK_IN: "Walk-in",
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function parseGallery(raw: unknown): GalleryImage[] {
+  try {
+    if (!raw) return [];
+    const arr = Array.isArray(raw) ? raw : JSON.parse(raw as string);
+    return arr as GalleryImage[];
+  } catch { return []; }
+}
 
-function Field({
+function parseTestimonials(raw: string | null): Testimonial[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function parseServicesJson(raw: unknown): ServiceItem[] {
+  try {
+    if (!raw) return [];
+    const arr = Array.isArray(raw) ? raw : JSON.parse(raw as string);
+    return arr as ServiceItem[];
+  } catch { return []; }
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function useToast() {
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = useCallback((msg: string, ok = true) => {
+    if (timer.current) clearTimeout(timer.current);
+    setToast({ msg, ok });
+    timer.current = setTimeout(() => setToast(null), 2500);
+  }, []);
+  return { toast, show };
+}
+
+// ─── Auto-save field components ───────────────────────────────────────────────
+
+function AField({
   label,
   value,
-  onChange,
+  onSave,
   type = "text",
   multiline = false,
   placeholder = "",
+  readOnly = false,
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onSave?: (v: string) => void;
   type?: string;
   multiline?: boolean;
   placeholder?: string;
+  readOnly?: boolean;
 }) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+  const handleBlur = () => {
+    if (!readOnly && local !== value && onSave) onSave(local);
+  };
+  const base =
+    "w-full px-3 py-2 rounded-xl border text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/50" +
+    (readOnly ? " opacity-60 cursor-default" : " bg-transparent");
   return (
     <div className="space-y-1">
       <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</label>
       {multiline ? (
         <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={local}
+          readOnly={readOnly}
+          onChange={(e) => !readOnly && setLocal(e.target.value)}
+          onBlur={handleBlur}
           rows={3}
           placeholder={placeholder}
-          className="w-full px-3 py-2 rounded-xl border text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50 resize-none"
-          style={{ borderColor: "var(--border)" }}
+          className={base + " resize-none"}
+          style={{ borderColor: "var(--border)", backgroundColor: readOnly ? "rgba(255,255,255,0.03)" : "transparent" }}
         />
       ) : (
         <input
           type={type}
-          value={value}
+          value={local}
+          readOnly={readOnly}
+          onChange={(e) => !readOnly && setLocal(e.target.value)}
+          onBlur={handleBlur}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50"
-          style={{ borderColor: "var(--border)" }}
+          className={base}
+          style={{ borderColor: "var(--border)", backgroundColor: readOnly ? "rgba(255,255,255,0.03)" : "transparent" }}
         />
       )}
     </div>
   );
 }
 
-function Toggle({
+function ASelect({
+  label,
+  value,
+  options,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onSave: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onSave(e.target.value)}
+        className="w-full px-3 py-2 rounded-xl border text-sm text-foreground outline-none"
+        style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function AToggle({
   label,
   description,
   checked,
-  onChange,
+  onSave,
   activeColor = "#34C759",
 }: {
   label: string;
   description?: string;
   checked: boolean;
-  onChange: (v: boolean) => void;
+  onSave: (v: boolean) => void;
   activeColor?: string;
 }) {
   return (
@@ -158,7 +256,7 @@ function Toggle({
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       <button
-        onClick={() => onChange(!checked)}
+        onClick={() => onSave(!checked)}
         className="w-11 h-6 rounded-full transition-colors relative shrink-0"
         style={{ backgroundColor: checked ? activeColor : "rgba(255,255,255,0.1)" }}
       >
@@ -171,26 +269,15 @@ function Toggle({
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-      <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
+        {action}
+      </div>
       {children}
     </div>
-  );
-}
-
-function SaveButton({ onClick, saving }: { onClick: () => void; saving: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={saving}
-      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-black disabled:opacity-50 transition-colors"
-      style={{ backgroundColor: "#D4A843" }}
-    >
-      {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-      Save
-    </button>
   );
 }
 
@@ -199,94 +286,45 @@ function SaveButton({ onClick, saving }: { onClick: () => void; saving: boolean 
 export default function AdminStudioDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { toast, show: showToast } = useToast();
   const [studio, setStudio] = useState<StudioDetail | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Editable state — info
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [bio, setBio] = useState("");
-  const [tagline, setTagline] = useState("");
-  const [streetAddress, setStreetAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [instagram, setInstagram] = useState("");
-  const [savingInfo, setSavingInfo] = useState(false);
-
-  // Editable state — admin controls
-  const [studioTier, setStudioTier] = useState("");
-  const [tierOverride, setTierOverride] = useState("");
-  const [isPublished, setIsPublished] = useState(false);
-  const [isEnterprise, setIsEnterprise] = useState(false);
-  const [savingControls, setSavingControls] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
 
   useEffect(() => {
     fetch(`/api/admin/studios/${id}`)
       .then((r) => r.json())
-      .then((d: StudioDetail) => {
-        setStudio(d);
-        setName(d.name ?? "");
-        setDescription(d.description ?? "");
-        setBio(d.bio ?? "");
-        setTagline(d.tagline ?? "");
-        setStreetAddress(d.streetAddress ?? "");
-        setCity(d.city ?? "");
-        setState(d.state ?? "");
-        setZipCode(d.zipCode ?? "");
-        setPhone(d.phone ?? "");
-        setEmail(d.email ?? "");
-        setInstagram(d.instagram ?? "");
-        setStudioTier(d.studioTier);
-        setTierOverride(d.tierOverride ?? "");
-        setIsPublished(d.isPublished);
-        setIsEnterprise(d.isEnterprise);
-      })
+      .then((d: StudioDetail) => setStudio(d))
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function patch(body: Record<string, unknown>) {
-    const res = await fetch(`/api/admin/studios/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
-  }
-
-  async function saveInfo() {
-    setSavingInfo(true);
-    try {
-      await patch({
-        name,
-        description: description || null,
-        bio: bio || null,
-        tagline: tagline || null,
-        streetAddress: streetAddress || null,
-        city: city || null,
-        state: state || null,
-        zipCode: zipCode || null,
-        phone: phone || null,
-        email: email || null,
-        instagram: instagram || null,
+  const save = useCallback(
+    async (body: Record<string, unknown>) => {
+      const res = await fetch(`/api/admin/studios/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      setStudio((s) => s ? { ...s, name, description: description || null, bio: bio || null, tagline: tagline || null } : s);
-    } finally { setSavingInfo(false); }
-  }
+      if (res.ok) showToast("Saved");
+      else showToast("Save failed", false);
+    },
+    [id, showToast]
+  );
 
-  async function saveControls() {
-    setSavingControls(true);
+  async function forceUnpublish() {
+    if (!window.confirm("Force unpublish this studio's public page?")) return;
+    setUnpublishing(true);
     try {
-      await patch({
-        studioTier: studioTier || undefined,
-        tierOverride: tierOverride || null,
-        isPublished,
-        isEnterprise,
-      });
-      setStudio((s) => s ? { ...s, studioTier, tierOverride: tierOverride || null, isPublished, isEnterprise } : s);
-    } finally { setSavingControls(false); }
+      const res = await fetch(`/api/admin/studios/${id}/unpublish`, { method: "POST" });
+      if (res.ok) {
+        setStudio((s) => s ? { ...s, isPublished: false } : s);
+        showToast("Studio unpublished");
+      } else {
+        showToast("Failed to unpublish", false);
+      }
+    } finally {
+      setUnpublishing(false);
+    }
   }
 
   if (loading) {
@@ -303,12 +341,31 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
 
   const effectiveTier = studio.tierOverride ?? studio.studioTier;
   const tierColors: Record<string, string> = { PRO: "#D4A843", ELITE: "#34C759" };
-  const openRate = studio._count.emailCampaigns > 0
-    ? Math.round((studio.emailCampaigns.reduce((s, c) => s + c.openCount, 0) / Math.max(studio.emailCampaigns.reduce((s, c) => s + c.recipientCount, 0), 1)) * 100)
+
+  const totalCampaignRecipients = studio.emailCampaigns.reduce((s, c) => s + c.recipientCount, 0);
+  const totalCampaignOpens = studio.emailCampaigns.reduce((s, c) => s + c.openCount, 0);
+  const openRate = totalCampaignRecipients > 0
+    ? Math.round((totalCampaignOpens / totalCampaignRecipients) * 100)
     : 0;
+
+  const gallery = parseGallery(studio.galleryImages);
+  const testimonials = parseTestimonials(studio.testimonials);
+  const servicesJson = parseServicesJson(studio.servicesJson);
+  const services = studio.services ?? [];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold transition-all"
+          style={{ backgroundColor: toast.ok ? "#34C759" : "#E85D4A", color: "#fff" }}
+        >
+          {toast.ok ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
+          {toast.msg}
+        </div>
+      )}
+
       {/* Back + header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -329,7 +386,10 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
               </span>
               <span
                 className="text-[10px] font-bold px-2 py-1 rounded-full"
-                style={{ backgroundColor: studio.isPublished ? "rgba(52,199,89,0.12)" : "rgba(255,255,255,0.06)", color: studio.isPublished ? "#34C759" : "rgba(255,255,255,0.35)" }}
+                style={{
+                  backgroundColor: studio.isPublished ? "rgba(52,199,89,0.12)" : "rgba(255,255,255,0.06)",
+                  color: studio.isPublished ? "#34C759" : "rgba(255,255,255,0.35)",
+                }}
               >
                 {studio.isPublished ? "Published" : "Draft"}
               </span>
@@ -340,9 +400,7 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
               )}
             </div>
             {studio.slug && (
-              <p className="text-sm text-muted-foreground mt-0.5 ml-0">
-                /{studio.slug}
-              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">/{studio.slug}</p>
             )}
           </div>
         </div>
@@ -351,7 +409,7 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
             href={`/${studio.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
             style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           >
             <ExternalLink size={14} /> Public Page
@@ -360,15 +418,17 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         {[
           { label: "Artists", value: studio._count.artists },
           { label: "Bookings", value: studio._count.sessions },
-          { label: "CRM Contacts", value: studio._count.contacts },
+          { label: "Contacts", value: studio._count.contacts },
           { label: "Email Blasts", value: studio._count.emailCampaigns },
+          { label: "Intake Links", value: studio._count.intakeLinks },
+          { label: "Submissions", value: studio._count.intakeSubmissions },
         ].map((s) => (
-          <div key={s.label} className="rounded-2xl border p-4 text-center" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-            <p className="text-xl font-bold text-foreground">{s.value}</p>
+          <div key={s.label} className="rounded-2xl border p-3 text-center" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <p className="text-lg font-bold text-foreground">{s.value}</p>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{s.label}</p>
           </div>
         ))}
@@ -378,28 +438,101 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
         {/* Studio Info */}
         <SectionCard title="Studio Info">
           <div className="space-y-3">
-            <Field label="Studio Name" value={name} onChange={setName} />
-            <Field label="Tagline" value={tagline} onChange={setTagline} placeholder="One-line pitch" />
-            <Field label="Description" value={description} onChange={setDescription} multiline />
-            <Field label="Bio" value={bio} onChange={setBio} multiline />
+            <AField
+              label="Studio Name"
+              value={studio.name}
+              onSave={(v) => { setStudio((s) => s ? { ...s, name: v } : s); save({ name: v }); }}
+            />
+            <AField
+              label="Tagline"
+              value={studio.tagline ?? ""}
+              placeholder="One-line pitch"
+              onSave={(v) => { setStudio((s) => s ? { ...s, tagline: v || null } : s); save({ tagline: v || null }); }}
+            />
+            <AField
+              label="Description"
+              value={studio.description ?? ""}
+              multiline
+              onSave={(v) => { setStudio((s) => s ? { ...s, description: v || null } : s); save({ description: v || null }); }}
+            />
+            <AField
+              label="Bio"
+              value={studio.bio ?? ""}
+              multiline
+              onSave={(v) => { setStudio((s) => s ? { ...s, bio: v || null } : s); save({ bio: v || null }); }}
+            />
           </div>
+
           <div className="space-y-3 pt-1">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Location</p>
-            <Field label="Street Address" value={streetAddress} onChange={setStreetAddress} />
+            <AField
+              label="Street Address"
+              value={studio.streetAddress ?? ""}
+              onSave={(v) => { setStudio((s) => s ? { ...s, streetAddress: v || null } : s); save({ streetAddress: v || null }); }}
+            />
             <div className="grid grid-cols-3 gap-2">
-              <Field label="City" value={city} onChange={setCity} />
-              <Field label="State" value={state} onChange={setState} />
-              <Field label="ZIP" value={zipCode} onChange={setZipCode} />
+              <AField
+                label="City"
+                value={studio.city ?? ""}
+                onSave={(v) => { setStudio((s) => s ? { ...s, city: v || null } : s); save({ city: v || null }); }}
+              />
+              <AField
+                label="State"
+                value={studio.state ?? ""}
+                onSave={(v) => { setStudio((s) => s ? { ...s, state: v || null } : s); save({ state: v || null }); }}
+              />
+              <AField
+                label="ZIP"
+                value={studio.zipCode ?? ""}
+                onSave={(v) => { setStudio((s) => s ? { ...s, zipCode: v || null } : s); save({ zipCode: v || null }); }}
+              />
             </div>
           </div>
+
           <div className="space-y-3 pt-1">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Contact</p>
-            <Field label="Phone" value={phone} onChange={setPhone} type="tel" />
-            <Field label="Email" value={email} onChange={setEmail} type="email" />
-            <Field label="Instagram" value={instagram} onChange={setInstagram} />
-          </div>
-          <div className="flex justify-end">
-            <SaveButton onClick={saveInfo} saving={savingInfo} />
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Contact &amp; Socials</p>
+            <div className="grid grid-cols-2 gap-2">
+              <AField
+                label="Phone"
+                value={studio.phone ?? ""}
+                type="tel"
+                onSave={(v) => { setStudio((s) => s ? { ...s, phone: v || null } : s); save({ phone: v || null }); }}
+              />
+              <AField
+                label="Email"
+                value={studio.email ?? ""}
+                type="email"
+                onSave={(v) => { setStudio((s) => s ? { ...s, email: v || null } : s); save({ email: v || null }); }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <AField
+                label="Instagram"
+                value={studio.instagram ?? ""}
+                placeholder="@handle"
+                onSave={(v) => { setStudio((s) => s ? { ...s, instagram: v || null } : s); save({ instagram: v || null }); }}
+              />
+              <AField
+                label="TikTok"
+                value={studio.tiktok ?? ""}
+                placeholder="@handle"
+                onSave={(v) => { setStudio((s) => s ? { ...s, tiktok: v || null } : s); save({ tiktok: v || null }); }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <AField
+                label="YouTube"
+                value={studio.youtube ?? ""}
+                placeholder="Channel URL"
+                onSave={(v) => { setStudio((s) => s ? { ...s, youtube: v || null } : s); save({ youtube: v || null }); }}
+              />
+              <AField
+                label="Facebook"
+                value={studio.facebook ?? ""}
+                placeholder="Page URL"
+                onSave={(v) => { setStudio((s) => s ? { ...s, facebook: v || null } : s); save({ facebook: v || null }); }}
+              />
+            </div>
           </div>
         </SectionCard>
 
@@ -408,25 +541,26 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
           {/* Admin Controls */}
           <SectionCard title="Admin Controls">
             <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Base Tier</label>
-                <select
-                  value={studioTier}
-                  onChange={(e) => setStudioTier(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm text-foreground outline-none"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-                >
-                  <option value="PRO">Pro</option>
-                  <option value="ELITE">Elite</option>
-                </select>
-              </div>
+              <ASelect
+                label="Base Tier"
+                value={studio.studioTier}
+                options={[
+                  { value: "PRO", label: "Pro" },
+                  { value: "ELITE", label: "Elite" },
+                ]}
+                onSave={(v) => { setStudio((s) => s ? { ...s, studioTier: v } : s); save({ studioTier: v }); }}
+              />
               <div className="space-y-1">
                 <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
                   Tier Override <span className="normal-case font-normal">(overrides subscription tier)</span>
                 </label>
                 <select
-                  value={tierOverride}
-                  onChange={(e) => setTierOverride(e.target.value)}
+                  value={studio.tierOverride ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setStudio((s) => s ? { ...s, tierOverride: v } : s);
+                    save({ tierOverride: v });
+                  }}
                   className="w-full px-3 py-2 rounded-xl border text-sm text-foreground outline-none"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
                 >
@@ -435,29 +569,41 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
                   <option value="ELITE">Elite</option>
                 </select>
               </div>
-              <Toggle
+              <AToggle
                 label="Published"
                 description="Studio public page is visible to the world"
-                checked={isPublished}
-                onChange={setIsPublished}
+                checked={studio.isPublished}
+                onSave={(v) => { setStudio((s) => s ? { ...s, isPublished: v } : s); save({ isPublished: v }); }}
               />
-              <Toggle
+              <AToggle
                 label="Enterprise"
                 description="Unlocks enterprise-only features"
-                checked={isEnterprise}
-                onChange={setIsEnterprise}
+                checked={studio.isEnterprise}
+                onSave={(v) => { setStudio((s) => s ? { ...s, isEnterprise: v } : s); save({ isEnterprise: v }); }}
                 activeColor="#5AC8FA"
               />
-            </div>
-            <div className="flex justify-end">
-              <SaveButton onClick={saveControls} saving={savingControls} />
+
+              {/* Force Unpublish */}
+              {studio.isPublished && (
+                <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                  <button
+                    onClick={forceUnpublish}
+                    disabled={unpublishing}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A", border: "1px solid rgba(232,93,74,0.25)" }}
+                  >
+                    {unpublishing ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
+                    Force Unpublish
+                  </button>
+                </div>
+              )}
             </div>
           </SectionCard>
 
           {/* Owner */}
           <SectionCard title="Owner">
             <div
-              className="flex items-center justify-between p-3 rounded-xl border cursor-pointer hover:bg-white/3 transition-colors"
+              className="flex items-center justify-between p-3 rounded-xl border cursor-pointer hover:bg-white/5 transition-colors"
               style={{ borderColor: "var(--border)" }}
               onClick={() => router.push(`/admin/users/${studio.owner.id}`)}
             >
@@ -509,18 +655,63 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
+      {/* Intake / Public Page Stats */}
+      {studio._count.intakeSubmissions > 0 && (
+        <SectionCard title={`Intake Submissions (${studio._count.intakeSubmissions} total · ${studio.intakeConversionRate}% converted)`}>
+          <div className="space-y-2">
+            {studio.intakeSubmissions.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between py-2 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-foreground">{s.artistName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.genre ?? "No genre"} · {fmt(s.createdAt)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {s.convertedToBookingId ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(52,199,89,0.12)", color: "#34C759" }}>
+                      Booked
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)" }}>
+                      Pending
+                    </span>
+                  )}
+                  {s.depositPaid && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}>
+                      Deposit Paid
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
       {/* Recent Bookings */}
       {studio.sessions.length > 0 && (
         <SectionCard title={`Recent Bookings (${studio._count.sessions} total)`}>
           <div className="space-y-2">
             {studio.sessions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+              <div
+                key={s.id}
+                className="flex items-center justify-between py-2 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
                 <div>
                   <p className="text-sm font-medium text-foreground">{s.contact?.name ?? "Unknown Contact"}</p>
                   <p className="text-xs text-muted-foreground">{fmt(s.dateTime, true)} · {s.sessionType ?? "Session"}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${STATUS_COLOR[s.status] ?? "#888"}18`, color: STATUS_COLOR[s.status] ?? "#888" }}>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: `${STATUS_COLOR[s.status] ?? "#888"}18`, color: STATUS_COLOR[s.status] ?? "#888" }}
+                  >
                     {s.status}
                   </span>
                   <span className="text-[10px] text-muted-foreground">{s.paymentStatus}</span>
@@ -569,7 +760,7 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
                         <span className="text-foreground">{CONTACT_SOURCE_LABEL[source] ?? source}</span>
                         <span className="text-muted-foreground">{count} ({pct}%)</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
                         <div
                           className="h-full rounded-full"
                           style={{ width: `${pct}%`, backgroundColor: "var(--accent)" }}
@@ -582,6 +773,90 @@ export default function AdminStudioDetailPage({ params }: { params: Promise<{ id
           </SectionCard>
         )}
       </div>
+
+      {/* Services (read-only) */}
+      {(services.length > 0 || servicesJson.length > 0) && (
+        <SectionCard title="Services (read-only)">
+          {servicesJson.length > 0 ? (
+            <div className="space-y-2">
+              {servicesJson.map((svc, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-2 border-b last:border-b-0"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <p className="text-sm text-foreground">{svc.name ?? svc.title ?? `Service ${i + 1}`}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {svc.duration && <span>{svc.duration}</span>}
+                    {svc.price !== undefined && <span className="font-semibold text-foreground">${svc.price}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {services.map((svc, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--accent)" }} />
+                  {svc}
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
+
+      {/* Gallery (read-only) */}
+      {gallery.length > 0 && (
+        <SectionCard title={`Gallery Photos (${gallery.length})`}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {gallery.map((img, i) => {
+              const src = img.url ?? img.src;
+              return (
+                <div
+                  key={i}
+                  className="aspect-square rounded-xl overflow-hidden border relative"
+                  style={{ borderColor: "var(--border)", backgroundColor: "rgba(255,255,255,0.04)" }}
+                >
+                  {src ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={src} alt={img.alt ?? img.caption ?? `Gallery ${i + 1}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <ImageIcon size={20} className="text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Testimonials (read-only) */}
+      {testimonials.length > 0 && (
+        <SectionCard title={`Testimonials (${testimonials.length})`}>
+          <div className="space-y-3">
+            {testimonials.map((t, i) => (
+              <div
+                key={i}
+                className="p-3 rounded-xl border"
+                style={{ borderColor: "var(--border)", backgroundColor: "rgba(255,255,255,0.02)" }}
+              >
+                <p className="text-sm text-foreground italic leading-relaxed">
+                  &ldquo;{t.text ?? t.body ?? "—"}&rdquo;
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs font-semibold text-muted-foreground">{t.name ?? "Anonymous"}</p>
+                  {t.rating !== undefined && (
+                    <p className="text-xs text-muted-foreground">{"★".repeat(t.rating)}{"☆".repeat(5 - t.rating)}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
