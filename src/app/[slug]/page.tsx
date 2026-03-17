@@ -177,13 +177,12 @@ export default async function SlugPage({
     // Template dispatch
     const template = studio.template ?? "CLASSIC";
 
-    // ?preview=CLASSIC|BOLD|EDITORIAL — bypass stored config, show that template style live
-    const previewStyle = (preview === "BOLD" || preview === "EDITORIAL" || preview === "CLASSIC")
-      ? preview
-      : null;
-
-    if (previewStyle) {
-      return <DefaultTemplate {...templateProps} templateStyle={previewStyle} />;
+    // ?preview=TEMPLATE — bypass stored template/config, show any template live
+    if (preview === "CLEAN")      return <CleanTemplate     {...templateProps} />;
+    if (preview === "CINEMATIC")  return <CinematicTemplate {...templateProps} />;
+    if (preview === "GRID")       return <GridTemplate      {...templateProps} />;
+    if (preview === "BOLD" || preview === "EDITORIAL" || preview === "CLASSIC") {
+      return <DefaultTemplate {...templateProps} templateStyle={preview} />;
     }
 
     // CLEAN / CINEMATIC / GRID — always use their own renderer, never pageConfig
