@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -14,7 +13,6 @@ import {
   Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useUserStore } from "@/store";
 
 type NavItem = {
   label: string;
@@ -31,16 +29,19 @@ const navItems: NavItem[] = [
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
-// Admin accent color — coral/CTA
-const ADMIN_ACCENT = "var(--color-cta, #E85D4A)";
-
 export default function AdminSidebar() {
   const pathname = usePathname();
-  const { user } = useUserStore();
+  const router = useRouter();
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
     return pathname.startsWith(href);
+  }
+
+  async function handleLogout() {
+    await fetch("/api/admin/auth/logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
   }
 
   return (
@@ -48,12 +49,12 @@ export default function AdminSidebar() {
       className="hidden md:flex flex-col w-[240px] h-screen shrink-0 border-r"
       style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
     >
-      {/* Logo — admin context uses coral accent */}
+      {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
         <Link href="/admin" className="flex items-center gap-2.5 no-underline">
           <div
             className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
-            style={{ background: `linear-gradient(135deg, #E85D4A, #D4A843)` }}
+            style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
           >
             <ShieldCheck size={16} className="text-white" strokeWidth={2.5} />
           </div>
@@ -90,24 +91,22 @@ export default function AdminSidebar() {
         })}
       </nav>
 
-      {/* Bottom: user + sign out */}
+      {/* Bottom: sign out */}
       <div className="border-t p-3" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3 px-2 py-2 mb-1">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
             style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
           >
-            {user?.displayName?.[0]?.toUpperCase() ?? "A"}
+            A
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {user?.displayName ?? "Admin"}
-            </p>
+            <p className="text-sm font-medium text-foreground">Admin</p>
             <p className="text-[11px]" style={{ color: "#E85D4A" }}>Platform Admin</p>
           </div>
         </div>
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
         >
           <LogOut size={16} strokeWidth={1.75} />

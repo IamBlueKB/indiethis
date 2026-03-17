@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
   ChevronDown,
@@ -14,9 +13,9 @@ import {
   Building2,
   BarChart3,
   Settings,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import NotificationBell from "@/components/shared/NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,24 +27,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useUserStore } from "@/store";
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Studios", href: "/admin/studios", icon: Building2 },
   { label: "Revenue", href: "/admin/revenue", icon: BarChart3 },
+  { label: "AI Usage", href: "/admin/ai-usage", icon: Cpu },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 export default function AdminTopBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user } = useUserStore();
   const pathname = usePathname();
+  const router = useRouter();
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
     return pathname.startsWith(href);
+  }
+
+  async function handleLogout() {
+    await fetch("/api/admin/auth/logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
   }
 
   return (
@@ -64,46 +69,44 @@ export default function AdminTopBar() {
         </Button>
 
         <div className="ml-auto flex items-center gap-1">
-        <NotificationBell />
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors outline-none">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-              style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
-            >
-              {user?.displayName?.[0]?.toUpperCase() ?? "A"}
-            </div>
-            <div className="hidden sm:block text-left">
-              <p className="text-sm font-medium text-foreground leading-tight">
-                {user?.displayName ?? "Admin"}
-              </p>
-              <p className="text-[11px] leading-tight" style={{ color: "#E85D4A" }}>
-                Platform Admin
-              </p>
-            </div>
-            <ChevronDown size={14} className="text-muted-foreground hidden sm:block" />
-          </DropdownMenuTrigger>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors outline-none">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
+              >
+                A
+              </div>
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-medium text-foreground leading-tight">Admin</p>
+                <p className="text-[11px] leading-tight" style={{ color: "#E85D4A" }}>
+                  Platform Admin
+                </p>
+              </div>
+              <ChevronDown size={14} className="text-muted-foreground hidden sm:block" />
+            </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium text-foreground">{user?.displayName ?? "Admin"}</p>
-                <p className="text-xs" style={{ color: "#E85D4A" }}>Platform Admin</p>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="text-red-400 focus:text-red-400 cursor-pointer"
-            >
-              <LogOut size={14} className="mr-2" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="font-normal">
+                  <p className="text-sm font-medium text-foreground">Admin</p>
+                  <p className="text-xs" style={{ color: "#E85D4A" }}>Platform Admin</p>
+                </DropdownMenuLabel>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="text-red-400 focus:text-red-400 cursor-pointer"
+              >
+                <LogOut size={14} className="mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
+      {/* Mobile sheet */}
       <Sheet open={mobileOpen} onOpenChange={(v) => !v && setMobileOpen(false)}>
         <SheetContent side="left" className="w-[240px] p-0" style={{ backgroundColor: "var(--card)" }}>
           <SheetHeader className="h-16 flex flex-row items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
