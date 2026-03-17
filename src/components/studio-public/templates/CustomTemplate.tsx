@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MapPin, Phone, Mail, Clock, Instagram, Youtube, Twitter, Facebook } from "lucide-react";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -23,31 +23,24 @@ function fmt12h(time: string) {
 // ─── Nav ────────────────────────────────────────────────────────────────────
 
 function Nav({ studio, slug, logoSrc }: { studio: any; slug: string; logoSrc: string }) {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+      className="fixed top-0 left-0 right-0 z-50 overflow-hidden"
       style={{
-        backgroundColor: scrolled ? "rgba(10,10,10,0.92)" : "transparent",
-        backdropFilter: scrolled ? "blur(12px)" : "none",
-        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
+        backgroundColor: "#0A0A0A",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
         fontFamily: SANS,
+        height: "72px",
       }}
     >
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+      <div className="w-full px-6 h-full flex items-center justify-between gap-6">
         {/* Logo */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center shrink-0">
           {logoSrc ? (
             <img
               src={logoSrc}
               alt={studio.name}
-              style={{ height: "32px", width: "auto" }}
+              style={{ height: "110px", width: "auto", filter: "brightness(0) invert(1)" }}
               className="object-contain"
             />
           ) : (
@@ -73,9 +66,9 @@ function Nav({ studio, slug, logoSrc }: { studio: any; slug: string; logoSrc: st
 
         {/* CTA */}
         <a
-          href={`/${slug}/intake`}
+          href={`/${slug}/book`}
           className="px-5 py-2.5 rounded-lg text-sm font-bold no-underline hover:opacity-90 transition-opacity shrink-0"
-          style={{ backgroundColor: CORAL, color: "#fff", fontFamily: SANS }}
+          style={{ backgroundColor: GOLD, color: BG, fontFamily: SANS }}
         >
           Book Now
         </a>
@@ -178,7 +171,7 @@ function ContactForm({ studioId }: { studioId: string }) {
         type="submit"
         disabled={status === "loading"}
         className="w-full py-4 rounded-xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-        style={{ backgroundColor: CORAL, color: "#fff", fontFamily: SANS }}
+        style={{ backgroundColor: GOLD, color: BG, fontFamily: SANS }}
       >
         {status === "loading" ? "Sending…" : "Send Message →"}
       </button>
@@ -225,8 +218,8 @@ export function CustomTemplate({
     "/images/studio/gallery-7.jpg",
   ];
 
-  const heroSrc = studio.heroImage || HERO_IMG;
-  const logoSrc = studio.logo || studio.logoUrl || LOGO_IMG;
+  const heroSrc = HERO_IMG;
+  const logoSrc = LOGO_IMG;
   const galleryImages: string[] =
     Array.isArray(studio.galleryImages) && studio.galleryImages.length > 0
       ? studio.galleryImages
@@ -320,7 +313,7 @@ export function CustomTemplate({
 
         <div className="relative z-10 flex flex-wrap gap-4 justify-center">
           <a
-            href={`/${slug}/intake`}
+            href={`/${slug}/book`}
             className="px-9 py-4 rounded-xl font-bold text-sm no-underline hover:opacity-90 transition-opacity"
             style={{ backgroundColor: GOLD, color: BG, fontFamily: SANS }}
           >
@@ -400,8 +393,8 @@ export function CustomTemplate({
                   </p>
                 )}
                 <a
-                  href={`/${slug}/intake`}
-                  className="mt-auto text-xs font-bold no-underline opacity-0 group-hover:opacity-100 transition-opacity"
+                  href={`/${slug}/book`}
+                  className="mt-auto text-xs font-bold no-underline"
                   style={{ color: GOLD, fontFamily: SANS }}
                 >
                   Book this service →
@@ -550,65 +543,6 @@ export function CustomTemplate({
         </section>
       )}
 
-      {/* ── TESTIMONIALS ──────────────────────────────────────────────────── */}
-      {testimonials.length > 0 && (
-        <section className="py-28 px-6" style={{ backgroundColor: "#0d0d0d" }}>
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
-              <p
-                className="text-xs font-bold uppercase mb-3"
-                style={{ color: GOLD, letterSpacing: "0.3em", fontFamily: SANS }}
-              >
-                What Artists Say
-              </p>
-              <h2
-                className="font-bold"
-                style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", fontFamily: SERIF }}
-              >
-                Testimonials
-              </h2>
-            </div>
-            <div className="grid md:grid-cols-3 gap-5">
-              {testimonials.map((t, i) => (
-                <div
-                  key={i}
-                  className="rounded-2xl p-8 border flex flex-col gap-5"
-                  style={{ backgroundColor: "#111", borderColor: "rgba(255,255,255,0.07)" }}
-                >
-                  <p
-                    className="text-3xl leading-none"
-                    style={{ color: GOLD, opacity: 0.5, fontFamily: SERIF }}
-                  >
-                    &ldquo;
-                  </p>
-                  <p
-                    className="text-base leading-relaxed flex-1"
-                    style={{
-                      color: "rgba(255,255,255,0.75)",
-                      fontStyle: "italic",
-                      fontFamily: SANS,
-                    }}
-                  >
-                    {t.quote}
-                  </p>
-                  <div>
-                    <p className="font-bold" style={{ fontFamily: SANS }}>{t.author}</p>
-                    {t.track && (
-                      <p
-                        className="text-xs mt-0.5"
-                        style={{ color: "rgba(255,255,255,0.35)", fontFamily: SANS }}
-                      >
-                        {t.track}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* ── BOOKING CTA ───────────────────────────────────────────────────── */}
       <section
         className="relative py-40 px-6 text-center overflow-hidden"
@@ -648,9 +582,9 @@ export function CustomTemplate({
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <a
-              href={`/${slug}/intake`}
+              href={`/${slug}/book`}
               className="px-10 py-4 rounded-xl font-bold text-base no-underline hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: CORAL, color: "#fff", fontFamily: SANS }}
+              style={{ backgroundColor: GOLD, color: BG, fontFamily: SANS }}
             >
               Book a Session →
             </a>
