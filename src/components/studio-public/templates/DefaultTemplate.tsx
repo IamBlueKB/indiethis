@@ -1,3 +1,4 @@
+"use client";
 import type { PageConfig, SectionConfig, SectionType, SectionVariant } from "@/types/page-config";
 import { STYLE_DEFAULTS } from "@/types/page-config";
 import { ConfigRenderer } from "../ConfigRenderer";

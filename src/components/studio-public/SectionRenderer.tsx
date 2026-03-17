@@ -1,3 +1,4 @@
+"use client";
 import type React from "react";
 import type { SectionConfig, SectionType } from "@/types/page-config";
 import type { SectionSharedProps } from "./ConfigRenderer";

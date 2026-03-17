@@ -1,3 +1,4 @@
+"use client";
 import { MapPin, Phone, Mail, Clock, Quote, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ContactForm } from "../shared/ContactForm";

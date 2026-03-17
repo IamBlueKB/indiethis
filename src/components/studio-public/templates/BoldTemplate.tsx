@@ -1,3 +1,4 @@
+"use client";
 import type React from "react";
 import { MapPin, Phone, Mail, Clock, Instagram, Twitter, Facebook, Youtube, Music2 } from "lucide-react";
 import Link from "next/link";

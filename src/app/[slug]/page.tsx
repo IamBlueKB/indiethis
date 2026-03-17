@@ -172,7 +172,8 @@ export default async function SlugPage({
       studio.youtube   && { label: "YouTube", href: studio.youtube },
     ].filter(Boolean) as { label: string; href: string }[];
 
-    const templateProps = { studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials };
+    const galleryImages: string[] = Array.isArray(studio.galleryImages) ? studio.galleryImages as string[] : [];
+    const templateProps = { studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages };
 
     // Template dispatch
     const template = studio.template ?? "CLASSIC";

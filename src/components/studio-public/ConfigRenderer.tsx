@@ -1,3 +1,4 @@
+"use client";
 import type { PageConfig } from "@/types/page-config";
 import type React from "react";
 import { SectionRenderer } from "./SectionRenderer";
