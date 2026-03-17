@@ -6,6 +6,9 @@ import TrackList from "./TrackList";
 import MerchGrid from "./MerchGrid";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
+import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
+import { CinematicTemplate } from "@/components/studio-public/templates/CinematicTemplate";
+import { GridTemplate } from "@/components/studio-public/templates/GridTemplate";
 import { ConfigRenderer } from "@/components/studio-public/ConfigRenderer";
 import type { PageConfig } from "@/types/page-config";
 
@@ -183,7 +186,15 @@ export default async function SlugPage({
       return <DefaultTemplate {...templateProps} templateStyle={previewStyle} />;
     }
 
-    // Use studio's generated pageConfig if available (all templates, including CUSTOM)
+    // CLEAN / CINEMATIC / GRID — always use their own renderer, never pageConfig
+    if (template === "CLEAN")      return <CleanTemplate     {...templateProps} />;
+    if (template === "CINEMATIC")  return <CinematicTemplate {...templateProps} />;
+    if (template === "GRID")       return <GridTemplate      {...templateProps} />;
+
+    // CUSTOM — always use CustomTemplate
+    if (template === "CUSTOM")     return <CustomTemplate    {...templateProps} />;
+
+    // CLASSIC / BOLD / EDITORIAL — use generated pageConfig if available, else DefaultTemplate fallback
     const pageConfig = studio.pageConfig as PageConfig | null;
     if (pageConfig?.sections?.length) {
       return (
@@ -199,9 +210,6 @@ export default async function SlugPage({
         />
       );
     }
-
-    // No generated config yet — use fallback based on template
-    if (template === "CUSTOM") return <CustomTemplate {...templateProps} />;
 
     const style = (template === "BOLD" || template === "EDITORIAL") ? template : "CLASSIC";
     return <DefaultTemplate {...templateProps} templateStyle={style} />;

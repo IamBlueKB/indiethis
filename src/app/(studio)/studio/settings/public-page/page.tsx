@@ -27,9 +27,12 @@ const DEFAULT_HOURS: HoursJson = Object.fromEntries(
 );
 
 const STYLES = [
-  { id: "CLASSIC",   label: "Classic",   desc: "Clean and professional" },
-  { id: "BOLD",      label: "Bold",      desc: "Visual and high-impact" },
-  { id: "EDITORIAL", label: "Editorial", desc: "Magazine-style and sophisticated" },
+  { id: "CLASSIC",   label: "Classic",    desc: "Clean and professional" },
+  { id: "BOLD",      label: "Bold",       desc: "Visual and high-impact" },
+  { id: "EDITORIAL", label: "Editorial",  desc: "Magazine-style and sophisticated" },
+  { id: "CLEAN",     label: "Clean",      desc: "Minimal, modern, Spotify/Apple aesthetic" },
+  { id: "CINEMATIC", label: "Cinematic",  desc: "Dramatic, immersive, luxury hotel feel" },
+  { id: "GRID",      label: "Grid",       desc: "Magazine editorial, asymmetric, art-directed" },
 ] as const;
 
 const SECTION_LABELS: Record<string, string> = {
@@ -385,7 +388,7 @@ export default function PublicPageEditor() {
   const [twitter,   setTwitter]   = useState("");
 
   // Style & generation
-  const [baseStyle, setBaseStyle]             = useState<"CLASSIC" | "BOLD" | "EDITORIAL">("BOLD");
+  const [baseStyle, setBaseStyle]             = useState<"CLASSIC" | "BOLD" | "EDITORIAL" | "CLEAN" | "CINEMATIC" | "GRID">("BOLD");
   const [generationsUsed, setGenerationsUsed] = useState(0);
   const [generating, setGenerating]           = useState(false);
   const [generateError, setGenerateError]     = useState<string | null>(null);
@@ -436,8 +439,8 @@ export default function PublicPageEditor() {
         setGenerationsUsed(s.generationsUsedThisMonth ?? 0);
         if (s.pageConfig && typeof s.pageConfig === "object") setPageConfig(s.pageConfig as PageConfig);
         // Detect base style from template
-        if (s.template && ["CLASSIC", "BOLD", "EDITORIAL"].includes(s.template)) {
-          setBaseStyle(s.template as "CLASSIC" | "BOLD" | "EDITORIAL");
+        if (s.template && ["CLASSIC", "BOLD", "EDITORIAL", "CLEAN", "CINEMATIC", "GRID"].includes(s.template)) {
+          setBaseStyle(s.template as "CLASSIC" | "BOLD" | "EDITORIAL" | "CLEAN" | "CINEMATIC" | "GRID");
         }
       })
       .finally(() => setLoading(false));
@@ -452,6 +455,7 @@ export default function PublicPageEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name, tagline, bio, phone, email,
+          template: baseStyle,
           logoUrl: logoUrl || null,
           heroImage: heroImage || null,
           galleryImages: gallery,
@@ -770,7 +774,7 @@ export default function PublicPageEditor() {
             {STYLES.map((s) => (
               <button
                 key={s.id}
-                onClick={() => setBaseStyle(s.id as "CLASSIC" | "BOLD" | "EDITORIAL")}
+                onClick={() => setBaseStyle(s.id as "CLASSIC" | "BOLD" | "EDITORIAL" | "CLEAN" | "CINEMATIC" | "GRID")}
                 className="rounded-xl border p-4 text-left transition-all"
                 style={{
                   borderColor: baseStyle === s.id ? "var(--accent)" : "var(--border)",
