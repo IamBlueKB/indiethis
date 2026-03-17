@@ -104,8 +104,15 @@ async function ArtistSite({ slug }: { slug: string }) {
 // ROUTE HANDLER
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default async function SlugPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function SlugPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const { slug } = await params;
+  const { preview } = await searchParams;
 
   // ── Studio? ───────────────────────────────────────────────────────────────
   const studio = await db.studio.findUnique({
@@ -166,6 +173,15 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
 
     // Template dispatch
     const template = studio.template ?? "CLASSIC";
+
+    // ?preview=CLASSIC|BOLD|EDITORIAL — bypass stored config, show that template style live
+    const previewStyle = (preview === "BOLD" || preview === "EDITORIAL" || preview === "CLASSIC")
+      ? preview
+      : null;
+
+    if (previewStyle) {
+      return <DefaultTemplate {...templateProps} templateStyle={previewStyle} />;
+    }
 
     // Use studio's generated pageConfig if available (all templates, including CUSTOM)
     const pageConfig = studio.pageConfig as PageConfig | null;

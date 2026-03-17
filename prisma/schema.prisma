@@ -170,6 +170,9 @@ enum StudioTemplate {
   BOLD
   EDITORIAL
   CUSTOM
+  CLEAN
+  CINEMATIC
+  GRID
 }
 
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
