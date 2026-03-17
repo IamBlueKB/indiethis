@@ -151,7 +151,7 @@ export async function POST(
         photoUrl:        photoUrl || undefined,
         instagramHandle: instagram?.trim() || undefined,
         genre:           genre?.trim() || undefined,
-        source:          "INTAKE_FORM",
+        source:          "BOOKING",
       },
     });
     contactId = contact.id;

@@ -21,10 +21,21 @@ export async function GET() {
     take: 50,
   });
 
-  // Count total contacts for recipient stats
-  const totalContacts = await db.contact.count({ where: { studioId: studio.id } });
+  // Count contacts per source for segmentation UI
+  const [totalContacts, sourceCounts] = await Promise.all([
+    db.contact.count({ where: { studioId: studio.id } }),
+    db.contact.groupBy({
+      by: ["source"],
+      where: { studioId: studio.id },
+      _count: { id: true },
+    }),
+  ]);
 
-  return NextResponse.json({ campaigns, totalContacts });
+  const countBySource = Object.fromEntries(
+    sourceCounts.map((r) => [r.source, r._count.id])
+  );
+
+  return NextResponse.json({ campaigns, totalContacts, countBySource });
 }
 
 // POST /api/studio/email — create (and optionally send) campaign
@@ -41,19 +52,24 @@ export async function POST(req: NextRequest) {
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
   const body = await req.json();
-  const { subject, body: emailBody, sendNow, attachmentUrls } = body;
+  const { subject, body: emailBody, sendNow, attachmentUrls, sourceFilter } = body;
 
   if (!subject?.trim() || !emailBody?.trim()) {
     return NextResponse.json({ error: "Subject and body are required" }, { status: 400 });
   }
 
-  const recipientCount = await db.contact.count({ where: { studioId: studio.id } });
+  const recipientWhere = {
+    studioId: studio.id,
+    ...(sourceFilter ? { source: sourceFilter as import("@prisma/client").ContactSource } : {}),
+  };
+  const recipientCount = await db.contact.count({ where: recipientWhere });
 
   const campaign = await db.emailCampaign.create({
     data: {
       studioId: studio.id,
       subject: subject.trim(),
       body: emailBody.trim(),
+      recipientFilter: sourceFilter ? { source: sourceFilter } : undefined,
       recipientCount,
       attachmentUrls: attachmentUrls ?? [],
       sentAt: sendNow ? new Date() : null,

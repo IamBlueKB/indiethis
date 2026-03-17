@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Mail, Send, Users, CheckCircle2, Clock, Plus, X, Paperclip, Loader2 } from "lucide-react";
+import { Mail, Send, Users, CheckCircle2, Clock, Plus, X, Paperclip, Loader2, ChevronDown } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
 type Campaign = {
@@ -14,13 +14,23 @@ type Campaign = {
   createdAt: string;
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  BOOKING:  "Booking",
+  INQUIRY:  "Inquiry",
+  MANUAL:   "Manual",
+  WALK_IN:  "Walk-In",
+  REFERRAL: "Referral",
+};
+
 export default function EmailPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [totalContacts, setTotalContacts] = useState(0);
+  const [countBySource, setCountBySource] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
@@ -33,6 +43,7 @@ export default function EmailPage() {
       .then((d) => {
         setCampaigns(d.campaigns ?? []);
         setTotalContacts(d.totalContacts ?? 0);
+        setCountBySource(d.countBySource ?? {});
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -45,12 +56,12 @@ export default function EmailPage() {
       const res = await fetch("/api/studio/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, body, sendNow, attachmentUrls }),
+        body: JSON.stringify({ subject, body, sendNow, attachmentUrls, sourceFilter: sourceFilter || undefined }),
       });
       if (res.ok) {
         const data = await res.json();
         setCampaigns((prev) => [data.campaign, ...prev]);
-        setSubject(""); setBody(""); setAttachmentUrls([]); setAttachmentNames([]); setComposing(false);
+        setSubject(""); setBody(""); setSourceFilter(""); setAttachmentUrls([]); setAttachmentNames([]); setComposing(false);
       }
     } finally {
       setSending(false);
@@ -110,6 +121,31 @@ export default function EmailPage() {
               className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
               style={{ borderColor: "var(--border)" }}
             />
+          </div>
+
+          {/* Recipient segmentation */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Send To</label>
+            <div className="relative">
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full appearance-none rounded-xl border px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 pr-8"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+              >
+                <option value="">All contacts ({totalContacts})</option>
+                {Object.entries(SOURCE_LABEL).map(([val, lbl]) => {
+                  const cnt = countBySource[val] ?? 0;
+                  if (!cnt) return null;
+                  return (
+                    <option key={val} value={val}>
+                      {lbl} only ({cnt})
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -180,7 +216,7 @@ export default function EmailPage() {
               style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
             >
               <Send size={14} />
-              {sending ? "Sending…" : `Send to ${totalContacts} contacts`}
+              {sending ? "Sending…" : `Send to ${sourceFilter ? (countBySource[sourceFilter] ?? 0) : totalContacts} contacts`}
             </button>
             <button
               onClick={() => handleSend(false)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, UserCircle2, Mail, Phone, DollarSign } from "lucide-react";
+import { Search, Plus, UserCircle2, Mail, Phone, DollarSign, ChevronDown } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
 type Contact = {
@@ -18,16 +18,50 @@ type Contact = {
 };
 
 const SOURCE_LABEL: Record<string, string> = {
-  MANUAL: "Manual",
+  BOOKING:     "Booking",
+  INQUIRY:     "Inquiry",
+  MANUAL:      "Manual",
+  WALK_IN:     "Walk-In",
+  REFERRAL:    "Referral",
   INTAKE_FORM: "Intake Form",
-  BOOKING: "Booking",
-  REFERRAL: "Referral",
+  INSTAGRAM:   "Instagram",
 };
+
+type BadgeStyle = { bg: string; color: string; border: string };
+
+const SOURCE_BADGE: Record<string, BadgeStyle> = {
+  BOOKING:     { bg: "rgba(34,197,94,0.12)",  color: "#22c55e", border: "rgba(34,197,94,0.25)"  },
+  INQUIRY:     { bg: "rgba(212,168,67,0.12)", color: "#D4A843", border: "rgba(212,168,67,0.25)" },
+  MANUAL:      { bg: "rgba(148,163,184,0.1)", color: "#94a3b8", border: "rgba(148,163,184,0.2)" },
+  WALK_IN:     { bg: "rgba(59,130,246,0.12)", color: "#60a5fa", border: "rgba(59,130,246,0.25)" },
+  REFERRAL:    { bg: "rgba(251,146,60,0.12)", color: "#fb923c", border: "rgba(251,146,60,0.25)" },
+  INTAKE_FORM: { bg: "rgba(34,197,94,0.12)",  color: "#22c55e", border: "rgba(34,197,94,0.25)"  },
+  INSTAGRAM:   { bg: "rgba(168,85,247,0.12)", color: "#a855f7", border: "rgba(168,85,247,0.25)" },
+};
+
+const SOURCE_OPTIONS = [
+  { value: "MANUAL",   label: "Manual"    },
+  { value: "WALK_IN",  label: "Walk-In"   },
+  { value: "REFERRAL", label: "Referral"  },
+];
+
+function SourceBadge({ source }: { source: string }) {
+  const style = SOURCE_BADGE[source] ?? SOURCE_BADGE.MANUAL;
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none"
+      style={{ backgroundColor: style.bg, color: style.color, border: `1px solid ${style.border}` }}
+    >
+      {SOURCE_LABEL[source] ?? source}
+    </span>
+  );
+}
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [showAdd, setShowAdd] = useState(false);
 
   // Add form state
@@ -35,17 +69,21 @@ export default function ContactsPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [genre, setGenre] = useState("");
+  const [addSource, setAddSource] = useState("MANUAL");
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    const q = search ? `?search=${encodeURIComponent(search)}` : "";
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (sourceFilter) params.set("source", sourceFilter);
+    const q = params.toString() ? `?${params.toString()}` : "";
     fetch(`/api/studio/contacts${q}`)
       .then((r) => r.json())
       .then((d) => {
         setContacts(d.contacts ?? []);
         setLoading(false);
       });
-  }, [search]);
+  }, [search, sourceFilter]);
 
   async function handleAdd() {
     if (!name.trim()) return;
@@ -54,13 +92,13 @@ export default function ContactsPage() {
       const res = await fetch("/api/studio/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, genre }),
+        body: JSON.stringify({ name, email, phone, genre, source: addSource }),
       });
       if (res.ok) {
         const data = await res.json();
         setContacts((prev) => [data.contact, ...prev]);
         setShowAdd(false);
-        setName(""); setEmail(""); setPhone(""); setGenre("");
+        setName(""); setEmail(""); setPhone(""); setGenre(""); setAddSource("MANUAL");
       }
     } finally {
       setAdding(false);
@@ -112,6 +150,24 @@ export default function ContactsPage() {
                 />
               </div>
             ))}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Source
+              </label>
+              <div className="relative">
+                <select
+                  value={addSource}
+                  onChange={(e) => setAddSource(e.target.value)}
+                  className="w-full appearance-none rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 pr-8"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+                >
+                  {SOURCE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              </div>
+            </div>
           </div>
           <button
             onClick={handleAdd}
@@ -124,16 +180,32 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, or phone…"
-          className="w-full rounded-xl border pl-9 pr-4 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        />
+      {/* Search + filter row */}
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or phone…"
+            className="w-full rounded-xl border pl-9 pr-4 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          />
+        </div>
+        <div className="relative">
+          <select
+            value={sourceFilter}
+            onChange={(e) => { setSourceFilter(e.target.value); setLoading(true); }}
+            className="appearance-none h-full rounded-xl border pl-3 pr-8 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <option value="">All sources</option>
+            {Object.entries(SOURCE_LABEL).map(([val, lbl]) => (
+              <option key={val} value={val}>{lbl}</option>
+            ))}
+          </select>
+          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        </div>
       </div>
 
       {/* Contacts table */}
@@ -142,7 +214,7 @@ export default function ContactsPage() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
-          className="grid grid-cols-[1fr_180px_120px_100px_80px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
+          className="grid grid-cols-[1fr_180px_120px_100px_100px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
           style={{ borderColor: "var(--border)" }}
         >
           <span>Contact</span>
@@ -158,7 +230,7 @@ export default function ContactsPage() {
           <div className="py-12 text-center space-y-2">
             <UserCircle2 size={32} className="mx-auto text-muted-foreground opacity-40" />
             <p className="text-sm text-muted-foreground">
-              {search ? "No contacts match your search." : "No contacts yet. Add your first one above."}
+              {search || sourceFilter ? "No contacts match your filters." : "No contacts yet. Add your first one above."}
             </p>
           </div>
         ) : (
@@ -166,7 +238,7 @@ export default function ContactsPage() {
             <Link
               key={c.id}
               href={`/studio/contacts/${c.id}`}
-              className="grid grid-cols-[1fr_180px_120px_100px_80px] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors no-underline"
+              className="grid grid-cols-[1fr_180px_120px_100px_100px] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors no-underline"
               style={{ borderColor: "var(--border)" }}
             >
               <div>
@@ -199,9 +271,9 @@ export default function ContactsPage() {
                 <DollarSign size={12} />
                 {c.totalSpent.toFixed(2)}
               </div>
-              <span className="text-xs text-muted-foreground">
-                {SOURCE_LABEL[c.source] ?? c.source}
-              </span>
+              <div>
+                <SourceBadge source={c.source} />
+              </div>
             </Link>
           ))
         )}

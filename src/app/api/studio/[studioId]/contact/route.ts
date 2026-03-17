@@ -92,14 +92,14 @@ export async function POST(
       },
     }).catch(() => {});
   } else {
-    // Create new Contact with source MANUAL (WEBSITE_INQUIRY not in ContactSource enum)
+    // Create new Contact with source INQUIRY (came through public studio page contact form)
     const newContact = await db.contact.create({
       data: {
         studioId: studio.id,
         name: trimmedName,
         email: normalizedEmail,
         phone: trimmedPhone,
-        source: "MANUAL",
+        source: "INQUIRY",
       },
     }).catch(() => null);
 

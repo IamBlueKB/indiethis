@@ -117,6 +117,7 @@ enum InvoiceStatus {
 enum ContactSource {
   INTAKE_FORM
   MANUAL
+  INQUIRY
   BOOKING
   REFERRAL
   INSTAGRAM

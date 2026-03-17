@@ -73,6 +73,27 @@ const ACTIVITY_COLORS: Record<string, string> = {
   AI_VIDEO_REQUESTED: "text-purple-400",
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  BOOKING:     "Booking",
+  INQUIRY:     "Inquiry",
+  MANUAL:      "Manual",
+  WALK_IN:     "Walk-In",
+  REFERRAL:    "Referral",
+  INTAKE_FORM: "Intake Form",
+  INSTAGRAM:   "Instagram",
+};
+
+type BadgeStyle = { bg: string; color: string; border: string };
+const SOURCE_BADGE: Record<string, BadgeStyle> = {
+  BOOKING:     { bg: "rgba(34,197,94,0.12)",  color: "#22c55e", border: "rgba(34,197,94,0.25)"  },
+  INQUIRY:     { bg: "rgba(212,168,67,0.12)", color: "#D4A843", border: "rgba(212,168,67,0.25)" },
+  MANUAL:      { bg: "rgba(148,163,184,0.1)", color: "#94a3b8", border: "rgba(148,163,184,0.2)" },
+  WALK_IN:     { bg: "rgba(59,130,246,0.12)", color: "#60a5fa", border: "rgba(59,130,246,0.25)" },
+  REFERRAL:    { bg: "rgba(251,146,60,0.12)", color: "#fb923c", border: "rgba(251,146,60,0.25)" },
+  INTAKE_FORM: { bg: "rgba(34,197,94,0.12)",  color: "#22c55e", border: "rgba(34,197,94,0.25)"  },
+  INSTAGRAM:   { bg: "rgba(168,85,247,0.12)", color: "#a855f7", border: "rgba(168,85,247,0.25)" },
+};
+
 const SESSION_STATUS_COLOR: Record<string, string> = {
   PENDING: "text-yellow-400",
   CONFIRMED: "text-blue-400",
@@ -166,6 +187,17 @@ fetch(`/api/studio/contacts/${id}`)
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-foreground">{contact.name}</h1>
+            {contact.source && (() => {
+              const style = SOURCE_BADGE[contact.source] ?? SOURCE_BADGE.MANUAL;
+              return (
+                <span
+                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  style={{ backgroundColor: style.bg, color: style.color, border: `1px solid ${style.border}` }}
+                >
+                  {SOURCE_LABEL[contact.source] ?? contact.source}
+                </span>
+              );
+            })()}
             {contact.aiVideoRequested && (
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f733" }}>
                 🎬 AI Video requested — photo uploaded

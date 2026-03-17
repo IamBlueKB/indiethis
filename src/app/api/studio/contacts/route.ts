@@ -18,10 +18,12 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? "";
+  const sourceFilter = searchParams.get("source") ?? "";
 
   const contacts = await db.contact.findMany({
     where: {
       studioId: studio.id,
+      ...(sourceFilter ? { source: sourceFilter as ContactSource } : {}),
       ...(search
         ? {
             OR: [
