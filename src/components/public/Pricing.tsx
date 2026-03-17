@@ -1,387 +1,360 @@
 "use client";
 
-import { Check, Minus, Zap } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
+import { Check, Minus, Zap } from "lucide-react";
+import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
-const tiers = [
+type FeatureValue = string | boolean | null;
+type TierFeature = { label: string; value: FeatureValue };
+
+type ArtistTier = {
+  name: string;
+  price: number;
+  tagline: string;
+  color: string;
+  popular: boolean;
+  features: TierFeature[];
+};
+
+type StudioTier = {
+  name: string;
+  price: number;
+  tagline: string;
+  color: string;
+  popular: boolean;
+  cta: string;
+  features: TierFeature[];
+};
+
+const artistTiers: ArtistTier[] = [
   {
-    name: "Spark",
-    price: 19,
-    tagline: "Start your journey",
-    color: "#9A9A9E",
-    accentColor: "#9A9A9E",
-    popular: false,
+    name: "Launch", price: 19, tagline: "Start making moves", color: "#9A9A9E", popular: false,
     features: [
-      { label: "AI Cover Art", value: "5 / month" },
-      { label: "AI Music Videos", value: null },
-      { label: "AI Mastering", value: "1 / month" },
-      { label: "Lyric Video", value: false },
-      { label: "AI A&R Report", value: false },
+      { label: "AI Cover Art",        value: "5 / month" },
+      { label: "AI Music Videos",     value: null },
+      { label: "AI Mastering",        value: "1 / month" },
+      { label: "Lyric Video",         value: false },
+      { label: "AI A&R Report",       value: false },
       { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site", value: "Profile only" },
-      { label: "Merch Storefront", value: false },
-      { label: "Beat Marketplace", value: false },
-      { label: "Studio Time Included", value: false },
-      { label: "10% Off À La Carte", value: false },
+      { label: "Artist Mini-Site",    value: "Profile only" },
+      { label: "Merch Storefront",    value: false },
+      { label: "Beat Marketplace",    value: false },
+      { label: "Studio Time",         value: false },
+      { label: "10% Off À La Carte",  value: false },
     ],
   },
   {
-    name: "Flame",
-    price: 49,
-    tagline: "Serious artists, serious tools",
-    color: "#D4A843",
-    accentColor: "#D4A843",
-    popular: true,
+    name: "Push", price: 49, tagline: "Scale your sound", color: "#D4A843", popular: true,
     features: [
-      { label: "AI Cover Art", value: "10 / month" },
-      { label: "AI Music Videos", value: "2 / month" },
-      { label: "AI Mastering", value: "3 / month" },
-      { label: "Lyric Video", value: true },
-      { label: "AI A&R Report", value: "1 / month" },
+      { label: "AI Cover Art",        value: "10 / month" },
+      { label: "AI Music Videos",     value: "2 / month" },
+      { label: "AI Mastering",        value: "3 / month" },
+      { label: "Lyric Video",         value: true },
+      { label: "AI A&R Report",       value: "1 / month" },
       { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site", value: "Full site" },
-      { label: "Merch Storefront", value: "Yes (15% cut)" },
-      { label: "Beat Marketplace", value: false },
-      { label: "Studio Time Included", value: false },
-      { label: "10% Off À La Carte", value: true },
+      { label: "Artist Mini-Site",    value: "Full site" },
+      { label: "Merch Storefront",    value: "Yes (15% cut)" },
+      { label: "Beat Marketplace",    value: false },
+      { label: "Studio Time",         value: false },
+      { label: "10% Off À La Carte",  value: true },
     ],
   },
   {
-    name: "Dynasty",
-    price: 149,
-    tagline: "Built for breakout artists",
-    color: "#E85D4A",
-    accentColor: "#E85D4A",
-    popular: false,
+    name: "Reign", price: 149, tagline: "Own your lane", color: "#E85D4A", popular: false,
     features: [
-      { label: "AI Cover Art", value: "15 / month" },
-      { label: "AI Music Videos", value: "5 / month" },
-      { label: "AI Mastering", value: "10 / month" },
-      { label: "Lyric Video", value: true },
-      { label: "AI A&R Report", value: "3 / month" },
+      { label: "AI Cover Art",        value: "15 / month" },
+      { label: "AI Music Videos",     value: "5 / month" },
+      { label: "AI Mastering",        value: "10 / month" },
+      { label: "Lyric Video",         value: true },
+      { label: "AI A&R Report",       value: "3 / month" },
       { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site", value: "Full + custom domain" },
-      { label: "Merch Storefront", value: "Yes (10% cut)" },
-      { label: "Beat Marketplace", value: true },
-      { label: "Studio Time Included", value: "2 hrs / month" },
-      { label: "10% Off À La Carte", value: true },
+      { label: "Artist Mini-Site",    value: "Full + custom domain" },
+      { label: "Merch Storefront",    value: "Yes (10% cut)" },
+      { label: "Beat Marketplace",    value: true },
+      { label: "Studio Time",         value: "2 hrs / month" },
+      { label: "10% Off À La Carte",  value: true },
+    ],
+  },
+];
+
+const studioTiers: StudioTier[] = [
+  {
+    name: "Pro", price: 49, tagline: "Run your studio smarter", color: "#9A9A9E", popular: false, cta: "Get Started",
+    features: [
+      { label: "Studio admin dashboard",          value: true },
+      { label: "Bookings + CRM",                  value: true },
+      { label: "Intake, invoicing, file delivery", value: true },
+      { label: "Email blasts",                    value: "500/mo" },
+      { label: "Public page (AI styles)",          value: "3 styles" },
+      { label: "AI page generations",             value: "3/mo" },
+      { label: "Contact form on page",            value: true },
+      { label: "AI video upsell at intake",       value: true },
+      { label: "Featured artists section",        value: false },
+      { label: "Gallery",                         value: "6 photos" },
+      { label: "Custom accent color",             value: false },
+      { label: "Custom domain",                   value: false },
+      { label: "Analytics dashboard",             value: false },
+      { label: "Priority support",                value: false },
+    ],
+  },
+  {
+    name: "Elite", price: 99, tagline: "The full studio experience", color: "#E85D4A", popular: true, cta: "Go Elite",
+    features: [
+      { label: "Studio admin dashboard",          value: true },
+      { label: "Bookings + CRM",                  value: true },
+      { label: "Intake, invoicing, file delivery", value: true },
+      { label: "Email blasts",                    value: "2,000/mo" },
+      { label: "Public page (AI styles)",          value: "All styles" },
+      { label: "AI page generations",             value: "10/mo" },
+      { label: "Contact form on page",            value: true },
+      { label: "AI video upsell at intake",       value: true },
+      { label: "Featured artists section",        value: true },
+      { label: "Gallery",                         value: "12 photos" },
+      { label: "Custom accent color",             value: true },
+      { label: "Custom domain",                   value: true },
+      { label: "Analytics dashboard",             value: true },
+      { label: "Priority support",                value: true },
     ],
   },
 ];
 
 const alaCarteItems = [
-  { name: "AI Music Video", options: ["$49 Standard", "$99 Premium", "$149 Cinematic"] },
-  { name: "AI Cover Art", options: ["$9.99 Single", "$29.99 Promo Pack"] },
-  { name: "AI Mastering", options: ["$4.99 Quick", "$14.99 Studio Grade"] },
-  { name: "Lyric Video", options: ["$24.99"] },
-  { name: "AI A&R Report", options: ["$9.99"] },
-  { name: "Press Kit", options: ["$19.99"] },
+  { name: "AI Music Video",  options: ["$49 Standard", "$99 Premium", "$149 Cinematic"] },
+  { name: "AI Cover Art",    options: ["$9.99 Single", "$29.99 Promo Pack"] },
+  { name: "AI Mastering",    options: ["$4.99 Quick", "$14.99 Studio Grade"] },
+  { name: "Lyric Video",     options: ["$24.99"] },
+  { name: "AI A&R Report",   options: ["$9.99"] },
+  { name: "Press Kit",       options: ["$19.99"] },
 ];
 
-function FeatureValue({ value }: { value: string | boolean | null }) {
-  if (value === null || value === false) {
-    return <Minus size={16} color="#3A3A3E" />;
-  }
-  if (value === true) {
-    return <Check size={16} color="#34C759" strokeWidth={2.5} />;
-  }
+function FeatureRow({ value }: { value: FeatureValue }) {
+  if (value === null || value === false)
+    return <Minus size={15} className="text-border" />;
+  if (value === true)
+    return <Check size={15} className="text-success" strokeWidth={2.5} />;
+  return <span className="text-xs font-medium text-foreground">{value}</span>;
+}
+
+function ArtistCards() {
   return (
-    <span style={{ fontSize: "13px", color: "#F5F0E8", fontWeight: 500 }}>
-      {value}
-    </span>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start mb-14">
+      {artistTiers.map((tier) => (
+        <Card
+          key={tier.name}
+          className={cn("relative transition-all", tier.popular && "scale-[1.02]")}
+          style={{
+            backgroundColor: "var(--card)",
+            ...(tier.popular
+              ? { border: `2px solid ${tier.color}70`, boxShadow: `0 0 48px ${tier.color}15, 0 0 0 1px ${tier.color}40` }
+              : { border: "1px solid var(--border)" }),
+          }}
+        >
+          {tier.popular && (
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+              <Badge className="rounded-full text-xs font-bold gap-1 px-3 py-1 bg-accent text-accent-foreground border-0 shadow-lg whitespace-nowrap">
+                <Zap size={10} strokeWidth={3} />
+                Most Popular
+              </Badge>
+            </div>
+          )}
+          <CardHeader className="pb-2">
+            <h3 className="font-display font-extrabold text-xl tracking-tight mb-1" style={{ color: tier.color }}>
+              {tier.name}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">{tier.tagline}</p>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-extrabold text-foreground leading-none" style={{ fontSize: "52px", letterSpacing: "-2px" }}>
+                ${tier.price}
+              </span>
+              <span className="text-base text-muted-foreground font-medium">/mo</span>
+            </div>
+          </CardHeader>
+          <Separator />
+          <CardContent className="py-4">
+            <div className="space-y-0">
+              {tier.features.map((f, i) => (
+                <div
+                  key={i}
+                  className={cn("flex items-center justify-between py-2.5", i < tier.features.length - 1 && "border-b border-border-subtle")}
+                >
+                  <span className="text-sm" style={{ color: f.value === null || f.value === false ? "#4A4A4E" : "var(--color-muted-foreground)" }}>
+                    {f.label}
+                  </span>
+                  <FeatureRow value={f.value} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+          <CardFooter className="bg-transparent border-t-0 px-4 pb-5 pt-2">
+            <Link
+              href="/signup"
+              className={cn(
+                "w-full rounded-full h-11 font-bold text-sm transition-all inline-flex items-center justify-center",
+                tier.popular
+                  ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                  : "border hover:bg-surface-hover"
+              )}
+              style={!tier.popular ? { borderColor: `${tier.color}50`, color: tier.color } : undefined}
+            >
+              Get {tier.name}
+            </Link>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function StudioCards() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start mb-14 max-w-3xl mx-auto w-full">
+      {studioTiers.map((tier) => (
+        <Card
+          key={tier.name}
+          className={cn("relative transition-all", tier.popular && "scale-[1.02]")}
+          style={{
+            backgroundColor: "var(--card)",
+            ...(tier.popular
+              ? { border: `2px solid ${tier.color}70`, boxShadow: `0 0 48px ${tier.color}15, 0 0 0 1px ${tier.color}40` }
+              : { border: "1px solid var(--border)" }),
+          }}
+        >
+          {tier.popular && (
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+              <Badge className="rounded-full text-xs font-bold gap-1 px-3 py-1 border-0 shadow-lg whitespace-nowrap" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
+                <Zap size={10} strokeWidth={3} />
+                Most Popular
+              </Badge>
+            </div>
+          )}
+          <CardHeader className="pb-2">
+            <h3 className="font-display font-extrabold text-xl tracking-tight mb-1" style={{ color: tier.color }}>
+              {tier.name}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">{tier.tagline}</p>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-extrabold text-foreground leading-none" style={{ fontSize: "52px", letterSpacing: "-2px" }}>
+                ${tier.price}
+              </span>
+              <span className="text-base text-muted-foreground font-medium">/mo</span>
+            </div>
+          </CardHeader>
+          <Separator />
+          <CardContent className="py-4">
+            <div className="space-y-0">
+              {tier.features.map((f, i) => (
+                <div
+                  key={i}
+                  className={cn("flex items-center justify-between py-2.5", i < tier.features.length - 1 && "border-b border-border-subtle")}
+                >
+                  <span className="text-sm" style={{ color: f.value === null || f.value === false ? "#4A4A4E" : "var(--color-muted-foreground)" }}>
+                    {f.label}
+                  </span>
+                  <FeatureRow value={f.value} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+          <CardFooter className="bg-transparent border-t-0 px-4 pb-5 pt-2">
+            <Link
+              href="/signup"
+              className="w-full rounded-full h-11 font-bold text-sm transition-all inline-flex items-center justify-center"
+              style={
+                tier.popular
+                  ? { backgroundColor: "#E85D4A", color: "#fff" }
+                  : { border: "1px solid #E85D4A80", color: "#E85D4A" }
+              }
+            >
+              {tier.cta}
+            </Link>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
   );
 }
 
 export default function Pricing() {
-  return (
-    <section
-      id="pricing"
-      style={{
-        padding: "100px 24px",
-        backgroundColor: "#0A0A0B",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
+  const [tab, setTab] = useState<"artists" | "studios">("artists");
 
-      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
+  return (
+    <section id="pricing" className="relative py-24 px-6 bg-background">
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "64px" }}>
-          <div
-            style={{
-              display: "inline-block",
-              backgroundColor: "rgba(212, 168, 67, 0.1)",
-              border: "1px solid rgba(212, 168, 67, 0.25)",
-              borderRadius: "9999px",
-              padding: "5px 16px",
-              marginBottom: "20px",
-            }}
-          >
-            <span
-              style={{
-                color: "#D4A843",
-                fontSize: "12px",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Pricing
-            </span>
+        <div className="text-center mb-10">
+          <div className="inline-block rounded-full border border-accent/25 bg-accent/10 px-4 py-1 mb-5">
+            <span className="text-accent text-[11px] font-semibold uppercase tracking-[0.08em]">Pricing</span>
           </div>
           <h2
-            style={{
-              fontFamily: "var(--font-outfit), sans-serif",
-              fontSize: "clamp(32px, 4vw, 52px)",
-              fontWeight: 800,
-              color: "#F5F0E8",
-              lineHeight: 1.1,
-              letterSpacing: "-1.5px",
-              marginBottom: "16px",
-            }}
+            className="font-display font-extrabold text-foreground leading-[1.1] mb-4"
+            style={{ fontSize: "clamp(32px,4vw,52px)", letterSpacing: "-1.5px" }}
           >
             Simple pricing.{" "}
-            <span style={{ color: "#9A9A9E" }}>No surprises.</span>
+            <span className="text-muted-foreground">No surprises.</span>
           </h2>
-          <p style={{ fontSize: "18px", color: "#9A9A9E", maxWidth: "460px", margin: "0 auto" }}>
-            Every tier is month-to-month. Cancel anytime. All plans billed monthly.
+          <p className="text-lg text-muted-foreground max-w-[420px] mx-auto mb-8">
+            Every tier is month-to-month. Cancel anytime.
           </p>
+
+          {/* Toggle */}
+          <div className="inline-flex items-center gap-2">
+            <button
+              onClick={() => setTab("artists")}
+              className="rounded-full px-6 py-2.5 text-sm font-bold transition-all"
+              style={
+                tab === "artists"
+                  ? { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }
+                  : { border: "1px solid var(--border)", color: "var(--muted-foreground)", backgroundColor: "transparent" }
+              }
+            >
+              For Artists
+            </button>
+            <button
+              onClick={() => setTab("studios")}
+              className="rounded-full px-6 py-2.5 text-sm font-bold transition-all"
+              style={
+                tab === "studios"
+                  ? { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }
+                  : { border: "1px solid var(--border)", color: "var(--muted-foreground)", backgroundColor: "transparent" }
+              }
+            >
+              For Studios
+            </button>
+          </div>
         </div>
 
         {/* Tier cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "24px",
-            alignItems: "start",
-            marginBottom: "64px",
-          }}
-        >
-          {tiers.map((tier) => (
-            <div
-              key={tier.name}
-              style={{
-                backgroundColor: tier.popular ? "#141416" : "#0E0E10",
-                border: tier.popular
-                  ? `2px solid ${tier.accentColor}50`
-                  : "1px solid #2A2A2E",
-                borderRadius: "16px",
-                padding: "36px 32px",
-                position: "relative",
-                transform: tier.popular ? "scale(1.02)" : "scale(1)",
-                boxShadow: tier.popular
-                  ? `0 0 60px ${tier.accentColor}18`
-                  : "none",
-              }}
-            >
-              {tier.popular && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-14px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    backgroundColor: tier.accentColor,
-                    color: "#0A0A0B",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    padding: "4px 16px",
-                    borderRadius: "9999px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <Zap size={11} strokeWidth={3} />
-                  Most Popular
-                </div>
-              )}
+        {tab === "artists" ? <ArtistCards /> : <StudioCards />}
 
-              {/* Tier header */}
-              <div style={{ marginBottom: "28px" }}>
-                <h3
-                  style={{
-                    fontFamily: "var(--font-outfit), sans-serif",
-                    fontSize: "22px",
-                    fontWeight: 800,
-                    color: tier.accentColor,
-                    marginBottom: "6px",
-                    letterSpacing: "-0.3px",
-                  }}
-                >
-                  {tier.name}
-                </h3>
-                <p style={{ fontSize: "14px", color: "#6A6A6E", marginBottom: "20px" }}>
-                  {tier.tagline}
-                </p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-outfit), sans-serif",
-                      fontSize: "52px",
-                      fontWeight: 800,
-                      color: "#F5F0E8",
-                      lineHeight: 1,
-                      letterSpacing: "-2px",
-                    }}
-                  >
-                    ${tier.price}
-                  </span>
-                  <span style={{ fontSize: "16px", color: "#6A6A6E", fontWeight: 500 }}>
-                    /mo
-                  </span>
-                </div>
-              </div>
-
-              {/* Features list */}
-              <div style={{ marginBottom: "32px" }}>
-                {tier.features.map((feature, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 0",
-                      borderBottom: i < tier.features.length - 1 ? "1px solid #1F1F22" : "none",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        color:
-                          feature.value === null || feature.value === false
-                            ? "#4A4A4E"
-                            : "#9A9A9E",
-                      }}
-                    >
-                      {feature.label}
-                    </span>
-                    <FeatureValue value={feature.value} />
+        {/* À La Carte — artists only */}
+        {tab === "artists" && (
+          <Card style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+            <CardHeader>
+              <h3 className="text-xl font-bold tracking-tight">Pay Per Use</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                No subscription needed. Just pick a tool and go. Push and Reign subscribers save 10%.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {alaCarteItems.map((item, i) => (
+                  <div key={i} className="rounded-[10px] border border-border-subtle bg-background p-4">
+                    <div className="text-sm font-semibold text-foreground mb-2">{item.name}</div>
+                    {item.options.map((opt, j) => (
+                      <div key={j} className="text-xs text-accent font-medium leading-[1.8]">{opt}</div>
+                    ))}
                   </div>
                 ))}
               </div>
-
-              <Link
-                href="/signup"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "center",
-                  textDecoration: "none",
-                  padding: "13px",
-                  borderRadius: "9999px",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  transition: "all 0.2s",
-                  backgroundColor: tier.popular ? tier.accentColor : "transparent",
-                  color: tier.popular ? "#0A0A0B" : tier.accentColor,
-                  border: tier.popular ? "none" : `1px solid ${tier.accentColor}50`,
-                }}
-                onMouseEnter={(e) => {
-                  if (tier.popular) {
-                    e.currentTarget.style.opacity = "0.9";
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                  } else {
-                    e.currentTarget.style.backgroundColor = `${tier.accentColor}15`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (tier.popular) {
-                    e.currentTarget.style.opacity = "1";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  } else {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                  }
-                }}
-              >
-                Get {tier.name}
-              </Link>
-            </div>
-          ))}
-        </div>
-
-        {/* À La Carte */}
-        <div
-          style={{
-            backgroundColor: "#141416",
-            border: "1px solid #2A2A2E",
-            borderRadius: "16px",
-            padding: "40px",
-          }}
-        >
-          <div style={{ marginBottom: "28px" }}>
-            <h3
-              style={{
-                fontFamily: "var(--font-outfit), sans-serif",
-                fontSize: "22px",
-                fontWeight: 700,
-                color: "#F5F0E8",
-                marginBottom: "8px",
-                letterSpacing: "-0.3px",
-              }}
-            >
-              À La Carte Pricing
-            </h3>
-            <p style={{ fontSize: "14px", color: "#6A6A6E" }}>
-              Buy individual AI tools without a subscription. Flame and Dynasty subscribers get 10% off all à la carte purchases.
-            </p>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: "16px",
-            }}
-          >
-            {alaCarteItems.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  backgroundColor: "#0E0E10",
-                  border: "1px solid #1F1F22",
-                  borderRadius: "10px",
-                  padding: "16px 18px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    color: "#F5F0E8",
-                    marginBottom: "8px",
-                  }}
-                >
-                  {item.name}
-                </div>
-                {item.options.map((opt, j) => (
-                  <div
-                    key={j}
-                    style={{
-                      fontSize: "13px",
-                      color: "#D4A843",
-                      fontWeight: 500,
-                      lineHeight: 1.8,
-                    }}
-                  >
-                    {opt}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </section>
   );

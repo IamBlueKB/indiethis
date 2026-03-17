@@ -1,0 +1,10 @@
+{
+  "name": "IndieThis",
+  "short_name": "IndieThis",
+  "description": "Your music. Your money. Your move.",
+  "start_url": "/studio/quick-send",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#D4A843",
+  "icons": []
+}

@@ -1,133 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Users, MessageSquare, BarChart3, Mail, Upload, Calendar } from "lucide-react";
+import { ArrowRight, Users, MessageSquare, BarChart3, Mail, Upload, Calendar, type LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-const studioFeatures = [
-  {
-    icon: Calendar,
-    title: "Booking Management",
-    description: "Send branded SMS intake links. Artists complete intake forms from their phone — session locked in before they arrive.",
-  },
-  {
-    icon: Users,
-    title: "Artist Roster",
-    description: "Every artist you work with gets an IndieThis account. Track sessions, files, subscriptions, and revenue in one view.",
-  },
-  {
-    icon: Upload,
-    title: "File Delivery",
-    description: "Upload mastered tracks, stems, and project files. Artists receive instant notifications and download from their dashboard.",
-  },
-  {
-    icon: Mail,
-    title: "Email Campaigns",
-    description: "Send targeted email blasts to your roster — by genre, frequency, or subscription tier. Schedule or send immediately.",
-  },
-  {
-    icon: MessageSquare,
-    title: "SMS Notifications",
-    description: "Automated booking confirmations, session reminders, and file delivery alerts — all powered by Twilio.",
-  },
-  {
-    icon: BarChart3,
-    title: "Revenue Tracking",
-    description: "Stripe, PayPal, Zelle, and CashApp — all in one payment dashboard with daily, weekly, and monthly reporting.",
-  },
+type StudioFeature = { icon: LucideIcon; title: string; description: string };
+
+const studioFeatures: StudioFeature[] = [
+  { icon: Calendar,     title: "Booking Management",
+    description: "Send branded SMS intake links. Artists complete intake forms from their phone — session locked in before they arrive." },
+  { icon: Users,        title: "Artist Roster",
+    description: "Every artist you work with gets an IndieThis account. Track sessions, files, subscriptions, and revenue in one view." },
+  { icon: Upload,       title: "File Delivery",
+    description: "Upload mastered tracks, stems, and project files. Artists receive instant notifications and download from their dashboard." },
+  { icon: Mail,         title: "Email Campaigns",
+    description: "Send targeted email blasts to your roster — by genre, frequency, or subscription tier. Schedule or send immediately." },
+  { icon: MessageSquare,title: "SMS Notifications",
+    description: "Automated booking confirmations, session reminders, and file delivery alerts — built directly into the platform." },
+  { icon: BarChart3,    title: "Revenue Tracking",
+    description: "Stripe, PayPal, Zelle, and CashApp — all in one payment dashboard with daily, weekly, and monthly reporting." },
 ];
 
 export default function ForStudios() {
   return (
-    <section
-      id="studios"
-      style={{
-        padding: "100px 24px",
-        backgroundColor: "#0D0D0F",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
+    <section id="studios" className="relative py-24 px-6 overflow-hidden" style={{ backgroundColor: "#0D0D0F" }}>
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      <div className="pointer-events-none absolute top-1/3 -right-20 w-[500px] h-[500px]"
+        style={{ background: "radial-gradient(ellipse, rgba(212,168,67,0.05) 0%, transparent 70%)" }} />
 
-      {/* Ambient glow */}
-      <div
-        style={{
-          position: "absolute",
-          top: "30%",
-          right: "-10%",
-          width: "500px",
-          height: "500px",
-          background: "radial-gradient(ellipse, rgba(212, 168, 67, 0.05) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
-      />
-
-      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "80px",
-            alignItems: "center",
-          }}
-          className="grid-studios"
-        >
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
           {/* Left: Copy */}
           <div>
-            <div
-              style={{
-                display: "inline-block",
-                backgroundColor: "rgba(212, 168, 67, 0.1)",
-                border: "1px solid rgba(212, 168, 67, 0.25)",
-                borderRadius: "9999px",
-                padding: "5px 16px",
-                marginBottom: "24px",
-              }}
-            >
-              <span
-                style={{
-                  color: "#D4A843",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                For Studios
-              </span>
+            <div className="inline-block rounded-full border border-accent/25 bg-accent/10 px-4 py-1 mb-6">
+              <span className="text-accent text-[11px] font-semibold uppercase tracking-[0.08em]">For Studios</span>
             </div>
 
             <h2
-              style={{
-                fontFamily: "var(--font-outfit), sans-serif",
-                fontSize: "clamp(32px, 3.5vw, 48px)",
-                fontWeight: 800,
-                color: "#F5F0E8",
-                lineHeight: 1.1,
-                letterSpacing: "-1.5px",
-                marginBottom: "20px",
-              }}
+              className="font-display font-extrabold text-foreground leading-[1.1] mb-5"
+              style={{ fontSize: "clamp(32px,3.5vw,48px)", letterSpacing: "-1.5px" }}
             >
-              Your studio.{" "}
+              Your studio.
               <br />
               Our platform.{" "}
               <span
@@ -142,134 +59,55 @@ export default function ForStudios() {
               </span>
             </h2>
 
-            <p
-              style={{
-                fontSize: "17px",
-                color: "#9A9A9E",
-                lineHeight: 1.7,
-                marginBottom: "32px",
-                maxWidth: "480px",
-              }}
-            >
+            <p className="text-[17px] text-muted-foreground leading-relaxed mb-8 max-w-[480px]">
               IndieThis started in a recording studio in Chicago. We built the tools
               we needed — and now every studio on the platform gets them. CRM,
               booking, file delivery, email campaigns, and payments in one place.
             </p>
 
-            <div
-              style={{
-                backgroundColor: "#141416",
-                border: "1px solid #2A2A2E",
-                borderRadius: "12px",
-                padding: "20px 24px",
-                marginBottom: "36px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "13px",
-                  color: "#6A6A6E",
-                  fontWeight: 500,
-                  marginBottom: "6px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Flagship Studio
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-outfit), sans-serif",
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  color: "#F5F0E8",
-                  marginBottom: "4px",
-                }}
-              >
-                Clear Ear Studios
-              </div>
-              <div style={{ fontSize: "14px", color: "#6A6A6E" }}>
-                7411 S Stony Island Ave, Chicago, IL 60649
-              </div>
-              <div
-                style={{
-                  marginTop: "12px",
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                {["Recording", "Mixing", "Mastering"].map((service) => (
-                  <span
-                    key={service}
-                    style={{
-                      backgroundColor: "rgba(212, 168, 67, 0.1)",
-                      border: "1px solid rgba(212, 168, 67, 0.2)",
-                      color: "#D4A843",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      padding: "3px 12px",
-                      borderRadius: "9999px",
-                    }}
-                  >
-                    {service}
-                  </span>
-                ))}
-              </div>
-            </div>
+            {/* Flagship studio callout */}
+            <Card className="mb-9">
+              <CardContent className="pt-5 pb-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
+                  Flagship Studio
+                </div>
+                <div className="font-display font-bold text-lg text-foreground tracking-tight mb-0.5">
+                  Clear Ear Studios
+                </div>
+                <div className="text-sm text-muted-foreground mb-3">
+                  Chicago, IL
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {["Recording", "Mixing", "Mastering"].map((s) => (
+                    <Badge
+                      key={s}
+                      variant="outline"
+                      className="rounded-full text-xs font-semibold border-accent/20 bg-accent/10 text-accent"
+                    >
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <div className="flex gap-3 flex-wrap">
               <Link
                 href="/studios"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  backgroundColor: "#D4A843",
-                  color: "#0A0A0B",
-                  textDecoration: "none",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  padding: "13px 24px",
-                  borderRadius: "9999px",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#E0B85A";
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#D4A843";
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
+                className={cn(
+                  buttonVariants({ variant: "default" }),
+                  "rounded-full h-auto px-6 py-3 text-sm font-bold gap-2 bg-accent text-accent-foreground hover:bg-accent/90 hover:-translate-y-px transition-all"
+                )}
               >
                 Onboard Your Studio
-                <ArrowRight size={16} strokeWidth={2.5} />
+                <ArrowRight size={15} strokeWidth={2.5} />
               </Link>
               <Link
                 href="/clearearstudios"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  backgroundColor: "transparent",
-                  color: "#9A9A9E",
-                  textDecoration: "none",
-                  fontSize: "15px",
-                  fontWeight: 500,
-                  padding: "13px 24px",
-                  borderRadius: "9999px",
-                  border: "1px solid #2A2A2E",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "#F5F0E8";
-                  e.currentTarget.style.borderColor = "#4A4A4E";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "#9A9A9E";
-                  e.currentTarget.style.borderColor = "#2A2A2E";
-                }}
+                className={cn(
+                  buttonVariants({ variant: "ghost" }),
+                  "rounded-full h-auto px-6 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+                )}
               >
                 See Example Studio
               </Link>
@@ -277,78 +115,24 @@ export default function ForStudios() {
           </div>
 
           {/* Right: Feature grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-            }}
-          >
-            {studioFeatures.map((feature, i) => {
-              const Icon = feature.icon;
+          <div className="grid grid-cols-2 gap-4">
+            {studioFeatures.map((f, i) => {
+              const Icon = f.icon;
               return (
-                <div
-                  key={i}
-                  style={{
-                    backgroundColor: "#141416",
-                    border: "1px solid #2A2A2E",
-                    borderRadius: "12px",
-                    padding: "20px",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#3A3A3E";
-                    e.currentTarget.style.backgroundColor = "#1A1A1D";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#2A2A2E";
-                    e.currentTarget.style.backgroundColor = "#141416";
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      borderRadius: "8px",
-                      backgroundColor: "rgba(212, 168, 67, 0.1)",
-                      border: "1px solid rgba(212, 168, 67, 0.2)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginBottom: "14px",
-                    }}
-                  >
-                    <Icon size={16} color="#D4A843" strokeWidth={2} />
-                  </div>
-                  <h4
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: 700,
-                      color: "#F5F0E8",
-                      marginBottom: "6px",
-                      letterSpacing: "-0.2px",
-                    }}
-                  >
-                    {feature.title}
-                  </h4>
-                  <p style={{ fontSize: "13px", color: "#6A6A6E", lineHeight: 1.55 }}>
-                    {feature.description}
-                  </p>
-                </div>
+                <Card key={i} className="transition-all duration-200 hover:bg-surface-hover hover:ring-border/40">
+                  <CardContent className="pt-5 pb-5">
+                    <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center mb-3.5">
+                      <Icon size={15} className="text-accent" strokeWidth={2} />
+                    </div>
+                    <h4 className="text-sm font-bold text-foreground mb-1.5 tracking-tight">{f.title}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{f.description}</p>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @media (max-width: 768px) {
-          .grid-studios {
-            grid-template-columns: 1fr !important;
-            gap: 48px !important;
-          }
-        }
-      `}</style>
     </section>
   );
 }

@@ -3,6 +3,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X, Music2 } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+
+const navLinks = [
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "For Studios", href: "#studios" },
+];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -16,76 +25,31 @@ export default function Navbar() {
 
   return (
     <header
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-        transition: "all 0.3s ease",
-        backgroundColor: scrolled ? "rgba(10, 10, 11, 0.92)" : "transparent",
-        backdropFilter: scrolled ? "blur(12px)" : "none",
-        borderBottom: scrolled ? "1px solid #2A2A2E" : "1px solid transparent",
-      }}
+      className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        scrolled
+          ? "bg-background/92 backdrop-blur-md border-b border-border"
+          : "bg-transparent border-b border-transparent"
+      )}
     >
-      <div
-        style={{
-          maxWidth: "1280px",
-          margin: "0 auto",
-          padding: "0 24px",
-          height: "72px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-          <div
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "10px",
-              background: "linear-gradient(135deg, #D4A843, #E85D4A)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Music2 size={18} color="#0A0A0B" strokeWidth={2.5} />
+        <Link href="/" className="flex items-center gap-2.5 no-underline">
+          <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-accent to-cta flex items-center justify-center shrink-0">
+            <Music2 size={18} className="text-background" strokeWidth={2.5} />
           </div>
-          <span
-            style={{
-              fontFamily: "var(--font-outfit), sans-serif",
-              fontWeight: 700,
-              fontSize: "20px",
-              color: "#F5F0E8",
-              letterSpacing: "-0.3px",
-            }}
-          >
+          <span className="font-display font-bold text-xl text-foreground tracking-tight">
             IndieThis
           </span>
         </Link>
 
         {/* Desktop Nav */}
-        <nav style={{ display: "flex", alignItems: "center", gap: "32px" }} className="hidden md:flex">
-          {[
-            { label: "Features", href: "#features" },
-            { label: "Pricing", href: "#pricing" },
-            { label: "For Studios", href: "#studios" },
-          ].map((item) => (
+        <nav className="hidden md:flex items-center gap-8">
+          {navLinks.map((item) => (
             <a
               key={item.label}
               href={item.href}
-              style={{
-                color: "#9A9A9E",
-                textDecoration: "none",
-                fontSize: "15px",
-                fontWeight: 500,
-                transition: "color 0.2s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#F5F0E8")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#9A9A9E")}
+              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors no-underline"
             >
               {item.label}
             </a>
@@ -93,120 +57,69 @@ export default function Navbar() {
         </nav>
 
         {/* Desktop CTAs */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }} className="hidden md:flex">
+        <div className="hidden md:flex items-center gap-2">
           <Link
             href="/login"
-            style={{
-              color: "#9A9A9E",
-              textDecoration: "none",
-              fontSize: "15px",
-              fontWeight: 500,
-              padding: "8px 16px",
-              transition: "color 0.2s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#F5F0E8")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#9A9A9E")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "rounded-full px-4 text-muted-foreground hover:text-foreground"
+            )}
           >
             Sign In
           </Link>
           <Link
             href="/signup"
-            style={{
-              backgroundColor: "#D4A843",
-              color: "#0A0A0B",
-              textDecoration: "none",
-              fontSize: "15px",
-              fontWeight: 600,
-              padding: "9px 20px",
-              borderRadius: "9999px",
-              transition: "background-color 0.2s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#E0B85A")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#D4A843")}
+            className={cn(
+              buttonVariants({ variant: "default", size: "sm" }),
+              "rounded-full px-5 font-semibold bg-accent text-accent-foreground hover:bg-accent/90"
+            )}
           >
             Start Creating
           </Link>
         </div>
 
-        {/* Mobile menu button */}
-        <button
-          className="md:hidden"
+        {/* Mobile toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden text-foreground"
           onClick={() => setMobileOpen(!mobileOpen)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#F5F0E8",
-            cursor: "pointer",
-            padding: "8px",
-          }}
         >
-          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+        </Button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile menu */}
       {mobileOpen && (
-        <div
-          className="md:hidden"
-          style={{
-            backgroundColor: "#141416",
-            borderTop: "1px solid #2A2A2E",
-            padding: "20px 24px 24px",
-          }}
-        >
-          <nav style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            {[
-              { label: "Features", href: "#features" },
-              { label: "Pricing", href: "#pricing" },
-              { label: "For Studios", href: "#studios" },
-            ].map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                style={{
-                  color: "#9A9A9E",
-                  textDecoration: "none",
-                  fontSize: "16px",
-                  fontWeight: 500,
-                  padding: "12px 0",
-                  borderBottom: "1px solid #1F1F22",
-                }}
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
+        <div className="md:hidden bg-card border-t border-border px-6 pb-6 pt-4 space-y-1">
+          {navLinks.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className="block py-3 text-muted-foreground hover:text-foreground text-base font-medium border-b border-border-subtle no-underline transition-colors"
+            >
+              {item.label}
+            </a>
+          ))}
+          <div className="flex flex-col gap-3 pt-4">
             <Link
               href="/login"
               onClick={() => setMobileOpen(false)}
-              style={{
-                color: "#F5F0E8",
-                textDecoration: "none",
-                fontSize: "16px",
-                fontWeight: 500,
-                padding: "12px 20px",
-                border: "1px solid #2A2A2E",
-                borderRadius: "9999px",
-                textAlign: "center",
-              }}
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "rounded-full h-11 text-base font-medium"
+              )}
             >
               Sign In
             </Link>
             <Link
               href="/signup"
               onClick={() => setMobileOpen(false)}
-              style={{
-                backgroundColor: "#D4A843",
-                color: "#0A0A0B",
-                textDecoration: "none",
-                fontSize: "16px",
-                fontWeight: 600,
-                padding: "12px 20px",
-                borderRadius: "9999px",
-                textAlign: "center",
-              }}
+              className={cn(
+                buttonVariants({ variant: "default" }),
+                "rounded-full h-11 text-base font-semibold bg-accent text-accent-foreground"
+              )}
             >
               Start Creating
             </Link>

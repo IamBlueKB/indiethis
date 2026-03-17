@@ -1,0 +1,770 @@
+// IndieThis — Prisma Schema
+// Database: PostgreSQL
+// Auth: NextAuth v5 (Credentials + JWT strategy)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")    // pooler URL (port 6543) — used at runtime
+  directUrl = env("DIRECT_URL")      // direct URL (port 5432) — used by prisma db push/migrate
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ARTIST
+  STUDIO_ADMIN
+  PLATFORM_ADMIN
+}
+
+enum SubscriptionTier {
+  LAUNCH
+  PUSH
+  REIGN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum SessionStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  DEPOSIT
+  PAID
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAYPAL
+  ZELLE
+  CASHAPP
+}
+
+enum TrackStatus {
+  DRAFT
+  PROCESSING
+  PUBLISHED
+}
+
+enum AIGenerationType {
+  VIDEO
+  COVER_ART
+  MASTERING
+  LYRIC_VIDEO
+  AAR_REPORT
+  PRESS_KIT
+}
+
+enum AIGenerationStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ProductType {
+  TSHIRT
+  HOODIE
+  POSTER
+  PHONECASE
+  HAT
+  STICKER
+  MUG
+}
+
+enum FulfillmentStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+}
+
+enum ArtistSiteTemplate {
+  TEMPLATE_1
+  TEMPLATE_2
+  TEMPLATE_3
+  TEMPLATE_4
+}
+
+enum ReceiptType {
+  SUBSCRIPTION
+  AI_TOOL
+  MERCH_SALE
+  BEAT_PURCHASE
+  SESSION_PAYMENT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  OVERDUE
+}
+
+enum ContactSource {
+  INTAKE_FORM
+  MANUAL
+  BOOKING
+  REFERRAL
+  INSTAGRAM
+  WALK_IN
+}
+
+enum NotificationType {
+  FILE_DELIVERED
+  PAYMENT_RECEIVED
+  BOOKING_CONFIRMED
+  BOOKING_INQUIRY
+  AI_GENERATION_COMPLETE
+  NEW_MESSAGE
+  BEAT_PREVIEW
+}
+
+enum ActivityLogType {
+  BOOKING_LINK_SENT
+  FORM_SUBMITTED
+  FILES_DELIVERED
+  PAYMENT_RECEIVED
+  EMAIL_SENT
+  SMS_SENT
+  EMAIL_OPENED
+  NOTE_ADDED
+  SESSION_COMPLETED
+  AI_VIDEO_REQUESTED
+}
+
+enum BeatPreviewStatus {
+  PENDING
+  LISTENED
+  PURCHASED
+  EXPIRED
+}
+
+enum LicenseType {
+  EXCLUSIVE
+  NON_EXCLUSIVE
+  LEASE
+  CUSTOM
+}
+
+enum StudioTier {
+  PRO
+  ELITE
+}
+
+enum StudioTemplate {
+  CLASSIC
+  BOLD
+  EDITORIAL
+  CUSTOM
+}
+
+// ─── NextAuth Required Models ─────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Business Models ──────────────────────────────────────────────────────────
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  emailVerified    DateTime?
+  phone            String?
+  passwordHash     String
+  role             Role     @default(ARTIST)
+  name             String
+  artistName       String?
+  bio              String?
+  photo            String?
+  instagramHandle  String?
+  tiktokHandle     String?
+  youtubeChannel   String?
+  spotifyUrl       String?
+  appleMusicUrl    String?
+  stripeCustomerId String?
+  stripeConnectId      String?
+  passwordResetToken   String?   @unique
+  passwordResetExpiry  DateTime?
+  igFollowClaimed  Boolean  @default(false)
+  referralCode     String?  @unique
+  referredById     String?
+  artistSlug       String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  accounts         Account[]
+  subscription     Subscription?
+  tracks           Track[]
+  sessions         BookingSession[]
+  aiGenerations    AIGeneration[]
+  merchProducts    MerchProduct[]
+  artistSite       ArtistSite?
+  deliveredFiles   DeliveredFile[]
+  studios          StudioArtist[]
+  ownedStudios     Studio[]
+  payments         Payment[]
+  notifications    Notification[]
+  receipts         Receipt[]
+  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id])
+  referrals        User[]           @relation("Referrals")
+  producedPreviews   BeatPreview[]      @relation("ProducerPreviews")
+  receivedPreviews   BeatPreview[]      @relation("ArtistPreviews")
+  producerLicenses   BeatLicense[]      @relation("ProducerLicenses")
+  artistLicenses     BeatLicense[]      @relation("ArtistLicenses")
+  youtubeReferences  YoutubeReference[]
+}
+
+model Studio {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  address      String?
+  phone        String?
+  email        String?
+  description  String?
+  hours        String?
+  streetAddress        String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  instagram            String?
+  tiktok               String?
+  youtube              String?
+  facebook             String?
+  cashAppHandle        String?
+  zelleHandle          String?
+  paypalHandle         String?
+  venmoHandle          String?
+  stripePaymentsEnabled Boolean @default(false)
+  photos       String[]
+  logo         String?
+  heroImage    String?
+  tagline      String?
+  services     String[]
+  servicesJson String?
+  testimonials String?
+  twitter      String?
+  isEnterprise Boolean  @default(false)
+  studioTier    StudioTier     @default(PRO)
+  template      StudioTemplate @default(CLASSIC)
+  accentColor   String?
+  customDomain  String?
+  isPublished   Boolean        @default(false)
+  bio           String?
+  logoUrl       String?
+  galleryImages Json?
+  studioHours   Json?
+  hoursNote     String?
+  socialLinks   Json?
+  paymentMethods Json?
+  featuredArtists Json?
+  pageConfig               Json?
+  onboardingCompleted      Boolean   @default(false)
+  generationsUsedThisMonth Int       @default(0)
+  generationResetDate      DateTime?
+  ownerId      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner              User              @relation(fields: [ownerId], references: [id])
+  artists            StudioArtist[]
+  sessions           BookingSession[]
+  deliveredFiles     DeliveredFile[]
+  emailCampaigns     EmailCampaign[]
+  contacts           Contact[]
+  intakeLinks        IntakeLink[]
+  intakeSubmissions  IntakeSubmission[]
+  quickSends         QuickSend[]
+  activityLog        ActivityLog[]
+  invoices           Invoice[]
+  contactSubmissions ContactSubmission[]
+  generationLogs     GenerationLog[]
+}
+
+model StudioArtist {
+  id       String   @id @default(cuid())
+  studioId String
+  artistId String
+  joinedAt DateTime @default(now())
+
+  studio   Studio   @relation(fields: [studioId], references: [id])
+  artist   User     @relation(fields: [artistId], references: [id])
+
+  @@unique([studioId, artistId])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  tier                   SubscriptionTier
+  status                 SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId   String?
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  aiVideoCreditsUsed     Int                @default(0)
+  aiVideoCreditsLimit    Int
+  aiArtCreditsUsed       Int                @default(0)
+  aiArtCreditsLimit      Int
+  aiMasterCreditsUsed    Int                @default(0)
+  aiMasterCreditsLimit   Int
+  lyricVideoCreditsUsed  Int                @default(0)
+  lyricVideoCreditsLimit Int
+  aarReportCreditsUsed   Int                @default(0)
+  aarReportCreditsLimit  Int
+  pressKitCreditsUsed    Int                @default(0)
+  pressKitCreditsLimit   Int                @default(0)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user                   User               @relation(fields: [userId], references: [id])
+}
+
+// Named BookingSession to avoid conflict with NextAuth's Session model
+model BookingSession {
+  id            String        @id @default(cuid())
+  studioId      String
+  artistId      String
+  contactId     String?
+  dateTime      DateTime
+  duration      Int?
+  sessionType   String?
+  status        SessionStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
+  paymentMethod PaymentMethod?
+  intakeData    Json?
+  notes         String?
+  engineerNotes String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  studio         Studio          @relation(fields: [studioId], references: [id])
+  artist         User            @relation(fields: [artistId], references: [id])
+  contact        Contact?        @relation(fields: [contactId], references: [id])
+  deliveredFiles DeliveredFile[]
+}
+
+model Track {
+  id          String      @id @default(cuid())
+  artistId    String
+  title       String
+  description String?
+  fileUrl     String
+  coverArtUrl String?
+  price       Float?
+  status      TrackStatus @default(DRAFT)
+  plays       Int         @default(0)
+  downloads   Int         @default(0)
+  earnings    Float       @default(0)
+  projectName String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  artist       User          @relation(fields: [artistId], references: [id])
+  beatPreviews BeatPreview[]
+  beatLicenses BeatLicense[]
+}
+
+model DeliveredFile {
+  id               String         @id @default(cuid())
+  sessionId        String?
+  artistId         String
+  studioId         String
+  contactId        String?
+  fileUrl          String
+  fileName         String
+  notes            String?
+  notificationSent Boolean        @default(false)
+  deliveredAt      DateTime       @default(now())
+
+  session          BookingSession? @relation(fields: [sessionId], references: [id])
+  artist           User            @relation(fields: [artistId], references: [id])
+  studio           Studio          @relation(fields: [studioId], references: [id])
+  contact          Contact?        @relation(fields: [contactId], references: [id])
+}
+
+model MerchProduct {
+  id           String      @id @default(cuid())
+  artistId     String
+  title        String
+  description  String?
+  imageUrl     String
+  basePrice    Float
+  artistMarkup Float
+  productType  ProductType
+  variants     Json?
+  isActive     Boolean     @default(true)
+  printfulId   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  artist       User        @relation(fields: [artistId], references: [id])
+  orders       MerchOrder[]
+}
+
+model MerchOrder {
+  id                String            @id @default(cuid())
+  merchProductId    String
+  artistId          String
+  buyerEmail        String
+  quantity          Int
+  totalPrice        Float
+  platformCut       Float
+  artistEarnings    Float
+  fulfillmentStatus FulfillmentStatus @default(PENDING)
+  trackingNumber    String?
+  stripePaymentId   String?
+  createdAt         DateTime          @default(now())
+
+  merchProduct      MerchProduct      @relation(fields: [merchProductId], references: [id])
+}
+
+model AIGeneration {
+  id         String             @id @default(cuid())
+  artistId   String
+  type       AIGenerationType
+  inputData  Json?
+  outputData Json?
+  outputUrl  String?
+  creditUsed Boolean            @default(false)
+  paymentId  String?
+  status     AIGenerationStatus @default(QUEUED)
+  createdAt  DateTime           @default(now())
+
+  artist     User               @relation(fields: [artistId], references: [id])
+}
+
+model ArtistSite {
+  id                String             @id @default(cuid())
+  artistId          String             @unique
+  template          ArtistSiteTemplate @default(TEMPLATE_1)
+  colorScheme       Json?
+  heroImage         String?
+  bioContent        String?
+  showMusic         Boolean            @default(true)
+  showVideos        Boolean            @default(true)
+  showMerch         Boolean            @default(true)
+  showContact       Boolean            @default(false)
+  followGateEnabled Boolean            @default(false)
+  customDomain      String?
+  isPublished       Boolean            @default(false)
+  draftMode         Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  artist            User               @relation(fields: [artistId], references: [id])
+}
+
+model YoutubeReference {
+  id           String   @id @default(cuid())
+  artistId     String
+  url          String
+  videoId      String
+  title        String
+  thumbnailUrl String
+  authorName   String?
+  projectTag   String?
+  folder       String?
+  createdAt    DateTime @default(now())
+
+  artist  User @relation(fields: [artistId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String
+  amount          Float
+  method          String?
+  status          String
+  stripePaymentId String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model EmailCampaign {
+  id              String    @id @default(cuid())
+  studioId        String
+  subject         String
+  body            String
+  recipientFilter Json?
+  recipientCount  Int       @default(0)
+  openCount       Int       @default(0)
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  attachmentUrls  String[]
+
+  studio          Studio    @relation(fields: [studioId], references: [id])
+}
+
+// ─── Notification Center ──────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Studio CRM ───────────────────────────────────────────────────────────────
+
+model Contact {
+  id              String        @id @default(cuid())
+  studioId        String
+  name            String
+  firstName       String?
+  lastName        String?
+  email           String?
+  phone           String?
+  photoUrl        String?
+  instagramHandle String?
+  genre           String?
+  notes           String?
+  source          ContactSource @default(MANUAL)
+  totalSpent      Float         @default(0)
+  lastSessionDate DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  studio             Studio            @relation(fields: [studioId], references: [id])
+  sessions           BookingSession[]
+  deliveredFiles     DeliveredFile[]
+  intakeSubmissions  IntakeSubmission[]
+  activityLog        ActivityLog[]
+  invoices           Invoice[]
+}
+
+model ActivityLog {
+  id          String          @id @default(cuid())
+  contactId   String
+  studioId    String
+  type        ActivityLogType
+  description String
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+
+  contact     Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  studio      Studio          @relation(fields: [studioId], references: [id])
+}
+
+// ─── Intake Form Links ────────────────────────────────────────────────────────
+
+model IntakeLink {
+  id        String    @id @default(cuid())
+  studioId  String
+  contactId String?
+  token       String    @unique
+  name        String?
+  email       String?
+  phone       String?
+  sessionDate DateTime?
+  sessionTime String?
+  endTime     String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  studio     Studio           @relation(fields: [studioId], references: [id])
+  submission IntakeSubmission?
+}
+
+model IntakeSubmission {
+  id                    String   @id @default(cuid())
+  intakeLinkId          String   @unique
+  studioId              String
+  contactId             String?
+  artistName            String
+  genre                 String?
+  projectDesc           String?
+  youtubeLinks          String[]
+  fileUrls              String[]
+  photoUrl              String?
+  notes                 String?
+  bpmDetected           Int?
+  keyDetected           String?
+  instagram             String?
+  tiktok                String?
+  youtubeHandle         String?
+  paymentMethod         String?
+  depositPaid           Boolean  @default(false)
+  depositAmount         Float?
+  aiVideoRequested      Boolean  @default(false)
+  convertedToBookingId  String?
+  createdAt             DateTime @default(now())
+
+  intakeLink  IntakeLink @relation(fields: [intakeLinkId], references: [id])
+  studio      Studio     @relation(fields: [studioId], references: [id])
+  contact     Contact?   @relation(fields: [contactId], references: [id])
+}
+
+// ─── Quick Send (WeTransfer-style) ────────────────────────────────────────────
+
+model QuickSend {
+  id             String    @id @default(cuid())
+  studioId       String
+  contactId      String?
+  senderName     String
+  recipientEmail String
+  recipientPhone String?
+  fileUrls       String[]
+  message        String?
+  token          String    @unique
+  expiresAt      DateTime
+  downloadedAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  studio   Studio   @relation(fields: [studioId], references: [id])
+}
+
+// ─── Beat Preview + Licensing ─────────────────────────────────────────────────
+
+model BeatPreview {
+  id             String            @id @default(cuid())
+  producerId     String
+  artistId       String?
+  trackId        String
+  expiresAt      DateTime
+  isDownloadable Boolean           @default(false)
+  status         BeatPreviewStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+
+  producer  User          @relation("ProducerPreviews", fields: [producerId], references: [id])
+  artist    User?         @relation("ArtistPreviews", fields: [artistId], references: [id])
+  track     Track         @relation(fields: [trackId], references: [id])
+  licenses  BeatLicense[]
+}
+
+model BeatLicense {
+  id            String      @id @default(cuid())
+  beatPreviewId String
+  trackId       String
+  producerId    String
+  artistId      String
+  licenseType   LicenseType
+  customTerms   String?
+  price         Float
+  status        String      @default("ACTIVE")
+  pdfUrl        String?
+  createdAt     DateTime    @default(now())
+
+  beatPreview BeatPreview @relation(fields: [beatPreviewId], references: [id])
+  track       Track       @relation(fields: [trackId], references: [id])
+  producer    User        @relation("ProducerLicenses", fields: [producerId], references: [id])
+  artist      User        @relation("ArtistLicenses", fields: [artistId], references: [id])
+}
+
+// ─── Receipts ──────────────────────────────────────────────────────────────────
+
+model Receipt {
+  id              String      @id @default(cuid())
+  userId          String
+  type            ReceiptType
+  description     String
+  amount          Float
+  paymentMethod   String?
+  stripePaymentId String?
+  pdfUrl          String?
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Studio Invoices ───────────────────────────────────────────────────────────
+
+model Invoice {
+  id             String        @id @default(cuid())
+  studioId       String
+  contactId      String
+  invoiceNumber  Int
+  lineItems      Json
+  subtotal       Float
+  tax            Float         @default(0)
+  taxRate        Float         @default(0)
+  total          Float
+  dueDate        DateTime
+  status         InvoiceStatus @default(DRAFT)
+  paymentMethod  String?
+  paidAt         DateTime?
+  remindersSent  Int           @default(0)
+  notes          String?
+  pdfUrl         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  studio   Studio   @relation(fields: [studioId], references: [id])
+  contact  Contact  @relation(fields: [contactId], references: [id])
+
+  @@unique([studioId, invoiceNumber])
+}
+
+// ─── Studio Public Page Contact Submissions ───────────────────────────────────
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  studioId  String
+  name      String
+  email     String
+  phone     String?
+  message   String
+  source    String   @default("PUBLIC_PAGE")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}
+
+model GenerationLog {
+  id             String         @id @default(cuid())
+  studioId       String
+  template       StudioTemplate
+  configSnapshot Json
+  createdAt      DateTime       @default(now())
+  wasPaid        Boolean        @default(false)
+
+  studio         Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}

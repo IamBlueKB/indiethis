@@ -1,102 +1,55 @@
 "use client";
 
-import { UserPlus, Wand2, DollarSign } from "lucide-react";
+import { UserPlus, Wand2, DollarSign, type LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const steps = [
+type Step = {
+  number: string;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  color: string;
+  detail: string;
+};
+
+const steps: Step[] = [
   {
-    number: "01",
-    icon: UserPlus,
+    number: "01", icon: UserPlus, color: "#D4A843",
     title: "Join",
-    description:
-      "Sign up and connect with your studio — or join on your own. Your account comes pre-loaded with AI credits, a merch storefront builder, and your own artist page. No label required.",
-    color: "#D4A843",
     detail: "Setup takes under 5 minutes",
+    description: "Sign up and connect with your studio — or join on your own. Your account comes pre-loaded with AI credits, a merch storefront builder, and your own artist page. No label required.",
   },
   {
-    number: "02",
-    icon: Wand2,
+    number: "02", icon: Wand2, color: "#E85D4A",
     title: "Create",
-    description:
-      "Use AI to generate music videos, cover art, and mastered tracks. Build your merch catalog. Customize your artist site. All of it in one dashboard, built for working musicians.",
-    color: "#E85D4A",
     detail: "AI video in under 30 minutes",
+    description: "Use AI to generate music videos, cover art, and mastered tracks. Build your merch catalog. Customize your artist site. All of it in one dashboard, built for working musicians.",
   },
   {
-    number: "03",
-    icon: DollarSign,
+    number: "03", icon: DollarSign, color: "#34C759",
     title: "Earn",
-    description:
-      "Sell music, merch, and beats directly through your artist page. Keep the majority of every sale. Get paid via Stripe Connect. Track every dollar in your earnings dashboard.",
-    color: "#34C759",
     detail: "Direct payouts, no delays",
+    description: "Sell music, merch, and beats directly through your artist page. Keep the majority of every sale. Get paid via Stripe Connect. Track every dollar in your earnings dashboard.",
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section
-      style={{
-        padding: "100px 24px",
-        backgroundColor: "#0D0D0F",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
+    <section className="relative py-24 px-6 overflow-hidden" style={{ backgroundColor: "#0D0D0F" }}>
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
-      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: "72px" }}>
-          <div
-            style={{
-              display: "inline-block",
-              backgroundColor: "rgba(212, 168, 67, 0.1)",
-              border: "1px solid rgba(212, 168, 67, 0.25)",
-              borderRadius: "9999px",
-              padding: "5px 16px",
-              marginBottom: "20px",
-            }}
-          >
-            <span
-              style={{
-                color: "#D4A843",
-                fontSize: "12px",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-16">
+          <div className="inline-block rounded-full border border-accent/25 bg-accent/10 px-4 py-1 mb-5">
+            <span className="text-accent text-[11px] font-semibold uppercase tracking-[0.08em]">
               How It Works
             </span>
           </div>
           <h2
-            style={{
-              fontFamily: "var(--font-outfit), sans-serif",
-              fontSize: "clamp(32px, 4vw, 52px)",
-              fontWeight: 800,
-              color: "#F5F0E8",
-              lineHeight: 1.1,
-              letterSpacing: "-1.5px",
-              marginBottom: "16px",
-            }}
+            className="font-display font-extrabold text-foreground leading-[1.1] mb-4"
+            style={{ fontSize: "clamp(32px,4vw,52px)", letterSpacing: "-1.5px" }}
           >
             From first track to{" "}
             <span
@@ -110,131 +63,62 @@ export default function HowItWorks() {
               first sale.
             </span>
           </h2>
-          <p style={{ fontSize: "18px", color: "#9A9A9E", maxWidth: "480px", margin: "0 auto" }}>
+          <p className="text-lg text-muted-foreground max-w-[420px] mx-auto">
             Three steps. No label. No middleman.
           </p>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "24px",
-            position: "relative",
-          }}
-        >
-          {/* Connector line (desktop only) */}
-          <div
-            className="hidden lg:block"
-            style={{
-              position: "absolute",
-              top: "72px",
-              left: "calc(16.6% + 32px)",
-              right: "calc(16.6% + 32px)",
-              height: "1px",
-              background: "linear-gradient(90deg, #D4A843, #E85D4A, #34C759)",
-              opacity: 0.3,
-              zIndex: 0,
-            }}
-          />
-
-          {steps.map((step, i) => {
-            const Icon = step.icon;
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {steps.map((s) => {
+            const Icon = s.icon;
             return (
-              <div
-                key={i}
-                style={{
-                  backgroundColor: "#141416",
-                  border: "1px solid #2A2A2E",
-                  borderRadius: "16px",
-                  padding: "36px 32px",
-                  position: "relative",
-                  zIndex: 1,
-                  textAlign: "center",
-                }}
-              >
+              <Card key={s.number} className="text-center relative">
                 {/* Step number */}
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "20px",
-                    right: "20px",
-                    fontFamily: "var(--font-mono-base), monospace",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#3A3A3E",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  {step.number}
-                </div>
+                <span className="absolute top-5 right-5 font-mono text-xs font-semibold text-border tracking-widest">
+                  {s.number}
+                </span>
 
-                {/* Icon */}
-                <div
-                  style={{
-                    width: "72px",
-                    height: "72px",
-                    borderRadius: "50%",
-                    backgroundColor: `${step.color}15`,
-                    border: `2px solid ${step.color}30`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 28px",
-                    boxShadow: `0 0 32px ${step.color}20`,
-                  }}
-                >
-                  <Icon size={28} color={step.color} strokeWidth={1.8} />
-                </div>
-
-                <h3
-                  style={{
-                    fontFamily: "var(--font-outfit), sans-serif",
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    color: step.color,
-                    marginBottom: "16px",
-                    letterSpacing: "-0.5px",
-                  }}
-                >
-                  {step.title}
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: "15px",
-                    color: "#9A9A9E",
-                    lineHeight: 1.65,
-                    marginBottom: "24px",
-                  }}
-                >
-                  {step.description}
-                </p>
-
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    backgroundColor: `${step.color}12`,
-                    border: `1px solid ${step.color}25`,
-                    borderRadius: "9999px",
-                    padding: "6px 14px",
-                  }}
-                >
+                <CardContent className="pt-8 pb-8 flex flex-col items-center">
+                  {/* Icon ring */}
                   <div
+                    className="w-[72px] h-[72px] rounded-full flex items-center justify-center mb-7"
                     style={{
-                      width: "5px",
-                      height: "5px",
-                      borderRadius: "50%",
-                      backgroundColor: step.color,
+                      backgroundColor: `${s.color}15`,
+                      border: `2px solid ${s.color}30`,
+                      boxShadow: `0 0 32px ${s.color}20`,
                     }}
-                  />
-                  <span style={{ fontSize: "13px", color: step.color, fontWeight: 500 }}>
-                    {step.detail}
-                  </span>
-                </div>
-              </div>
+                  >
+                    <Icon size={28} color={s.color} strokeWidth={1.8} />
+                  </div>
+
+                  <h3
+                    className="font-display font-extrabold mb-4 tracking-tight"
+                    style={{ fontSize: "28px", color: s.color, letterSpacing: "-0.5px" }}
+                  >
+                    {s.title}
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-6 max-w-[280px]">
+                    {s.description}
+                  </p>
+
+                  <Badge
+                    variant="outline"
+                    className="rounded-full text-xs font-medium gap-1.5"
+                    style={{
+                      backgroundColor: `${s.color}12`,
+                      borderColor: `${s.color}25`,
+                      color: s.color,
+                    }}
+                  >
+                    <span
+                      className="size-1.5 rounded-full"
+                      style={{ backgroundColor: s.color }}
+                    />
+                    {s.detail}
+                  </Badge>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

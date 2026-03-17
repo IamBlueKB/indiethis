@@ -1,240 +1,103 @@
 "use client";
 
-import { Video, ImageIcon, Zap, FileText, ShoppingBag, Globe, Calendar, TrendingUp } from "lucide-react";
+import { Video, ImageIcon, Zap, FileText, ShoppingBag, Globe, Calendar, TrendingUp, type LucideIcon } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const features = [
-  {
-    icon: Video,
-    title: "AI Music Videos",
-    description:
-      "Upload your track and a photo. Our AI generates cinematic music videos — vertical, horizontal, and square — in minutes.",
-    color: "#E85D4A",
-    badge: "Most Popular",
-  },
-  {
-    icon: ImageIcon,
-    title: "AI Cover Art",
-    description:
-      "Describe your vision or upload a reference image. Get 4 stunning 3000×3000 options generated in seconds.",
-    color: "#D4A843",
-  },
-  {
-    icon: Zap,
-    title: "AI Mastering",
-    description:
-      "Upload your unmastered track. Set your target loudness and style. A/B compare with your original before downloading.",
-    color: "#5AC8FA",
-  },
-  {
-    icon: FileText,
-    title: "AI A&R Report",
-    description:
-      "Get professional genre positioning, comparable artists, quality scores, playlist recommendations, and social strategy.",
-    color: "#34C759",
-  },
-  {
-    icon: ShoppingBag,
-    title: "Merch Storefronts",
-    description:
-      "Upload your artwork, apply it to 7 product types, set your markup, and sell — with zero inventory.",
-    color: "#D4A843",
-  },
-  {
-    icon: Globe,
-    title: "Artist Mini-Sites",
-    description:
-      "Your music, videos, merch, and bio — live on your own artist page. Dynasty tier gets a custom domain.",
-    color: "#E85D4A",
-  },
-  {
-    icon: Calendar,
-    title: "Studio Booking",
-    description:
-      "Studios send you a branded SMS intake link. Everything from session details to deposit happens in one tap.",
-    color: "#5AC8FA",
-  },
-  {
-    icon: TrendingUp,
-    title: "Beat Marketplace",
-    description:
-      "Sell beats with license tiers, preview clips, and direct checkout. Dynasty artists only.",
-    color: "#34C759",
-  },
+type Feature = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  color: string;
+  badge?: string;
+};
+
+const features: Feature[] = [
+  { icon: Video,       title: "AI Music Videos",  color: "#D4A843", badge: "Most Popular",
+    description: "Upload your track and a photo. Our AI generates cinematic music videos — vertical, horizontal, and square — in minutes." },
+  { icon: ImageIcon,   title: "AI Cover Art",      color: "#E85D4A",
+    description: "Describe your vision or upload a reference image. Get 4 stunning 3000×3000 options generated in seconds." },
+  { icon: Zap,         title: "AI Mastering",      color: "#34C759",
+    description: "Upload your unmastered track. Set your target loudness and style. A/B compare with your original before downloading." },
+  { icon: FileText,    title: "AI A&R Report",     color: "#5AC8FA",
+    description: "Get professional genre positioning, comparable artists, quality scores, playlist recommendations, and social strategy." },
+  { icon: ShoppingBag, title: "Merch Storefronts", color: "#E85D4A",
+    description: "Upload your artwork, apply it to 7 product types, set your markup, and sell — with zero inventory." },
+  { icon: Globe,       title: "Artist Mini-Sites", color: "#00C7BD",
+    description: "Your music, videos, merch, and bio — live on your own artist page. Reign tier gets a custom domain." },
+  { icon: Calendar,    title: "Studio Booking",    color: "#5AC8FA",
+    description: "Studios send you a branded SMS intake link. Everything from session details to deposit happens in one tap." },
+  { icon: TrendingUp,  title: "Beat Marketplace",  color: "#34C759",
+    description: "Sell beats with license tiers, preview clips, and direct checkout. Reign artists only." },
 ];
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="inline-block rounded-full border border-accent/25 bg-accent/10 px-4 py-1 mb-5">
+      <span className="text-accent text-[11px] font-semibold uppercase tracking-[0.08em]">
+        {children}
+      </span>
+    </div>
+  );
+}
 
 export default function Features() {
   return (
-    <section
-      id="features"
-      style={{
-        padding: "100px 24px",
-        backgroundColor: "#0A0A0B",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Section divider */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, #2A2A2E 30%, #2A2A2E 70%, transparent)",
-        }}
-      />
+    <section id="features" className="relative py-24 px-6 bg-background overflow-hidden">
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
-      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-        {/* Section header */}
-        <div style={{ textAlign: "center", marginBottom: "72px" }}>
-          <div
-            style={{
-              display: "inline-block",
-              backgroundColor: "rgba(212, 168, 67, 0.1)",
-              border: "1px solid rgba(212, 168, 67, 0.25)",
-              borderRadius: "9999px",
-              padding: "5px 16px",
-              marginBottom: "20px",
-            }}
-          >
-            <span
-              style={{
-                color: "#D4A843",
-                fontSize: "12px",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Platform Features
-            </span>
-          </div>
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-18">
+          <SectionLabel>Platform Features</SectionLabel>
           <h2
-            style={{
-              fontFamily: "var(--font-outfit), sans-serif",
-              fontSize: "clamp(32px, 4vw, 52px)",
-              fontWeight: 800,
-              color: "#F5F0E8",
-              lineHeight: 1.1,
-              letterSpacing: "-1.5px",
-              marginBottom: "16px",
-            }}
+            className="font-display font-extrabold text-foreground tracking-tight leading-[1.1] mb-4"
+            style={{ fontSize: "clamp(32px,4vw,52px)", letterSpacing: "-1.5px" }}
           >
-            Your label. Your studio.{" "}
-            <span style={{ color: "#9A9A9E" }}>Your rules.</span>
+            Your music. Your money.{" "}
+            <span className="text-muted-foreground">Your move.</span>
           </h2>
-          <p
-            style={{
-              fontSize: "18px",
-              color: "#9A9A9E",
-              maxWidth: "520px",
-              margin: "0 auto",
-              lineHeight: 1.6,
-            }}
-          >
-            Six tools that used to cost six subscriptions — now in one platform
-            built specifically for indie artists.
+          <p className="text-lg text-muted-foreground max-w-[520px] mx-auto leading-relaxed">
+            One platform. Everything you need to create, sell, and grow as an
+            independent artist.
           </p>
         </div>
 
-        {/* Feature grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "20px",
-          }}
-        >
-          {features.map((feature, i) => {
-            const Icon = feature.icon;
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-16">
+          {features.map((f, i) => {
+            const Icon = f.icon;
             return (
-              <div
+              <Card
                 key={i}
-                style={{
-                  backgroundColor: "#141416",
-                  border: "1px solid #2A2A2E",
-                  borderRadius: "12px",
-                  padding: "28px",
-                  position: "relative",
-                  transition: "all 0.25s ease",
-                  cursor: "default",
-                  overflow: "hidden",
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.borderColor = "#3A3A3E";
-                  el.style.backgroundColor = "#1A1A1D";
-                  el.style.transform = "translateY(-2px)";
-                  el.style.boxShadow = `0 8px 32px rgba(0,0,0,0.4)`;
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.borderColor = "#2A2A2E";
-                  el.style.backgroundColor = "#141416";
-                  el.style.transform = "translateY(0)";
-                  el.style.boxShadow = "none";
-                }}
+                className="relative group/card transition-all duration-200 hover:-translate-y-0.5 hover:ring-border/40 hover:bg-surface-hover cursor-default overflow-visible"
               >
-                {feature.badge && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "16px",
-                      right: "16px",
-                      backgroundColor: "rgba(232, 93, 74, 0.15)",
-                      border: "1px solid rgba(232, 93, 74, 0.3)",
-                      color: "#E85D4A",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      padding: "3px 10px",
-                      borderRadius: "9999px",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {feature.badge}
+                {f.badge && (
+                  <div className="absolute -top-3 right-4">
+                    <Badge className="bg-cta/15 text-cta border border-cta/30 text-[11px] font-semibold tracking-wide px-3">
+                      {f.badge}
+                    </Badge>
                   </div>
                 )}
-
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "10px",
-                    backgroundColor: `${feature.color}18`,
-                    border: `1px solid ${feature.color}30`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <Icon size={20} color={feature.color} strokeWidth={2} />
-                </div>
-
-                <h3
-                  style={{
-                    fontFamily: "var(--font-outfit), sans-serif",
-                    fontSize: "18px",
-                    fontWeight: 700,
-                    color: "#F5F0E8",
-                    marginBottom: "10px",
-                    letterSpacing: "-0.3px",
-                  }}
-                >
-                  {feature.title}
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "#9A9A9E",
-                    lineHeight: 1.65,
-                  }}
-                >
-                  {feature.description}
-                </p>
-              </div>
+                <CardHeader className="pb-0">
+                  {/* 48px icon container with per-feature tint */}
+                  <div
+                    className="w-12 h-12 rounded-[12px] flex items-center justify-center mb-3"
+                    style={{
+                      backgroundColor: `${f.color}18`,
+                      border: `1px solid ${f.color}35`,
+                    }}
+                  >
+                    <Icon size={24} color={f.color} strokeWidth={1.75} />
+                  </div>
+                  <CardTitle className="text-[17px] font-bold text-foreground tracking-tight">
+                    {f.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-sm text-muted-foreground leading-relaxed">
+                    {f.description}
+                  </CardDescription>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
