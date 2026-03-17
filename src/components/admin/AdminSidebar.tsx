@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Studios", href: "/admin/studios", icon: Building2 },
   { label: "Revenue", href: "/admin/revenue", icon: BarChart3 },
+  { label: "AI Usage", href: "/admin/ai-usage", icon: Cpu },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

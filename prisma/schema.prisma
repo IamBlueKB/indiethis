@@ -233,6 +233,7 @@ model User {
   artistSlug       String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  lastLoginAt      DateTime?
 
   accounts         Account[]
   subscription     Subscription?
@@ -355,6 +356,8 @@ model Subscription {
   aarReportCreditsLimit  Int
   pressKitCreditsUsed    Int                @default(0)
   pressKitCreditsLimit   Int                @default(0)
+  cancelReason           String?
+  canceledAt             DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 

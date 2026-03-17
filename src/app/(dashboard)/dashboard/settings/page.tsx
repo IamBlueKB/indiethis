@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff,
+  User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff, AlertTriangle, X,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -345,6 +345,8 @@ export default function SettingsPage() {
       >
         {saved ? <><Check size={14} /> Saved</> : saving ? "Saving…" : "Save Changes"}
       </button>
+
+      <CancelSubscriptionSection />
     </div>
   );
 }
@@ -358,6 +360,125 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
       </div>
       {children}
     </div>
+  );
+}
+
+const CANCEL_REASONS = [
+  "Too expensive",
+  "Not enough features",
+  "Switched platforms",
+  "Not using it",
+  "Other",
+];
+
+function CancelSubscriptionSection() {
+  const [showModal, setShowModal] = useState(false);
+  const [reason, setReason] = useState("");
+  const [canceling, setCanceling] = useState(false);
+  const [canceled, setCanceled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCancel() {
+    if (!reason) { setError("Please select a reason."); return; }
+    setCanceling(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/stripe/subscription/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelReason: reason }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Something went wrong."); return; }
+      setCanceled(true);
+      setShowModal(false);
+    } finally {
+      setCanceling(false);
+    }
+  }
+
+  if (canceled) {
+    return (
+      <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="text-sm text-muted-foreground">Your subscription has been canceled. You&apos;ll retain access until the end of your billing period.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="rounded-2xl border p-5 flex items-center justify-between" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <div>
+          <p className="text-sm font-semibold text-foreground">Cancel Subscription</p>
+          <p className="text-xs text-muted-foreground mt-0.5">You&apos;ll keep access until your billing period ends.</p>
+        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors"
+          style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}
+        >
+          Cancel Plan
+        </button>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <div className="w-full max-w-sm rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
+                  <AlertTriangle size={16} style={{ color: "#ef4444" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Why are you leaving?</p>
+                  <p className="text-xs text-muted-foreground">Your feedback helps us improve.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setReason(r)}
+                  className="w-full text-left px-3 py-2.5 rounded-xl border text-sm transition-all"
+                  style={{
+                    borderColor: reason === r ? "rgba(239,68,68,0.5)" : "var(--border)",
+                    backgroundColor: reason === r ? "rgba(239,68,68,0.08)" : "transparent",
+                    color: reason === r ? "#ef4444" : "var(--foreground)",
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border text-sm font-semibold"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                Keep my plan
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={canceling || !reason}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ backgroundColor: "#ef4444", color: "#fff" }}
+              >
+                {canceling ? "Canceling…" : "Confirm Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
