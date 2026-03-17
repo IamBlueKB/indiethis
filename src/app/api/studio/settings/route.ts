@@ -81,7 +81,9 @@ export async function PATCH(req: NextRequest) {
       testimonials:   body.testimonials         ?? undefined,
       featuredArtists: body.featuredArtists     ?? undefined,
       twitter:        body.twitter?.trim()      ?? undefined,
-      pageConfig:     body.pageConfig           ?? undefined,
+      pageConfig:          body.pageConfig               ?? undefined,
+      onboardingCompleted: typeof body.onboardingCompleted === "boolean"
+        ? body.onboardingCompleted : undefined,
     },
   });
 
