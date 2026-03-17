@@ -232,7 +232,7 @@ export default function StudioSetupPage() {
               <label className="text-sm font-medium text-foreground">Phone</label>
               <div className="relative">
                 <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input type="tel" placeholder="(312) 555-0100" value={phone}
+                <input type="tel" placeholder="(555) 555-0100" value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className={inputClass} style={{ paddingLeft: "2.25rem", borderColor: "var(--border)" }} />
               </div>
