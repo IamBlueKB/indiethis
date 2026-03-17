@@ -134,9 +134,8 @@ export default function EmailPage() {
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
               >
                 <option value="">All contacts ({totalContacts})</option>
-                {Object.entries(SOURCE_LABEL).map(([val, lbl]) => {
-                  const cnt = countBySource[val] ?? 0;
-                  if (!cnt) return null;
+                {Object.entries(countBySource).map(([val, cnt]) => {
+                  const lbl = SOURCE_LABEL[val] ?? val.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
                   return (
                     <option key={val} value={val}>
                       {lbl} only ({cnt})
