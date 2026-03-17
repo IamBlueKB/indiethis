@@ -1,13 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 
-// Prevent multiple PrismaClient instances during Next.js hot reload
+// Singleton — reuse the same client across hot reloads in dev
+// and across module evaluations in production serverless environments
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
-export const db = globalThis.prisma ?? new PrismaClient();
+export const db = globalThis.prisma ?? new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prisma = db;
-}
+globalThis.prisma = db;
