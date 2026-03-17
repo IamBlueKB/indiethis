@@ -104,6 +104,8 @@ export default function StudioSetupPage() {
 
   // Step 1 state
   const [name, setName] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [bio, setBio] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -128,7 +130,7 @@ export default function StudioSetupPage() {
       const res = await fetch("/api/studio/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, address, phone, email }),
+        body: JSON.stringify({ name, tagline, bio, address, phone, email }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -215,6 +217,32 @@ export default function StudioSetupPage() {
                 onChange={(e) => setName(e.target.value)}
                 className={inputClass} style={{ paddingLeft: "2.25rem", borderColor: "var(--border)" }} />
             </div>
+          </div>
+
+          {/* AI nudge */}
+          <div className="rounded-xl border px-3.5 py-3 flex items-start gap-2.5"
+            style={{ borderColor: "rgba(212,168,67,0.25)", backgroundColor: "rgba(212,168,67,0.06)" }}>
+            <span className="text-sm mt-0.5">✦</span>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold" style={{ color: "#D4A843" }}>Tip:</span> Fill in your tagline and bio and our AI can build your entire public page in one click — copy, layout, and all.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Tagline <span className="text-muted-foreground font-normal text-xs">(optional)</span></label>
+            <input type="text" placeholder="Where artists come to sound their best"
+              value={tagline} onChange={(e) => setTagline(e.target.value.slice(0, 100))}
+              className={inputClass} style={{ borderColor: "var(--border)" }} />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground flex items-center justify-between">
+              <span>About Your Studio <span className="text-muted-foreground font-normal text-xs">(optional)</span></span>
+              <span className="text-xs text-muted-foreground">{bio.length}/500</span>
+            </label>
+            <textarea rows={4} placeholder="Tell us about your studio — your vibe, your gear, what makes you different…"
+              value={bio} onChange={(e) => setBio(e.target.value.slice(0, 500))}
+              className={inputClass + " resize-none"} style={{ borderColor: "var(--border)" }} />
           </div>
 
           <div className="space-y-1.5">

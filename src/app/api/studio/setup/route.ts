@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json() as {
-    name?: string; address?: string; phone?: string; email?: string;
+    name?: string; tagline?: string; bio?: string; address?: string; phone?: string; email?: string;
   };
 
   if (!body.name?.trim()) {
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
     data: {
       name: body.name.trim(),
       slug,
+      tagline: body.tagline?.trim() ?? null,
+      bio: body.bio?.trim() ?? null,
       address: body.address?.trim() ?? null,
       phone: body.phone?.trim() ?? null,
       email: body.email?.trim() ?? null,
