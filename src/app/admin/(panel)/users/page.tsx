@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users,
   Search,
@@ -33,22 +34,6 @@ type UserRow = {
   _count: { sessions: number };
 };
 
-type UserDetail = UserRow & {
-  bio: string | null;
-  artistName: string | null;
-  photo: string | null;
-  subscription: {
-    tier: string;
-    status: string;
-    createdAt: string;
-    canceledAt: string | null;
-    cancelReason: string | null;
-    currentPeriodEnd: string | null;
-  } | null;
-  _count: { sessions: number; aiGenerations: number; tracks: number };
-  ownedStudios: Array<{ id: string; name: string; slug: string; studioTier: string }>;
-};
-
 type ApiResponse = {
   users: UserRow[];
   total: number;
@@ -69,146 +54,6 @@ const TIER_COLOR: Record<string, string> = {
 };
 
 type SortField = "name" | "email" | "joined" | "lastLogin" | "sessions";
-
-// ─── User Detail Modal ────────────────────────────────────────────────────────
-
-function UserDetailModal({
-  userId,
-  onClose,
-}: {
-  userId: string;
-  onClose: () => void;
-}) {
-  const [user, setUser] = useState<UserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/admin/users/${userId}`)
-      .then((r) => r.json())
-      .then((d) => setUser(d as UserDetail))
-      .finally(() => setLoading(false));
-  }, [userId]);
-
-  function fmt(d: string | null) {
-    if (!d) return "—";
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
-      <div className="w-full max-w-lg rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-          <h2 className="text-base font-semibold text-foreground">User Profile</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X size={18} />
-          </button>
-        </div>
-        {loading || !user ? (
-          <div className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 size={16} className="animate-spin" />
-          </div>
-        ) : (
-          <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
-                style={{ backgroundColor: "var(--accent)", color: "var(--background)" }}
-              >
-                {user.name[0]?.toUpperCase()}
-              </div>
-              <div>
-                <p className="text-base font-semibold text-foreground">{user.name}</p>
-                {user.artistName && <p className="text-xs text-muted-foreground">aka {user.artistName}</p>}
-                <p className="text-sm text-muted-foreground">{user.email}</p>
-              </div>
-            </div>
-
-            {/* Flags */}
-            <div className="flex flex-wrap gap-2">
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: `${ROLE_COLOR[user.role]}18`, color: ROLE_COLOR[user.role] }}>
-                {user.role === "STUDIO_ADMIN" ? "STUDIO" : user.role}
-              </span>
-              {user.isComped && (
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(52,199,89,0.12)", color: "#34C759" }}>
-                  COMPED{user.compExpiresAt ? ` · expires ${fmt(user.compExpiresAt)}` : " · permanent"}
-                </span>
-              )}
-              {user.isSuspended && (
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}>
-                  SUSPENDED
-                </span>
-              )}
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Sessions", value: user._count.sessions },
-                { label: "AI Gens", value: user._count.aiGenerations },
-                { label: "Tracks", value: user._count.tracks },
-              ].map((s) => (
-                <div key={s.label} className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--background)" }}>
-                  <p className="text-lg font-bold text-foreground">{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Subscription */}
-            <div className="rounded-xl p-4 space-y-2" style={{ backgroundColor: "var(--background)" }}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription</p>
-              {user.subscription ? (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-foreground font-medium">{user.subscription.tier}</span>
-                    <span className="text-xs" style={{ color: user.subscription.status === "ACTIVE" ? "#34C759" : "#E85D4A" }}>
-                      {user.subscription.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Since {fmt(user.subscription.createdAt)}</p>
-                  {user.subscription.canceledAt && (
-                    <p className="text-xs text-muted-foreground">
-                      Canceled {fmt(user.subscription.canceledAt)}
-                      {user.subscription.cancelReason && ` · "${user.subscription.cancelReason}"`}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No subscription</p>
-              )}
-            </div>
-
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-3" style={{ backgroundColor: "var(--background)" }}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Joined</p>
-                <p className="text-sm text-foreground">{fmt(user.createdAt)}</p>
-              </div>
-              <div className="rounded-xl p-3" style={{ backgroundColor: "var(--background)" }}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Last Login</p>
-                <p className="text-sm text-foreground">{fmt(user.lastLoginAt)}</p>
-              </div>
-            </div>
-
-            {/* Studios */}
-            {user.ownedStudios.length > 0 && (
-              <div className="rounded-xl p-4 space-y-2" style={{ backgroundColor: "var(--background)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Owned Studios</p>
-                {user.ownedStudios.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">/{s.slug} · {s.studioTier}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── Comp Modal ────────────────────────────────────────────────────────────────
 
@@ -340,8 +185,9 @@ function UserActions({
   user: UserRow;
   onRefresh: (updated: Partial<UserRow>) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [modal, setModal] = useState<"detail" | "comp" | null>(null);
+  const [modal, setModal] = useState<"comp" | null>(null);
   const [suspending, setSuspending] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -406,7 +252,7 @@ function UserActions({
             style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
           >
             <button
-              onClick={() => { setModal("detail"); setOpen(false); }}
+              onClick={() => { router.push(`/admin/users/${user.id}`); setOpen(false); }}
               className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-foreground hover:bg-white/5 transition-colors"
             >
               <User size={14} className="text-muted-foreground" /> View Profile
@@ -441,9 +287,6 @@ function UserActions({
         )}
       </div>
 
-      {modal === "detail" && (
-        <UserDetailModal userId={user.id} onClose={() => setModal(null)} />
-      )}
       {modal === "comp" && (
         <CompModal
           user={user}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   AlertTriangle,
@@ -264,8 +265,9 @@ function StudioActions({
   studio: StudioRow;
   onRefresh: (updated: Partial<StudioRow>) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [modal, setModal] = useState<"detail" | "tier" | null>(null);
+  const [modal, setModal] = useState<"tier" | null>(null);
   const [unpublishing, setUnpublishing] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -308,7 +310,7 @@ function StudioActions({
             style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
           >
             <button
-              onClick={() => { setModal("detail"); setOpen(false); }}
+              onClick={() => { router.push(`/admin/studios/${studio.id}`); setOpen(false); }}
               className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-foreground hover:bg-white/5 transition-colors"
             >
               <Eye size={14} className="text-muted-foreground" /> View Studio
@@ -347,9 +349,6 @@ function StudioActions({
         )}
       </div>
 
-      {modal === "detail" && (
-        <StudioDetailModal studioId={studio.id} onClose={() => setModal(null)} />
-      )}
       {modal === "tier" && (
         <TierOverrideModal
           studio={studio}
