@@ -11,6 +11,7 @@ import {
   LogOut,
   ShieldCheck,
   Cpu,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { label: "Studios", href: "/admin/studios", icon: Building2 },
   { label: "Revenue", href: "/admin/revenue", icon: BarChart3 },
   { label: "AI Usage", href: "/admin/ai-usage", icon: Cpu },
+  { label: "Moderation", href: "/admin/moderation", icon: ShieldAlert },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

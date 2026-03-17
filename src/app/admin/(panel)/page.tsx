@@ -9,10 +9,14 @@ import {
   XCircle,
   ArrowUpRight,
   ArrowDownRight,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
+import AIInsightsCard from "@/components/admin/AIInsightsCard";
+import ChurnPredictionTable from "@/components/admin/ChurnPredictionTable";
 
 const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
 
@@ -162,6 +166,16 @@ export default async function AdminDashboardPage() {
         <p className="text-muted-foreground mt-1 text-sm">IndieThis platform overview</p>
       </div>
 
+      {/* AI Insights Card */}
+      <Suspense fallback={
+        <div className="rounded-2xl border p-5 flex items-center gap-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <Loader2 size={16} className="animate-spin text-muted-foreground shrink-0" />
+          <p className="text-sm text-muted-foreground">Generating AI insights…</p>
+        </div>
+      }>
+        <AIInsightsCard />
+      </Suspense>
+
       {/* Stats with % change */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
@@ -276,6 +290,16 @@ export default async function AdminDashboardPage() {
         valuePrefix="$"
         multiColor
       />
+
+      {/* Churn Prediction */}
+      <Suspense fallback={
+        <div className="rounded-2xl border p-5 flex items-center gap-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <Loader2 size={16} className="animate-spin text-muted-foreground shrink-0" />
+          <p className="text-sm text-muted-foreground">Running churn prediction…</p>
+        </div>
+      }>
+        <ChurnPredictionTable />
+      </Suspense>
     </div>
   );
 }

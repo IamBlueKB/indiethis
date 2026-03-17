@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/admin-auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminTopBar from "@/components/admin/AdminTopBar";
+import SupportChat from "@/components/admin/SupportChat";
 import type { ReactNode } from "react";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -17,6 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           {children}
         </main>
       </div>
+      <SupportChat />
     </div>
   );
 }

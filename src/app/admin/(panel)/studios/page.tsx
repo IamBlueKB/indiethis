@@ -25,6 +25,7 @@ type StudioRow = {
   isPublished: boolean;
   createdAt: string;
   isDormant: boolean;
+  moderationStatus: string | null;
   owner: {
     name: string;
     email: string;
@@ -489,6 +490,16 @@ export default function AdminStudiosPage() {
                     {s.isDormant && (
                       <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "rgba(255,159,10,0.12)", color: "#FF9F0A" }}>
                         <AlertTriangle size={9} /> Dormant
+                      </span>
+                    )}
+                    {s.moderationStatus === "FLAGGED" && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}>
+                        <AlertTriangle size={9} /> Flagged
+                      </span>
+                    )}
+                    {s.moderationStatus === "REVIEWING" && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "rgba(255,159,10,0.12)", color: "#FF9F0A" }}>
+                        <AlertTriangle size={9} /> Review
                       </span>
                     )}
                     {!s.isPublished && (

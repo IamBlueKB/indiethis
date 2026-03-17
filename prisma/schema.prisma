@@ -176,6 +176,12 @@ enum StudioTemplate {
   GRID
 }
 
+enum ModerationStatus {
+  CLEAN
+  FLAGGED
+  REVIEWING
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -306,6 +312,9 @@ model Studio {
   featuredArtists Json?
   pageConfig               Json?
   tierOverride             String?
+  moderationStatus         ModerationStatus @default(CLEAN)
+  moderationReason         String?
+  moderationScannedAt      DateTime?
   onboardingCompleted      Boolean   @default(false)
   generationsUsedThisMonth Int       @default(0)
   generationResetDate      DateTime?

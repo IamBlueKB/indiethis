@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { triggerModerationScan } from "@/lib/moderation";
 
 // GET /api/studio/settings
 export async function GET() {
@@ -86,6 +87,11 @@ export async function PATCH(req: NextRequest) {
         ? body.onboardingCompleted : undefined,
     },
   });
+
+  // Auto-scan on publish
+  if (typeof body.isPublished === "boolean" && body.isPublished) {
+    triggerModerationScan(studio.id);
+  }
 
   return NextResponse.json({ studio: updated });
 }
