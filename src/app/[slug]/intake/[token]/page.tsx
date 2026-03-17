@@ -606,6 +606,7 @@ export default function IntakeFormPage() {
               <a key={label} href={url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs text-foreground hover:border-accent transition-colors"
                 style={{ borderColor: "var(--border)" }}>
+                <span className="text-muted-foreground">{label}</span>
                 {handle} <ExternalLink size={10} className="text-muted-foreground" />
               </a>
             ))}

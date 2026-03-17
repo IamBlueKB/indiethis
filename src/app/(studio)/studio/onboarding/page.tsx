@@ -27,10 +27,15 @@ const DEFAULT_HOURS: HoursJson = {
   sunday:    { open: false, openTime: "10:00", closeTime: "18:00" },
 };
 
-const STYLE_OPTIONS: { id: "CLASSIC" | "BOLD" | "EDITORIAL"; label: string; subtitle: string }[] = [
-  { id: "CLASSIC", label: "Clean",     subtitle: "Warm, professional, timeless" },
-  { id: "BOLD",    label: "Cinematic", subtitle: "Energetic, powerful, modern" },
-  { id: "EDITORIAL", label: "Grid",    subtitle: "Sleek, refined, artistic" },
+type StyleId = "CLASSIC" | "BOLD" | "EDITORIAL" | "CLEAN" | "CINEMATIC" | "GRID";
+
+const STYLE_OPTIONS: { id: StyleId; label: string; subtitle: string; aiSupported: boolean }[] = [
+  { id: "CLASSIC",   label: "Classic",   subtitle: "Clean and professional",   aiSupported: true },
+  { id: "BOLD",      label: "Bold",      subtitle: "Visual and high-impact",    aiSupported: true },
+  { id: "EDITORIAL", label: "Editorial", subtitle: "Magazine-style",            aiSupported: true },
+  { id: "CLEAN",     label: "Clean",     subtitle: "Minimal, modern",           aiSupported: false },
+  { id: "CINEMATIC", label: "Cinematic", subtitle: "Dramatic, immersive",       aiSupported: false },
+  { id: "GRID",      label: "Grid",      subtitle: "Editorial, art-directed",   aiSupported: false },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -264,7 +269,7 @@ export default function OnboardingPage() {
   const [website, setWebsite] = useState("");
 
   // Step 6
-  const [selectedStyle, setSelectedStyle] = useState<"CLASSIC" | "BOLD" | "EDITORIAL">("BOLD");
+  const [selectedStyle, setSelectedStyle] = useState<StyleId>("BOLD");
   const [pageConfig, setPageConfig] = useState<object | null>(null);
 
   // ── Load ────────────────────────────────────────────────────────────────────
@@ -382,7 +387,15 @@ export default function OnboardingPage() {
     setStep(s => Math.max(s - 1, 1) as typeof s);
   }
 
+  const selectedStyleOption = STYLE_OPTIONS.find(s => s.id === selectedStyle)!;
+
   async function handleGenerate() {
+    // Non-AI styles: just save the template and advance
+    if (!selectedStyleOption.aiSupported) {
+      const ok = await save({ template: selectedStyle });
+      if (ok) setStep(7);
+      return;
+    }
     const ok = await save();
     if (!ok) return;
     setGenerating(true);
@@ -816,7 +829,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                {STYLE_OPTIONS.map(opt => {
+                {STYLE_OPTIONS.filter(opt => studioTier === "ELITE" || opt.aiSupported).map(opt => {
                   const active = selectedStyle === opt.id;
                   return (
                     <button
@@ -835,6 +848,9 @@ export default function OnboardingPage() {
                       />
                       <p className="text-sm font-semibold text-foreground">{opt.label}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{opt.subtitle}</p>
+                      {!opt.aiSupported && (
+                        <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.25)" }}>Static template</p>
+                      )}
                       {active && (
                         <div className="flex items-center gap-1 mt-2">
                           <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: "#D4A843" }}>
@@ -860,12 +876,17 @@ export default function OnboardingPage() {
                     <><Loader2 size={15} className="animate-spin" /> Building your page…</>
                   ) : saving ? (
                     <><Loader2 size={15} className="animate-spin" /> Saving…</>
-                  ) : (
+                  ) : selectedStyleOption.aiSupported ? (
                     <><Sparkles size={15} /> Generate My Page</>
+                  ) : (
+                    <><ChevronRight size={15} /> Apply Template</>
                   )}
                 </button>
                 {generating && (
                   <p className="text-xs text-center text-muted-foreground mt-2">This takes about 10–20 seconds.</p>
+                )}
+                {!selectedStyleOption.aiSupported && (
+                  <p className="text-xs text-center text-muted-foreground mt-2">Static templates don't use AI — you can customize content in the editor after setup.</p>
                 )}
               </div>
             </>
