@@ -1,6 +1,4 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Cpu, DollarSign, Zap, Layout } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 
@@ -33,9 +31,6 @@ const TOOL_COLOR: Record<string, string> = {
 };
 
 export default async function AdminAIUsagePage() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "PLATFORM_ADMIN") redirect("/login");
-
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const thirtyDaysAgo = new Date(now);

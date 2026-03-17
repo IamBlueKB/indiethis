@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
@@ -6,8 +6,8 @@ import type { Prisma } from "@prisma/client";
 const DORMANT_DAYS = 14;
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "PLATFORM_ADMIN") {
+  const session = await getAdminSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

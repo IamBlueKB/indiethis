@@ -16,6 +16,9 @@ const PUBLIC_PATHS = [
 function isPublicPath(pathname: string): boolean {
   // Allow public static paths and API auth routes
   if (pathname.startsWith("/api/auth")) return true;
+  // Admin panel — protected by admin cookie auth (getAdminSession), not NextAuth
+  if (pathname.startsWith("/admin")) return true;
+  if (pathname.startsWith("/api/admin")) return true;
   if (pathname.startsWith("/api/uploadthing")) return true;
   if (pathname.startsWith("/api/public")) return true;
   // Public studio contact form — /api/studio/[studioId]/contact
@@ -66,8 +69,8 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Platform admin routes — PLATFORM_ADMIN only
-  if (nextUrl.pathname.startsWith("/admin")) {
+  // Platform admin routes — handled by admin cookie auth, not NextAuth
+  if (nextUrl.pathname.startsWith("/admin") && nextUrl.pathname !== "/admin/login") {
     if (role !== "PLATFORM_ADMIN") {
       return NextResponse.redirect(
         new URL(getDashboardForRole(role ?? "ARTIST"), nextUrl)

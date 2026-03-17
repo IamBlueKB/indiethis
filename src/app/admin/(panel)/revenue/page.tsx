@@ -1,6 +1,4 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { DollarSign, TrendingUp, Users, Zap, UserMinus, BarChart2 } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminPieChart from "@/components/admin/charts/AdminPieChart";
@@ -9,9 +7,6 @@ const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
 const TIER_COLOR: Record<string, string> = { LAUNCH: "#888", PUSH: "#D4A843", REIGN: "#34C759" };
 
 export default async function AdminRevenuePage() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "PLATFORM_ADMIN") redirect("/login");
-
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const thirtyDaysAgo = new Date(now);

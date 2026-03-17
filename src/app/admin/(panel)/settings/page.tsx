@@ -1,10 +1,6 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { Settings, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
 
 export default async function AdminSettingsPage() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "PLATFORM_ADMIN") redirect("/login");
 
   const integrations = [
     { name: "Brevo (Email)", key: "BREVO_API_KEY", env: process.env.BREVO_API_KEY },

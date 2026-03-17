@@ -1,6 +1,4 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import {
   Users,
   Building2,
@@ -25,9 +23,6 @@ function pctDelta(current: number, prev: number): { delta: string; positive: boo
 }
 
 export default async function AdminDashboardPage() {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "PLATFORM_ADMIN") redirect("/login");
-
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);

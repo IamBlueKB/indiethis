@@ -5,7 +5,7 @@ const COOKIE_NAME = "admin_token";
 const EXPIRY = "8h";
 
 function getSecret() {
-  const raw = process.env.ADMIN_SECRET ?? process.env.NEXTAUTH_SECRET ?? "fallback-admin-secret";
+  const raw = process.env.ADMIN_SECRET || process.env.NEXTAUTH_SECRET || "fallback-admin-secret";
   return new TextEncoder().encode(raw);
 }
 
