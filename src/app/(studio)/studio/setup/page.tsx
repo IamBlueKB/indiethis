@@ -211,7 +211,7 @@ export default function StudioSetupPage() {
             </label>
             <div className="relative">
               <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input type="text" placeholder="e.g. Clear Ear Studios" required value={name}
+              <input type="text" placeholder="e.g. Sunrise Sound Studio" required value={name}
                 onChange={(e) => setName(e.target.value)}
                 className={inputClass} style={{ paddingLeft: "2.25rem", borderColor: "var(--border)" }} />
             </div>
