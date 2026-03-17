@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check, Loader2, Plus, X, ImageIcon, Sparkles,
@@ -38,7 +38,90 @@ const STYLE_OPTIONS: { id: StyleId; label: string; subtitle: string; aiSupported
   { id: "GRID",      label: "Grid",      subtitle: "Editorial, art-directed",   aiSupported: false },
 ];
 
+const STYLE_PREVIEWS: Record<StyleId, React.ReactNode> = {
+  CLASSIC: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#111"/>
+      <rect x="8" y="8" width="50" height="4" rx="2" fill="rgba(255,255,255,0.5)"/>
+      <rect x="80" y="8" width="12" height="4" rx="2" fill="rgba(255,255,255,0.2)"/>
+      <rect x="96" y="8" width="12" height="4" rx="2" fill="rgba(255,255,255,0.2)"/>
+      <rect x="8" y="20" width="104" height="28" rx="3" fill="rgba(255,255,255,0.06)"/>
+      <rect x="30" y="27" width="60" height="6" rx="2" fill="rgba(255,255,255,0.45)"/>
+      <rect x="38" y="36" width="44" height="3" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+      <rect x="8" y="52" width="104" height="1" fill="rgba(255,255,255,0.1)"/>
+      <rect x="8" y="57" width="45" height="2.5" rx="1.25" fill="rgba(255,255,255,0.15)"/>
+      <rect x="67" y="57" width="45" height="2.5" rx="1.25" fill="rgba(255,255,255,0.15)"/>
+    </svg>
+  ),
+  BOLD: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#0a0a0a"/>
+      <rect width="120" height="46" fill="rgba(255,255,255,0.07)"/>
+      <rect x="0" y="0" width="4" height="46" fill="#D4A843"/>
+      <rect x="8" y="26" width="55" height="8" rx="2" fill="rgba(255,255,255,0.7)"/>
+      <rect x="8" y="18" width="38" height="5" rx="2" fill="rgba(255,255,255,0.3)"/>
+      <rect x="0" y="50" width="120" height="14" fill="rgba(212,168,67,0.1)"/>
+      <rect x="8" y="55" width="36" height="3" rx="1.5" fill="#D4A843"/>
+      <rect x="50" y="55" width="22" height="3" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+    </svg>
+  ),
+  EDITORIAL: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#111"/>
+      <rect x="8" y="8" width="32" height="22" rx="2" fill="rgba(255,255,255,0.1)"/>
+      <rect x="8" y="33" width="32" height="3.5" rx="1.75" fill="rgba(255,255,255,0.4)"/>
+      <rect x="8" y="39" width="28" height="2.5" rx="1.25" fill="rgba(255,255,255,0.15)"/>
+      <rect x="8" y="44" width="24" height="2.5" rx="1.25" fill="rgba(255,255,255,0.1)"/>
+      <rect x="8" y="55" width="14" height="2" rx="1" fill="#D4A843"/>
+      <rect x="48" y="8" width="64" height="36" rx="2" fill="rgba(255,255,255,0.08)"/>
+      <rect x="48" y="48" width="50" height="5" rx="2" fill="rgba(255,255,255,0.35)"/>
+      <rect x="48" y="56" width="40" height="2.5" rx="1.25" fill="rgba(255,255,255,0.15)"/>
+    </svg>
+  ),
+  CLEAN: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#0f0f0f"/>
+      <rect x="25" y="13" width="70" height="7" rx="3" fill="rgba(255,255,255,0.55)"/>
+      <rect x="45" y="24" width="30" height="1.5" rx="0.75" fill="#D4A843"/>
+      <rect x="20" y="32" width="80" height="2.5" rx="1.25" fill="rgba(255,255,255,0.12)"/>
+      <rect x="28" y="37" width="64" height="2.5" rx="1.25" fill="rgba(255,255,255,0.08)"/>
+      <rect x="35" y="42" width="50" height="2.5" rx="1.25" fill="rgba(255,255,255,0.06)"/>
+      <rect x="40" y="51" width="40" height="9" rx="4.5" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.2)" strokeWidth="0.75"/>
+      <rect x="47" y="54.5" width="26" height="2" rx="1" fill="rgba(255,255,255,0.3)"/>
+    </svg>
+  ),
+  CINEMATIC: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#050505"/>
+      <rect x="0" y="10" width="120" height="44" fill="rgba(255,255,255,0.05)"/>
+      <ellipse cx="60" cy="32" rx="38" ry="20" fill="rgba(255,255,255,0.04)"/>
+      <rect x="0" y="0" width="120" height="10" fill="rgba(0,0,0,0.85)"/>
+      <rect x="0" y="54" width="120" height="10" fill="rgba(0,0,0,0.85)"/>
+      <rect x="28" y="26" width="64" height="7" rx="3" fill="rgba(255,255,255,0.5)"/>
+      <rect x="38" y="36" width="44" height="3" rx="1.5" fill="rgba(255,255,255,0.22)"/>
+    </svg>
+  ),
+  GRID: (
+    <svg viewBox="0 0 120 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="120" height="64" fill="#111"/>
+      <rect x="8" y="6" width="38" height="5" rx="2" fill="rgba(255,255,255,0.5)"/>
+      <rect x="8" y="14" width="26" height="3" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+      <rect x="8" y="22" width="32" height="19" rx="2" fill="rgba(255,255,255,0.1)"/>
+      <rect x="8" y="22" width="2" height="19" fill="#D4A843"/>
+      <rect x="44" y="22" width="32" height="19" rx="2" fill="rgba(255,255,255,0.07)"/>
+      <rect x="80" y="22" width="32" height="19" rx="2" fill="rgba(255,255,255,0.12)"/>
+      <rect x="8" y="44" width="32" height="13" rx="2" fill="rgba(255,255,255,0.06)"/>
+      <rect x="44" y="44" width="32" height="13" rx="2" fill="rgba(255,255,255,0.09)"/>
+      <rect x="80" y="44" width="32" height="13" rx="2" fill="rgba(255,255,255,0.05)"/>
+    </svg>
+  ),
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+function toSlug(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
 function to12hr(time24: string) {
   const [h, m] = time24.split(":").map(Number);
@@ -240,6 +323,9 @@ export default function OnboardingPage() {
 
   // Step 1
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const slugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
@@ -283,6 +369,7 @@ export default function OnboardingPage() {
 
         setStudioTier(s.studioTier ?? "PRO");
         setStudioSlug(s.slug ?? "");
+        setSlug(s.slug ?? "");
         setName(s.name ?? "");
         setPhone(s.phone ?? "");
         setEmail(s.email ?? "");
@@ -330,6 +417,7 @@ export default function OnboardingPage() {
     try {
       const body: Record<string, unknown> = {
         name: name.trim() || undefined,
+        slug: slug.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
         streetAddress: streetAddress.trim() || undefined,
@@ -356,11 +444,13 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         setError(data.error ?? "Failed to save.");
         return false;
       }
+      // Keep studioSlug in sync so the step 7 preview URL stays current
+      if (data.studio?.slug) setStudioSlug(data.studio.slug);
       return true;
     } catch {
       setError("Network error. Please try again.");
@@ -368,7 +458,7 @@ export default function OnboardingPage() {
     } finally {
       setSaving(false);
     }
-  }, [name, phone, email, streetAddress, city, stateVal, zipCode, logoUrl, tagline, bio, services, heroImage, gallery, hours, hoursNote, instagram, tiktok, facebook, twitter, website]);
+  }, [name, slug, phone, email, streetAddress, city, stateVal, zipCode, logoUrl, tagline, bio, services, heroImage, gallery, hours, hoursNote, instagram, tiktok, facebook, twitter, website]);
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   async function handleNext() {
@@ -503,11 +593,63 @@ export default function OnboardingPage() {
                   <label className={labelCls}>Studio Name <span style={{ color: "#D4A843" }}>*</span></label>
                   <input
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => {
+                      const n = e.target.value;
+                      setName(n);
+                      // Auto-fill slug from name only if user hasn't manually edited it
+                      setSlug(prev => {
+                        const autoSlug = toSlug(n);
+                        // Only auto-update if slug is empty or matches previous auto-slug
+                        if (!prev || prev === toSlug(name)) return autoSlug;
+                        return prev;
+                      });
+                    }}
                     placeholder="Your studio name"
                     className={inputCls}
                     style={{ borderColor: "var(--border)" }}
                   />
+                </div>
+
+                <div>
+                  <label className={labelCls}>Your Page URL</label>
+                  <div
+                    className="flex items-center rounded-xl border overflow-hidden"
+                    style={{ borderColor: slugStatus === "taken" ? "rgba(239,68,68,0.5)" : slugStatus === "available" ? "rgba(34,197,94,0.5)" : "var(--border)" }}
+                  >
+                    <span className="px-3 py-2.5 text-sm border-r flex-shrink-0" style={{ borderColor: "var(--border)", color: "rgba(255,255,255,0.3)", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      indiethis.com/
+                    </span>
+                    <input
+                      value={slug}
+                      onChange={e => {
+                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                        setSlug(val);
+                        setSlugStatus("checking");
+                        if (slugTimerRef.current) clearTimeout(slugTimerRef.current);
+                        slugTimerRef.current = setTimeout(async () => {
+                          if (!val.trim()) { setSlugStatus("idle"); return; }
+                          const res = await fetch(`/api/studio/settings/slug-check?slug=${encodeURIComponent(val)}`);
+                          if (res.ok) {
+                            const data = await res.json();
+                            setSlugStatus(data.available ? "available" : "taken");
+                          } else {
+                            setSlugStatus("idle");
+                          }
+                        }, 600);
+                      }}
+                      placeholder="your-studio-name"
+                      className="flex-1 px-3 py-2.5 text-sm bg-transparent text-foreground outline-none"
+                    />
+                    {slugStatus === "checking" && <Loader2 size={14} className="mr-3 animate-spin text-muted-foreground flex-shrink-0" />}
+                    {slugStatus === "available" && <Check size={14} className="mr-3 flex-shrink-0" style={{ color: "#22c55e" }} />}
+                    {slugStatus === "taken" && <X size={14} className="mr-3 flex-shrink-0" style={{ color: "#ef4444" }} />}
+                  </div>
+                  {slugStatus === "taken" && (
+                    <p className="text-[11px] mt-1" style={{ color: "#f87171" }}>That URL is already taken. Try another.</p>
+                  )}
+                  {slugStatus === "available" && (
+                    <p className="text-[11px] mt-1" style={{ color: "#86efac" }}>Available!</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -842,10 +984,9 @@ export default function OnboardingPage() {
                         backgroundColor: active ? "rgba(212,168,67,0.08)" : "var(--background)",
                       }}
                     >
-                      <div
-                        className="w-full h-16 rounded-lg mb-3"
-                        style={{ backgroundColor: active ? "rgba(212,168,67,0.15)" : "var(--muted)" }}
-                      />
+                      <div className="w-full h-16 rounded-lg mb-3 overflow-hidden">
+                        {STYLE_PREVIEWS[opt.id]}
+                      </div>
                       <p className="text-sm font-semibold text-foreground">{opt.label}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{opt.subtitle}</p>
                       {!opt.aiSupported && (

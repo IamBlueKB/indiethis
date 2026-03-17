@@ -20,9 +20,9 @@ function UploadBox({ value, onUpload, guidance, aspect = "wide" }: {
     const res = await startUpload([file]);
     if (res?.[0]?.url) onUpload(res[0].url);
   }
-  const heightClass = aspect === "square" ? "aspect-square" : "h-36";
+  const sizeClass = aspect === "square" ? "w-32 h-32" : "w-full h-36";
   return value ? (
-    <div className={`relative group w-full ${heightClass} rounded-xl overflow-hidden border`} style={{ borderColor: "var(--border)" }}>
+    <div className={`relative group ${sizeClass} rounded-xl overflow-hidden border`} style={{ borderColor: "var(--border)" }}>
       <img src={value} alt="upload" className="w-full h-full object-cover" />
       <button type="button" onClick={() => onUpload("")}
         className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -30,11 +30,11 @@ function UploadBox({ value, onUpload, guidance, aspect = "wide" }: {
       </button>
     </div>
   ) : (
-    <label className={`flex flex-col items-center justify-center w-full ${heightClass} rounded-xl border border-dashed cursor-pointer transition-colors px-4 text-center hover:border-[var(--accent)]/40`}
+    <label className={`flex flex-col items-center justify-center ${sizeClass} rounded-xl border border-dashed cursor-pointer transition-colors px-4 text-center hover:border-[var(--accent)]/40`}
       style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}>
       <ImageIcon size={20} className="text-muted-foreground mb-2" />
       <span className="text-xs font-medium text-muted-foreground">{isUploading ? "Uploading…" : "Click to upload"}</span>
-      {!isUploading && (
+      {!isUploading && aspect !== "square" && (
         <span className="text-[11px] mt-1.5 leading-snug max-w-[240px]" style={{ color: "rgba(255,255,255,0.3)" }}>{guidance}</span>
       )}
       <input type="file" accept="image/*" className="sr-only" onChange={handleFile} disabled={isUploading} />
@@ -310,8 +310,13 @@ export default function StudioSetupPage() {
           {/* Logo */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Logo</label>
-            <UploadBox value={logoUrl || null} onUpload={setLogoUrl} aspect="square"
-              guidance="Upload your studio logo — square format works best." />
+            <div className="flex items-center gap-4">
+              <UploadBox value={logoUrl || null} onUpload={setLogoUrl} aspect="square"
+                guidance="Upload your studio logo — square format works best." />
+              <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.3)" }}>
+                Upload your studio logo.<br />Square format works best.
+              </p>
+            </div>
           </div>
 
           {/* Hero */}
