@@ -182,6 +182,13 @@ export async function POST(req: NextRequest) {
 
   // Overage charge if at or over limit
   if (currentCount >= limit) {
+    if (!stripe) {
+      return NextResponse.json(
+        { error: "You've reached your generation limit. Payments are not configured.", code: "NO_PAYMENT_METHOD" },
+        { status: 402 }
+      );
+    }
+
     const owner = studio.owner;
     let customerId = owner.stripeCustomerId;
 

@@ -3,13 +3,15 @@ import Stripe from "stripe";
 declare global { var stripe: Stripe | undefined; }
 
 export const stripe =
-  globalThis.stripe ??
-  new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-    apiVersion: "2025-01-27.acacia",
-    typescript: true,
-  });
+  process.env.STRIPE_SECRET_KEY
+    ? (globalThis.stripe ??
+        new Stripe(process.env.STRIPE_SECRET_KEY, {
+          apiVersion: "2025-01-27.acacia",
+          typescript: true,
+        }))
+    : null;
 
-if (process.env.NODE_ENV !== "production") globalThis.stripe = stripe;
+if (process.env.NODE_ENV !== "production" && stripe) globalThis.stripe = stripe;
 
 // Stripe Price IDs — set these in .env.local after creating products in Stripe dashboard
 // STRIPE_PRICE_LAUNCH=price_xxx

@@ -299,7 +299,7 @@ function SectionEditPanel({
   instagram, setInstagram, tiktok, setTiktok, facebook, setFacebook, twitter, setTwitter, youtube, setYoutube,
   accentColor, setAccentColor,
   pageConfig, setPageConfig, updateSection, updateSectionContent, moveSection,
-  savingConfig, configSaved, handleSaveConfig,
+  savingConfig, configSaved, handleSaveConfig, handleResetConfig,
 }: {
   sectionKey: string; saving: boolean; saved: boolean; onSave: () => void;
   name: string; setName: (v: string) => void;
@@ -327,7 +327,7 @@ function SectionEditPanel({
   updateSection: (idx: number, patch: Partial<SectionConfig>) => void;
   updateSectionContent: (idx: number, key: string, val: string | boolean) => void;
   moveSection: (idx: number, dir: -1 | 1) => void;
-  savingConfig: boolean; configSaved: boolean; handleSaveConfig: () => void;
+  savingConfig: boolean; configSaved: boolean; handleSaveConfig: () => void; handleResetConfig: () => void;
 }) {
   const content: Record<string, React.ReactNode> = {
     hero: (
@@ -443,6 +443,11 @@ function SectionEditPanel({
               className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
               style={{ backgroundColor: "var(--accent)", color: "#0A0A0A" }}>
               {configSaved ? <><Check size={13} /> Saved!</> : savingConfig ? "Saving…" : <><Save size={13} /> Save Config</>}
+            </button>
+            <button onClick={handleResetConfig} disabled={savingConfig}
+              className="w-full py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-40 flex items-center justify-center gap-1.5"
+              style={{ color: "#EF4444", border: "1px solid #EF444430" }}>
+              <X size={11} /> Reset to Default Template
             </button>
           </div>
         )}
@@ -581,10 +586,10 @@ export default function PublicPageEditor() {
     facebook: facebook || null, twitter: twitter || null, youtube: youtube || null,
     streetAddress: streetAddress || null, city: city || null,
     state: stateVal || null, zipCode: zipCode || null,
-    template: baseStyle, pageConfig,
+    template: isCustom ? "CUSTOM" : baseStyle, pageConfig,
   }), [studioId, slug, name, tagline, bio, phone, email, logoUrl, heroImage, gallery,
        hours, hoursNote, accentColor, instagram, tiktok, facebook, twitter, youtube,
-       streetAddress, city, stateVal, zipCode, baseStyle, pageConfig]);
+       streetAddress, city, stateVal, zipCode, baseStyle, isCustom, pageConfig]);
 
   const sendDraft = useCallback(() => {
     const win = iframeRef.current?.contentWindow;
@@ -593,7 +598,7 @@ export default function PublicPageEditor() {
       type: "DRAFT_UPDATE",
       payload: {
         studio: buildDraftStudio(),
-        template: baseStyle,
+        template: isCustom ? "CUSTOM" : baseStyle,
         pageConfig,
         services,
         testimonials,
@@ -631,7 +636,7 @@ export default function PublicPageEditor() {
       location: { streetAddress: streetAddress || null, city: city || null, state: stateVal || null, zipCode: zipCode || null },
       contact:  { phone: phone || null, email: email || null },
       socials:  { instagram: instagram || null, tiktok: tiktok || null, facebook: facebook || null, twitter: twitter || null, youtube: youtube || null },
-      design:   { accentColor: accentColor || null, template: baseStyle },
+      design:   { accentColor: accentColor || null, template: isCustom ? "CUSTOM" : baseStyle },
     }[selectedSection] ?? {};
 
     try {
@@ -659,6 +664,19 @@ export default function PublicPageEditor() {
       setGenerationsUsed((prev) => prev + 1);
       setSelectedSection("ai-sections");
     } finally { setGenerating(false); }
+  }
+
+  // ── Reset pageConfig ──
+  async function handleResetConfig() {
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/studio/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageConfig: null }),
+      });
+      if (res.ok) { setPageConfig(null); setSelectedSection("hero"); }
+    } finally { setSavingConfig(false); }
   }
 
   // ── Save pageConfig ──
@@ -719,46 +737,50 @@ export default function PublicPageEditor() {
       <div className="h-14 flex items-center gap-3 px-4 border-b shrink-0" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
         <span className="text-sm font-bold text-foreground mr-1">Studio Page</span>
 
-        {/* Template picker — hidden for CUSTOM */}
-        {!isCustom && (
-          <div className="flex items-center gap-1 bg-black/20 rounded-xl p-1">
-            {STYLES.map((s) => (
-              <button key={s.id}
-                onClick={() => setBaseStyle(s.id as typeof baseStyle)}
-                className="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: baseStyle === s.id ? "var(--accent)" : "transparent",
-                  color: baseStyle === s.id ? "#0A0A0A" : "var(--muted-foreground)",
-                }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {isCustom && (
-          <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "var(--muted-foreground)" }}>
-            Custom Layout
-          </span>
-        )}
+        {/* Template picker */}
+        <div className="flex items-center gap-1 bg-black/20 rounded-xl p-1">
+          {STYLES.map((s) => (
+            <button key={s.id}
+              onClick={() => { setBaseStyle(s.id as typeof baseStyle); setIsCustom(false); }}
+              className="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
+              style={{
+                backgroundColor: !isCustom && baseStyle === s.id ? "var(--accent)" : "transparent",
+                color: !isCustom && baseStyle === s.id ? "#0A0A0A" : "var(--muted-foreground)",
+              }}>
+              {s.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setIsCustom(true)}
+            className="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
+            style={{
+              backgroundColor: isCustom ? "rgba(255,255,255,0.15)" : "transparent",
+              color: isCustom ? "#fff" : "var(--muted-foreground)",
+            }}>
+            Custom
+          </button>
+        </div>
 
         <div className="flex-1" />
 
         {/* AI Generate */}
-        {!isCustom && (
-          <button onClick={handleGenerate} disabled={generating}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
-            {generating ? <><RefreshCw size={12} className="animate-spin" /> Generating…</> : <><Wand2 size={12} /> Generate with AI</>}
-          </button>
-        )}
-
-        {/* Usage counter */}
-        {!isCustom && (
-          <span className="text-xs font-semibold" style={{ color: atLimit ? "#EF4444" : "var(--muted-foreground)" }}>
-            <Zap size={11} className="inline mr-0.5" />
-            {atLimit ? "$1 per extra" : `${generationsLeft} of ${generationLimit} left`}
-          </span>
-        )}
+        {(() => {
+          const aiSupported = !isCustom && ["CLASSIC","BOLD","EDITORIAL"].includes(baseStyle);
+          return (
+            <div className="flex items-center gap-2">
+              <button onClick={handleGenerate} disabled={generating || !aiSupported}
+                title={!aiSupported ? "AI Generate only works with Classic, Bold, or Editorial templates" : undefined}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
+                {generating ? <><RefreshCw size={12} className="animate-spin" /> Generating…</> : <><Wand2 size={12} /> Generate with AI</>}
+              </button>
+              <span className="text-xs font-semibold" style={{ color: atLimit ? "#EF4444" : "var(--muted-foreground)" }}>
+                <Zap size={11} className="inline mr-0.5" />
+                {atLimit ? "$1 per extra" : `${generationsLeft} of ${generationLimit} left`}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Preview in new tab */}
         {slug && (
@@ -892,6 +914,7 @@ export default function PublicPageEditor() {
               moveSection={moveSection}
               savingConfig={savingConfig} configSaved={configSaved}
               handleSaveConfig={handleSaveConfig}
+              handleResetConfig={handleResetConfig}
             />
           </div>
         </div>
