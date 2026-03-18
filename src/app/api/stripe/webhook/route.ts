@@ -9,6 +9,7 @@ import {
 } from "@/lib/studio-referral";
 import { cancelFollowUpByEmail } from "@/lib/email-sequence";
 import { activateReferral, deactivateReferral } from "@/lib/referral-tracking";
+import { applyReferralRewardsToInvoice } from "@/lib/referral-billing";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -296,8 +297,9 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    // Apply studio referral credits before each subscription invoice is
-    // finalised so the credit reduces what the studio owner actually pays.
+    // Apply billing adjustments before each subscription invoice is finalised:
+    //   1. Studio referral credits (reduce what the studio owner pays)
+    //   2. User referral reward tier (free month, 20% off, etc.)
     case "invoice.upcoming": {
       const upcomingInvoice = event.data.object as Stripe.Invoice;
       const customerId =
@@ -306,6 +308,7 @@ export async function POST(req: NextRequest) {
           : (upcomingInvoice.customer as { id: string } | null)?.id;
       if (customerId) {
         void applyStudioCreditsToStripeInvoice(customerId);
+        void applyReferralRewardsToInvoice(customerId);
       }
       break;
     }
