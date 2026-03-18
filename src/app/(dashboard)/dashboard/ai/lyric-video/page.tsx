@@ -3,409 +3,651 @@
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Film, Loader2, CheckCircle2, Clock, AlertCircle, Plus, X, Download, Zap, CreditCard } from "lucide-react";
+import {
+  Film, Loader2, CheckCircle2, Clock, AlertCircle, Upload, X,
+  Zap, PlayCircle, ChevronRight, Edit3,
+} from "lucide-react";
+import { useUploadThing } from "@/lib/uploadthing-client";
 
-type LyricVideoJob = {
-  id: string;
-  inputData: {
-    songTitle?: string;
-    fontStyle?: string;
-    background?: string;
-    accentColor?: string;
-    aspectRatio?: string;
-  } | null;
-  outputUrl: string | null;
-  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
-  createdAt: string;
-};
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Subscription = {
-  tier: string;
-  lyricVideoCreditsUsed: number;
-  lyricVideoCreditsLimit: number;
-};
+type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
 
-const STATUS_CONFIG = {
-  QUEUED:     { color: "text-yellow-400", icon: Clock,        label: "Queued" },
-  PROCESSING: { color: "text-blue-400",   icon: Loader2,      label: "Processing" },
-  COMPLETED:  { color: "text-emerald-400",icon: CheckCircle2, label: "Completed" },
-  FAILED:     { color: "text-red-400",    icon: AlertCircle,  label: "Failed" },
-};
+interface WhisperWord {
+  word:  string;
+  start: number;
+  end:   number;
+}
 
-const FONT_STYLES  = ["Minimal", "Bold", "Elegant", "Neon", "Handwritten"];
-const BACKGROUNDS  = ["Pure Black", "Gradient", "Abstract", "Bokeh", "Cinematic"];
-const ACCENT_COLORS = ["White", "Gold", "Cyan", "Rose", "Lime"];
-const ASPECT_RATIOS = ["16:9 (YouTube)", "9:16 (Reels/TikTok)", "1:1 (Instagram)"];
+interface PollData {
+  jobId:               string;
+  status:              JobStatus;
+  priceCharged:        number | null;
+  createdAt:           string;
+  completedAt:         string | null;
+  errorMessage:        string | null;
+  phase?:              number;
+  transcriptionReady?: boolean;
+  words?:              WhisperWord[];
+  segments?:           { start: number; end: number; text: string }[];
+  text?:               string;
+  duration?:           number | null;
+  finalVideoUrl?:      string;
+}
+
+interface HistoryItem {
+  id:           string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  outputData:   { finalVideoUrl?: string } | null;
+  errorMessage: string | null;
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const VISUAL_STYLES = [
+  { value: "gradient",  label: "Gradient",  desc: "Smooth colour gradient background" },
+  { value: "cinematic", label: "Cinematic", desc: "Dramatic dark cinematic look" },
+  { value: "minimal",   label: "Minimal",   desc: "Clean minimal white/black" },
+  { value: "neon",      label: "Neon",      desc: "Neon glow on dark background" },
+];
+
+const FONT_STYLES = [
+  { value: "bold",    label: "Bold" },
+  { value: "elegant", label: "Elegant" },
+  { value: "default", label: "Default" },
+];
+
+const ASPECT_RATIOS = [
+  { value: "16:9", label: "16:9 — YouTube" },
+  { value: "9:16", label: "9:16 — Reels/TikTok" },
+  { value: "1:1",  label: "1:1 — Instagram" },
+];
+
+// ─── Transcription review component ───────────────────────────────────────────
+
+function TranscriptionReview({
+  words,
+  text,
+  onApprove,
+  approving,
+  approveError,
+}: {
+  words:       WhisperWord[];
+  text?:       string;
+  onApprove:   (correctedWords?: WhisperWord[]) => void;
+  approving:   boolean;
+  approveError: string | null;
+}) {
+  const [editedWords, setEditedWords] = useState<WhisperWord[]>(words);
+  const [editingIdx,  setEditingIdx]  = useState<number | null>(null);
+  const [editValue,   setEditValue]   = useState("");
+
+  function startEdit(idx: number) {
+    setEditingIdx(idx);
+    setEditValue(editedWords[idx].word);
+  }
+
+  function saveEdit(idx: number) {
+    const updated = editedWords.map((w, i) => i === idx ? { ...w, word: editValue.trim() || w.word } : w);
+    setEditedWords(updated);
+    setEditingIdx(null);
+  }
+
+  const correctedText = editedWords.map(w => w.word).join(" ");
+  const hasChanges    = editedWords.some((w, i) => w.word !== words[i].word);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-foreground">Review transcription</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Click any word to correct it. When happy, approve to generate the video.
+        </p>
+      </div>
+
+      {/* Word tokens */}
+      <div className="rounded-xl border p-4 flex flex-wrap gap-1.5 max-h-52 overflow-y-auto" style={{ borderColor: "var(--border)" }}>
+        {editedWords.map((w, i) => (
+          editingIdx === i ? (
+            <input
+              key={i}
+              autoFocus
+              value={editValue}
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={() => saveEdit(i)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") saveEdit(i); if (e.key === "Escape") setEditingIdx(null); }}
+              className="px-2 py-0.5 rounded-md text-sm border outline-none"
+              style={{ borderColor: "#D4A843", backgroundColor: "rgba(212,168,67,0.1)", color: "var(--foreground)", minWidth: 60, width: Math.max(60, editValue.length * 9) }}
+            />
+          ) : (
+            <button
+              key={i}
+              onClick={() => startEdit(i)}
+              className="px-2 py-0.5 rounded-md text-sm transition-all hover:opacity-80"
+              style={{
+                backgroundColor: w.word !== words[i].word ? "rgba(212,168,67,0.15)" : "var(--border)",
+                color:           w.word !== words[i].word ? "#D4A843" : "var(--foreground)",
+                border:          `1px solid ${w.word !== words[i].word ? "#D4A843" : "transparent"}`,
+              }}
+            >
+              {w.word}
+            </button>
+          )
+        ))}
+      </div>
+
+      {hasChanges && (
+        <p className="text-xs text-muted-foreground">
+          <span style={{ color: "#D4A843" }}>{editedWords.filter((w, i) => w.word !== words[i].word).length} words edited</span>
+          {" — these corrections will be used in the video."}
+        </p>
+      )}
+
+      {approveError && (
+        <div className="flex items-center gap-2 text-red-400 text-sm">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          {approveError}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">Approve to start rendering (~5–10 min)</p>
+        <button
+          onClick={() => onApprove(hasChanges ? editedWords : undefined)}
+          disabled={approving}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
+          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+        >
+          {approving ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+          Approve Lyrics & Render
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Inner page (needs Suspense for useSearchParams) ──────────────────────────
 
 function LyricVideoContent() {
   const searchParams = useSearchParams();
-  const justPaid = searchParams.get("paid") === "1";
+  const justPaid     = searchParams.get("paid") === "1";
 
-  const [jobs, setJobs] = useState<LyricVideoJob[]>([]);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [composing, setComposing] = useState(justPaid); // open form on return from payment
+  // Form
+  const [trackUrl,     setTrackUrl]     = useState("");
+  const [visualStyle,  setVisualStyle]  = useState("gradient");
+  const [fontStyle,    setFontStyle]    = useState("bold");
+  const [accentColor,  setAccentColor]  = useState("#D4A843");
+  const [aspectRatio,  setAspectRatio]  = useState("16:9");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const [songTitle, setSongTitle] = useState("");
-  const [lyrics, setLyrics] = useState("");
-  const [fontStyle, setFontStyle] = useState("Minimal");
-  const [background, setBackground] = useState("Pure Black");
-  const [accentColor, setAccentColor] = useState("White");
-  const [aspectRatio, setAspectRatio] = useState("16:9 (YouTube)");
-  const [generating, setGenerating] = useState(false);
-  const [buyLoading, setBuyLoading] = useState(false);
+  // Job state
+  const [submitting,   setSubmitting]   = useState(false);
+  const [submitError,  setSubmitError]  = useState<string | null>(null);
+  const [approving,    setApproving]    = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
+  const [activeJobId,  setActiveJobId]  = useState<string | null>(null);
+  const [jobData,      setJobData]      = useState<PollData | null>(null);
 
+  // History
+  const [history,        setHistory]        = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  // UploadThing
+  const { startUpload: uploadTrack, isUploading: trackUploading } = useUploadThing("artistTrack", {
+    onClientUploadComplete: (res) => {
+      const url = res[0]?.url;
+      if (url) setTrackUrl(url);
+    },
+  });
+
+  // ── Load history on mount ─────────────────────────────────────────────────
   useEffect(() => {
-    fetch("/api/dashboard/lyric-video")
-      .then((r) => r.json())
-      .then((d) => {
-        setJobs(d.jobs ?? []);
-        setSubscription(d.subscription ?? null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    fetch("/api/dashboard/ai/lyric-video")
+      .then(r => r.ok ? r.json() : { jobs: [] })
+      .then(d => setHistory(d.jobs ?? []))
+      .finally(() => setHistoryLoading(false));
   }, []);
 
-  const creditsUsed  = subscription?.lyricVideoCreditsUsed  ?? 0;
-  const creditsLimit = subscription?.lyricVideoCreditsLimit ?? 0;
-  const creditsLeft  = creditsLimit - creditsUsed;
-  const hasCredits   = creditsLeft > 0;
+  // ── Poll active job every 4 s ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeJobId) return;
+    if (jobData?.status === "COMPLETE" || jobData?.status === "FAILED") return;
 
-  async function handleGenerate() {
-    if (!lyrics.trim()) return;
-    setGenerating(true);
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ai-jobs/${activeJobId}`);
+        if (!res.ok) return;
+        const data: PollData = await res.json();
+        setJobData(data);
+        if (data.status === "COMPLETE") {
+          setHistory(prev => [{
+            id:           data.jobId,
+            status:       data.status,
+            priceCharged: data.priceCharged,
+            createdAt:    data.createdAt,
+            outputData:   { finalVideoUrl: data.finalVideoUrl },
+            errorMessage: null,
+          }, ...prev]);
+        }
+      } catch { /* transient */ }
+    }, 4000);
+
+    return () => clearInterval(t);
+  }, [activeJobId, jobData?.status]);
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!trackUrl.trim()) return;
+    setSubmitting(true);
+    setSubmitError(null);
     try {
-      const res = await fetch("/api/dashboard/lyric-video", {
-        method: "POST",
+      const res = await fetch("/api/dashboard/ai/lyric-video", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ songTitle: songTitle.trim(), lyrics: lyrics.trim(), fontStyle, background, accentColor, aspectRatio }),
+        body:    JSON.stringify({
+          trackUrl:    trackUrl.trim(),
+          visualStyle,
+          fontStyle,
+          accentColor,
+          aspectRatio,
+        }),
       });
-      if (res.ok) {
-        const data = await res.json() as { job: LyricVideoJob };
-        setJobs((prev) => [data.job, ...prev]);
-        setSongTitle(""); setLyrics(""); setComposing(false);
-      } else {
-        const d = await res.json() as { error?: string };
-        alert(d.error ?? "Something went wrong.");
+
+      if (res.status === 402) {
+        const d = await res.json();
+        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "24.99"}. Add a payment method in Settings.`);
+        return;
       }
+
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
+
+      const init: PollData = {
+        jobId: data.jobId, status: "QUEUED", priceCharged: null, phase: 0,
+        createdAt: new Date().toISOString(), completedAt: null, errorMessage: null,
+      };
+      setActiveJobId(data.jobId);
+      setJobData(init);
+      setTrackUrl("");
     } finally {
-      setGenerating(false);
+      setSubmitting(false);
     }
   }
 
-  async function handleBuy() {
-    setBuyLoading(true);
+  // ── Approve lyrics ────────────────────────────────────────────────────────
+  async function handleApprove(correctedWords?: WhisperWord[]) {
+    if (!activeJobId) return;
+    setApproving(true);
+    setApproveError(null);
     try {
-      const res = await fetch("/api/stripe/pay-per-use", {
-        method: "POST",
+      const res = await fetch(`/api/ai-jobs/${activeJobId}/approve-lyrics`, {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: "LYRIC_VIDEO" }),
+        body:    correctedWords ? JSON.stringify({ words: correctedWords }) : "{}",
       });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        alert(data.error ?? "Could not start checkout.");
-      }
+      const data = await res.json();
+      if (!res.ok) { setApproveError(data.error ?? "Failed to approve"); return; }
+      // Job is now entering Phase 2 rendering — polling will pick up state
+      setJobData(prev => prev ? { ...prev, transcriptionReady: false, phase: 2 } : prev);
     } finally {
-      setBuyLoading(false);
+      setApproving(false);
     }
   }
+
+  const isActive = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+
+  function dismissJob() { setJobData(null); setActiveJobId(null); }
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <AIToolsNav />
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Lyric Video</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Animated lyric videos synced to your music
-          </p>
-        </div>
-        <button
-          onClick={() => setComposing(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Plus size={14} /> New Lyric Video
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Lyric Video</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Upload your track — AI transcribes it, you review the lyrics, then we render the video via Remotion.
+        </p>
       </div>
 
-      {/* Payment success banner */}
-      {justPaid && (
-        <div
-          className="rounded-2xl border p-4 flex items-center gap-3"
-          style={{ backgroundColor: "#D4A84314", borderColor: "#D4A84360" }}
-        >
-          <CheckCircle2 size={16} style={{ color: "#D4A843" }} className="shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">Payment successful!</p>
-            <p className="text-xs text-muted-foreground">1 lyric video credit added. Fill in your details below and generate.</p>
+      {/* Form */}
+      {!isActive && !jobData && (
+        <div className="rounded-2xl border p-5 space-y-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-2">
+            <Film size={15} style={{ color: "#D4A843" }} />
+            <h2 className="text-sm font-semibold text-foreground">New Lyric Video</h2>
           </div>
-        </div>
-      )}
 
-      {/* Pricing & credits card */}
-      {!loading && (
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="grid grid-cols-2 divide-x" style={{ borderColor: "var(--border)" }}>
-            {/* Left: plan credit */}
-            <div className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <Zap size={14} style={{ color: "#D4A843" }} />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Included with Plan</span>
-              </div>
-              {creditsLimit > 0 ? (
-                <>
-                  <p className="text-sm text-foreground">
-                    <span className="font-bold text-foreground">{creditsLeft}</span>
-                    <span className="text-muted-foreground"> / {creditsLimit} credit{creditsLimit !== 1 ? "s" : ""} remaining</span>
-                  </p>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "var(--border)" }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(100, (creditsUsed / creditsLimit) * 100)}%`,
-                        backgroundColor: creditsLeft <= 0 ? "#f87171" : "#D4A843",
-                      }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground capitalize">{subscription?.tier.toLowerCase()} plan</p>
-                </>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Track upload */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audio Track *</label>
+              {trackUrl ? (
+                <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
+                  <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                  <p className="text-sm text-foreground truncate flex-1">Track uploaded — ready to process</p>
+                  <button type="button" onClick={() => setTrackUrl("")} className="text-muted-foreground hover:text-foreground shrink-0">
+                    <X size={13} />
+                  </button>
+                </div>
               ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">Not included in your current plan.</p>
-                  <a
-                    href="/dashboard/upgrade"
-                    className="inline-flex items-center gap-1 text-xs font-semibold no-underline"
-                    style={{ color: "#D4A843" }}
-                  >
-                    Upgrade to Push or Reign →
-                  </a>
-                </>
+                <div className="space-y-2">
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer transition-colors"
+                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                    {trackUploading
+                      ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                      : <><Upload size={14} /> Upload WAV, MP3, or FLAC</>}
+                    <input type="file" accept="audio/*" className="sr-only" disabled={trackUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTrack([f]); e.target.value = ""; }}
+                    />
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+                    <span className="text-xs text-muted-foreground">or paste URL</span>
+                    <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+                  </div>
+                  <input
+                    type="url"
+                    value={trackUrl}
+                    onChange={e => setTrackUrl(e.target.value)}
+                    placeholder="https://example.com/track.mp3"
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
               )}
             </div>
 
-            {/* Right: pay per use */}
-            <div className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <CreditCard size={14} className="text-muted-foreground" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pay Per Use</span>
+            {/* Visual style */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Visual Style</label>
+              <div className="grid grid-cols-2 gap-2">
+                {VISUAL_STYLES.map(s => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setVisualStyle(s.value)}
+                    className="rounded-xl border px-3 py-2.5 text-left transition-all"
+                    style={{
+                      borderColor:     visualStyle === s.value ? "#D4A843" : "var(--border)",
+                      backgroundColor: visualStyle === s.value ? "rgba(212,168,67,0.08)" : "transparent",
+                    }}
+                  >
+                    <p className="text-sm font-semibold text-foreground">{s.label}</p>
+                    <p className="text-xs text-muted-foreground">{s.desc}</p>
+                  </button>
+                ))}
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">$24.99</p>
-                <p className="text-xs text-muted-foreground mt-0.5">one lyric video · no subscription needed</p>
+            </div>
+
+            {/* Advanced options toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(v => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1"
+            >
+              <Edit3 size={11} />
+              {showAdvanced ? "Hide" : "Show"} font & colour options
+            </button>
+
+            {showAdvanced && (
+              <div className="space-y-4 pt-1">
+                {/* Font style */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Font Style</label>
+                  <div className="flex gap-2">
+                    {FONT_STYLES.map(f => (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => setFontStyle(f.value)}
+                        className="flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-all"
+                        style={{
+                          borderColor:     fontStyle === f.value ? "#D4A843" : "var(--border)",
+                          backgroundColor: fontStyle === f.value ? "rgba(212,168,67,0.08)" : "transparent",
+                          color:           fontStyle === f.value ? "#D4A843" : "var(--muted-foreground)",
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Accent colour */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accent Colour</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={accentColor}
+                      onChange={e => setAccentColor(e.target.value)}
+                      className="w-10 h-10 rounded-lg border cursor-pointer"
+                      style={{ borderColor: "var(--border)", padding: 2 }}
+                    />
+                    <span className="text-sm text-muted-foreground">{accentColor}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAccentColor("#D4A843")}
+                      className="text-xs text-muted-foreground hover:text-foreground transition"
+                    >
+                      Reset to gold
+                    </button>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Aspect ratio */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Format</label>
+              <div className="flex gap-2">
+                {ASPECT_RATIOS.map(r => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    onClick={() => setAspectRatio(r.value)}
+                    className="flex-1 rounded-xl border px-2 py-2 text-xs text-center transition-all"
+                    style={{
+                      borderColor:     aspectRatio === r.value ? "#D4A843" : "var(--border)",
+                      backgroundColor: aspectRatio === r.value ? "rgba(212,168,67,0.08)" : "transparent",
+                      color:           aspectRatio === r.value ? "#D4A843" : "var(--muted-foreground)",
+                      fontWeight:      aspectRatio === r.value ? "600" : "400",
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {submitError && (
+              <div className="flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} className="flex-shrink-0" />
+                {submitError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-muted-foreground">Lyric video · $24.99 or 1 credit · ~10 min</p>
               <button
-                onClick={handleBuy}
-                disabled={buyLoading}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
+                type="submit"
+                disabled={submitting || trackUploading || !trackUrl.trim()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
-                {buyLoading
-                  ? <><Loader2 size={12} className="animate-spin" /> Redirecting…</>
-                  : <><CreditCard size={12} /> Buy for $24.99</>}
+                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />}
+                Start Transcription
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
-      {/* Compose form */}
-      {composing && (
-        <div
-          className="rounded-2xl border p-5 space-y-5"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Film size={15} className="text-accent" />
-              <h2 className="text-sm font-semibold text-foreground">Create Lyric Video</h2>
-            </div>
-            <button onClick={() => setComposing(false)} className="text-muted-foreground hover:text-foreground">
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Song Title</label>
-            <input
-              value={songTitle}
-              onChange={(e) => setSongTitle(e.target.value)}
-              placeholder="e.g. Midnight Drive"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-              style={{ borderColor: "var(--border)" }}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Lyrics <span className="text-muted-foreground font-normal normal-case">(paste full lyrics)</span>
-            </label>
-            <textarea
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-              placeholder={"[Verse 1]\nDriving through the neon glow\n..."}
-              rows={8}
-              className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"
-              style={{ borderColor: "var(--border)" }}
-            />
-            <p className="text-[11px] text-muted-foreground">{lyrics.split("\n").filter(Boolean).length} lines</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Font Style</label>
-              <div className="flex flex-wrap gap-1.5">
-                {FONT_STYLES.map((f) => (
-                  <button key={f} onClick={() => setFontStyle(f)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: fontStyle === f ? "#D4A843" : "var(--border)", color: fontStyle === f ? "#0A0A0A" : "var(--muted-foreground)" }}
-                  >{f}</button>
-                ))}
+      {/* Active job status */}
+      {jobData && (
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          {/* Phase 0/1: Transcribing */}
+          {isActive && !jobData.transcriptionReady && (
+            <div className="flex items-start gap-3">
+              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {jobData.status === "QUEUED" ? "Queued — starting transcription…" : "Transcribing your audio with Whisper…"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {jobData.status === "PROCESSING"
+                    ? "Running OpenAI Whisper word-level transcription. Takes ~1–3 minutes."
+                    : "Job is waiting to start…"}
+                </p>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Background</label>
-              <div className="flex flex-wrap gap-1.5">
-                {BACKGROUNDS.map((b) => (
-                  <button key={b} onClick={() => setBackground(b)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: background === b ? "#D4A843" : "var(--border)", color: background === b ? "#0A0A0A" : "var(--muted-foreground)" }}
-                  >{b}</button>
-                ))}
+          )}
+
+          {/* Phase 1 done — transcription ready for review */}
+          {jobData.transcriptionReady && jobData.words && !jobData.finalVideoUrl && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                <p className="text-sm font-semibold text-emerald-400">
+                  Transcription ready — {jobData.words.length} words
+                  {jobData.duration && ` · ${jobData.duration.toFixed(0)}s`}
+                </p>
+              </div>
+
+              <TranscriptionReview
+                words={jobData.words}
+                text={jobData.text}
+                onApprove={handleApprove}
+                approving={approving}
+                approveError={approveError}
+              />
+            </div>
+          )}
+
+          {/* Phase 2: rendering */}
+          {isActive && jobData.phase === 2 && !jobData.transcriptionReady && (
+            <div className="flex items-start gap-3">
+              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">Phase 2: Rendering lyric video…</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Generating Remotion animation script and rendering on Lambda. Takes ~5–10 minutes.
+                </p>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accent Color</label>
-              <div className="flex flex-wrap gap-1.5">
-                {ACCENT_COLORS.map((c) => (
-                  <button key={c} onClick={() => setAccentColor(c)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: accentColor === c ? "#D4A843" : "var(--border)", color: accentColor === c ? "#0A0A0A" : "var(--muted-foreground)" }}
-                  >{c}</button>
-                ))}
+          {/* Complete */}
+          {jobData.status === "COMPLETE" && jobData.finalVideoUrl && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-400">Lyric video ready!</p>
+                </div>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">
+                  Dismiss
+                </button>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aspect Ratio</label>
-              <select
-                value={aspectRatio}
-                onChange={(e) => setAspectRatio(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-              >
-                {ASPECT_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Dynamic submit — generate (with credits) or buy (without) */}
-          {hasCredits ? (
-            <button
-              onClick={handleGenerate}
-              disabled={generating || !lyrics.trim()}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-            >
-              {generating
-                ? <><Loader2 size={14} className="animate-spin" /> Queuing…</>
-                : <><Film size={14} /> Generate Lyric Video</>}
-            </button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBuy}
-                disabled={buyLoading || !lyrics.trim()}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+              <div className="rounded-xl overflow-hidden aspect-video" style={{ backgroundColor: "var(--border)" }}>
+                <video src={jobData.finalVideoUrl} controls className="w-full h-full object-contain" />
+              </div>
+              <a
+                href={jobData.finalVideoUrl}
+                download="lyric-video.mp4"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
                 style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
-                {buyLoading
-                  ? <><Loader2 size={14} className="animate-spin" /> Redirecting…</>
-                  : <><CreditCard size={14} /> Buy for $24.99 &amp; Generate</>}
-              </button>
-              <p className="text-xs text-muted-foreground">Your lyrics will be ready when you return</p>
+                <PlayCircle size={14} /> Download MP4
+              </a>
             </div>
+          )}
+
+          {/* Failed */}
+          {jobData.status === "FAILED" && (
+            <div className="flex items-start gap-3 text-red-400">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Lyric video generation failed</p>
+                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error occurred"}</p>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel button when active (not in transcription review) */}
+          {isActive && !jobData.transcriptionReady && (
+            <button onClick={dismissJob} className="mt-4 text-xs text-muted-foreground hover:text-foreground transition">
+              ← Cancel and start new
+            </button>
           )}
         </div>
       )}
 
-      {/* Jobs list */}
-      {loading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : jobs.length === 0 ? (
-        <div
-          className="rounded-2xl border py-14 text-center space-y-2"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <Film size={32} className="mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm font-semibold text-foreground">No lyric videos yet</p>
-          <p className="text-xs text-muted-foreground">Paste your lyrics and pick a style to get started.</p>
-        </div>
-      ) : (
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Generated Videos</p>
-          </div>
-          {jobs.map((job) => {
-            const cfg = STATUS_CONFIG[job.status];
-            const Icon = cfg.icon;
-            const title = job.inputData?.songTitle || "Untitled";
-            const label = `${job.inputData?.fontStyle ?? "Minimal"} · ${job.inputData?.background ?? "Pure Black"} · ${job.inputData?.aspectRatio ?? "16:9"}`;
-            return (
-              <div
-                key={job.id}
-                className="flex items-center gap-4 px-5 py-4 border-b last:border-b-0"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "var(--border)" }}
-                >
-                  <Icon size={16} className={job.status === "PROCESSING" ? `${cfg.color} animate-spin` : cfg.color} />
+      {/* History */}
+      {!historyLoading && history.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Lyric Videos</p>
+          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            {history.map(job => (
+              <div key={job.id} className="flex items-center gap-4 px-5 py-4 border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+                <div className="w-14 h-10 rounded-lg overflow-hidden shrink-0 flex items-center justify-center" style={{ backgroundColor: "var(--border)" }}>
+                  {job.status === "COMPLETE"   ? <Film size={16} className="text-emerald-400" />          :
+                   job.status === "PROCESSING" ? <Loader2 size={16} className="text-blue-400 animate-spin" /> :
+                   job.status === "FAILED"     ? <AlertCircle size={16} className="text-red-400" />       :
+                   <Clock size={16} className="text-yellow-400" />}
                 </div>
+
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{title}</p>
-                  <p className="text-xs text-muted-foreground truncate">{label}</p>
-                </div>
-                <div className="text-right shrink-0 space-y-0.5">
-                  <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  <p className="text-sm font-semibold text-foreground">
+                    {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {job.status === "COMPLETE"   && <span className="text-xs text-emerald-400">Completed</span>}
+                    {job.status === "PROCESSING" && <span className="text-xs text-blue-400">Processing</span>}
+                    {job.status === "QUEUED"     && <span className="text-xs text-yellow-400">Queued</span>}
+                    {job.status === "FAILED"     && <span className="text-xs text-red-400">Failed</span>}
+                    {job.priceCharged != null && job.priceCharged > 0 && (
+                      <span className="text-xs text-muted-foreground">${job.priceCharged.toFixed(2)}</span>
+                    )}
+                  </div>
                 </div>
-                {job.status === "COMPLETED" && job.outputUrl && (
+
+                {job.outputData?.finalVideoUrl && (
                   <a
-                    href={job.outputUrl}
-                    download
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold no-underline"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    href={job.outputData.finalVideoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs font-medium shrink-0"
+                    style={{ color: "#D4A843" }}
                   >
-                    <Download size={11} /> Download
+                    Watch <ChevronRight size={12} />
                   </a>
                 )}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// ─── Page wrapper (Suspense for useSearchParams) ───────────────────────────────
+
 export default function LyricVideoPage() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="p-6 flex items-center justify-center min-h-[300px]">
+        <Loader2 size={24} className="animate-spin text-muted-foreground" />
+      </div>
+    }>
       <LyricVideoContent />
     </Suspense>
   );

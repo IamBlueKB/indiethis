@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse }        from "next/server";
 import { auth }                             from "@/lib/auth";
+import { db }                               from "@/lib/db";
 import { createAIJob }                      from "@/lib/ai-jobs";
 import { processAIJob }                     from "@/lib/ai-job-processor";
 import { AIJobType, AIJobTrigger }          from "@prisma/client";
@@ -289,4 +290,43 @@ export async function POST(
     },
     { status: 202 },
   );
+}
+
+// ─── GET /api/dashboard/ai/[toolType] — job history ───────────────────────────
+
+export async function GET(
+  _req:   NextRequest,
+  { params }: { params: Promise<{ toolType: string }> },
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== "ARTIST") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { toolType: rawToolType } = await params;
+  const type = resolveToolType(rawToolType);
+  if (!type) {
+    return NextResponse.json({ error: "Unknown tool type" }, { status: 400 });
+  }
+
+  const jobs = await db.aIJob.findMany({
+    where:   { triggeredById: session.user.id, type },
+    orderBy: { createdAt: "desc" },
+    take:    20,
+    select:  {
+      id:           true,
+      type:         true,
+      status:       true,
+      priceCharged: true,
+      createdAt:    true,
+      completedAt:  true,
+      errorMessage: true,
+      outputData:   true,
+    },
+  });
+
+  return NextResponse.json({ jobs });
 }

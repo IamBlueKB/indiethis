@@ -1,117 +1,167 @@
 "use client";
 
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
-import { useEffect, useState } from "react";
-import { Image, Loader2, CheckCircle2, Clock, AlertCircle, Plus, X, Download } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw } from "lucide-react";
 
-type CoverArtJob = {
-  id: string;
-  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
-  inputData: { prompt?: string; style?: string; mood?: string } | null;
-  outputUrl: string | null;
-  outputData: { revisedPrompt?: string; error?: string } | null;
-  createdAt: string;
-};
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG = {
-  QUEUED:     { color: "text-yellow-400", icon: Clock,        label: "Queued" },
-  PROCESSING: { color: "text-blue-400",   icon: Loader2,      label: "Processing" },
-  COMPLETED:  { color: "text-emerald-400",icon: CheckCircle2, label: "Completed" },
-  FAILED:     { color: "text-red-400",    icon: AlertCircle,  label: "Failed" },
-};
+type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
 
-const STYLES = ["Photorealistic", "Digital Art", "Oil Painting", "Watercolor", "Minimalist", "Abstract", "Retro / Vintage", "Anime / Illustrated"];
-const MOODS  = ["Dark & Moody", "Vibrant & Colorful", "Dreamy", "Gritty", "Ethereal", "Bold & Graphic", "Nostalgic", "Futuristic"];
+interface PollData {
+  jobId:        string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  completedAt:  string | null;
+  errorMessage: string | null;
+  imageUrls?:   string[];
+  outputData?: {
+    imageUrls?:       string[];
+    optimizedPrompt?: string;
+  } | null;
+}
+
+interface HistoryItem {
+  id:           string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  outputData:   { imageUrls?: string[] } | null;
+  errorMessage: string | null;
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const STYLES = [
+  "Photorealistic", "Digital Art", "Oil Painting", "Watercolor",
+  "Minimalist", "Abstract", "Retro / Vintage", "Cinematic",
+];
+
+const MOODS = [
+  "Dark & Moody", "Vibrant & Colorful", "Dreamy", "Gritty",
+  "Ethereal", "Bold & Graphic", "Nostalgic", "Futuristic",
+];
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function CoverArtPage() {
-  const [jobs, setJobs]           = useState<CoverArtJob[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [composing, setComposing] = useState(false);
-  const [prompt, setPrompt]       = useState("");
-  const [style, setStyle]         = useState("Photorealistic");
-  const [mood, setMood]           = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [preview, setPreview]     = useState<CoverArtJob | null>(null);
+  // Form
+  const [artistPrompt, setArtistPrompt] = useState("");
+  const [style,        setStyle]        = useState("Photorealistic");
+  const [mood,         setMood]         = useState("");
 
+  // Job state
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobData,     setJobData]     = useState<PollData | null>(null);
+
+  // History
+  const [history,        setHistory]        = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  // ── Load history on mount ───────────────────────────────────────────────────
   useEffect(() => {
-    fetch("/api/dashboard/cover-art")
-      .then(r => r.json())
-      .then(d => { setJobs(d.jobs ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+    fetch("/api/dashboard/ai/cover-art")
+      .then(r => r.ok ? r.json() : { jobs: [] })
+      .then(d => setHistory(d.jobs ?? []))
+      .finally(() => setHistoryLoading(false));
   }, []);
 
-  async function handleGenerate() {
-    if (!prompt.trim()) return;
+  // ── Poll active job every 4 s ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeJobId) return;
+    if (jobData?.status === "COMPLETE" || jobData?.status === "FAILED") return;
+
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ai-jobs/${activeJobId}`);
+        if (!res.ok) return;
+        const data: PollData = await res.json();
+        setJobData(data);
+        if (data.status === "COMPLETE") {
+          setHistory(prev => [{
+            id:           data.jobId,
+            status:       data.status,
+            priceCharged: data.priceCharged,
+            createdAt:    data.createdAt,
+            outputData:   data.outputData ?? null,
+            errorMessage: null,
+          }, ...prev]);
+        }
+      } catch { /* transient */ }
+    }, 4000);
+
+    return () => clearInterval(t);
+  }, [activeJobId, jobData?.status]);
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!artistPrompt.trim()) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      const res = await fetch("/api/dashboard/cover-art", {
-        method: "POST",
+      const res = await fetch("/api/dashboard/ai/cover-art", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), style, mood }),
+        body:    JSON.stringify({ artistPrompt: artistPrompt.trim(), style, mood }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(prev => [{
-          id: data.jobId,
-          status: "QUEUED",
-          inputData: { prompt: prompt.trim(), style, mood },
-          outputUrl: null,
-          outputData: null,
-          createdAt: new Date().toISOString(),
-        }, ...prev]);
-        setPrompt(""); setMood(""); setComposing(false);
+
+      if (res.status === 402) {
+        const d = await res.json();
+        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "4.99"}. Add a payment method in Settings.`);
+        return;
       }
+
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
+
+      const init: PollData = {
+        jobId: data.jobId, status: "QUEUED", priceCharged: null,
+        createdAt: new Date().toISOString(), completedAt: null, errorMessage: null,
+      };
+      setActiveJobId(data.jobId);
+      setJobData(init);
+      setArtistPrompt("");
     } finally {
       setSubmitting(false);
     }
   }
 
+  const isActive  = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+  const imageUrls = jobData?.outputData?.imageUrls ?? jobData?.imageUrls ?? [];
+
+  function dismissJob() { setJobData(null); setActiveJobId(null); }
+
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <AIToolsNav />
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Cover Art Generator</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            AI-generated album and single artwork, ready to use
-          </p>
-        </div>
-        <button
-          onClick={() => setComposing(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Plus size={14} /> Generate Art
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">AI Cover Art</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Generate 4 professional album cover variations from your description.
+        </p>
       </div>
 
-      {/* Compose form */}
-      {composing && (
-        <div
-          className="rounded-2xl border p-5 space-y-4"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Image size={15} style={{ color: "#D4A843" }} />
-              <h2 className="text-sm font-semibold text-foreground">New Cover Art</h2>
-            </div>
-            <button onClick={() => setComposing(false)} className="text-muted-foreground hover:text-foreground">
-              <X size={15} />
-            </button>
-          </div>
-
+      {/* Form */}
+      <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Prompt */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Describe your cover art
+              Describe your cover art *
             </label>
             <textarea
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
+              value={artistPrompt}
+              onChange={e => setArtistPrompt(e.target.value)}
               placeholder="e.g. A lone figure on a neon-lit city rooftop at midnight, rain-soaked streets below…"
               rows={3}
+              required
+              disabled={!!isActive}
               className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 resize-none"
               style={{ borderColor: "var(--border)" }}
             />
@@ -124,12 +174,14 @@ export default function CoverArtPage() {
               {STYLES.map(s => (
                 <button
                   key={s}
+                  type="button"
                   onClick={() => setStyle(s)}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                  disabled={!!isActive}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-40"
                   style={{
-                    borderColor: style === s ? "#D4A843" : "var(--border)",
-                    backgroundColor: style === s ? "rgba(212,168,67,0.1)" : "transparent",
-                    color: style === s ? "#D4A843" : "var(--muted-foreground)",
+                    borderColor:       style === s ? "#D4A843" : "var(--border)",
+                    backgroundColor:   style === s ? "rgba(212,168,67,0.1)" : "transparent",
+                    color:             style === s ? "#D4A843" : "var(--muted-foreground)",
                   }}
                 >
                   {s}
@@ -141,18 +193,20 @@ export default function CoverArtPage() {
           {/* Mood chips */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Mood <span className="normal-case text-muted-foreground font-normal">(optional)</span>
+              Mood <span className="normal-case font-normal">(optional)</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {MOODS.map(m => (
                 <button
                   key={m}
+                  type="button"
                   onClick={() => setMood(mood === m ? "" : m)}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                  disabled={!!isActive}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-40"
                   style={{
-                    borderColor: mood === m ? "#D4A843" : "var(--border)",
-                    backgroundColor: mood === m ? "rgba(212,168,67,0.1)" : "transparent",
-                    color: mood === m ? "#D4A843" : "var(--muted-foreground)",
+                    borderColor:       mood === m ? "#D4A843" : "var(--border)",
+                    backgroundColor:   mood === m ? "rgba(212,168,67,0.1)" : "transparent",
+                    color:             mood === m ? "#D4A843" : "var(--muted-foreground)",
                   }}
                 >
                   {m}
@@ -161,145 +215,164 @@ export default function CoverArtPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={submitting || !prompt.trim()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            {submitting
-              ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-              : <><Image size={14} /> Generate Cover</>}
-          </button>
-        </div>
-      )}
+          {submitError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={14} className="flex-shrink-0" />
+              {submitError}
+            </div>
+          )}
 
-      {/* Image preview modal */}
-      {preview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.8)" }}
-          onClick={() => setPreview(null)}
-        >
-          <div
-            className="relative max-w-lg w-full rounded-2xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview.outputUrl!} alt="Generated cover art" className="w-full aspect-square object-cover" />
-            <div
-              className="p-4 flex items-center justify-between"
-              style={{ backgroundColor: "var(--card)" }}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">4 variations · $4.99 or 1 credit</p>
+            <button
+              type="submit"
+              disabled={submitting || !!isActive || !artistPrompt.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
             >
-              <p className="text-xs text-muted-foreground truncate flex-1 mr-3">
-                {preview.inputData?.prompt}
-              </p>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={preview.outputUrl!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold no-underline"
-                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                >
-                  <Download size={12} /> Save
-                </a>
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              Generate Cover Art
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Active job status */}
+      {jobData && (
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          {isActive && (
+            <div className="flex items-start gap-3">
+              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {jobData.status === "QUEUED" ? "Queued — starting soon…" : "Generating your cover art…"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {jobData.status === "PROCESSING"
+                    ? "Optimizing your prompt with Claude, then generating 4 images via SDXL. Takes ~45 seconds."
+                    : "Job is waiting to start…"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {jobData.status === "COMPLETE" && imageUrls.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-400">{imageUrls.length} images generated</p>
+                </div>
                 <button
-                  onClick={() => setPreview(null)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground"
-                  style={{ backgroundColor: "var(--border)" }}
+                  onClick={dismissJob}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition"
                 >
-                  <X size={14} />
+                  <RotateCcw size={12} /> New generation
+                </button>
+              </div>
+
+              {/* 2×2 image grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {imageUrls.map((url, i) => (
+                  <div key={i} className="relative group rounded-xl overflow-hidden aspect-square" style={{ backgroundColor: "var(--border)" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Cover art variation ${i + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <a
+                        href={url}
+                        download={`cover-art-${i + 1}.png`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
+                        style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                      >
+                        <Download size={14} /> Download
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {jobData.outputData?.optimizedPrompt && (
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground select-none">View AI-optimized prompt</summary>
+                  <p className="mt-2 leading-relaxed border rounded-lg p-3" style={{ borderColor: "var(--border)" }}>
+                    {jobData.outputData.optimizedPrompt}
+                  </p>
+                </details>
+              )}
+            </div>
+          )}
+
+          {jobData.status === "FAILED" && (
+            <div className="flex items-start gap-3 text-red-400">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Generation failed</p>
+                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error occurred"}</p>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">
+                  Dismiss
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Gallery / list */}
-      {loading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : jobs.length === 0 ? (
-        <div
-          className="rounded-2xl border py-14 text-center space-y-2"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <Image size={32} className="mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm font-semibold text-foreground">No cover art generated yet</p>
-          <p className="text-xs text-muted-foreground">
-            Describe your vision and let AI bring your artwork to life.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Completed images grid */}
-          {jobs.some(j => j.status === "COMPLETED" && j.outputUrl) && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {jobs
-                .filter(j => j.status === "COMPLETED" && j.outputUrl)
-                .map(job => (
-                  <button
-                    key={job.id}
-                    onClick={() => setPreview(job)}
-                    className="relative aspect-square rounded-xl overflow-hidden group"
-                    style={{ backgroundColor: "var(--border)" }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={job.outputUrl!}
-                      alt={job.inputData?.prompt ?? "Cover art"}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                      <p className="text-[10px] text-white leading-tight line-clamp-2">
-                        {job.inputData?.prompt}
-                      </p>
+      {/* History */}
+      {!historyLoading && history.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Generations</p>
+          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            {history.map((job, idx) => {
+              const urls = job.outputData?.imageUrls ?? [];
+              return (
+                <div
+                  key={job.id}
+                  className="p-4 border-b last:border-b-0"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {job.status === "COMPLETE"   && <CheckCircle2 size={13} className="text-emerald-400" />}
+                      {job.status === "PROCESSING" && <Loader2 size={13} className="text-blue-400 animate-spin" />}
+                      {job.status === "QUEUED"     && <Clock size={13} className="text-yellow-400" />}
+                      {job.status === "FAILED"     && <AlertCircle size={13} className="text-red-400" />}
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(job.createdAt).toLocaleDateString()}
+                      </span>
                     </div>
-                  </button>
-                ))}
-            </div>
-          )}
-
-          {/* Pending / failed jobs */}
-          {jobs.some(j => j.status !== "COMPLETED") && (
-            <div
-              className="rounded-2xl border overflow-hidden"
-              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-            >
-              <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">In Progress</p>
-              </div>
-              {jobs.filter(j => j.status !== "COMPLETED").map(job => {
-                const cfg  = STATUS_CONFIG[job.status];
-                const Icon = cfg.icon;
-                return (
-                  <div
-                    key={job.id}
-                    className="flex items-center gap-4 px-5 py-4 border-b last:border-b-0"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: "var(--border)" }}
-                    >
-                      <Icon
-                        size={16}
-                        className={job.status === "PROCESSING" ? `${cfg.color} animate-spin` : cfg.color}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{job.inputData?.prompt ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{job.inputData?.style} · {job.inputData?.mood || "No mood"}</p>
-                    </div>
-                    <p className={`text-xs font-semibold shrink-0 ${cfg.color}`}>{cfg.label}</p>
+                    {job.priceCharged != null && job.priceCharged > 0 && (
+                      <span className="text-xs text-muted-foreground">${job.priceCharged.toFixed(2)}</span>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+
+                  {urls.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {urls.slice(0, 4).map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square rounded-lg overflow-hidden block"
+                          style={{ backgroundColor: "var(--border)" }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="w-full h-full object-cover hover:opacity-80 transition" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {job.status === "FAILED" && (
+                    <p className="text-xs text-red-400/70">{job.errorMessage ?? "Failed"}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

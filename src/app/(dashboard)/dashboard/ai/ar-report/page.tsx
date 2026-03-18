@@ -2,313 +2,472 @@
 
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState } from "react";
-import { BarChart3, Loader2, CheckCircle2, Clock, AlertCircle, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { BarChart3, Loader2, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
+import { useUploadThing } from "@/lib/uploadthing-client";
 
-type ARReportJob = {
-  id: string;
-  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
-  inputData: {
-    artistName?: string;
-    genre?: string;
-    bio?: string;
-    trackUrls?: string[];
-    targetMarket?: string;
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
+
+interface AudioAnalysis {
+  loudness?:     number | null;
+  tempo?:        number | null;
+  key?:          string | null;
+  mode?:         string | null;
+  energy?:       number | null;
+  danceability?: number | null;
+}
+
+interface PollData {
+  jobId:        string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  completedAt:  string | null;
+  errorMessage: string | null;
+  outputData?: {
+    report?:               string;
+    lyrics?:               string;
+    audioAnalysis?:        AudioAnalysis;
+    audioDurationMinutes?: number;
   } | null;
-  outputData: { report?: string; artistName?: string; genre?: string; error?: string } | null;
-  createdAt: string;
-};
+}
 
-const STATUS_CONFIG = {
-  QUEUED:     { color: "text-yellow-400", icon: Clock,        label: "Queued" },
-  PROCESSING: { color: "text-blue-400",   icon: Loader2,      label: "Processing" },
-  COMPLETED:  { color: "text-emerald-400",icon: CheckCircle2, label: "Completed" },
-  FAILED:     { color: "text-red-400",    icon: AlertCircle,  label: "Failed" },
-};
+interface HistoryItem {
+  id:           string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  outputData:   { report?: string } | null;
+  errorMessage: string | null;
+}
 
-const GENRES = ["Hip-Hop / Rap", "R&B / Soul", "Pop", "Alternative / Indie", "Electronic / EDM", "Rock", "Country", "Jazz", "Gospel / Christian", "Latin", "Afrobeats", "Other"];
+// ─── Constants ─────────────────────────────────────────────────────────────────
 
-function ReportCard({ job }: { job: ARReportJob }) {
-  const [expanded, setExpanded] = useState(false);
-  const cfg  = STATUS_CONFIG[job.status];
-  const Icon = cfg.icon;
-  const name   = job.outputData?.artistName ?? job.inputData?.artistName ?? "Report";
-  const genre  = job.outputData?.genre ?? job.inputData?.genre ?? "";
-  const report = job.outputData?.report ?? "";
+const GENRES = [
+  "Hip-Hop / Rap", "R&B / Soul", "Pop", "Alternative / Indie",
+  "Electronic / EDM", "Rock", "Country", "Jazz", "Afrobeats", "Latin", "Other",
+];
 
+// ─── Markdown renderer (basic) ─────────────────────────────────────────────────
+
+function ReportSection({ title, body }: { title: string; body: string }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div
-      className="rounded-2xl border overflow-hidden"
-      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-    >
-      <div
-        className="flex items-center gap-4 px-5 py-4 cursor-pointer"
-        onClick={() => job.status === "COMPLETED" && setExpanded(v => !v)}
+    <div className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-left hover:opacity-80 transition"
       >
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)" }}
-        >
-          <Icon
-            size={16}
-            className={job.status === "PROCESSING" ? `${cfg.color} animate-spin` : cfg.color}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">
-            {genre || "Genre not specified"} · {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
-          {job.status === "COMPLETED" && (
-            expanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />
-          )}
-        </div>
-      </div>
-
-      {expanded && report && (
-        <div className="border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
-          <div
-            className="prose prose-sm prose-invert max-w-none text-foreground leading-relaxed"
-            style={{ fontSize: "13px" }}
-          >
-            {report.split("\n").map((line, i) => {
-              if (line.startsWith("## ") || line.startsWith("# ")) {
-                const text = line.replace(/^#+\s/, "");
-                return <h3 key={i} className="text-sm font-bold text-foreground mt-4 mb-1 first:mt-0">{text}</h3>;
-              }
-              if (line.startsWith("**") && line.endsWith("**")) {
-                const text = line.slice(2, -2);
-                return <p key={i} className="text-sm font-semibold text-foreground mt-3 mb-1">{text}</p>;
-              }
-              if (line.match(/^\*\*[^*]+\*\*/)) {
-                const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                return (
-                  <p key={i} className="text-sm text-foreground mb-1">
-                    {parts.map((part, j) =>
-                      part.startsWith("**") && part.endsWith("**")
-                        ? <strong key={j}>{part.slice(2, -2)}</strong>
-                        : part
-                    )}
-                  </p>
-                );
-              }
-              if (line.startsWith("- ") || line.startsWith("• ")) {
-                return (
-                  <div key={i} className="flex gap-2 mb-1">
-                    <span className="text-muted-foreground shrink-0 mt-0.5" style={{ color: "#D4A843" }}>·</span>
-                    <p className="text-sm text-foreground">{line.slice(2)}</p>
-                  </div>
-                );
-              }
-              if (line.match(/^\d+\.\s/)) {
-                const text = line.replace(/^\d+\.\s/, "");
-                const num  = line.match(/^(\d+)/)?.[1];
-                return (
-                  <div key={i} className="flex gap-2 mb-1">
-                    <span className="text-[10px] font-bold shrink-0 mt-1" style={{ color: "#D4A843" }}>{num}.</span>
-                    <p className="text-sm text-foreground">{text}</p>
-                  </div>
-                );
-              }
-              if (!line.trim()) return <div key={i} className="h-2" />;
-              return <p key={i} className="text-sm text-foreground mb-1">{line}</p>;
-            })}
-          </div>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {open ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="px-5 pb-4">
+          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{body.trim()}</p>
         </div>
       )}
     </div>
   );
 }
 
-export default function ARReportPage() {
-  const [jobs, setJobs]               = useState<ARReportJob[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [composing, setComposing]     = useState(false);
-  const [artistName, setArtistName]   = useState("");
-  const [genre, setGenre]             = useState("");
-  const [bio, setBio]                 = useState("");
-  const [trackUrls, setTrackUrls]     = useState(["", "", ""]);
-  const [targetMarket, setTargetMarket] = useState("");
-  const [submitting, setSubmitting]   = useState(false);
+function ReportDisplay({ report }: { report: string }) {
+  // Split on ## section headers
+  const sections: { title: string; body: string }[] = [];
+  const lines = report.split("\n");
+  let currentTitle = "Report";
+  let currentLines: string[] = [];
 
-  useEffect(() => {
-    fetch("/api/dashboard/ar-report")
-      .then(r => r.json())
-      .then(d => { setJobs(d.jobs ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
-
-  function updateTrackUrl(index: number, value: string) {
-    setTrackUrls(prev => prev.map((u, i) => i === index ? value : u));
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (currentLines.length > 0) {
+        sections.push({ title: currentTitle, body: currentLines.join("\n") });
+      }
+      currentTitle = line.replace(/^##\s+/, "").replace(/\*\*/g, "");
+      currentLines = [];
+    } else {
+      currentLines.push(line.replace(/^\*\*(.+?)\*\*/, "**$1**"));
+    }
+  }
+  if (currentLines.length > 0) {
+    sections.push({ title: currentTitle, body: currentLines.join("\n") });
   }
 
-  async function handleGenerate() {
-    if (!artistName.trim()) return;
+  if (sections.length === 0) {
+    return <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line px-5 pb-4">{report}</p>;
+  }
+
+  return (
+    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+      {sections.filter(s => s.body.trim()).map((s, i) => (
+        <ReportSection key={i} title={s.title} body={s.body} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
+export default function ARReportPage() {
+  // Form
+  const [trackUrl,           setTrackUrl]           = useState("");
+  const [genre,              setGenre]              = useState("");
+  const [artistBio,          setArtistBio]          = useState("");
+  const [targetMarket,       setTargetMarket]       = useState("");
+  const [comparableArtists,  setComparableArtists]  = useState("");
+
+  // Job state
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobData,     setJobData]     = useState<PollData | null>(null);
+
+  // History
+  const [history,        setHistory]        = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [expandedId,     setExpandedId]     = useState<string | null>(null);
+
+  // UploadThing
+  const { startUpload: uploadTrack, isUploading: trackUploading } = useUploadThing("artistTrack", {
+    onClientUploadComplete: (res) => {
+      const url = res[0]?.url;
+      if (url) setTrackUrl(url);
+    },
+  });
+
+  // ── Load history on mount ───────────────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/dashboard/ai/ar-report")
+      .then(r => r.ok ? r.json() : { jobs: [] })
+      .then(d => setHistory(d.jobs ?? []))
+      .finally(() => setHistoryLoading(false));
+  }, []);
+
+  // ── Poll active job every 4 s ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeJobId) return;
+    if (jobData?.status === "COMPLETE" || jobData?.status === "FAILED") return;
+
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ai-jobs/${activeJobId}`);
+        if (!res.ok) return;
+        const data: PollData = await res.json();
+        setJobData(data);
+        if (data.status === "COMPLETE") {
+          setHistory(prev => [{
+            id:           data.jobId,
+            status:       data.status,
+            priceCharged: data.priceCharged,
+            createdAt:    data.createdAt,
+            outputData:   data.outputData ? { report: data.outputData.report } : null,
+            errorMessage: null,
+          }, ...prev]);
+        }
+      } catch { /* transient */ }
+    }, 4000);
+
+    return () => clearInterval(t);
+  }, [activeJobId, jobData?.status]);
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!trackUrl.trim()) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      const res = await fetch("/api/dashboard/ar-report", {
-        method: "POST",
+      const res = await fetch("/api/dashboard/ai/ar-report", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artistName: artistName.trim(),
+        body:    JSON.stringify({
+          trackUrl:          trackUrl.trim(),
           genre,
-          bio: bio.trim(),
-          trackUrls: trackUrls.filter(u => u.trim()),
-          targetMarket: targetMarket.trim(),
+          artistBio,
+          targetMarket,
+          comparableArtists,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(prev => [{
-          id: data.jobId,
-          status: "QUEUED",
-          inputData: { artistName: artistName.trim(), genre, bio: bio.trim(), trackUrls: trackUrls.filter(u => u.trim()), targetMarket: targetMarket.trim() },
-          outputData: null,
-          createdAt: new Date().toISOString(),
-        }, ...prev]);
-        setArtistName(""); setGenre(""); setBio(""); setTrackUrls(["", "", ""]); setTargetMarket(""); setComposing(false);
+
+      if (res.status === 402) {
+        const d = await res.json();
+        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "14.99"}. Add a payment method in Settings.`);
+        return;
       }
+
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
+
+      const init: PollData = {
+        jobId: data.jobId, status: "QUEUED", priceCharged: null,
+        createdAt: new Date().toISOString(), completedAt: null, errorMessage: null,
+      };
+      setActiveJobId(data.jobId);
+      setJobData(init);
+      setTrackUrl("");
     } finally {
       setSubmitting(false);
     }
   }
 
+  const isActive = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+
+  function dismissJob() { setJobData(null); setActiveJobId(null); }
+
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <AIToolsNav />
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">A&R Report</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            AI-generated A&R evaluation — executive summary, market position, and recommendations
-          </p>
-        </div>
-        <button
-          onClick={() => setComposing(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Plus size={14} /> New Report
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">A&R Report</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Deep A&R analysis covering commercial viability, lyric breakdown, audio quality, and marketing strategy.
+        </p>
       </div>
 
-      {/* Compose form */}
-      {composing && (
-        <div
-          className="rounded-2xl border p-5 space-y-4"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 size={15} style={{ color: "#D4A843" }} />
-              <h2 className="text-sm font-semibold text-foreground">Generate A&R Report</h2>
-            </div>
-            <button onClick={() => setComposing(false)} className="text-muted-foreground hover:text-foreground">
-              <X size={15} />
-            </button>
+      {/* Form */}
+      <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="flex items-center gap-2">
+          <BarChart3 size={15} style={{ color: "#D4A843" }} />
+          <h2 className="text-sm font-semibold text-foreground">Submit a Track for Analysis</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Track upload */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Track Audio *</label>
+            {trackUrl ? (
+              <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                <p className="text-sm text-foreground truncate flex-1">Track ready</p>
+                <button type="button" onClick={() => setTrackUrl("")} disabled={!!isActive} className="text-muted-foreground hover:text-foreground shrink-0">
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer transition-colors"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                  {trackUploading
+                    ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                    : <><Upload size={14} /> Upload WAV, MP3, or FLAC</>}
+                  <input type="file" accept="audio/*" className="sr-only" disabled={trackUploading || !!isActive}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTrack([f]); e.target.value = ""; }}
+                  />
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+                </div>
+                <input
+                  type="url"
+                  value={trackUrl}
+                  onChange={e => setTrackUrl(e.target.value)}
+                  placeholder="https://example.com/track.mp3"
+                  disabled={!!isActive}
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Artist Name <span style={{ color: "#E85D4A" }}>*</span>
-              </label>
-              <input
-                value={artistName}
-                onChange={e => setArtistName(e.target.value)}
-                placeholder="Your artist name or alias"
-                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                style={{ borderColor: "var(--border)" }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Genre</label>
+          {/* Genre */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Genre</label>
+            <div className="relative">
               <select
                 value={genre}
                 onChange={e => setGenre(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                disabled={!!isActive}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
               >
-                <option value="">Select genre…</option>
+                <option value="">Select genre (optional)</option>
                 {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
           </div>
 
+          {/* Artist bio */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Artist Bio</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Artist Bio / Background <span className="normal-case font-normal">(optional)</span>
+            </label>
             <textarea
-              value={bio}
-              onChange={e => setBio(e.target.value)}
-              placeholder="Brief background — where you're from, your sound, your story, any notable achievements…"
-              rows={3}
+              value={artistBio}
+              onChange={e => setArtistBio(e.target.value)}
+              placeholder="Brief background about the artist — influences, career stage, goals…"
+              rows={2}
+              disabled={!!isActive}
               className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 resize-none"
               style={{ borderColor: "var(--border)" }}
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Track URLs <span className="normal-case font-normal text-muted-foreground">(up to 3)</span>
-            </label>
-            <div className="space-y-2">
-              {trackUrls.map((url, i) => (
-                <input
-                  key={i}
-                  value={url}
-                  onChange={e => updateTrackUrl(i, e.target.value)}
-                  placeholder={`Track ${i + 1} — Spotify, SoundCloud, or YouTube link`}
-                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                  style={{ borderColor: "var(--border)" }}
-                />
-              ))}
+          {/* Two columns for optional fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Target Market</label>
+              <input
+                value={targetMarket}
+                onChange={e => setTargetMarket(e.target.value)}
+                placeholder="e.g. 18–24, global"
+                disabled={!!isActive}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comparable Artists</label>
+              <input
+                value={comparableArtists}
+                onChange={e => setComparableArtists(e.target.value)}
+                placeholder="e.g. Drake, Kendrick"
+                disabled={!!isActive}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Target Market</label>
-            <input
-              value={targetMarket}
-              onChange={e => setTargetMarket(e.target.value)}
-              placeholder="e.g. 18–24 urban listeners in Atlanta and Houston, TikTok-driven audience"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-              style={{ borderColor: "var(--border)" }}
-            />
-          </div>
+          {submitError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={14} className="flex-shrink-0" />
+              {submitError}
+            </div>
+          )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={submitting || !artistName.trim()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            {submitting
-              ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-              : <><BarChart3 size={14} /> Generate Report</>}
-          </button>
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">Full analysis · $14.99 or 1 credit · ~5 min</p>
+            <button
+              type="submit"
+              disabled={submitting || trackUploading || !!isActive || !trackUrl.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : <BarChart3 size={14} />}
+              Generate A&R Report
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Active job */}
+      {jobData && (
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          {isActive && (
+            <div className="flex items-start gap-3">
+              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {jobData.status === "QUEUED" ? "Queued — starting analysis…" : "Analyzing your track…"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {jobData.status === "PROCESSING"
+                    ? "Running Whisper transcription → Dolby audio analysis → Claude A&R report. Takes ~5 minutes."
+                    : "Job is waiting to start…"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {jobData.status === "COMPLETE" && jobData.outputData?.report && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-400">A&R Report complete</p>
+                </div>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">
+                  Dismiss
+                </button>
+              </div>
+
+              {/* Audio stats */}
+              {jobData.outputData?.audioAnalysis && (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Loudness",    value: jobData.outputData.audioAnalysis.loudness != null     ? `${(jobData.outputData.audioAnalysis.loudness as number).toFixed(1)} LUFS` : "—" },
+                    { label: "Tempo",       value: jobData.outputData.audioAnalysis.tempo != null        ? `${jobData.outputData.audioAnalysis.tempo} BPM` : "—" },
+                    { label: "Key",         value: jobData.outputData.audioAnalysis.key != null          ? `${jobData.outputData.audioAnalysis.key} ${jobData.outputData.audioAnalysis.mode ?? ""}`.trim() : "—" },
+                  ].map(stat => (
+                    <div key={stat.label} className="rounded-lg p-3 text-center" style={{ backgroundColor: "var(--border)" }}>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                      <p className="text-sm font-semibold text-foreground mt-0.5">{stat.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Report sections */}
+              <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                <ReportDisplay report={jobData.outputData.report} />
+              </div>
+            </div>
+          )}
+
+          {jobData.status === "FAILED" && (
+            <div className="flex items-start gap-3 text-red-400">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Analysis failed</p>
+                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error occurred"}</p>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">Dismiss</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Reports list */}
-      {loading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : jobs.length === 0 ? (
-        <div
-          className="rounded-2xl border py-14 text-center space-y-2"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <BarChart3 size={32} className="mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm font-semibold text-foreground">No reports generated yet</p>
-          <p className="text-xs text-muted-foreground">
-            Generate your first A&R report to see how you stack up in the market.
-          </p>
-        </div>
-      ) : (
+      {/* History */}
+      {!historyLoading && history.length > 0 && (
         <div className="space-y-3">
-          {jobs.map(job => <ReportCard key={job.id} job={job} />)}
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Reports</p>
+          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            {history.map(job => (
+              <div key={job.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+                <button
+                  onClick={() => setExpandedId(expandedId === job.id ? null : job.id)}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-left hover:opacity-80 transition"
+                >
+                  {job.status === "COMPLETE"   && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
+                  {job.status === "PROCESSING" && <Loader2 size={14} className="text-blue-400 animate-spin shrink-0" />}
+                  {job.status === "QUEUED"     && <Clock size={14} className="text-yellow-400 shrink-0" />}
+                  {job.status === "FAILED"     && <AlertCircle size={14} className="text-red-400 shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                    {job.outputData?.report && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {job.outputData.report.slice(0, 100)}…
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {job.priceCharged != null && job.priceCharged > 0 && (
+                      <span className="text-xs text-muted-foreground">${job.priceCharged.toFixed(2)}</span>
+                    )}
+                    {job.status === "COMPLETE" && job.outputData?.report && (
+                      expandedId === job.id
+                        ? <ChevronUp size={14} className="text-muted-foreground" />
+                        : <ChevronDown size={14} className="text-muted-foreground" />
+                    )}
+                  </div>
+                </button>
+
+                {expandedId === job.id && job.outputData?.report && (
+                  <div className="border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
+                    <ReportDisplay report={job.outputData.report} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

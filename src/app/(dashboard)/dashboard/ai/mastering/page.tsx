@@ -2,53 +2,70 @@
 
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState } from "react";
-import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Plus, X, Download, Upload, ChevronDown } from "lucide-react";
+import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Download, Upload, X, PlayCircle } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
-type SavedTrack = {
-  id: string;
-  title: string;
-  fileUrl: string;
-  projectName: string | null;
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
+
+interface MasteringOutput {
+  label:        string;   // "Warm" | "Punchy" | "Broadcast Ready"
+  description:  string;
+  loudnessLUFS: number;
+  measuredLUFS: number | null;
+  downloadUrl:  string | null;
+  status:       string;
+}
+
+interface PollData {
+  jobId:        string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  completedAt:  string | null;
+  errorMessage: string | null;
+  outputData?: {
+    outputs?:      MasteringOutput[];
+    successCount?: number;
+  } | null;
+}
+
+interface HistoryItem {
+  id:           string;
+  status:       JobStatus;
+  priceCharged: number | null;
+  createdAt:    string;
+  outputData:   { outputs?: MasteringOutput[]; successCount?: number } | null;
+  errorMessage: string | null;
+}
+
+// ─── Profile colour map ────────────────────────────────────────────────────────
+
+const PROFILE_COLORS: Record<string, string> = {
+  "Warm":              "#F59E0B",
+  "Punchy":            "#EF4444",
+  "Broadcast Ready":   "#10B981",
 };
 
-type MasteringJob = {
-  id: string;
-  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
-  inputData: { trackUrl?: string; tier?: string; preset?: string; trackTitle?: string } | null;
-  outputUrl: string | null;
-  outputData: { loudness?: number; error?: string } | null;
-  createdAt: string;
-};
-
-const STATUS_CONFIG = {
-  QUEUED:     { color: "text-yellow-400", icon: Clock,        label: "Queued" },
-  PROCESSING: { color: "text-blue-400",   icon: Loader2,      label: "Processing" },
-  COMPLETED:  { color: "text-emerald-400",icon: CheckCircle2, label: "Completed" },
-  FAILED:     { color: "text-red-400",    icon: AlertCircle,  label: "Failed" },
-};
-
-const PRESETS = [
-  { value: "A", label: "Balanced",    desc: "General-purpose, most genres" },
-  { value: "B", label: "Bright",      desc: "Pop-forward, high-freq boost" },
-  { value: "C", label: "Warm",        desc: "Bass-forward, smooth highs" },
-  { value: "D", label: "Dynamic",     desc: "Acoustic / jazz, natural feel" },
-  { value: "E", label: "Electronic",  desc: "Aggressive, heavy-hitting" },
-  { value: "F", label: "Film",        desc: "Cinematic, wide stereo" },
-];
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function MasteringPage() {
-  const [jobs, setJobs]           = useState<MasteringJob[]>([]);
-  const [savedTracks, setSavedTracks] = useState<SavedTrack[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [composing, setComposing] = useState(false);
-  const [trackUrl, setTrackUrl]   = useState("");
+  // Form
+  const [trackUrl,   setTrackUrl]   = useState("");
   const [trackTitle, setTrackTitle] = useState("");
-  const [trackSource, setTrackSource] = useState<"upload" | "existing">("upload");
-  const [tier, setTier]           = useState<"quick" | "studio">("quick");
-  const [preset, setPreset]       = useState("A");
-  const [submitting, setSubmitting] = useState(false);
 
+  // Job state
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobData,     setJobData]     = useState<PollData | null>(null);
+
+  // History
+  const [history,        setHistory]        = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  // UploadThing
   const { startUpload: uploadTrack, isUploading: trackUploading } = useUploadThing("artistTrack", {
     onClientUploadComplete: (res) => {
       const url = res[0]?.url;
@@ -56,292 +73,353 @@ export default function MasteringPage() {
     },
   });
 
+  // ── Load history on mount ───────────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([
-      fetch("/api/dashboard/mastering").then(r => r.json()),
-      fetch("/api/dashboard/tracks").then(r => r.json()),
-    ]).then(([mastData, trackData]) => {
-      setJobs(mastData.jobs ?? []);
-      setSavedTracks(trackData.tracks ?? []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetch("/api/dashboard/ai/mastering")
+      .then(r => r.ok ? r.json() : { jobs: [] })
+      .then(d => setHistory(d.jobs ?? []))
+      .finally(() => setHistoryLoading(false));
   }, []);
 
-  async function handleSubmit() {
+  // ── Poll active job every 4 s ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeJobId) return;
+    if (jobData?.status === "COMPLETE" || jobData?.status === "FAILED") return;
+
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/ai-jobs/${activeJobId}`);
+        if (!res.ok) return;
+        const data: PollData = await res.json();
+        setJobData(data);
+        if (data.status === "COMPLETE") {
+          setHistory(prev => [{
+            id:           data.jobId,
+            status:       data.status,
+            priceCharged: data.priceCharged,
+            createdAt:    data.createdAt,
+            outputData:   data.outputData ?? null,
+            errorMessage: null,
+          }, ...prev]);
+        }
+      } catch { /* transient */ }
+    }, 4000);
+
+    return () => clearInterval(t);
+  }, [activeJobId, jobData?.status]);
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     if (!trackUrl.trim()) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      const res = await fetch("/api/dashboard/mastering", {
-        method: "POST",
+      const res = await fetch("/api/dashboard/ai/mastering", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trackUrl: trackUrl.trim(),
-          tier,
-          preset,
-          trackTitle: trackTitle.trim() || undefined,
-        }),
+        body:    JSON.stringify({ trackUrl: trackUrl.trim() }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(prev => [{
-          id: data.jobId,
-          status: "QUEUED",
-          inputData: { trackUrl: trackUrl.trim(), tier, preset, trackTitle: trackTitle.trim() || "Untitled" },
-          outputUrl: null,
-          outputData: null,
-          createdAt: new Date().toISOString(),
-        }, ...prev]);
-        setTrackUrl(""); setTrackTitle(""); setTrackSource("upload"); setComposing(false);
+
+      if (res.status === 402) {
+        const d = await res.json();
+        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "9.99"}. Add a payment method in Settings.`);
+        return;
       }
+
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
+
+      const init: PollData = {
+        jobId: data.jobId, status: "QUEUED", priceCharged: null,
+        createdAt: new Date().toISOString(), completedAt: null, errorMessage: null,
+      };
+      setActiveJobId(data.jobId);
+      setJobData(init);
+      setTrackUrl("");
+      setTrackTitle("");
     } finally {
       setSubmitting(false);
     }
   }
 
+  const isActive = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+  const outputs  = jobData?.outputData?.outputs ?? [];
+
+  function dismissJob() { setJobData(null); setActiveJobId(null); }
+
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <AIToolsNav />
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">AI Mastering</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Professional loudness and EQ mastering for streaming and radio
-          </p>
-        </div>
-        <button
-          onClick={() => setComposing(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Plus size={14} /> Master a Track
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">AI Mastering</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Professional mastering in 3 styles — Warm, Punchy, and Broadcast Ready — delivered in minutes.
+        </p>
       </div>
 
-      {/* Compose form */}
-      {composing && (
-        <div
-          className="rounded-2xl border p-5 space-y-4"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Music size={15} style={{ color: "#D4A843" }} />
-              <h2 className="text-sm font-semibold text-foreground">New Mastering Job</h2>
-            </div>
-            <button onClick={() => setComposing(false)} className="text-muted-foreground hover:text-foreground">
-              <X size={15} />
-            </button>
-          </div>
+      {/* Form */}
+      <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="flex items-center gap-2">
+          <Music size={15} style={{ color: "#D4A843" }} />
+          <h2 className="text-sm font-semibold text-foreground">Master a Track</h2>
+        </div>
 
-          {/* Track source */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Track Source</label>
-            <div className="flex gap-1 p-0.5 rounded-lg border w-fit" style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}>
-              {(["upload", "existing"] as const).map(src => (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Upload */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audio File *</label>
+
+            {trackUrl ? (
+              <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                <p className="text-sm text-foreground truncate flex-1">
+                  {trackTitle || "File ready"}
+                </p>
                 <button
-                  key={src}
-                  onClick={() => { setTrackSource(src); setTrackUrl(""); setTrackTitle(""); }}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
-                  style={trackSource === src
-                    ? { backgroundColor: "var(--card)", color: "var(--foreground)" }
-                    : { color: "var(--muted-foreground)" }}
+                  type="button"
+                  onClick={() => { setTrackUrl(""); setTrackTitle(""); }}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  disabled={!!isActive}
                 >
-                  {src === "upload" ? "Upload File" : "My Tracks"}
+                  <X size={13} />
                 </button>
-              ))}
-            </div>
-
-            {trackSource === "upload" ? (
-              <div className="flex items-center gap-3">
-                {trackUrl ? (
-                  <div className="flex items-center gap-3 flex-1 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
-                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
-                    <p className="text-sm text-foreground truncate flex-1">File uploaded</p>
-                    <button onClick={() => setTrackUrl("")} className="text-muted-foreground hover:text-foreground shrink-0">
-                      <X size={13} />
-                    </button>
-                  </div>
-                ) : (
-                  <label
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer transition-colors flex-1 justify-center"
-                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-                  >
-                    {trackUploading ? <><Loader2 size={14} className="animate-spin" /> Uploading…</> : <><Upload size={14} /> Upload WAV, MP3, or FLAC</>}
-                    <input type="file" accept="audio/*" className="sr-only" disabled={trackUploading}
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadTrack([f]); setTrackTitle(f.name.replace(/\.[^/.]+$/, "")); } e.target.value = ""; }} />
-                  </label>
-                )}
               </div>
             ) : (
-              <div className="relative">
-                <select
-                  value={trackUrl}
-                  onChange={e => {
-                    const t = savedTracks.find(t => t.fileUrl === e.target.value);
-                    setTrackUrl(e.target.value);
-                    if (t) setTrackTitle(t.title);
+              <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer transition-colors"
+                style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                {trackUploading
+                  ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                  : <><Upload size={14} /> Upload WAV, MP3, or FLAC</>}
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="sr-only"
+                  disabled={trackUploading || !!isActive}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      uploadTrack([f]);
+                      setTrackTitle(f.name.replace(/\.[^/.]+$/, ""));
+                    }
+                    e.target.value = "";
                   }}
-                  className="w-full rounded-xl border px-3 py-2.5 pr-8 text-sm text-foreground outline-none appearance-none"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-                >
-                  <option value="">Select a track…</option>
-                  {savedTracks.map(t => (
-                    <option key={t.id} value={t.fileUrl}>
-                      {t.title}{t.projectName ? ` — ${t.projectName}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                />
+              </label>
+            )}
+
+            {/* OR paste URL */}
+            {!trackUrl && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground text-center">— or paste a URL —</p>
+                <input
+                  type="url"
+                  value={trackUrl}
+                  onChange={e => setTrackUrl(e.target.value)}
+                  placeholder="https://example.com/track.mp3"
+                  disabled={!!isActive}
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }}
+                />
               </div>
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Track Title (optional)</label>
-            <input
-              value={trackTitle}
-              onChange={e => setTrackTitle(e.target.value)}
-              placeholder="e.g. Summer Nights"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-              style={{ borderColor: "var(--border)" }}
-            />
+          {/* Info about what's generated */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "Warm",            desc: "−14 LUFS · Smooth lows",        color: "#F59E0B" },
+              { label: "Punchy",          desc: "−9 LUFS · Club-ready",          color: "#EF4444" },
+              { label: "Broadcast Ready", desc: "−14 LUFS · Streaming compliant", color: "#10B981" },
+            ].map(p => (
+              <div key={p.label} className="rounded-lg border p-2.5" style={{ borderColor: "var(--border)" }}>
+                <div className="w-1.5 h-1.5 rounded-full mb-1.5" style={{ backgroundColor: p.color }} />
+                <p className="text-xs font-semibold text-foreground">{p.label}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{p.desc}</p>
+              </div>
+            ))}
           </div>
 
-          {/* Tier */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mastering Tier</label>
-            <div className="grid grid-cols-2 gap-3">
-              {(["quick", "studio"] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTier(t)}
-                  className="rounded-xl border p-3 text-left transition-all"
-                  style={{
-                    borderColor: tier === t ? "#D4A843" : "var(--border)",
-                    backgroundColor: tier === t ? "rgba(212,168,67,0.08)" : "transparent",
-                  }}
-                >
-                  <p className="text-sm font-semibold text-foreground">
-                    {t === "quick" ? "Quick Master" : "Studio Grade"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {t === "quick" ? "−14 LUFS · Streaming standard" : "−9 LUFS · Commercial / radio"}
-                  </p>
-                </button>
-              ))}
+          {submitError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={14} className="flex-shrink-0" />
+              {submitError}
             </div>
-          </div>
+          )}
 
-          {/* Preset */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sound Profile</label>
-            <div className="grid grid-cols-3 gap-2">
-              {PRESETS.map(p => (
-                <button
-                  key={p.value}
-                  onClick={() => setPreset(p.value)}
-                  className="rounded-lg border px-3 py-2 text-left transition-all"
-                  style={{
-                    borderColor: preset === p.value ? "#D4A843" : "var(--border)",
-                    backgroundColor: preset === p.value ? "rgba(212,168,67,0.08)" : "transparent",
-                  }}
-                >
-                  <p className="text-xs font-semibold text-foreground">{p.label}</p>
-                  <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{p.desc}</p>
-                </button>
-              ))}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">3 masters · $9.99 or 1 credit · ~10 min</p>
+            <button
+              type="submit"
+              disabled={submitting || trackUploading || !!isActive || !trackUrl.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
+              Start Mastering
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Active job status */}
+      {jobData && (
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          {isActive && (
+            <div className="flex items-start gap-3">
+              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {jobData.status === "QUEUED" ? "Queued — starting soon…" : "Mastering your track…"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {jobData.status === "PROCESSING"
+                    ? "Running 3 Dolby mastering profiles in parallel. This usually takes 5–10 minutes."
+                    : "Job is waiting to start…"}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || trackUploading || !trackUrl.trim()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            {submitting
-              ? <><Loader2 size={14} className="animate-spin" /> Queuing…</>
-              : trackUploading
-              ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
-              : <><Music size={14} /> Start Mastering</>}
-          </button>
+          {jobData.status === "COMPLETE" && outputs.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-400">
+                    {jobData.outputData?.successCount ?? outputs.filter(o => o.status === "Success").length} masters ready
+                  </p>
+                </div>
+                <button
+                  onClick={dismissJob}
+                  className="text-xs text-muted-foreground hover:text-foreground transition"
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {outputs.map(output => (
+                  <div
+                    key={output.label}
+                    className="rounded-xl border p-4 space-y-3"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PROFILE_COLORS[output.label] ?? "#D4A843" }} />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{output.label}</p>
+                          <p className="text-xs text-muted-foreground">{output.description}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {output.measuredLUFS != null && (
+                          <p className="text-xs text-muted-foreground">{output.measuredLUFS.toFixed(1)} LUFS measured</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">{output.loudnessLUFS} LUFS target</p>
+                      </div>
+                    </div>
+
+                    {output.status === "Success" && output.downloadUrl ? (
+                      <div className="space-y-2">
+                        {/* Audio player */}
+                        <audio
+                          controls
+                          className="w-full h-8"
+                          style={{ accentColor: PROFILE_COLORS[output.label] ?? "#D4A843" }}
+                        >
+                          <source src={output.downloadUrl} type="audio/wav" />
+                        </audio>
+                        <a
+                          href={output.downloadUrl}
+                          download={`${output.label.toLowerCase().replace(/\s+/g, "-")}-master.wav`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+                          style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
+                        >
+                          <Download size={12} /> Download WAV
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-red-400/70">This profile failed to process</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {jobData.status === "FAILED" && (
+            <div className="flex items-start gap-3 text-red-400">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Mastering failed</p>
+                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error occurred"}</p>
+                <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Jobs list */}
-      {loading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : jobs.length === 0 ? (
-        <div
-          className="rounded-2xl border py-14 text-center space-y-2"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <Music size={32} className="mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm font-semibold text-foreground">No mastering jobs yet</p>
-          <p className="text-xs text-muted-foreground">
-            Upload a track or pick from your music library to get a professional master in minutes.
-          </p>
-        </div>
-      ) : (
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-        >
-          <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mastering Jobs</p>
-          </div>
-          {jobs.map(job => {
-            const cfg  = STATUS_CONFIG[job.status];
-            const Icon = cfg.icon;
-            const title  = job.inputData?.trackTitle || "Untitled";
-            const tierLabel   = job.inputData?.tier === "studio" ? "Studio Grade" : "Quick Master";
-            const presetLabel = PRESETS.find(p => p.value === job.inputData?.preset)?.label ?? job.inputData?.preset ?? "A";
-            return (
-              <div
-                key={job.id}
-                className="flex items-center gap-4 px-5 py-4 border-b last:border-b-0"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "var(--border)" }}
-                >
-                  <Icon
-                    size={16}
-                    className={job.status === "PROCESSING" ? `${cfg.color} animate-spin` : cfg.color}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{title}</p>
-                  <p className="text-xs text-muted-foreground">{tierLabel} · {presetLabel}</p>
-                </div>
-                <div className="text-right shrink-0 space-y-0.5">
-                  <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
-                  {job.outputData?.loudness ? (
-                    <p className="text-[10px] text-muted-foreground">
-                      {job.outputData.loudness.toFixed(1)} LUFS
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground">
-                      {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </p>
+      {/* History */}
+      {!historyLoading && history.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Mastering Jobs</p>
+          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            {history.map(job => {
+              const jobOutputs = job.outputData?.outputs ?? [];
+              const successOutputs = jobOutputs.filter(o => o.status === "Success" && o.downloadUrl);
+              return (
+                <div key={job.id} className="p-4 border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {job.status === "COMPLETE"   && <CheckCircle2 size={13} className="text-emerald-400" />}
+                      {job.status === "PROCESSING" && <Loader2 size={13} className="text-blue-400 animate-spin" />}
+                      {job.status === "QUEUED"     && <Clock size={13} className="text-yellow-400" />}
+                      {job.status === "FAILED"     && <AlertCircle size={13} className="text-red-400" />}
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(job.createdAt).toLocaleDateString()}
+                      </span>
+                      {job.status === "COMPLETE" && (
+                        <span className="text-xs text-muted-foreground">
+                          · {successOutputs.length} of 3 profiles succeeded
+                        </span>
+                      )}
+                    </div>
+                    {job.priceCharged != null && job.priceCharged > 0 && (
+                      <span className="text-xs text-muted-foreground">${job.priceCharged.toFixed(2)}</span>
+                    )}
+                  </div>
+
+                  {successOutputs.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {successOutputs.map(o => (
+                        <a
+                          key={o.label}
+                          href={o.downloadUrl!}
+                          download={`${o.label.toLowerCase().replace(/\s+/g, "-")}-master.wav`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                          style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PROFILE_COLORS[o.label] ?? "#D4A843" }} />
+                          <Download size={11} /> {o.label}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {job.status === "FAILED" && (
+                    <p className="text-xs text-red-400/70">{job.errorMessage ?? "Failed"}</p>
                   )}
                 </div>
-                {job.status === "COMPLETED" && job.outputUrl && (
-                  <a
-                    href={job.outputUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold no-underline shrink-0"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                  >
-                    <Download size={12} /> Download
-                  </a>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
