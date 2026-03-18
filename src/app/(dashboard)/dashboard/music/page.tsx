@@ -73,8 +73,9 @@ async function fetchOEmbed(url: string): Promise<OEmbedResult | null> {
 
 // ─── My Tracks Tab ────────────────────────────────────────────────────────────
 
-function TrackCard({ track, onDelete, onToggleStatus, onUpdate }: {
+function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
   track: Track;
+  context: import("@/store").AudioTrack[];
   onDelete: (id: string) => void;
   onToggleStatus: (id: string, status: "DRAFT" | "PUBLISHED") => void;
   onUpdate: (updated: Track) => void;
@@ -312,6 +313,7 @@ function TrackCard({ track, onDelete, onToggleStatus, onUpdate }: {
           src:      track.fileUrl,
           coverArt: track.coverArtUrl ?? undefined,
         }}
+        context={context}
         className="w-44 shrink-0"
       />
 
@@ -566,7 +568,14 @@ function MyTracksTab() {
       ) : (
         <div className="space-y-2">
           {tracks.map(track => (
-            <TrackCard key={track.id} track={track} onDelete={handleDelete} onToggleStatus={handleToggleStatus} onUpdate={handleUpdate} />
+            <TrackCard
+              key={track.id}
+              track={track}
+              context={tracks.map(t => ({ id: t.id, title: t.title, artist: "", src: t.fileUrl, coverArt: t.coverArtUrl ?? undefined }))}
+              onDelete={handleDelete}
+              onToggleStatus={handleToggleStatus}
+              onUpdate={handleUpdate}
+            />
           ))}
         </div>
       )}

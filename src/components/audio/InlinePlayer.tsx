@@ -106,6 +106,11 @@ export interface InlinePlayerProps {
   /** Track metadata + source URL — passed directly from the parent. */
   track: AudioTrack;
   /**
+   * Sibling tracks in the same list. When provided, playing this track also
+   * loads the full list into the queue so SkipBack/SkipForward work in MiniPlayer.
+   */
+  context?: AudioTrack[];
+  /**
    * Optional callback fired when this track is loaded into the store for the
    * first time (i.e. the user presses play and it wasn't already the active
    * track). Useful for side-effects like marking a preview as "listened".
@@ -126,14 +131,15 @@ export interface InlinePlayerProps {
  *
  * Layout:  [▶ / ~~~] [══ SVG waveform ══] [0:00]
  */
-export default function InlinePlayer({ track, onPlay, className = "" }: InlinePlayerProps) {
-  const currentTrackId = useAudioStore((s) => s.currentTrack?.id);
-  const isPlaying      = useAudioStore((s) => s.isPlaying);
-  const currentTime    = useAudioStore((s) => s.currentTime);
-  const storeDuration  = useAudioStore((s) => s.duration);
-  const play           = useAudioStore((s) => s.play);
-  const pause          = useAudioStore((s) => s.pause);
-  const resume         = useAudioStore((s) => s.resume);
+export default function InlinePlayer({ track, context, onPlay, className = "" }: InlinePlayerProps) {
+  const currentTrackId  = useAudioStore((s) => s.currentTrack?.id);
+  const isPlaying       = useAudioStore((s) => s.isPlaying);
+  const currentTime     = useAudioStore((s) => s.currentTime);
+  const storeDuration   = useAudioStore((s) => s.duration);
+  const play            = useAudioStore((s) => s.play);
+  const playInContext   = useAudioStore((s) => s.playInContext);
+  const pause           = useAudioStore((s) => s.pause);
+  const resume          = useAudioStore((s) => s.resume);
 
   const isCurrentTrack = currentTrackId === track.id;
   const isThisPlaying  = isCurrentTrack && isPlaying;
@@ -151,8 +157,12 @@ export default function InlinePlayer({ track, onPlay, className = "" }: InlinePl
 
   function handleToggle() {
     if (!isCurrentTrack) {
-      play(track);    // load into MiniPlayer
-      onPlay?.();     // notify parent (e.g. mark as listened)
+      if (context && context.length > 1) {
+        playInContext(track, context);
+      } else {
+        play(track);
+      }
+      onPlay?.();
     } else if (isPlaying) {
       pause();
     } else {

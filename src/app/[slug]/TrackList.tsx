@@ -118,6 +118,15 @@ export default function TrackList({
   const currentTrackId = useAudioStore((s) => s.currentTrack?.id);
   const [gateTrack, setGateTrack] = useState<Track | null>(null);
 
+  // Build the full queue context once — stable shape for all InlinePlayers in this list
+  const audioContext = tracks.map((t) => ({
+    id:       t.id,
+    title:    t.title,
+    artist:   artistName ?? "",
+    src:      t.fileUrl,
+    coverArt: t.coverArtUrl ?? undefined,
+  }));
+
   function handleDownload(track: Track) {
     if (followGateEnabled && instagramHandle && track.price === null) {
       setGateTrack(track);
@@ -181,6 +190,7 @@ export default function TrackList({
                     src:      track.fileUrl,
                     coverArt: track.coverArtUrl ?? undefined,
                   }}
+                  context={audioContext}
                 />
               </div>
 

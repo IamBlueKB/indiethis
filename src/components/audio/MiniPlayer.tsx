@@ -16,12 +16,11 @@ export default function MiniPlayer() {
   const isPlaying    = useAudioStore((s) => s.isPlaying);
   const volume       = useAudioStore((s) => s.volume);
   const isMuted      = useAudioStore((s) => s.isMuted);
-  const currentTime  = useAudioStore((s) => s.currentTime);
-  const duration     = useAudioStore((s) => s.duration);
   const pause        = useAudioStore((s) => s.pause);
   const resume       = useAudioStore((s) => s.resume);
   const stop         = useAudioStore((s) => s.stop);
-  const seekTo       = useAudioStore((s) => s.seekTo);
+  const next         = useAudioStore((s) => s.next);
+  const prev         = useAudioStore((s) => s.prev);
   const setVolume    = useAudioStore((s) => s.setVolume);
   const toggleMute   = useAudioStore((s) => s.toggleMute);
 
@@ -68,15 +67,13 @@ export default function MiniPlayer() {
         </div>
       </div>
 
-      {/* ── Rewind / Play / Fast-forward ──────────────────────────────── */}
+      {/* ── Prev / Play / Next ────────────────────────────────────────── */}
       <div className="flex items-center gap-1 shrink-0">
         <button
-          onClick={() => seekTo(currentTime - 10)}
+          onClick={prev}
           className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
           style={{ color: "var(--muted-foreground)" }}
-          aria-label="Rewind 10 seconds"
-          title="−10s"
-          disabled={duration === 0}
+          aria-label="Previous track"
         >
           <SkipBack size={14} />
         </button>
@@ -91,12 +88,10 @@ export default function MiniPlayer() {
         </button>
 
         <button
-          onClick={() => seekTo(currentTime + 10)}
+          onClick={next}
           className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
           style={{ color: "var(--muted-foreground)" }}
-          aria-label="Skip forward 10 seconds"
-          title="+10s"
-          disabled={duration === 0}
+          aria-label="Next track"
         >
           <SkipForward size={14} />
         </button>

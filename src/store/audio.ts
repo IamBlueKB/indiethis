@@ -24,6 +24,8 @@ type AudioState = {
 
 type AudioActions = {
   play: (track: AudioTrack) => void;
+  /** Play a track and load its siblings into the queue for next/prev navigation. */
+  playInContext: (track: AudioTrack, context: AudioTrack[]) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -53,6 +55,9 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   pendingSeek: null,
 
   play: (track) => set({ currentTrack: track, isPlaying: true, currentTime: 0 }),
+
+  playInContext: (track, context) =>
+    set({ currentTrack: track, queue: context, isPlaying: true, currentTime: 0 }),
   pause: () => set({ isPlaying: false }),
   resume: () => set({ isPlaying: true }),
   stop: () => set({ currentTrack: null, isPlaying: false, currentTime: 0 }),
