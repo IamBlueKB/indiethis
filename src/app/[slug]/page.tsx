@@ -90,7 +90,8 @@ async function ArtistSite({ slug }: { slug: string }) {
           </div>
         </div>
         {artist.tracks.length > 0 && (
-          <TrackList tracks={artist.tracks} followGateEnabled={site.followGateEnabled ?? false}
+          <TrackList tracks={artist.tracks} artistName={displayName}
+            followGateEnabled={site.followGateEnabled ?? false}
             instagramHandle={artist.instagramHandle ?? null} />
         )}
         {artist.merchProducts.length > 0 && (

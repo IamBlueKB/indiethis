@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Music2, Play, Pause, Loader2, Download, Instagram, ExternalLink, X, Check } from "lucide-react";
+import { useState } from "react";
+import { Music2, Download, Instagram, ExternalLink, X, Check } from "lucide-react";
+import { useAudioStore } from "@/store";
+import InlinePlayer from "@/components/audio/InlinePlayer";
 
 type Track = {
   id: string;
@@ -103,47 +105,18 @@ function FollowGateModal({
 
 export default function TrackList({
   tracks,
+  artistName,
   followGateEnabled = false,
   instagramHandle = null,
 }: {
   tracks: Track[];
+  /** Artist display name — used as the `artist` field in the audio store. */
+  artistName?: string;
   followGateEnabled?: boolean;
   instagramHandle?: string | null;
 }) {
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const currentTrackId = useAudioStore((s) => s.currentTrack?.id);
   const [gateTrack, setGateTrack] = useState<Track | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    return () => { audioRef.current?.pause(); };
-  }, []);
-
-  function handleTrackClick(track: Track) {
-    if (playingId === track.id) {
-      audioRef.current?.pause();
-      setPlayingId(null);
-      return;
-    }
-    audioRef.current?.pause();
-    setLoadingId(track.id);
-    setProgress(0);
-
-    const audio = new Audio(track.fileUrl);
-    audioRef.current = audio;
-
-    audio.addEventListener("canplay", () => {
-      setLoadingId(null);
-      setPlayingId(track.id);
-      audio.play().catch(() => { setLoadingId(null); setPlayingId(null); });
-    });
-    audio.addEventListener("timeupdate", () => {
-      if (audio.duration) setProgress(audio.currentTime / audio.duration);
-    });
-    audio.addEventListener("ended", () => { setPlayingId(null); setProgress(0); });
-    audio.addEventListener("error", () => { setLoadingId(null); setPlayingId(null); });
-  }
 
   function handleDownload(track: Track) {
     if (followGateEnabled && instagramHandle && track.price === null) {
@@ -166,68 +139,50 @@ export default function TrackList({
     <section className="space-y-4">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Music</h2>
 
-      {/* Mini waveform bar when playing */}
-      {playingId && (
-        <div className="h-1 rounded-full overflow-hidden transition-all" style={{ backgroundColor: "var(--border)" }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${Math.round(progress * 100)}%`, backgroundColor: "var(--accent)" }}
-          />
-        </div>
-      )}
-
       <div className="space-y-2">
         {tracks.map((track, i) => {
-          const isPlaying = playingId === track.id;
-          const isLoading = loadingId === track.id;
-          const isFree    = track.price === null;
+          const isActive = currentTrackId === track.id;
+          const isFree   = track.price === null;
 
           return (
             <div
               key={track.id}
-              className="flex items-center gap-4 rounded-xl border px-4 py-3 group transition-colors"
+              className="flex items-center gap-4 rounded-xl border px-4 py-3 transition-colors"
               style={{
-                backgroundColor: isPlaying ? "rgba(212,168,67,0.06)" : "var(--card)",
-                borderColor: isPlaying ? "rgba(212,168,67,0.3)" : "var(--border)",
+                backgroundColor: isActive ? "rgba(212,168,67,0.06)" : "var(--card)",
+                borderColor: isActive ? "rgba(212,168,67,0.3)" : "var(--border)",
               }}
             >
-              {/* Play button / number */}
-              <div
-                className="w-8 flex items-center justify-center shrink-0 cursor-pointer"
-                onClick={() => handleTrackClick(track)}
-              >
-                {isLoading ? (
-                  <Loader2 size={14} className="text-accent animate-spin" />
-                ) : isPlaying ? (
-                  <Pause size={14} className="text-accent" />
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground group-hover:hidden">{i + 1}</span>
-                    <Play size={14} className="text-muted-foreground hidden group-hover:block" />
-                  </>
-                )}
-              </div>
+              {/* Track number */}
+              <span className="w-5 text-xs text-muted-foreground text-right shrink-0 select-none">
+                {i + 1}
+              </span>
 
               {/* Cover art */}
               <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 cursor-pointer"
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                 style={{
                   backgroundImage: track.coverArtUrl ? `url(${track.coverArtUrl})` : undefined,
                   backgroundSize: "cover",
                   backgroundColor: "var(--border)",
                 }}
-                onClick={() => handleTrackClick(track)}
               >
                 {!track.coverArtUrl && <Music2 size={14} className="text-muted-foreground" />}
               </div>
 
-              {/* Title */}
-              <p
-                className="flex-1 text-sm font-medium text-foreground truncate cursor-pointer"
-                onClick={() => handleTrackClick(track)}
-              >
-                {track.title}
-              </p>
+              {/* Title + inline waveform player */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate mb-1">{track.title}</p>
+                <InlinePlayer
+                  track={{
+                    id:       track.id,
+                    title:    track.title,
+                    artist:   artistName ?? "",
+                    src:      track.fileUrl,
+                    coverArt: track.coverArtUrl ?? undefined,
+                  }}
+                />
+              </div>
 
               {/* Meta + actions */}
               <div className="flex items-center gap-3 shrink-0">

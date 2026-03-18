@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Playfair_Display, DM_Sans } from "next/font/google";
 import { db } from "@/lib/db";
+import MiniPlayer from "@/components/audio/MiniPlayer";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -44,7 +45,10 @@ export async function generateMetadata({
 export default function SlugLayout({ children }: { children: ReactNode }) {
   return (
     <div className={`${playfair.variable} ${dmSans.variable}`}>
-      {children}
+      <div className="pb-20">
+        {children}
+      </div>
+      <MiniPlayer />
     </div>
   );
 }

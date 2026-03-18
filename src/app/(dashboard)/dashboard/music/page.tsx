@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2,
-  Upload, Trash2, Globe, Lock, DollarSign, Play, CheckCircle2, ImagePlus, Pencil,
+  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
-import { useAudioStore } from "@/store";
+import InlinePlayer from "@/components/audio/InlinePlayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,13 +79,6 @@ function TrackCard({ track, onDelete, onToggleStatus, onUpdate }: {
   onToggleStatus: (id: string, status: "DRAFT" | "PUBLISHED") => void;
   onUpdate: (updated: Track) => void;
 }) {
-  const playTrack    = useAudioStore((s) => s.play);
-  const currentTrack = useAudioStore((s) => s.currentTrack);
-  const isPlaying    = useAudioStore((s) => s.isPlaying);
-  const pauseTrack   = useAudioStore((s) => s.pause);
-  const resumeTrack  = useAudioStore((s) => s.resume);
-  const isThisTrack  = currentTrack?.id === track.id;
-
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(track.title);
@@ -310,30 +303,17 @@ function TrackCard({ track, onDelete, onToggleStatus, onUpdate }: {
         {track.status === "PUBLISHED" ? <><Globe size={10} /> Published</> : <><Lock size={10} /> Draft</>}
       </button>
 
-      {/* Play button → loads track into persistent MiniPlayer */}
-      <button
-        onClick={() => {
-          if (isThisTrack) {
-            isPlaying ? pauseTrack() : resumeTrack();
-          } else {
-            playTrack({
-              id: track.id,
-              title: track.title,
-              artist: "",
-              src: track.fileUrl,
-              coverArt: track.coverArtUrl ?? undefined,
-            });
-          }
+      {/* Inline waveform player — delegates to persistent MiniPlayer */}
+      <InlinePlayer
+        track={{
+          id:       track.id,
+          title:    track.title,
+          artist:   "",
+          src:      track.fileUrl,
+          coverArt: track.coverArtUrl ?? undefined,
         }}
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
-        style={{
-          backgroundColor: isThisTrack ? "rgba(212,168,67,0.15)" : "var(--border)",
-          color: isThisTrack ? "#D4A843" : undefined,
-        }}
-        title={isThisTrack && isPlaying ? "Pause" : "Play"}
-      >
-        <Play size={13} className={isThisTrack ? "" : "text-muted-foreground"} style={isThisTrack ? { color: "#D4A843" } : {}} />
-      </button>
+        className="w-44 shrink-0"
+      />
 
       {/* Edit */}
       <button

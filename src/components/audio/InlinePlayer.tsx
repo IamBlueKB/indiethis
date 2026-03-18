@@ -105,6 +105,12 @@ function NowPlayingBars() {
 export interface InlinePlayerProps {
   /** Track metadata + source URL — passed directly from the parent. */
   track: AudioTrack;
+  /**
+   * Optional callback fired when this track is loaded into the store for the
+   * first time (i.e. the user presses play and it wasn't already the active
+   * track). Useful for side-effects like marking a preview as "listened".
+   */
+  onPlay?: () => void;
   className?: string;
 }
 
@@ -120,7 +126,7 @@ export interface InlinePlayerProps {
  *
  * Layout:  [▶ / ~~~] [══ SVG waveform ══] [0:00]
  */
-export default function InlinePlayer({ track, className = "" }: InlinePlayerProps) {
+export default function InlinePlayer({ track, onPlay, className = "" }: InlinePlayerProps) {
   const currentTrackId = useAudioStore((s) => s.currentTrack?.id);
   const isPlaying      = useAudioStore((s) => s.isPlaying);
   const currentTime    = useAudioStore((s) => s.currentTime);
@@ -144,9 +150,14 @@ export default function InlinePlayer({ track, className = "" }: InlinePlayerProp
   const bars = seededBars(track.id);
 
   function handleToggle() {
-    if (!isCurrentTrack) play(track);   // load into MiniPlayer
-    else if (isPlaying)  pause();
-    else                 resume();
+    if (!isCurrentTrack) {
+      play(track);    // load into MiniPlayer
+      onPlay?.();     // notify parent (e.g. mark as listened)
+    } else if (isPlaying) {
+      pause();
+    } else {
+      resume();
+    }
   }
 
   return (

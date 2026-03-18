@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Music2, Play, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User, Loader2, X } from "lucide-react";
+import { Music2, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User, Loader2, X } from "lucide-react";
 import { useAudioStore } from "@/store";
+import InlinePlayer from "@/components/audio/InlinePlayer";
 
 type BeatPreview = {
   id: string;
@@ -54,7 +55,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 function MyPreviews() {
   const [previews, setPreviews] = useState<BeatPreview[]>([]);
   const [loading, setLoading] = useState(true);
-  const { play: playTrack, pause, resume, currentTrack, isPlaying } = useAudioStore();
 
   // License modal state
   const [licensePreview, setLicensePreview] = useState<BeatPreview | null>(null);
@@ -91,13 +91,7 @@ function MyPreviews() {
       .then((d) => { setPreviews(d.previews ?? []); setLoading(false); });
   }, []);
 
-  async function handleListen(p: BeatPreview) {
-    const isThisTrack = currentTrack?.id === p.track.id;
-    if (isThisTrack) {
-      isPlaying ? pause() : resume();
-    } else {
-      playTrack({ id: p.track.id, title: p.track.title, artist: p.producer.displayName, src: p.track.fileUrl, coverArt: p.track.coverArtUrl ?? undefined });
-    }
+  async function markListened(p: BeatPreview) {
     if (p.status === "PENDING") {
       await fetch(`/api/beats/previews/${p.id}`);  // GET marks as LISTENED server-side
       setPreviews((prev) => prev.map((x) => x.id === p.id ? { ...x, status: "LISTENED" } : x));
@@ -201,8 +195,6 @@ function MyPreviews() {
         const effectiveStatus = isExpired && p.status !== "PURCHASED" ? "EXPIRED" : p.status;
         const effectiveCfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.PENDING;
         const EffectiveStatusIcon = effectiveCfg.icon;
-        const isThisTrack = currentTrack?.id === p.track.id;
-        const playing = isThisTrack && isPlaying;
 
         return (
           <div key={p.id} className="rounded-2xl border p-5 flex items-center gap-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
@@ -220,6 +212,20 @@ function MyPreviews() {
               <p className="text-sm font-bold text-foreground truncate">{p.track.title}</p>
               <p className="text-xs text-muted-foreground">by {p.producer.displayName}</p>
               {p.track.projectName && <p className="text-xs text-muted-foreground">{p.track.projectName}</p>}
+              {/* Inline waveform player — only shown for non-expired, non-purchased previews */}
+              {!isExpired && effectiveStatus !== "PURCHASED" && (
+                <InlinePlayer
+                  track={{
+                    id:       p.track.id,
+                    title:    p.track.title,
+                    artist:   p.producer.displayName,
+                    src:      p.track.fileUrl,
+                    coverArt: p.track.coverArtUrl ?? undefined,
+                  }}
+                  onPlay={() => markListened(p)}
+                  className="mt-2 w-full"
+                />
+              )}
             </div>
             {p.track.price && (
               <div className="text-right shrink-0">
@@ -232,19 +238,6 @@ function MyPreviews() {
               {effectiveCfg.label}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {!isExpired && effectiveStatus !== "PURCHASED" && (
-                <button
-                  onClick={() => handleListen(p)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-white/5"
-                  style={{
-                    borderColor: isThisTrack ? "#D4A843" : "var(--border)",
-                    color: isThisTrack ? "#D4A843" : "var(--foreground)",
-                  }}
-                >
-                  <Play size={12} />
-                  {playing ? "Playing…" : isThisTrack ? "Paused" : "Preview"}
-                </button>
-              )}
               {!isExpired && effectiveStatus !== "PURCHASED" && (
                 <button
                   onClick={() => { setLicensePreview(p); setLicenseType("NON_EXCLUSIVE"); setLicenseError(null); }}
@@ -285,7 +278,7 @@ function BrowseBeats() {
   const [tracks, setTracks] = useState<BrowseTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const { play: playTrack, pause, resume, currentTrack, isPlaying } = useAudioStore();
+  const currentTrack = useAudioStore((s) => s.currentTrack);
 
   // License modal state
   const [licenseTrack, setLicenseTrack] = useState<BrowseTrack | null>(null);
@@ -334,21 +327,6 @@ function BrowseBeats() {
         (t.artist.artistName ?? t.artist.name).toLowerCase().includes(search.toLowerCase())
       )
     : tracks;
-
-  function handlePlay(t: BrowseTrack) {
-    const isThis = currentTrack?.id === t.id;
-    if (isThis) {
-      isPlaying ? pause() : resume();
-    } else {
-      playTrack({
-        id: t.id,
-        title: t.title,
-        artist: t.artist.artistName ?? t.artist.name,
-        src: t.fileUrl,
-        coverArt: t.coverArtUrl ?? undefined,
-      });
-    }
-  }
 
   if (loading) return <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>;
 
@@ -475,7 +453,6 @@ function BrowseBeats() {
         <div className="grid grid-cols-1 gap-3">
           {filtered.map((t) => {
             const isThis = currentTrack?.id === t.id;
-            const playing = isThis && isPlaying;
             const producerName = t.artist.artistName ?? t.artist.name;
 
             return (
@@ -500,7 +477,7 @@ function BrowseBeats() {
                   {!t.coverArtUrl && <Music2 size={18} className="text-muted-foreground" />}
                 </div>
 
-                {/* Track info */}
+                {/* Track info + inline player */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-foreground truncate">{t.title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -516,6 +493,16 @@ function BrowseBeats() {
                   {t.plays > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>
                   )}
+                  <InlinePlayer
+                    track={{
+                      id:       t.id,
+                      title:    t.title,
+                      artist:   producerName,
+                      src:      t.fileUrl,
+                      coverArt: t.coverArtUrl ?? undefined,
+                    }}
+                    className="mt-2 w-full"
+                  />
                 </div>
 
                 {/* Price */}
@@ -526,19 +513,8 @@ function BrowseBeats() {
                   </div>
                 )}
 
-                {/* Actions */}
+                {/* License action */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handlePlay(t)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-white/5"
-                    style={{
-                      borderColor: isThis ? "#D4A843" : "var(--border)",
-                      color: isThis ? "#D4A843" : "var(--foreground)",
-                    }}
-                  >
-                    <Play size={12} />
-                    {playing ? "Playing…" : isThis ? "Paused" : "Preview"}
-                  </button>
                   <button
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
                     style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
