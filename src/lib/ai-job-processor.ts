@@ -1382,14 +1382,105 @@ async function uploadBufferToUT(
   return res.data.url;
 }
 
+// ─── Video resolution map (aspect ratio → pixel dimensions) ──────────────────
+const VIDEO_DIM: Record<string, { w: number; h: number }> = {
+  "16:9": { w: 1280, h: 720  },
+  "9:16": { w: 720,  h: 1280 },
+  "1:1":  { w: 960,  h: 960  },
+};
+
 /**
- * Download all clip videos, concatenate them with ffmpeg, and return the
- * stitched MP4 as a Buffer.
+ * Render a black-background IndieThis outro frame as a PNG file.
+ * Returns the absolute path to the created PNG.
  */
-async function stitchClipsToBuffer(clipUrls: string[], jobId: string): Promise<Buffer> {
+async function generateOutroFrame(aspectRatio: string, tmpDir: string): Promise<string> {
+  const { w, h } = VIDEO_DIM[aspectRatio] ?? VIDEO_DIM["16:9"];
+  const short     = Math.min(w, h);
+  const iconSize  = Math.round(short * 0.12);
+  const cx        = w / 2;
+  const iconY     = Math.round(h / 2 - iconSize * 0.9);
+
+  // Icon geometry (proportional to icon square)
+  const rx     = Math.round(iconSize * 0.22);
+  const barX   = Math.round(iconSize * 0.41);
+  const barY   = Math.round(iconSize * 0.31);
+  const barW   = Math.round(iconSize * 0.14);
+  const barH   = Math.round(iconSize * 0.47);
+  const barRx  = Math.round(iconSize * 0.07);
+  const triPts = [
+    `${Math.round(iconSize * 0.375)},${Math.round(iconSize * 0.155)}`,
+    `${Math.round(iconSize * 0.375)},${Math.round(iconSize * 0.390)}`,
+    `${Math.round(iconSize * 0.594)},${Math.round(iconSize * 0.273)}`,
+  ].join(" ");
+
+  const fontSize = Math.round(short * 0.045);
+  const textY    = iconY + iconSize + Math.round(fontSize * 1.5);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+  <rect width="${w}" height="${h}" fill="#000000"/>
+  <g transform="translate(${Math.round(cx - iconSize / 2)}, ${iconY})">
+    <rect x="0" y="0" width="${iconSize}" height="${iconSize}" rx="${rx}" fill="#D4A843"/>
+    <rect x="${barX}" y="${barY}" width="${barW}" height="${barH}" rx="${barRx}" fill="#FFFFFF"/>
+    <polygon points="${triPts}" fill="#E85D4A"/>
+  </g>
+  <text x="${cx}" y="${textY}" text-anchor="middle" fill="#FFFFFF"
+        font-family="sans-serif" font-size="${fontSize}" font-weight="700"
+        letter-spacing="-1">IndieThis</text>
+</svg>`;
+
+  const pngPath = path.join(tmpDir, "outro-frame.png");
+  await sharp(Buffer.from(svg)).png().toFile(pngPath);
+  return pngPath;
+}
+
+/**
+ * Convert a static PNG into a 2-second H.264 MP4 with 0.5s fade-in and fade-out.
+ * Returns the absolute path to the created MP4.
+ */
+async function generateOutroVideo(
+  pngPath:     string,
+  aspectRatio: string,
+  tmpDir:      string,
+): Promise<string> {
+  const { w, h }   = VIDEO_DIM[aspectRatio] ?? VIDEO_DIM["16:9"];
+  const outroPath  = path.join(tmpDir, "outro.mp4");
+  const fps        = 30;
+  const duration   = 2;           // total seconds
+  const fadeFr     = Math.round(fps * 0.5); // 15 frames = 0.5 s fade
+  const fadeOutAt  = Math.round(fps * (duration - 0.5)); // frame 45
+
+  await new Promise<void>((resolve, reject) => {
+    ffmpegFluent()
+      .addInput(pngPath)
+      .addInputOptions(["-loop 1", `-t ${duration}`, `-r ${fps}`])
+      .outputOptions([
+        `-vf scale=${w}:${h},fade=in:0:${fadeFr},fade=out:${fadeOutAt}:${fadeFr}`,
+        "-c:v libx264",
+        "-pix_fmt yuv420p",
+        `-r ${fps}`,
+        "-an",
+        "-movflags +faststart",
+      ])
+      .output(outroPath)
+      .on("end",   () => resolve())
+      .on("error", (e) => reject(e))
+      .run();
+  });
+
+  return outroPath;
+}
+
+/**
+ * Download all clip videos, concatenate them with ffmpeg, append a 2-second
+ * IndieThis outro card, and return the stitched MP4 as a Buffer.
+ */
+async function stitchClipsToBuffer(
+  clipUrls:    string[],
+  jobId:       string,
+  aspectRatio = "16:9",
+): Promise<Buffer> {
   const tmpDir     = path.join(os.tmpdir(), `indiethis-stitch-${jobId}`);
   const outputPath = path.join(tmpDir, "output.mp4");
-  const listPath   = path.join(tmpDir, "list.txt");
 
   fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -1406,25 +1497,52 @@ async function stitchClipsToBuffer(clipUrls: string[], jobId: string): Promise<B
       console.log(`[video/stitch] downloaded clip ${i + 1}/${clipUrls.length}`);
     }
 
+    // Generate outro card and append it
+    let outroPath: string | null = null;
+    try {
+      const pngPath = await generateOutroFrame(aspectRatio, tmpDir);
+      outroPath     = await generateOutroVideo(pngPath, aspectRatio, tmpDir);
+      console.log(`[video/stitch] outro card generated (${aspectRatio})`);
+    } catch (err) {
+      console.warn(`[video/stitch] outro generation failed, skipping: ${err}`);
+    }
+
+    const allPaths = outroPath ? [...clipPaths, outroPath] : clipPaths;
+
     // Write ffmpeg concat list (paths must use forward slashes on all platforms)
-    const listContent = clipPaths
+    const listPath    = path.join(tmpDir, "list.txt");
+    const listContent = allPaths
       .map((p) => `file '${p.replace(/\\/g, "/")}'`)
       .join("\n");
     fs.writeFileSync(listPath, listContent);
 
-    // Concatenate with ffmpeg (stream copy — no re-encode, very fast)
+    // Concatenate. When an outro is included the clips must be re-encoded so
+    // the codec/resolution matches; otherwise use lossless stream copy.
     await new Promise<void>((resolve, reject) => {
-      ffmpegFluent()
+      const cmd = ffmpegFluent()
         .addInput(listPath)
-        .addInputOptions(["-f concat", "-safe 0"])
-        .outputOptions(["-c copy"])
+        .addInputOptions(["-f concat", "-safe 0"]);
+
+      if (outroPath) {
+        cmd.outputOptions([
+          "-c:v libx264",
+          "-crf 23",
+          "-preset fast",
+          "-an",
+          "-movflags +faststart",
+        ]);
+      } else {
+        cmd.outputOptions(["-c copy"]);
+      }
+
+      cmd
         .output(outputPath)
         .on("end",   () => resolve())
         .on("error", (e) => reject(e))
         .run();
     });
 
-    console.log(`[video/stitch] stitched ${clipUrls.length} clips → ${outputPath}`);
+    console.log(`[video/stitch] stitched ${allPaths.length} clips → ${outputPath}`);
     return fs.readFileSync(outputPath);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1446,8 +1564,9 @@ async function stitchAndFinalize(
   await saveVideoPhase2State(jobId, { ...currentOutput, clips, stitching: true });
   console.log(`[video/stitch] starting stitch for job ${jobId}`);
 
-  const clipUrls = clips.map((c) => c.url!);
-  const stitchedBuffer = await stitchClipsToBuffer(clipUrls, jobId);
+  const clipUrls   = clips.map((c) => c.url!);
+  const ratio      = (currentOutput.aspectRatio as string | undefined) ?? "16:9";
+  const stitchedBuffer = await stitchClipsToBuffer(clipUrls, jobId, ratio);
 
   // Upload to UploadThing
   const finalVideoUrl = await uploadBufferToUT(
