@@ -368,7 +368,6 @@ model Studio {
   referralCredits          Float     @default(0)
   referralCreditHistory    Json?
   emailSequenceEnabled     Boolean   @default(false)
-  emailTemplates           Json?
   ownerId      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -926,6 +925,8 @@ model ScheduledEmail {
   contactEmail String
   quickSendId  String?
   sequenceStep SequenceStep
+  subject      String               @default("")
+  body         String               @default("")
   scheduledFor DateTime
   status       ScheduledEmailStatus @default(PENDING)
   sentAt       DateTime?

@@ -87,7 +87,6 @@ export async function PATCH(req: NextRequest) {
         ? body.onboardingCompleted : undefined,
       emailSequenceEnabled: typeof body.emailSequenceEnabled === "boolean"
         ? body.emailSequenceEnabled : undefined,
-      emailTemplates:      body.emailTemplates            ?? undefined,
     },
   });
 

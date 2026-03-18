@@ -4,61 +4,22 @@
  * Processes pending ScheduledEmail records where scheduledFor <= now()
  * and sends each one via Brevo transactional email.
  *
- * Called from the cron API route (Step 8). Designed to be safe to call
- * repeatedly — each job is updated to SENT/FAILED/CANCELLED before moving
- * to the next, so a mid-batch crash leaves remaining records PENDING for
- * the next cron run.
+ * Each ScheduledEmail row stores the full finalized subject + body text
+ * written by the studio at delivery time. No template resolution or
+ * variable substitution happens here — messages are sent as-is.
  */
 
 import { db } from "@/lib/db";
 import { getBrevoClient } from "@/lib/brevo/client";
 
-// ─── Platform pricing (substituted into templates) ────────────────────────────
-
-const PLATFORM_PRICES = {
-  masteringPrice: "$14.99",
-  coverArtPrice:  "$9.99",
-  arReportPrice:  "$19.99",
-};
-
 // ─── Env helpers ──────────────────────────────────────────────────────────────
 
 const FROM_EMAIL = () => process.env.BREVO_FROM_EMAIL ?? "hello@indiethis.com";
-const APP_URL    = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
 
-// ─── Step → template key mapping ─────────────────────────────────────────────
-
-const STEP_KEY: Record<string, "day1" | "day3" | "day7" | "day14"> = {
-  DAY_1:  "day1",
-  DAY_3:  "day3",
-  DAY_7:  "day7",
-  DAY_14: "day14",
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type EmailTemplateStep = {
-  enabled: boolean;
-  subject: string;
-  body:    string;
-};
-
-type EmailTemplates = Partial<Record<"day1" | "day3" | "day7" | "day14", EmailTemplateStep>>;
-
-// ─── Text helpers ─────────────────────────────────────────────────────────────
+// ─── HTML rendering ───────────────────────────────────────────────────────────
 
 /**
- * Replace all {variable} tokens in a string with values from the vars map.
- */
-function replacePlaceholders(text: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce(
-    (t, [key, val]) => t.replace(new RegExp(`\\{${key}\\}`, "g"), val),
-    text
-  );
-}
-
-/**
- * Convert plain-text email body to minimal HTML.
+ * Convert plain-text email body to minimal branded HTML.
  * - Double newlines → paragraph breaks
  * - Single newlines → <br>
  * - URLs → clickable gold links
@@ -120,28 +81,46 @@ export type SendResult = {
 
 /**
  * Fetch up to `batchSize` pending ScheduledEmail rows that are due,
- * send each one, and update their status.
+ * send each one via Brevo, and update their status.
  */
 export async function processPendingEmails(batchSize = 20): Promise<SendResult> {
   const now = new Date();
 
   const pending = await db.scheduledEmail.findMany({
     where: {
-      status:      "PENDING",
+      status:       "PENDING",
       scheduledFor: { lte: now },
     },
     take:    batchSize,
     orderBy: { scheduledFor: "asc" },
+    select: {
+      id:           true,
+      studioId:     true,
+      contactEmail: true,
+      sequenceStep: true,
+      subject:      true,
+      body:         true,
+    },
   });
 
   const result: SendResult = { sent: 0, failed: 0, cancelled: 0, skipped: 0 };
 
   for (const job of pending) {
     try {
-      // ── 1. Fetch studio ──────────────────────────────────────────────────
+      // ── 1. Validate message content ──────────────────────────────────────
+      if (!job.subject.trim() || !job.body.trim()) {
+        await db.scheduledEmail.update({
+          where: { id: job.id },
+          data:  { status: "CANCELLED", errorMessage: "Empty subject or body" },
+        });
+        result.cancelled++;
+        continue;
+      }
+
+      // ── 2. Fetch studio for sender identity ──────────────────────────────
       const studio = await db.studio.findUnique({
         where:  { id: job.studioId },
-        select: { name: true, email: true, phone: true, emailTemplates: true },
+        select: { name: true, email: true },
       });
       if (!studio) {
         await db.scheduledEmail.update({
@@ -152,90 +131,27 @@ export async function processPendingEmails(batchSize = 20): Promise<SendResult> 
         continue;
       }
 
-      // ── 2. Resolve template step ─────────────────────────────────────────
-      const templateKey = STEP_KEY[job.sequenceStep];
-      const templates   = (studio.emailTemplates ?? {}) as EmailTemplates;
-      const template    = templateKey ? templates[templateKey] : undefined;
+      // ── 3. Render HTML ───────────────────────────────────────────────────
+      const bodyHtml = toHtml(job.body, studio.name);
 
-      if (!template?.enabled || !template.subject?.trim() || !template.body?.trim()) {
-        // Step disabled or deleted after scheduling — cancel silently
-        await db.scheduledEmail.update({
-          where: { id: job.id },
-          data:  { status: "CANCELLED", errorMessage: "Template disabled or missing" },
-        });
-        result.cancelled++;
-        continue;
-      }
-
-      // ── 3. Resolve contact name + session date ───────────────────────────
-      let artistName  = job.contactEmail.split("@")[0]; // fallback if no contact record
-      let sessionDate = "";
-
-      if (job.contactId) {
-        const contact = await db.contact.findUnique({
-          where:  { id: job.contactId },
-          select: { name: true, lastSessionDate: true },
-        });
-        if (contact?.name) artistName = contact.name;
-        if (contact?.lastSessionDate) {
-          sessionDate = contact.lastSessionDate.toLocaleDateString("en-US", {
-            month: "long", day: "numeric", year: "numeric",
-          });
-        }
-      }
-
-      // ── 4. Resolve download link + fallback session date from quickSend ──
-      let downloadLink = APP_URL();
-
-      if (job.quickSendId) {
-        const qs = await db.quickSend.findUnique({
-          where:  { id: job.quickSendId },
-          select: { token: true, createdAt: true },
-        });
-        if (qs) {
-          downloadLink = `${APP_URL()}/dl/${qs.token}`;
-          if (!sessionDate) {
-            sessionDate = qs.createdAt.toLocaleDateString("en-US", {
-              month: "long", day: "numeric", year: "numeric",
-            });
-          }
-        }
-      }
-
-      // ── 5. Build placeholder substitution map ────────────────────────────
-      const vars: Record<string, string> = {
-        artistName,
-        sessionDate:    sessionDate || "your recent session",
-        studioName:     studio.name,
-        studioPhone:    studio.phone ?? "",
-        downloadLink,
-        masteringPrice: PLATFORM_PRICES.masteringPrice,
-        coverArtPrice:  PLATFORM_PRICES.coverArtPrice,
-        arReportPrice:  PLATFORM_PRICES.arReportPrice,
-      };
-
-      const subject  = replacePlaceholders(template.subject, vars);
-      const bodyText = replacePlaceholders(template.body,    vars);
-      const bodyHtml = toHtml(bodyText, studio.name);
-
-      // ── 6. Send via Brevo ────────────────────────────────────────────────
+      // ── 4. Send via Brevo ────────────────────────────────────────────────
       const client = getBrevoClient();
 
       await client.transactionalEmails.sendTransacEmail({
-        // From address uses verified IndieThis domain; display name = studio name
+        // From = verified IndieThis domain; display name = studio name
         sender:  { email: FROM_EMAIL(), name: studio.name },
         to:      [{ email: job.contactEmail }],
         // Reply-to = studio email so replies land in the studio's inbox
         ...(studio.email && {
           replyTo: { email: studio.email, name: studio.name },
         }),
-        subject,
-        textContent: bodyText,
+        subject:     job.subject,
+        textContent: job.body,
         htmlContent: bodyHtml,
         tags: ["email-sequence", job.sequenceStep.toLowerCase().replace("_", "-")],
       });
 
-      // ── 7. Mark SENT ─────────────────────────────────────────────────────
+      // ── 5. Mark SENT ─────────────────────────────────────────────────────
       await db.scheduledEmail.update({
         where: { id: job.id },
         data:  { status: "SENT", sentAt: new Date() },

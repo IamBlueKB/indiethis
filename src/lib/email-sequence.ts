@@ -3,30 +3,20 @@
  *
  * Scheduling service for post-delivery follow-up email sequences.
  *
- * Call `scheduleFollowUpSequence()` immediately after a file delivery is
- * created with sendFollowUpSequence: true. It reads the studio's saved
- * emailTemplates, filters to only enabled steps, and inserts one
- * ScheduledEmail row per enabled step with the correct scheduledFor date.
- *
- * A separate cron/worker (Step 7+) will query PENDING rows where
- * scheduledFor <= now() and actually send them.
+ * The studio composes the full subject + body for each step at delivery time.
+ * This module stores those finalized messages as ScheduledEmail rows —
+ * no template references, no variable substitution at send time.
  */
 
 import { db } from "@/lib/db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type EmailTemplateStep = {
-  enabled: boolean;
-  subject: string;
-  body: string;
-};
-
-type EmailTemplates = {
-  day1?:  EmailTemplateStep;
-  day3?:  EmailTemplateStep;
-  day7?:  EmailTemplateStep;
-  day14?: EmailTemplateStep;
+export type ScheduleStep = {
+  /** "day1" | "day3" | "day7" | "day14" */
+  dayKey:   string;
+  subject:  string;
+  body:     string;
 };
 
 export type ScheduleInput = {
@@ -35,25 +25,25 @@ export type ScheduleInput = {
   contactEmail: string;
   quickSendId:  string;
   deliveredAt:  Date;
-  /** Studio's emailTemplates JSON field — pass studio.emailTemplates directly */
-  emailTemplates: unknown;
-  /**
-   * Optional per-delivery step override. When provided, only steps whose key
-   * appears in this array will be scheduled (regardless of template.enabled).
-   * Keys are "day1" | "day3" | "day7" | "day14".
-   * When omitted, falls back to each step's template.enabled flag.
-   */
-  enabledStepKeys?: string[];
+  /** Finalized steps — only the steps the studio chose to send. */
+  steps: ScheduleStep[];
 };
 
-// ─── Step definitions ─────────────────────────────────────────────────────────
+// ─── Step → Prisma enum mapping ───────────────────────────────────────────────
 
-const STEPS = [
-  { key: "day1"  as const, prismaStep: "DAY_1"  as const, offsetDays: 0  },
-  { key: "day3"  as const, prismaStep: "DAY_3"  as const, offsetDays: 3  },
-  { key: "day7"  as const, prismaStep: "DAY_7"  as const, offsetDays: 7  },
-  { key: "day14" as const, prismaStep: "DAY_14" as const, offsetDays: 14 },
-] as const;
+const DAY_KEY_TO_ENUM: Record<string, "DAY_1" | "DAY_3" | "DAY_7" | "DAY_14"> = {
+  day1:  "DAY_1",
+  day3:  "DAY_3",
+  day7:  "DAY_7",
+  day14: "DAY_14",
+};
+
+const DAY_KEY_TO_OFFSET: Record<string, number> = {
+  day1:  0,
+  day3:  3,
+  day7:  7,
+  day14: 14,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,50 +53,30 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
-function parseTemplates(raw: unknown): EmailTemplates {
-  if (!raw || typeof raw !== "object") return {};
-  return raw as EmailTemplates;
-}
-
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Main exports ─────────────────────────────────────────────────────────────
 
 /**
- * Creates ScheduledEmail rows for every enabled template step.
- * Day 1 scheduledFor = deliveredAt (send immediately / within minutes).
- * Day 3/7/14 scheduledFor = deliveredAt + N days.
- *
- * Returns the number of jobs created.
+ * Creates one ScheduledEmail row per step in `input.steps`.
+ * Each row stores the full finalized subject + body — no template reference.
+ * Returns the number of rows created.
  */
 export async function scheduleFollowUpSequence(input: ScheduleInput): Promise<number> {
-  const {
-    studioId,
-    contactId,
-    contactEmail,
-    quickSendId,
-    deliveredAt,
-    emailTemplates,
-  } = input;
+  const { studioId, contactId, contactEmail, quickSendId, deliveredAt, steps } = input;
 
-  const templates = parseTemplates(emailTemplates);
-  const { enabledStepKeys } = input;
-
-  // Build create-many payload — only for steps with non-empty content that are
-  // either explicitly selected (per-delivery checklist) or globally enabled.
-  const data = STEPS
-    .filter(({ key }) => {
-      const step = templates[key];
-      if (!step?.subject?.trim() || !step?.body?.trim()) return false;
-      // Per-delivery override takes precedence over global enabled flag
-      if (enabledStepKeys !== undefined) return enabledStepKeys.includes(key);
-      return step.enabled === true;
+  const data = steps
+    .filter(({ dayKey, subject, body }) => {
+      const enumVal = DAY_KEY_TO_ENUM[dayKey];
+      return enumVal && subject.trim() && body.trim();
     })
-    .map(({ prismaStep, offsetDays }) => ({
+    .map(({ dayKey, subject, body }) => ({
       studioId,
       contactId:    contactId ?? null,
       contactEmail: contactEmail.toLowerCase().trim(),
       quickSendId,
-      sequenceStep: prismaStep,
-      scheduledFor: addDays(deliveredAt, offsetDays),
+      sequenceStep: DAY_KEY_TO_ENUM[dayKey]!,
+      subject:      subject.trim(),
+      body:         body.trim(),
+      scheduledFor: addDays(deliveredAt, DAY_KEY_TO_OFFSET[dayKey] ?? 0),
       // status defaults to PENDING via schema
     }));
 
@@ -118,17 +88,11 @@ export async function scheduleFollowUpSequence(input: ScheduleInput): Promise<nu
 
 /**
  * Cancel all pending follow-up emails for a given quickSendId.
- * Call this if a delivery is revoked or the studio opts the client out.
  */
 export async function cancelFollowUpSequence(quickSendId: string): Promise<number> {
   const result = await db.scheduledEmail.updateMany({
-    where: {
-      quickSendId,
-      status: "PENDING",
-    },
-    data: {
-      status: "CANCELLED",
-    },
+    where: { quickSendId, status: "PENDING" },
+    data:  { status: "CANCELLED" },
   });
   return result.count;
 }
@@ -143,34 +107,26 @@ export async function cancelFollowUpForContact(studioId: string, contactEmail: s
       contactEmail: contactEmail.toLowerCase().trim(),
       status: "PENDING",
     },
-    data: {
-      status: "CANCELLED",
-    },
+    data: { status: "CANCELLED" },
   });
   return result.count;
 }
 
 /**
- * Cancel all pending follow-up emails for a contact by their contact record ID.
+ * Cancel all pending follow-up emails for a contact by their CRM contact ID.
  * Used by the studio CRM "Cancel sequence" button.
  */
 export async function cancelFollowUpByContactId(studioId: string, contactId: string): Promise<number> {
   const result = await db.scheduledEmail.updateMany({
-    where: {
-      studioId,
-      contactId,
-      status: "PENDING",
-    },
-    data: {
-      status: "CANCELLED",
-    },
+    where: { studioId, contactId, status: "PENDING" },
+    data:  { status: "CANCELLED" },
   });
   return result.count;
 }
 
 /**
  * Cancel all pending follow-up emails for a given email address across ALL studios.
- * Used by Stripe webhook when a user subscribes — no studio context available.
+ * Used by Stripe webhook when a user subscribes.
  */
 export async function cancelFollowUpByEmail(contactEmail: string): Promise<number> {
   const result = await db.scheduledEmail.updateMany({
@@ -178,9 +134,7 @@ export async function cancelFollowUpByEmail(contactEmail: string): Promise<numbe
       contactEmail: contactEmail.toLowerCase().trim(),
       status: "PENDING",
     },
-    data: {
-      status: "CANCELLED",
-    },
+    data: { status: "CANCELLED" },
   });
   return result.count;
 }

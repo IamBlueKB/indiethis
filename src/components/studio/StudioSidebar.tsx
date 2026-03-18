@@ -22,7 +22,6 @@ import {
   ExternalLink,
   Wand2,
   Gift,
-  MailCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -48,7 +47,6 @@ const navItems: NavItem[] = [
   { label: "Credits", href: "/studio/credits", icon: Gift },
   { label: "Settings", href: "/studio/settings", icon: Settings },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
-  { label: "Email Sequences", href: "/studio/settings/email-sequences", icon: MailCheck },
 ];
 
 export default function StudioSidebar() {

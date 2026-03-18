@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Plus, Send, Download, Clock, CheckCircle2, AlertTriangle, Link2,
-  ToggleLeft, ToggleRight, Mail, AlertCircle,
+  ToggleLeft, ToggleRight, Mail, Eye, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,26 +26,361 @@ type Contact = { id: string; name: string; email: string | null };
 
 type StudioSettings = {
   emailSequenceEnabled: boolean;
-  emailTemplates: Record<string, { enabled?: boolean; subject?: string; body?: string }> | null;
   name: string;
+  phone?: string | null;
 };
 
-// ─── Sequence step config ─────────────────────────────────────────────────────
+// ─── Services ─────────────────────────────────────────────────────────────────
 
-const SEQUENCE_STEPS = [
-  { key: "day1",  label: "Day 1",  fallback: "Session Files Ready" },
-  { key: "day3",  label: "Day 3",  fallback: "Track Follow-Up" },
-  { key: "day7",  label: "Day 7",  fallback: "Social Proof" },
-  { key: "day14", label: "Day 14", fallback: "Subscription Pitch" },
+const SERVICES = [
+  { key: "mastering",   label: "Mastering",   price: "$14.99" },
+  { key: "coverArt",    label: "Cover Art",    price: "$9.99"  },
+  { key: "arReport",    label: "A&R Report",   price: "$19.99" },
+  { key: "pressKit",    label: "Press Kit",    price: "$24.99" },
+  { key: "lyricVideo",  label: "Lyric Video",  price: "$34.99" },
+  { key: "aiVideo",     label: "AI Video",     price: "$14.99" },
 ] as const;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+type ServiceKey = (typeof SERVICES)[number]["key"];
 
-function templatesConfigured(settings: StudioSettings | null): boolean {
-  if (!settings?.emailTemplates) return false;
-  const t = settings.emailTemplates as Record<string, { subject?: string; body?: string }>;
-  // Consider configured if at least day1 has a non-empty subject
-  return Boolean(t.day1?.subject?.trim());
+// ─── Step config ──────────────────────────────────────────────────────────────
+
+const STEPS = [
+  { dayKey: "day1",  label: "Day 1",  offsetDays: 0  },
+  { dayKey: "day3",  label: "Day 3",  offsetDays: 3  },
+  { dayKey: "day7",  label: "Day 7",  offsetDays: 7  },
+  { dayKey: "day14", label: "Day 14", offsetDays: 14 },
+] as const;
+
+type DayKey = (typeof STEPS)[number]["dayKey"];
+
+type StepDraft = {
+  enabled:  boolean;
+  services: ServiceKey[];
+  subject:  string;
+  body:     string;
+};
+
+// ─── Auto-generate email copy ─────────────────────────────────────────────────
+
+function servicePrice(key: ServiceKey): string {
+  return SERVICES.find((s) => s.key === key)?.price ?? "";
+}
+function serviceLabel(key: ServiceKey): string {
+  return SERVICES.find((s) => s.key === key)?.label ?? key;
+}
+
+function generateEmail(
+  dayKey: DayKey,
+  services: ServiceKey[],
+  opts: { contactName: string; studioName: string; studioPhone?: string | null }
+): { subject: string; body: string } {
+  const { contactName, studioName, studioPhone } = opts;
+  const greeting = `Hey ${contactName},`;
+  const sign = studioPhone ? `\n\n— ${studioName}\n${studioPhone}` : `\n\n— ${studioName}`;
+
+  const pitches = services
+    .map((k) => `• ${serviceLabel(k)} — ${servicePrice(k)}`)
+    .join("\n");
+
+  // Subject
+  let subject = "";
+  if (dayKey === "day1") {
+    subject = "Your session files are ready";
+  } else if (services.length === 0) {
+    subject =
+      dayKey === "day3" ? "Following up on your session" :
+      dayKey === "day7" ? "Artists are finishing their projects" :
+                          "A quick note from the studio";
+  } else if (services.length === 1) {
+    subject = `${serviceLabel(services[0])} — take your track further`;
+  } else {
+    subject = `${serviceLabel(services[0])} + ${services.length - 1} more — upgrade your track`;
+  }
+
+  // Body
+  let body = "";
+  if (dayKey === "day1") {
+    const downloadLine =
+      "Your session files are ready to download: {downloadLink}";
+    body = services.length === 0
+      ? `${greeting} thanks for coming in to ${studioName}. ${downloadLine}.${sign}`
+      : `${greeting} thanks for coming in to ${studioName}. ${downloadLine}.\n\nWant to take your track further?\n\n${pitches}${sign}`;
+
+  } else if (dayKey === "day3") {
+    body = services.length === 0
+      ? `${greeting} just checking in from ${studioName}. How's the track coming along? Let us know if you need anything.${sign}`
+      : `${greeting} just checking in from ${studioName}. Ready to take your track to the next level?\n\n${pitches}${sign}`;
+
+  } else if (dayKey === "day7") {
+    body = services.length === 0
+      ? `${greeting} artists who recorded at ${studioName} are finishing their projects and getting their music out. Don't let yours sit in a folder.${sign}`
+      : `${greeting} artists who recorded at ${studioName} are finishing their projects. Here's what's available to help you do the same:\n\n${pitches}${sign}`;
+
+  } else {
+    body = services.length === 0
+      ? `${greeting} one last note from ${studioName} — your track deserves to be heard. If there's anything we can do to help you release it, reach out.${sign}`
+      : `${greeting} one last note from ${studioName}. These tools are still available for your track:\n\n${pitches}${sign}`;
+  }
+
+  return { subject, body };
+}
+
+// ─── Preview Modal ────────────────────────────────────────────────────────────
+
+function PreviewModal({
+  stepLabel,
+  subject,
+  body,
+  studioName,
+  onClose,
+}: {
+  stepLabel: string;
+  subject:   string;
+  body:      string;
+  studioName: string;
+  onClose:   () => void;
+}) {
+  // Substitute {downloadLink} with a sample URL for preview
+  const previewBody    = body.replace(/\{downloadLink\}/g, "https://indiethis.com/dl/example-link");
+  const previewSubject = subject;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        style={{ maxHeight: "90vh" }}
+      >
+        {/* Modal chrome */}
+        <div
+          className="flex items-center justify-between px-5 py-3 shrink-0"
+          style={{ backgroundColor: "var(--card)", borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={14} style={{ color: "#D4A843" }} />
+            <span className="text-sm font-semibold text-foreground">Preview — {stepLabel}</span>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Email client chrome */}
+        <div className="overflow-y-auto" style={{ backgroundColor: "#f4f4f5" }}>
+          <div
+            className="px-6 py-4 space-y-1 border-b"
+            style={{ backgroundColor: "#ffffff", borderColor: "#e4e4e7" }}
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 w-14 shrink-0">From</span>
+              <span className="text-sm text-gray-800">{studioName} &lt;noreply@indiethis.com&gt;</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 w-14 shrink-0">Subject</span>
+              <span className="text-sm font-semibold text-gray-900">{previewSubject || "(no subject)"}</span>
+            </div>
+          </div>
+
+          <div
+            className="px-6 py-6 mx-4 my-4 rounded-xl"
+            style={{ backgroundColor: "#ffffff", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}
+          >
+            <div className="flex items-center gap-3 pb-5 mb-5" style={{ borderBottom: "1px solid #e4e4e7" }}>
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {studioName[0]?.toUpperCase() ?? "S"}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{studioName}</p>
+                <p className="text-[11px] text-gray-500">via IndieThis</p>
+              </div>
+            </div>
+            <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{previewBody || "(no body)"}</div>
+            <div className="mt-6 pt-5 text-[11px] text-gray-400" style={{ borderTop: "1px solid #e4e4e7" }}>
+              You received this email because you recorded at {studioName}. Powered by IndieThis.
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-500 text-center pb-5">
+            Sample — {"{downloadLink}"} replaced with example URL
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step Row ─────────────────────────────────────────────────────────────────
+
+function StepRow({
+  step,
+  draft,
+  contactName,
+  studioName,
+  studioPhone,
+  onChange,
+}: {
+  step:       typeof STEPS[number];
+  draft:      StepDraft;
+  contactName: string;
+  studioName:  string;
+  studioPhone?: string | null;
+  onChange:    (d: StepDraft) => void;
+}) {
+  const [previewing, setPreviewing] = useState(false);
+
+  function toggleService(key: ServiceKey) {
+    const next: ServiceKey[] = draft.services.includes(key)
+      ? draft.services.filter((s) => s !== key)
+      : [...draft.services, key];
+    const { subject, body } = generateEmail(step.dayKey, next, { contactName, studioName, studioPhone });
+    onChange({ ...draft, services: next, subject, body });
+  }
+
+  function handleSubjectChange(v: string) {
+    onChange({ ...draft, subject: v });
+  }
+  function handleBodyChange(v: string) {
+    onChange({ ...draft, body: v });
+  }
+
+  return (
+    <>
+      {previewing && (
+        <PreviewModal
+          stepLabel={step.label}
+          subject={draft.subject}
+          body={draft.body}
+          studioName={studioName}
+          onClose={() => setPreviewing(false)}
+        />
+      )}
+
+      <div
+        className="rounded-xl border overflow-hidden"
+        style={{
+          borderColor: draft.enabled ? "rgba(212,168,67,0.35)" : "var(--border)",
+        }}
+      >
+        {/* Header row */}
+        <div className="flex items-center gap-3 px-3.5 py-2.5">
+          <input
+            type="checkbox"
+            checked={draft.enabled}
+            onChange={(e) => {
+              const enabled = e.target.checked;
+              if (enabled && !draft.subject) {
+                // Auto-generate on first enable
+                const gen = generateEmail(step.dayKey, draft.services, { contactName, studioName, studioPhone });
+                onChange({ ...draft, enabled, ...gen });
+              } else {
+                onChange({ ...draft, enabled });
+              }
+            }}
+            className="w-4 h-4 shrink-0 accent-[#D4A843]"
+          />
+          <span
+            className="text-[11px] font-bold shrink-0 px-2 py-0.5 rounded-full"
+            style={{
+              backgroundColor: draft.enabled ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.05)",
+              color: draft.enabled ? "#D4A843" : "var(--muted-foreground)",
+            }}
+          >
+            {step.label}
+          </span>
+          <span className="text-xs text-muted-foreground flex-1 truncate">
+            {draft.enabled && draft.subject ? draft.subject : draft.enabled ? "No subject yet" : "Skipped"}
+          </span>
+          {draft.enabled && (
+            <button
+              type="button"
+              onClick={() => setPreviewing(true)}
+              className="shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              <Eye size={12} />
+              Preview
+            </button>
+          )}
+        </div>
+
+        {/* Expanded content */}
+        {draft.enabled && (
+          <div
+            className="px-3.5 pb-3.5 pt-2 space-y-3 border-t"
+            style={{ borderColor: "rgba(212,168,67,0.2)" }}
+          >
+            {/* Service buttons */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                Include a pitch for
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SERVICES.map((svc) => {
+                  const selected = draft.services.includes(svc.key);
+                  return (
+                    <button
+                      key={svc.key}
+                      type="button"
+                      onClick={() => toggleService(svc.key)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                      style={{
+                        backgroundColor: selected ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.04)",
+                        color:           selected ? "#D4A843"               : "var(--muted-foreground)",
+                        border:          selected ? "1px solid rgba(212,168,67,0.4)" : "1px solid var(--border)",
+                      }}
+                    >
+                      {svc.label} <span style={{ opacity: 0.7 }}>{svc.price}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Subject */}
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Subject
+              </label>
+              <input
+                value={draft.subject}
+                onChange={(e) => handleSubjectChange(e.target.value)}
+                placeholder="Email subject…"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </div>
+
+            {/* Body */}
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Message
+              </label>
+              <textarea
+                value={draft.body}
+                onChange={(e) => handleBodyChange(e.target.value)}
+                rows={5}
+                placeholder="Email body…"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none resize-y focus:ring-2 focus:ring-accent/40 transition-shadow leading-relaxed"
+                style={{ borderColor: "var(--border)" }}
+              />
+              {step.dayKey === "day1" && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  <code className="font-mono" style={{ color: "#D4A843" }}>{"{downloadLink}"}</code>{" "}
+                  will be replaced with the actual download URL when files are sent.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -60,15 +395,24 @@ export default function DeliverPage() {
   const [studioSettings, setStudioSettings] = useState<StudioSettings | null>(null);
 
   // Form state
-  const [contactId, setContactId]         = useState("");
+  const [contactId, setContactId]           = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [fileUrls, setFileUrls]             = useState("");
   const [message, setMessage]               = useState("");
   const [sendFollowUp, setSendFollowUp]     = useState(false);
-  const [stepChecks, setStepChecks]         = useState<Record<string, boolean>>({
-    day1: true, day3: true, day7: true, day14: true,
+
+  // Per-step drafts
+  const buildDefaultDrafts = (opts: { contactName: string; studioName: string; studioPhone?: string | null }): Record<DayKey, StepDraft> => ({
+    day1:  { enabled: true,  services: [], ...generateEmail("day1",  [], opts) },
+    day3:  { enabled: true,  services: [], ...generateEmail("day3",  [], opts) },
+    day7:  { enabled: true,  services: [], ...generateEmail("day7",  [], opts) },
+    day14: { enabled: false, services: [], ...generateEmail("day14", [], opts) },
   });
+
+  const [stepDrafts, setStepDrafts] = useState<Record<DayKey, StepDraft>>(() =>
+    buildDefaultDrafts({ contactName: "there", studioName: "the studio" })
+  );
 
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -76,32 +420,49 @@ export default function DeliverPage() {
       fetch("/api/studio/quick-send").then((r) => r.json()),
       fetch("/api/studio/contacts").then((r) => r.json()),
       fetch("/api/studio/settings").then((r) => r.json()),
-    ]).then(([qs, con, settings]) => {
+    ]).then(([qs, con, settingsRes]) => {
       setSends(qs.sends ?? []);
       setContacts(con.contacts ?? []);
-      const s: StudioSettings | null = settings?.studio ?? null;
+      const s: StudioSettings | null = settingsRes?.studio ?? null;
       setStudioSettings(s);
-      // Default toggle: on only if sequence is enabled AND templates exist
-      setSendFollowUp(
-        Boolean(s?.emailSequenceEnabled) && templatesConfigured(s)
-      );
-      // Initialise step checkboxes from saved enabled flags (true if missing/unconfigured)
-      const t = s?.emailTemplates;
-      setStepChecks({
-        day1:  t?.day1?.enabled  !== false,
-        day3:  t?.day3?.enabled  !== false,
-        day7:  t?.day7?.enabled  !== false,
-        day14: t?.day14?.enabled !== false,
-      });
+      setSendFollowUp(Boolean(s?.emailSequenceEnabled));
+      // Regenerate drafts with real studio name/phone
+      if (s) {
+        setStepDrafts(buildDefaultDrafts({
+          contactName: "there",
+          studioName:  s.name,
+          studioPhone: s.phone,
+        }));
+      }
       setLoading(false);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Pre-fill email when contact selected ──────────────────────────────────
+  // ── Contact selection ──────────────────────────────────────────────────────
   function handleContactChange(id: string) {
     setContactId(id);
     const c = contacts.find((c) => c.id === id);
     if (c?.email) setRecipientEmail(c.email);
+
+    // Re-generate drafts with the contact's actual name
+    const contactName = c?.name || "there";
+    setStepDrafts(
+      buildDefaultDrafts({
+        contactName,
+        studioName:  studioSettings?.name ?? "the studio",
+        studioPhone: studioSettings?.phone,
+      })
+    );
+  }
+
+  // Contact name for display + generation
+  const selectedContact = contacts.find((c) => c.id === contactId);
+  const contactName     = selectedContact?.name || "this client";
+  const genName         = selectedContact?.name || "there";
+
+  function updateStepDraft(dayKey: DayKey, draft: StepDraft) {
+    setStepDrafts((prev) => ({ ...prev, [dayKey]: draft }));
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -109,20 +470,31 @@ export default function DeliverPage() {
     const urls = fileUrls.split("\n").map((u) => u.trim()).filter(Boolean);
     if (!recipientEmail || urls.length === 0) return;
     setCreating(true);
+
+    // Collect enabled steps with non-empty content
+    const emailSteps = sendFollowUp
+      ? STEPS
+          .filter(({ dayKey }) => stepDrafts[dayKey].enabled)
+          .map(({ dayKey }) => ({
+            dayKey,
+            subject: stepDrafts[dayKey].subject.trim(),
+            body:    stepDrafts[dayKey].body.trim(),
+          }))
+          .filter((s) => s.subject && s.body)
+      : [];
+
     try {
       const res = await fetch("/api/studio/quick-send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contactId: contactId || undefined,
+          contactId:           contactId || undefined,
           recipientEmail,
           recipientPhone,
-          fileUrls: urls,
+          fileUrls:            urls,
           message,
-          sendFollowUpSequence: sendFollowUp,
-          enabledStepKeys: sendFollowUp
-            ? Object.entries(stepChecks).filter(([, v]) => v).map(([k]) => k)
-            : [],
+          sendFollowUpSequence: emailSteps.length > 0,
+          emailSteps:          emailSteps.length > 0 ? emailSteps : undefined,
         }),
       });
       if (res.ok) {
@@ -131,17 +503,12 @@ export default function DeliverPage() {
         setShowCreate(false);
         setContactId(""); setRecipientEmail(""); setRecipientPhone("");
         setFileUrls(""); setMessage("");
-        // Reset toggle + step checks to studio defaults for next send
-        setSendFollowUp(
-          Boolean(studioSettings?.emailSequenceEnabled) && templatesConfigured(studioSettings)
-        );
-        const t = studioSettings?.emailTemplates;
-        setStepChecks({
-          day1:  t?.day1?.enabled  !== false,
-          day3:  t?.day3?.enabled  !== false,
-          day7:  t?.day7?.enabled  !== false,
-          day14: t?.day14?.enabled !== false,
-        });
+        setSendFollowUp(Boolean(studioSettings?.emailSequenceEnabled));
+        setStepDrafts(buildDefaultDrafts({
+          contactName: "there",
+          studioName:  studioSettings?.name ?? "the studio",
+          studioPhone: studioSettings?.phone,
+        }));
       }
     } finally {
       setCreating(false);
@@ -162,7 +529,6 @@ export default function DeliverPage() {
     return { label: "Pending", color: "text-yellow-400", icon: Clock };
   }
 
-  const hasTemplates   = templatesConfigured(studioSettings);
   const sequenceActive = Boolean(studioSettings?.emailSequenceEnabled);
 
   return (
@@ -263,57 +629,39 @@ export default function DeliverPage() {
             />
           </div>
 
-          {/* ── Follow-up sequence toggle ──────────────────────────────────── */}
+          {/* ── Follow-up sequence ───────────────────────────────────────── */}
           <div
             className="rounded-xl border overflow-hidden"
             style={{
               borderColor: sendFollowUp ? "rgba(212,168,67,0.4)" : "var(--border)",
-              backgroundColor: sendFollowUp ? "rgba(212,168,67,0.05)" : "transparent",
             }}
           >
             {/* Toggle row */}
-            <div className="flex items-start gap-3 p-3.5">
+            <div className="flex items-center gap-3 px-3.5 py-3">
               <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                 style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
               >
                 <Mail size={15} style={{ color: "#D4A843" }} />
               </div>
-
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground">
-                  Send follow-up email sequence to this client
+                  Send follow-up emails to {contactName}
                 </p>
-
-                {!hasTemplates && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                    <AlertCircle size={11} className="shrink-0" />
-                    Templates not configured.{" "}
-                    <Link href="/studio/settings/email-sequences" className="underline" style={{ color: "#D4A843" }}>
-                      Set up your follow-up emails first
-                    </Link>
-                  </p>
-                )}
-                {!sequenceActive && hasTemplates && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                    <AlertCircle size={11} className="shrink-0" />
-                    Sequence disabled globally.{" "}
-                    <Link href="/studio/settings/email-sequences" className="underline" style={{ color: "#D4A843" }}>
-                      Enable in settings
-                    </Link>
-                  </p>
-                )}
-                {!sendFollowUp && sequenceActive && hasTemplates && (
+                {!sequenceActive && (
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    No follow-up emails will be sent for this delivery.
+                    Sequence disabled in{" "}
+                    <Link href="/studio/settings" className="underline" style={{ color: "#D4A843" }}>
+                      Studio Settings
+                    </Link>
                   </p>
                 )}
               </div>
-
               <button
                 onClick={() => setSendFollowUp((v) => !v)}
+                disabled={!sequenceActive}
+                className="shrink-0 disabled:opacity-40"
                 title={sendFollowUp ? "Disable follow-up for this send" : "Enable follow-up for this send"}
-                className="shrink-0"
               >
                 {sendFollowUp ? (
                   <ToggleRight size={28} style={{ color: "#D4A843" }} />
@@ -323,46 +671,26 @@ export default function DeliverPage() {
               </button>
             </div>
 
-            {/* Step checklist — shown when toggled on */}
+            {/* Step rows — shown when toggled on */}
             {sendFollowUp && (
               <div
-                className="border-t px-3.5 pb-3 pt-2.5 space-y-2"
-                style={{ borderColor: "rgba(212,168,67,0.25)" }}
+                className="border-t px-3.5 pb-3.5 pt-3 space-y-2"
+                style={{ borderColor: "rgba(212,168,67,0.2)" }}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                  Select which steps to send
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Compose each email step
                 </p>
-                {SEQUENCE_STEPS.map(({ key, label, fallback }) => {
-                  const subject = studioSettings?.emailTemplates?.[key]?.subject?.trim() || fallback;
-                  const checked = stepChecks[key] ?? true;
-                  return (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2.5 cursor-pointer group"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          setStepChecks((prev) => ({ ...prev, [key]: e.target.checked }))
-                        }
-                        className="shrink-0 accent-[#D4A843] w-3.5 h-3.5"
-                      />
-                      <span
-                        className="text-[11px] font-bold shrink-0"
-                        style={{ color: checked ? "#D4A843" : "var(--muted-foreground)", minWidth: 36 }}
-                      >
-                        {label}
-                      </span>
-                      <span
-                        className="text-[11px] truncate"
-                        style={{ color: checked ? "var(--foreground)" : "var(--muted-foreground)" }}
-                      >
-                        {subject}
-                      </span>
-                    </label>
-                  );
-                })}
+                {STEPS.map((step) => (
+                  <StepRow
+                    key={step.dayKey}
+                    step={step}
+                    draft={stepDrafts[step.dayKey]}
+                    contactName={genName}
+                    studioName={studioSettings?.name ?? "the studio"}
+                    studioPhone={studioSettings?.phone}
+                    onChange={(d) => updateStepDraft(step.dayKey, d)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -404,7 +732,7 @@ export default function DeliverPage() {
           sends.map((s) => {
             const st = getStatus(s);
             const StatusIcon = st.icon;
-            const expires  = new Date(s.expiresAt);
+            const expires   = new Date(s.expiresAt);
             const isExpired = expires < new Date();
             return (
               <div
@@ -416,9 +744,7 @@ export default function DeliverPage() {
                   <p className="text-sm font-semibold text-foreground">{s.recipientEmail}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-muted-foreground">
-                      {new Date(s.createdAt).toLocaleDateString("en-US", {
-                        month: "short", day: "numeric",
-                      })}
+                      {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       {!isExpired && ` · expires ${expires.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
                     </p>
                     {s.sendFollowUpSequence && (
