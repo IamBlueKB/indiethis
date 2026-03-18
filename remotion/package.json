@@ -1,0 +1,23 @@
+{
+  "name": "indiethis-remotion",
+  "version": "1.0.0",
+  "description": "Remotion compositions for IndieThis lyric video rendering",
+  "scripts": {
+    "start": "remotion studio src/index.ts",
+    "build": "remotion bundle src/index.ts --out=../remotion-bundle",
+    "deploy": "remotion lambda sites create src/index.ts --site-name=indiethis-lyric-video"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.436",
+    "@remotion/cli": "4.0.436",
+    "@remotion/lambda": "4.0.436",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "4.0.436"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}
