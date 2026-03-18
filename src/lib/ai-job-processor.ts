@@ -256,8 +256,143 @@ Please write the A&R report now.`.trim();
 
 async function handlePressKit(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing PRESS_KIT job ${job.id} via ${job.provider}`);
-  // Step 9: wire Claude (Anthropic) here
-  return { outputData: { stub: true, type: "PRESS_KIT" } };
+
+  // ── Env check ────────────────────────────────────────────────────────────
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey || anthropicKey === "sk-ant-...") {
+    throw new Error("ANTHROPIC_API_KEY is not configured — add it to .env.local to use Press Kit generation.");
+  }
+
+  // ── Extract job inputs ────────────────────────────────────────────────────
+  const input = (job.inputData ?? {}) as Record<string, unknown>;
+  const {
+    artistName,
+    bio,
+    genre,
+    achievements,
+    pressQuotes,
+    contactEmail,
+    photoUrl,
+    socialLinks = {},
+  } = input as {
+    artistName?:   string;
+    bio?:          string;
+    genre?:        string;
+    achievements?: string;
+    pressQuotes?:  string;
+    contactEmail?: string;
+    photoUrl?:     string;
+    socialLinks?:  Record<string, string>;
+  };
+
+  if (!artistName?.trim()) {
+    throw new Error("PRESS_KIT job missing required input: artistName");
+  }
+
+  // ── Claude Sonnet — generate structured press kit JSON ───────────────────
+  console.log(`[press-kit] generating structured content via Claude Sonnet`);
+
+  const systemPrompt = `You are a music PR professional. Generate a complete press kit document and return it as valid JSON only — no markdown, no code fences, just a raw JSON object.
+
+The JSON must have exactly these fields:
+{
+  "artistName": "string",
+  "tagline": "string — a catchy 1-line artist description",
+  "bio": {
+    "short": "string — 1-2 sentence bio for social media / brief mentions",
+    "medium": "string — 1 paragraph bio for website / press releases",
+    "long": "string — 2-3 paragraph bio for full EPK / label submissions"
+  },
+  "achievements": ["array of bullet point strings — notable milestones, press mentions, chart positions, collabs"],
+  "pressQuotes": [
+    { "quote": "string", "source": "string — publication or blog name" }
+  ],
+  "technicalRider": "string — brief technical requirements for live shows, or null if not applicable",
+  "contact": {
+    "email": "string or null",
+    "bookingEmail": "string or null",
+    "phone": "string or null"
+  },
+  "socialLinks": {
+    "instagram": "handle only, no @ or URL, or null",
+    "tiktok": "handle only or null",
+    "youtube": "full URL or null",
+    "spotify": "full URL or null",
+    "appleMusic": "full URL or null"
+  }
+}
+
+Be specific, industry-ready, and compelling. If press quotes are not provided by the artist, write 2-3 realistic-sounding fabricated quotes from music publications. Do not include placeholders.`;
+
+  const userMessage = `Generate a press kit for this artist:
+
+Artist Name: ${artistName}
+Genre: ${genre ?? "Not specified"}
+Bio / Background: ${bio ?? "Not provided"}
+Key Achievements: ${achievements ?? "Not provided"}
+Existing Press Quotes: ${pressQuotes ?? "None — please generate realistic ones"}
+Booking / Contact Email: ${contactEmail ?? "Not provided"}
+Social Links: ${JSON.stringify(socialLinks)}
+
+Return only the JSON object. No extra text.`;
+
+  const claudeResponse = await claude.messages.create({
+    model:      SONNET,
+    max_tokens: 2048,
+    system:     systemPrompt,
+    messages:   [{ role: "user", content: userMessage }],
+  });
+
+  const rawText = claudeResponse.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+
+  // Parse Claude's JSON response — strip any accidental code fences
+  const jsonStr = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+  let content: import("@/components/pdf/PressKitPDF").PressKitContent;
+
+  try {
+    content = JSON.parse(jsonStr) as import("@/components/pdf/PressKitPDF").PressKitContent;
+  } catch {
+    throw new Error(`Claude returned invalid JSON for press kit. Raw: ${rawText.slice(0, 200)}`);
+  }
+
+  // Inject genre/socialLinks from input if Claude missed them
+  content.genre ??= genre ?? undefined;
+  if (!content.socialLinks) content.socialLinks = {};
+  for (const [k, v] of Object.entries(socialLinks ?? {})) {
+    if (v && !(content.socialLinks as Record<string, unknown>)[k]) {
+      (content.socialLinks as Record<string, unknown>)[k] = v;
+    }
+  }
+
+  // Claude Sonnet cost: $3/MTok in, $15/MTok out
+  const inputTokens  = claudeResponse.usage.input_tokens;
+  const outputTokens = claudeResponse.usage.output_tokens;
+  const costToUs     = (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
+
+  console.log(
+    `[press-kit] Claude complete — ${inputTokens} in / ${outputTokens} out tokens. ` +
+    `Cost: $${costToUs.toFixed(4)}`,
+  );
+
+  // PDF is generated on-demand at /api/ai-jobs/[id]/press-kit-pdf
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+  const pdfUrl = `${appUrl}/api/ai-jobs/${job.id}/press-kit-pdf`;
+
+  return {
+    outputData: {
+      content,
+      photoUrl: photoUrl ?? null,
+      pdfUrl,
+      inputTokens,
+      outputTokens,
+      claudeModel: SONNET,
+    },
+    costToUs,
+  };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
