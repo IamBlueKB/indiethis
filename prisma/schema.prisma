@@ -353,6 +353,8 @@ model Studio {
   generationResetDate      DateTime?
   referralCredits          Float     @default(0)
   referralCreditHistory    Json?
+  emailSequenceEnabled     Boolean   @default(false)
+  emailTemplates           Json?
   ownerId      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
