@@ -170,8 +170,8 @@ export default function DeliverPage() {
               <select
                 value={contactId}
                 onChange={(e) => handleContactChange(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none"
-                style={{ borderColor: "var(--border)" }}
+                className="w-full rounded-lg border px-3 py-2 text-sm text-foreground outline-none"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", colorScheme: "dark" }}
               >
                 <option value="">Select a contact…</option>
                 {contacts.map((c) => (
@@ -289,19 +289,9 @@ export default function DeliverPage() {
             </div>
 
             <button
-              onClick={() => {
-                if (!hasTemplates) return; // can't enable without templates
-                setSendFollowUp((v) => !v);
-              }}
-              title={
-                !hasTemplates
-                  ? "Set up email templates first"
-                  : sendFollowUp
-                  ? "Disable follow-up for this send"
-                  : "Enable follow-up for this send"
-              }
+              onClick={() => setSendFollowUp((v) => !v)}
+              title={sendFollowUp ? "Disable follow-up for this send" : "Enable follow-up for this send"}
               className="shrink-0"
-              style={{ opacity: hasTemplates ? 1 : 0.4, cursor: hasTemplates ? "pointer" : "not-allowed" }}
             >
               {sendFollowUp ? (
                 <ToggleRight size={28} style={{ color: "#D4A843" }} />
