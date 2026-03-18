@@ -54,7 +54,16 @@ export async function GET(
     if (artistUser) youtubeReferences = artistUser.youtubeReferences;
   }
 
-  return NextResponse.json({ contact, youtubeReferences });
+  // Count pending follow-up emails for this contact
+  const pendingEmailCount = await db.scheduledEmail.count({
+    where: {
+      studioId: studio.id,
+      contactId: id,
+      status: "PENDING",
+    },
+  });
+
+  return NextResponse.json({ contact, youtubeReferences, pendingEmailCount });
 }
 
 // PATCH /api/studio/contacts/[id] — update contact

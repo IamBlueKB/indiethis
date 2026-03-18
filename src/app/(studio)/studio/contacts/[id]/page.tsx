@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Mail, Phone, Instagram, Music2, DollarSign,
   Calendar, Send, FolderOpen, FileText, UserCircle2,
-  MessageSquare, Link2, Pencil, Check, X, Youtube, Tag,
+  MessageSquare, Link2, Pencil, Check, X, Youtube, Tag, MailX,
 } from "lucide-react";
 
 type ActivityLog = {
@@ -109,6 +109,8 @@ export default function ContactDetailPage() {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingEmailCount, setPendingEmailCount] = useState(0);
+  const [cancellingSequence, setCancellingSequence] = useState(false);
 
   useEffect(() => {
 fetch(`/api/studio/contacts/${id}`)
@@ -120,9 +122,26 @@ fetch(`/api/studio/contacts/${id}`)
         setContact({ ...d.contact, aiVideoRequested });
         setNotes(d.contact?.notes ?? "");
         setYoutubeRefs(d.youtubeReferences ?? []);
+        setPendingEmailCount(d.pendingEmailCount ?? 0);
         setLoading(false);
       });
   }, [id]);
+
+  async function cancelSequence() {
+    if (!contact || cancellingSequence) return;
+    setCancellingSequence(true);
+    try {
+      const res = await fetch(`/api/studio/contacts/${id}/cancel-sequence`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setPendingEmailCount(0);
+        // Log a note in the UI via the contact's activityLog if desired — for now just clear count
+        void data;
+      }
+    } finally {
+      setCancellingSequence(false);
+    }
+  }
 
   async function saveNotes() {
     if (!contact) return;
@@ -227,11 +246,27 @@ fetch(`/api/studio/contacts/${id}`)
             )}
           </div>
         </div>
-        <div className="text-right shrink-0 space-y-1">
+        <div className="text-right shrink-0 space-y-2">
           <div className="flex items-center gap-1 text-emerald-400 font-bold text-lg justify-end">
             <DollarSign size={16} />{contact.totalSpent.toFixed(2)}
           </div>
           <p className="text-xs text-muted-foreground">Total Spent</p>
+          {pendingEmailCount > 0 && (
+            <button
+              onClick={cancelSequence}
+              disabled={cancellingSequence}
+              className="mt-1 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: "rgba(239,68,68,0.1)",
+                color: "#f87171",
+                border: "1px solid rgba(239,68,68,0.25)",
+              }}
+              title={`Cancel ${pendingEmailCount} pending follow-up email${pendingEmailCount === 1 ? "" : "s"}`}
+            >
+              <MailX size={12} />
+              {cancellingSequence ? "Cancelling…" : `Cancel sequence (${pendingEmailCount})`}
+            </button>
+          )}
         </div>
       </div>
 

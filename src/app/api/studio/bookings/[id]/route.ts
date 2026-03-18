@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { cancelFollowUpByContactId } from "@/lib/email-sequence";
 
 // PATCH /api/studio/bookings/[id]
 // Updates status, paymentStatus, and/or engineerNotes on a booking.
@@ -40,6 +41,18 @@ export async function PATCH(
 
   if (updated.count === 0) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  // When a booking is confirmed or completed, cancel any pending follow-up
+  // emails for that contact — they've re-engaged so the sequence is no longer needed.
+  if ((status === "CONFIRMED" || status === "COMPLETED")) {
+    const booking = await db.bookingSession.findFirst({
+      where: { id, studioId: studio.id },
+      select: { contactId: true },
+    });
+    if (booking?.contactId) {
+      void cancelFollowUpByContactId(studio.id, booking.contactId);
+    }
   }
 
   return NextResponse.json({ success: true });

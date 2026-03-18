@@ -7,6 +7,7 @@ import {
   creditStudioForArtistPurchase,
   applyStudioCreditsToStripeInvoice,
 } from "@/lib/studio-referral";
+import { cancelFollowUpByEmail } from "@/lib/email-sequence";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -169,6 +170,16 @@ export async function POST(req: NextRequest) {
 
         // Credit any studios that referred this artist (fire-and-forget)
         void creditStudioForArtistPurchase(userId, "SUBSCRIPTION");
+
+        // Cancel any pending follow-up sequences for this user —
+        // no point sending "you should subscribe" to someone who just did.
+        const subscribedUser = await db.user.findUnique({
+          where: { id: userId },
+          select: { email: true },
+        });
+        if (subscribedUser?.email) {
+          void cancelFollowUpByEmail(subscribedUser.email);
+        }
 
         break;
       }

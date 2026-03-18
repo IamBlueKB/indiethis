@@ -137,3 +137,38 @@ export async function cancelFollowUpForContact(studioId: string, contactEmail: s
   });
   return result.count;
 }
+
+/**
+ * Cancel all pending follow-up emails for a contact by their contact record ID.
+ * Used by the studio CRM "Cancel sequence" button.
+ */
+export async function cancelFollowUpByContactId(studioId: string, contactId: string): Promise<number> {
+  const result = await db.scheduledEmail.updateMany({
+    where: {
+      studioId,
+      contactId,
+      status: "PENDING",
+    },
+    data: {
+      status: "CANCELLED",
+    },
+  });
+  return result.count;
+}
+
+/**
+ * Cancel all pending follow-up emails for a given email address across ALL studios.
+ * Used by Stripe webhook when a user subscribes — no studio context available.
+ */
+export async function cancelFollowUpByEmail(contactEmail: string): Promise<number> {
+  const result = await db.scheduledEmail.updateMany({
+    where: {
+      contactEmail: contactEmail.toLowerCase().trim(),
+      status: "PENDING",
+    },
+    data: {
+      status: "CANCELLED",
+    },
+  });
+  return result.count;
+}
