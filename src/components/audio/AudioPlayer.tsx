@@ -25,11 +25,13 @@ export default function AudioPlayer() {
   const isPlaying       = useAudioStore((s) => s.isPlaying);
   const volume          = useAudioStore((s) => s.volume);
   const isMuted         = useAudioStore((s) => s.isMuted);
-  const currentTime     = useAudioStore((s) => s.currentTime);
-  const duration        = useAudioStore((s) => s.duration);
-  const setCurrentTime  = useAudioStore((s) => s.setCurrentTime);
-  const setDuration     = useAudioStore((s) => s.setDuration);
-  const pause           = useAudioStore((s) => s.pause);
+  const currentTime      = useAudioStore((s) => s.currentTime);
+  const duration         = useAudioStore((s) => s.duration);
+  const pendingSeek      = useAudioStore((s) => s.pendingSeek);
+  const setCurrentTime   = useAudioStore((s) => s.setCurrentTime);
+  const setDuration      = useAudioStore((s) => s.setDuration);
+  const clearPendingSeek = useAudioStore((s) => s.clearPendingSeek);
+  const pause            = useAudioStore((s) => s.pause);
 
   // ── Spawn a new WaveSurfer instance when the track changes ──────────────────
   useEffect(() => {
@@ -95,6 +97,17 @@ export default function AudioPlayer() {
   useEffect(() => {
     wsRef.current?.setVolume(isMuted ? 0 : volume);
   }, [volume, isMuted]);
+
+  // ── Handle external seek requests (e.g. ±10s buttons in MiniPlayer) ─────────
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (pendingSeek === null || !ws) return;
+    const dur = ws.getDuration();
+    if (dur > 0) {
+      ws.seekTo(Math.max(0, Math.min(pendingSeek / dur, 1)));
+    }
+    clearPendingSeek();
+  }, [pendingSeek, clearPendingSeek]);
 
   return (
     <div className="flex items-center gap-3 flex-1 min-w-0">

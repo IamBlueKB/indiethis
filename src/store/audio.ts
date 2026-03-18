@@ -18,6 +18,8 @@ type AudioState = {
   duration: number;
   isMuted: boolean;
   isMinimized: boolean;
+  /** Non-null when a seek has been requested externally. AudioPlayer clears it after seeking. */
+  pendingSeek: number | null;
 };
 
 type AudioActions = {
@@ -27,6 +29,9 @@ type AudioActions = {
   stop: () => void;
   next: () => void;
   prev: () => void;
+  /** Seek to an absolute position in seconds. AudioPlayer watches pendingSeek to act on it. */
+  seekTo: (seconds: number) => void;
+  clearPendingSeek: () => void;
   addToQueue: (track: AudioTrack) => void;
   clearQueue: () => void;
   setVolume: (volume: number) => void;
@@ -45,6 +50,7 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   duration: 0,
   isMuted: false,
   isMinimized: false,
+  pendingSeek: null,
 
   play: (track) => set({ currentTrack: track, isPlaying: true, currentTime: 0 }),
   pause: () => set({ isPlaying: false }),
@@ -65,6 +71,14 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
     const prev = queue[idx - 1];
     if (prev) set({ currentTrack: prev, isPlaying: true, currentTime: 0 });
   },
+
+  seekTo: (seconds) =>
+    set((state) => ({
+      pendingSeek: Math.max(0, Math.min(seconds, state.duration)),
+      currentTime: Math.max(0, Math.min(seconds, state.duration)),
+    })),
+
+  clearPendingSeek: () => set({ pendingSeek: null }),
 
   addToQueue: (track) =>
     set((state) => ({
