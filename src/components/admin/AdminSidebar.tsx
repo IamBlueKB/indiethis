@@ -58,7 +58,7 @@ export default function AdminSidebar() {
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
         <Link href="/admin" className="flex items-center gap-2.5 no-underline">
           <div className="flex flex-col gap-0.5">
-            <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "24px", width: "auto" }} />
+            <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "24px", width: "auto" }} />
             <p className="text-[10px] text-muted-foreground leading-tight ml-0.5">Platform Admin</p>
           </div>
         </Link>

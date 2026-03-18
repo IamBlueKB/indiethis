@@ -57,7 +57,7 @@ export default function DashboardSidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
         <Link href="/dashboard" className="flex items-center gap-2.5 no-underline">
-          <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "26px", width: "auto" }} />
+          <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "26px", width: "auto" }} />
         </Link>
       </div>
 

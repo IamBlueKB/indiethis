@@ -60,7 +60,7 @@ export default function DashboardMobileNav({ open, onClose }: DashboardMobileNav
         <SheetHeader className="h-16 flex flex-row items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
           <SheetTitle className="p-0 m-0">
             <Link href="/dashboard" onClick={onClose} className="flex items-center gap-2.5 no-underline">
-              <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "26px", width: "auto" }} />
+              <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "26px", width: "auto" }} />
             </Link>
           </SheetTitle>
         </SheetHeader>

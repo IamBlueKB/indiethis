@@ -110,7 +110,7 @@ export default function AffiliatePage() {
       >
         <Link href="/" className="no-underline">
           <img
-            src="/images/brand/indiethis-logo-full.svg"
+            src="/images/brand/indiethis-logo-dark-bg.svg"
             alt="IndieThis"
             style={{ height: "22px", width: "auto" }}
           />
