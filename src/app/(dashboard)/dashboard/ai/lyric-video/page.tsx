@@ -496,11 +496,11 @@ function LyricVideoContent() {
               <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
               <div>
                 <p className="text-sm font-semibold text-foreground">
-                  {jobData.status === "QUEUED" ? "Queued — starting transcription…" : "Transcribing your audio with Whisper…"}
+                  {jobData.status === "QUEUED" ? "Queued — starting transcription…" : "Transcribing your audio…"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {jobData.status === "PROCESSING"
-                    ? "Running OpenAI Whisper word-level transcription. Takes ~1–3 minutes."
+                    ? "Running word-level transcription. Takes ~1–3 minutes."
                     : "Job is waiting to start…"}
                 </p>
               </div>

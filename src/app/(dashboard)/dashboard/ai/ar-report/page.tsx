@@ -368,7 +368,7 @@ export default function ARReportPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {jobData.status === "PROCESSING"
-                    ? "Running Whisper transcription → Dolby audio analysis → Claude A&R report. Takes ~5 minutes."
+                    ? "Transcribing audio → analyzing frequency response → generating A&R report. Takes ~5 minutes."
                     : "Job is waiting to start…"}
                 </p>
               </div>

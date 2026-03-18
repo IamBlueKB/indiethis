@@ -206,7 +206,7 @@ export default function AIVideoPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">AI Music Video</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Turn a photo into a cinematic music video — powered by Kling 1.6 Pro via fal.ai.
+          Turn a photo into a cinematic music video.
         </p>
       </div>
 
@@ -370,7 +370,7 @@ export default function AIVideoPage() {
                   {jobData.status === "QUEUED" ? "Queued — starting soon…" : "Phase 1: Generating preview clips…"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Kling is animating your image into clips. You'll review them before the full render. Takes ~3–5 minutes.
+                  Animating your image into preview clips. You'll review them before the full render. Takes ~3–5 minutes.
                 </p>
               </div>
             </div>
