@@ -28,6 +28,7 @@ import { UTApi } from "uploadthing/server";
 import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
+import { embedIndieThisMetadata } from "@/lib/image-metadata";
 
 // Set the static ffmpeg binary path once at module load
 ffmpegFluent.setFfmpegPath(ffmpegInstaller.path);
@@ -494,9 +495,26 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
     `Total cost: $${totalCost.toFixed(4)}`,
   );
 
+  // ── Step 3: Embed IndieThis metadata + re-upload to UploadThing ──────────
+  // Replicate CDN URLs are temporary; re-uploading gives permanent URLs and
+  // embeds invisible EXIF metadata (Copyright, Artist, Software).
+  console.log(`[cover-art] embedding metadata and re-uploading ${imageUrls.length} image(s)…`);
+  const storedUrls: string[] = [];
+  for (let i = 0; i < imageUrls.length; i++) {
+    try {
+      const buffer = await embedIndieThisMetadata(imageUrls[i]);
+      const url    = await uploadBufferToUT(buffer, `cover-art-${job.id}-${i}.png`, "image/png");
+      storedUrls.push(url);
+    } catch (err) {
+      console.warn(`[cover-art] metadata embed failed for image ${i}, keeping original URL: ${err}`);
+      storedUrls.push(imageUrls[i]); // fall back to original Replicate URL
+    }
+  }
+  console.log(`[cover-art] re-upload complete → ${storedUrls.length} permanent URL(s)`);
+
   return {
     outputData: {
-      imageUrls,
+      imageUrls: storedUrls,
       optimizedPrompt,
       originalPrompt: artistPrompt,
       style:          style ?? null,

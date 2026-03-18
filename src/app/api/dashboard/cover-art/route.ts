@@ -1,6 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { UTApi } from "uploadthing/server";
+import { embedIndieThisMetadata } from "@/lib/image-metadata";
+
+const utapi = new UTApi();
 
 export async function GET() {
   const session = await auth();
@@ -92,11 +96,23 @@ async function generateCoverArt(
 
     if (!imageUrl) throw new Error("No image returned from OpenAI");
 
+    // Embed IndieThis EXIF metadata and upload to permanent storage.
+    // Falls back to the original OpenAI URL if processing fails.
+    let storedUrl = imageUrl;
+    try {
+      const buffer = await embedIndieThisMetadata(imageUrl);
+      const file   = new File([new Uint8Array(buffer)], `cover-art-${jobId}.png`, { type: "image/png" });
+      const res    = await utapi.uploadFiles(file);
+      storedUrl    = res.data?.ufsUrl ?? res.data?.url ?? imageUrl;
+    } catch (err) {
+      console.warn(`[cover-art] metadata embed/upload failed, using original URL: ${err}`);
+    }
+
     await db.aIGeneration.update({
       where: { id: jobId },
       data: {
         status: "COMPLETED",
-        outputUrl: imageUrl,
+        outputUrl: storedUrl,
         outputData: { revisedPrompt: data.data[0]?.revised_prompt },
       },
     });
