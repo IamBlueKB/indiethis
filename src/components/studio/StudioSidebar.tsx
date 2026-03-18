@@ -20,6 +20,7 @@ import {
   LogOut,
   Globe,
   ExternalLink,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { label: "Email Blasts", href: "/studio/email", icon: Mail },
   { label: "Invoices", href: "/studio/invoices", icon: FileText },
   { label: "Payments", href: "/studio/payments", icon: CreditCard },
+  { label: "AI Tools", href: "/studio/ai-tools", icon: Wand2 },
   { label: "Settings", href: "/studio/settings", icon: Settings },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
 ];
