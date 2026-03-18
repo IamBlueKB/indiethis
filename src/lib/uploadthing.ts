@@ -123,10 +123,12 @@ export const ourFileRouter = {
     "application/pdf": { maxFileSize: "64MB", maxFileCount: 20 },
   })
     .middleware(async () => {
-      return {};
+      const session = await auth();
+      if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") throw new Error("Unauthorized");
+      return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
-      return { url: file.url };
+      return { url: file.ufsUrl ?? file.url };
     }),
 } satisfies FileRouter;
 

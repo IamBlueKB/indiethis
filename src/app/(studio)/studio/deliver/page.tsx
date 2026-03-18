@@ -1,13 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Plus, Send, Download, Clock, CheckCircle2, AlertTriangle, Link2,
-  ToggleLeft, ToggleRight, Mail, Eye, X,
+  ToggleLeft, ToggleRight, Mail, Eye, X, UploadCloud, FileAudio,
+  FileImage, FileVideo, File as FileIcon, Loader2,
 } from "lucide-react";
+import { useUploadThing } from "@/lib/uploadthing-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type UploadedFile = { name: string; url: string; size: number };
+
+function fileIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["mp3", "wav", "aiff", "flac", "ogg", "m4a"].includes(ext)) return FileAudio;
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return FileVideo;
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return FileImage;
+  return FileIcon;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type QuickSend = {
   id: string;
@@ -22,7 +40,7 @@ type QuickSend = {
   createdAt: string;
 };
 
-type Contact = { id: string; name: string; email: string | null };
+type Contact = { id: string; name: string; email: string | null; phone: string | null };
 
 type StudioSettings = {
   emailSequenceEnabled: boolean;
@@ -398,9 +416,25 @@ export default function DeliverPage() {
   const [contactId, setContactId]           = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
-  const [fileUrls, setFileUrls]             = useState("");
+  const [uploadedFiles, setUploadedFiles]   = useState<UploadedFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [message, setMessage]               = useState("");
   const [sendFollowUp, setSendFollowUp]     = useState(false);
+  const [sendSms, setSendSms]               = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { startUpload, isUploading } = useUploadThing("deliveryFiles", {
+    onUploadProgress: (p) => setUploadProgress(p),
+    onClientUploadComplete: (res) => {
+      if (res) {
+        setUploadedFiles((prev) => [
+          ...prev,
+          ...res.map((f) => ({ name: f.name, url: f.ufsUrl ?? f.url, size: f.size })),
+        ]);
+      }
+      setUploadProgress(0);
+    },
+  });
 
   // Per-step drafts
   const buildDefaultDrafts = (opts: { contactName: string; studioName: string; studioPhone?: string | null }): Record<DayKey, StepDraft> => ({
@@ -444,6 +478,13 @@ export default function DeliverPage() {
     setContactId(id);
     const c = contacts.find((c) => c.id === id);
     if (c?.email) setRecipientEmail(c.email);
+    if (c?.phone) {
+      setRecipientPhone(c.phone);
+      setSendSms(true);
+    } else {
+      setRecipientPhone("");
+      setSendSms(false);
+    }
 
     // Re-generate drafts with the contact's actual name
     const contactName = c?.name || "there";
@@ -467,7 +508,7 @@ export default function DeliverPage() {
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleCreate() {
-    const urls = fileUrls.split("\n").map((u) => u.trim()).filter(Boolean);
+    const urls = uploadedFiles.map((f) => f.url);
     if (!recipientEmail || urls.length === 0) return;
     setCreating(true);
 
@@ -490,7 +531,7 @@ export default function DeliverPage() {
         body: JSON.stringify({
           contactId:           contactId || undefined,
           recipientEmail,
-          recipientPhone,
+          recipientPhone:      sendSms ? recipientPhone : undefined,
           fileUrls:            urls,
           message,
           sendFollowUpSequence: emailSteps.length > 0,
@@ -502,7 +543,7 @@ export default function DeliverPage() {
         setSends((prev) => [data.send, ...prev]);
         setShowCreate(false);
         setContactId(""); setRecipientEmail(""); setRecipientPhone("");
-        setFileUrls(""); setMessage("");
+        setUploadedFiles([]); setMessage(""); setSendSms(false);
         setSendFollowUp(Boolean(studioSettings?.emailSequenceEnabled));
         setStepDrafts(buildDefaultDrafts({
           contactName: "there",
@@ -588,31 +629,117 @@ export default function DeliverPage() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Recipient Phone (SMS)
-              </label>
-              <input
-                value={recipientPhone}
-                onChange={(e) => setRecipientPhone(e.target.value)}
-                placeholder="+1 (555) 000-0000"
-                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                style={{ borderColor: "var(--border)" }}
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Also send SMS
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSendSms((v) => !v)}
+                  className="shrink-0"
+                  title={sendSms ? "Disable SMS" : "Enable SMS"}
+                >
+                  {sendSms ? (
+                    <ToggleRight size={22} style={{ color: "#D4A843" }} />
+                  ) : (
+                    <ToggleLeft size={22} className="text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+              {sendSms && (
+                <input
+                  value={recipientPhone}
+                  onChange={(e) => setRecipientPhone(e.target.value)}
+                  placeholder="+1 (555) 000-0000"
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              )}
             </div>
           </div>
 
-          <div className="space-y-1">
+          {/* ── File Upload ─────────────────────────────────────────────── */}
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              File URLs * <span className="normal-case font-normal">(one per line)</span>
+              Files *
             </label>
-            <textarea
-              value={fileUrls}
-              onChange={(e) => setFileUrls(e.target.value)}
-              rows={3}
-              placeholder={"https://storage.example.com/track.mp3\nhttps://storage.example.com/stems.zip"}
-              className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none resize-none focus:ring-2 focus:ring-accent/50"
-              style={{ borderColor: "var(--border)" }}
-            />
+
+            {/* Drop zone */}
+            <div
+              onClick={() => !isUploading && fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={async (e) => {
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length && !isUploading) await startUpload(files);
+              }}
+              className="relative rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-6 cursor-pointer transition-colors hover:border-accent/40 hover:bg-white/2"
+              style={{ borderColor: isUploading ? "rgba(212,168,67,0.5)" : "var(--border)" }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length) await startUpload(files);
+                  e.target.value = "";
+                }}
+              />
+              {isUploading ? (
+                <>
+                  <Loader2 size={22} className="animate-spin" style={{ color: "#D4A843" }} />
+                  <p className="text-xs text-muted-foreground">Uploading… {uploadProgress}%</p>
+                  <div
+                    className="absolute bottom-0 left-0 h-0.5 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%`, backgroundColor: "#D4A843" }}
+                  />
+                </>
+              ) : (
+                <>
+                  <UploadCloud size={22} className="text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      Drop files here or <span style={{ color: "#D4A843" }}>browse</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Audio, video, images, PDF — up to 512 MB each · 20 files max
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Uploaded file chips */}
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {uploadedFiles.map((f, i) => {
+                  const Icon = fileIcon(f.name);
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 border"
+                      style={{ borderColor: "rgba(212,168,67,0.25)", backgroundColor: "rgba(212,168,67,0.05)" }}
+                    >
+                      <Icon size={14} style={{ color: "#D4A843" }} className="shrink-0" />
+                      <span className="flex-1 text-sm text-foreground truncate">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatBytes(f.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-1"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <p className="text-[11px] text-muted-foreground">
+                  {uploadedFiles.length} file{uploadedFiles.length !== 1 ? "s" : ""} ready to send
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -697,11 +824,11 @@ export default function DeliverPage() {
 
           <button
             onClick={handleCreate}
-            disabled={creating || !recipientEmail || !fileUrls.trim()}
+            disabled={creating || !recipientEmail || uploadedFiles.length === 0 || isUploading}
             className="px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
           >
-            {creating ? "Sending…" : "Send Files"}
+            {creating ? "Sending…" : isUploading ? "Uploading…" : `Send ${uploadedFiles.length > 0 ? `${uploadedFiles.length} File${uploadedFiles.length !== 1 ? "s" : ""}` : "Files"}`}
           </button>
         </div>
       )}
