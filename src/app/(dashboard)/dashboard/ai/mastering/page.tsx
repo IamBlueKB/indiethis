@@ -2,8 +2,9 @@
 
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState } from "react";
-import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Download, Upload, X, PlayCircle } from "lucide-react";
+import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Download, Upload, X, ChevronDown, ChevronUp } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import MasteringComparisonPlayer, { type MasteringVersion } from "@/components/audio/MasteringComparisonPlayer";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,26 @@ const PROFILE_COLORS: Record<string, string> = {
   "Punchy":            "#EF4444",
   "Broadcast Ready":   "#10B981",
 };
+
+// ─── History row player (lazy — WaveSurfer only mounts when expanded) ──────────
+
+function HistoryJobPlayer({ versions }: { versions: MasteringVersion[] }) {
+  const [open, setOpen] = useState(false);
+  if (versions.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-semibold transition-colors hover:text-foreground"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        {open ? "Hide Player" : "Compare & Listen"}
+      </button>
+      {open && <MasteringComparisonPlayer versions={versions} />}
+    </div>
+  );
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -283,73 +304,65 @@ export default function MasteringPage() {
             </div>
           )}
 
-          {jobData.status === "COMPLETE" && outputs.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-emerald-400" />
-                  <p className="text-sm font-semibold text-emerald-400">
-                    {jobData.outputData?.successCount ?? outputs.filter(o => o.status === "Success").length} masters ready
-                  </p>
-                </div>
-                <button
-                  onClick={dismissJob}
-                  className="text-xs text-muted-foreground hover:text-foreground transition"
-                >
-                  Dismiss
-                </button>
-              </div>
+          {jobData.status === "COMPLETE" && outputs.length > 0 && (() => {
+            const readyVersions: MasteringVersion[] = outputs
+              .filter(o => o.status === "Success" && o.downloadUrl)
+              .map(o => ({ label: o.label, url: o.downloadUrl! }));
+            const failedCount = outputs.length - readyVersions.length;
 
-              <div className="space-y-3">
-                {outputs.map(output => (
-                  <div
-                    key={output.label}
-                    className="rounded-xl border p-4 space-y-3"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PROFILE_COLORS[output.label] ?? "#D4A843" }} />
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{output.label}</p>
-                          <p className="text-xs text-muted-foreground">{output.description}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {output.measuredLUFS != null && (
-                          <p className="text-xs text-muted-foreground">{output.measuredLUFS.toFixed(1)} LUFS measured</p>
-                        )}
-                        <p className="text-xs text-muted-foreground">{output.loudnessLUFS} LUFS target</p>
-                      </div>
-                    </div>
-
-                    {output.status === "Success" && output.downloadUrl ? (
-                      <div className="space-y-2">
-                        {/* Audio player */}
-                        <audio
-                          controls
-                          className="w-full h-8"
-                          style={{ accentColor: PROFILE_COLORS[output.label] ?? "#D4A843" }}
-                        >
-                          <source src={output.downloadUrl} type="audio/wav" />
-                        </audio>
-                        <a
-                          href={output.downloadUrl}
-                          download={`${output.label.toLowerCase().replace(/\s+/g, "-")}-master.wav`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                          style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
-                        >
-                          <Download size={12} /> Download WAV
-                        </a>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-red-400/70">This profile failed to process</p>
-                    )}
+            return (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-400" />
+                    <p className="text-sm font-semibold text-emerald-400">
+                      {jobData.outputData?.successCount ?? readyVersions.length} masters ready
+                    </p>
                   </div>
-                ))}
+                  <button
+                    onClick={dismissJob}
+                    className="text-xs text-muted-foreground hover:text-foreground transition"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+
+                {/* Comparison player — instant A/B switching at same playback position */}
+                {readyVersions.length >= 1 && (
+                  <MasteringComparisonPlayer versions={readyVersions} />
+                )}
+
+                {/* Per-profile LUFS detail cards */}
+                <div className="grid grid-cols-3 gap-2">
+                  {outputs.map(output => (
+                    <div key={output.label} className="rounded-lg border p-2.5" style={{ borderColor: "var(--border)" }}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PROFILE_COLORS[output.label] ?? "#D4A843" }} />
+                        <p className="text-xs font-semibold text-foreground">{output.label}</p>
+                      </div>
+                      {output.status === "Success" ? (
+                        <>
+                          {output.measuredLUFS != null && (
+                            <p className="text-[11px] text-muted-foreground">{output.measuredLUFS.toFixed(1)} LUFS measured</p>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">{output.loudnessLUFS} LUFS target</p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-red-400/70">Failed to process</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {failedCount > 0 && (
+                  <p className="text-xs text-red-400/70">
+                    {failedCount} profile{failedCount > 1 ? "s" : ""} failed to process.
+                  </p>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {jobData.status === "FAILED" && (
             <div className="flex items-start gap-3 text-red-400">
@@ -397,19 +410,26 @@ export default function MasteringPage() {
                   </div>
 
                   {successOutputs.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {successOutputs.map(o => (
-                        <a
-                          key={o.label}
-                          href={o.downloadUrl!}
-                          download={`${o.label.toLowerCase().replace(/\s+/g, "-")}-master.wav`}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition"
-                          style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
-                        >
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PROFILE_COLORS[o.label] ?? "#D4A843" }} />
-                          <Download size={11} /> {o.label}
-                        </a>
-                      ))}
+                    <div className="space-y-2">
+                      {/* Download links row */}
+                      <div className="flex flex-wrap gap-2">
+                        {successOutputs.map(o => (
+                          <a
+                            key={o.label}
+                            href={o.downloadUrl!}
+                            download={`${o.label.toLowerCase().replace(/\s+/g, "-")}-master.wav`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                            style={{ backgroundColor: "var(--border)", color: "var(--foreground)" }}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PROFILE_COLORS[o.label] ?? "#D4A843" }} />
+                            <Download size={11} /> {o.label}
+                          </a>
+                        ))}
+                      </div>
+                      {/* Expandable comparison player */}
+                      <HistoryJobPlayer
+                        versions={successOutputs.map(o => ({ label: o.label, url: o.downloadUrl! }))}
+                      />
                     </div>
                   )}
 
