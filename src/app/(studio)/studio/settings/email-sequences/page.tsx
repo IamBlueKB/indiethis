@@ -27,68 +27,23 @@ type StepKey = keyof EmailTemplates;
 const DEFAULTS: EmailTemplates = {
   day1: {
     enabled: true,
-    subject: "Your session files are ready, {artistName}!",
-    body: `Hey {artistName},
-
-Your session files from {studioName} are ready for download. We had an amazing time working with you!
-
-Download your files here: {downloadLink}
-
-This link is available for 30 days, so grab your files when you're ready.
-
-If you have any questions or need anything else, give us a call at {studioPhone}.
-
-Looking forward to the next one,
-{studioName}`,
+    subject: "Your session files are ready",
+    body: `Hey {artistName}, thanks for coming in to {studioName}. Your session files from {sessionDate} are ready to download: {downloadLink}. Want to take your track further? Get it mastered for {masteringPrice}, create cover art for {coverArtPrice}, or get an A&R report for {arReportPrice}.`,
   },
   day3: {
     enabled: true,
-    subject: "How are your session files sounding, {artistName}?",
-    body: `Hey {artistName},
-
-Just checking in — how are your files from {studioName} sounding?
-
-If you haven't had a chance to download them yet, here's your link again: {downloadLink}
-
-Ready to take your track to the next level? We offer professional mastering starting at {masteringPrice} and AI-generated cover art starting at {coverArtPrice}. Reply to this email or call us at {studioPhone} and we'll get you set up.
-
-Talk soon,
-{studioName}`,
+    subject: "Your track could be release-ready",
+    body: `Hey {artistName}, just checking in from {studioName}. If you haven't already, mastering your track is the fastest way to get it streaming-ready. One click: {masteringPrice}.`,
   },
   day7: {
     enabled: true,
-    subject: "{artistName}, your track deserves to be heard",
-    body: `Hey {artistName},
-
-It's been a week since your session at {studioName} — how's the track coming along?
-
-We love helping artists like you get their music out into the world. If you're thinking about your next release, we'd love to help with:
-
-• Professional mastering (starting at {masteringPrice})
-• AI cover art generation (starting at {coverArtPrice})
-• A&R report to sharpen your sound (starting at {arReportPrice})
-
-When you're ready to book your next session, you know where to find us.
-
-Keep creating,
-{studioName}
-{studioPhone}`,
+    subject: "Artists are finishing their projects",
+    body: `Hey {artistName}, artists who recorded at {studioName} are releasing music with professional cover art, mastered tracks, and press kits — all from the same platform where your session files live. Check it out.`,
   },
   day14: {
     enabled: false,
-    subject: "Stay sharp between sessions, {artistName}",
-    body: `Hey {artistName},
-
-It's been two weeks since your session at {studioName}. We hope the track is sounding great!
-
-We wanted to reach out because we know consistent recording is key to growing as an artist. Our clients who book regularly tend to release more music and grow their audience faster.
-
-If budget is a concern, ask us about our monthly session packages — we work with artists at every level.
-
-Book your next session or reach us anytime at {studioPhone}.
-
-Keep grinding,
-{studioName}`,
+    subject: "A better way to manage your music",
+    body: `Hey {artistName}, you've been using pay-per-use tools from {studioName}. A subscription plan could save you money. See what's included.`,
   },
 };
 
