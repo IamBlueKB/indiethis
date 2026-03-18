@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Music2, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User, Loader2, X } from "lucide-react";
 import { useAudioStore } from "@/store";
-import InlinePlayer from "@/components/audio/InlinePlayer";
+import BeatPreviewPlayer from "@/components/audio/BeatPreviewPlayer";
 
 type BeatPreview = {
   id: string;
@@ -34,6 +34,8 @@ type BrowseTrack = {
   projectName: string | null;
   plays: number;
   createdAt: string;
+  /** True when the current user holds an active BeatLicense for this track. */
+  isOwned: boolean;
   artist: {
     id: string;
     name: string;
@@ -212,16 +214,15 @@ function MyPreviews() {
               <p className="text-sm font-bold text-foreground truncate">{p.track.title}</p>
               <p className="text-xs text-muted-foreground">by {p.producer.displayName}</p>
               {p.track.projectName && <p className="text-xs text-muted-foreground">{p.track.projectName}</p>}
-              {/* Inline waveform player — only shown for non-expired, non-purchased previews */}
-              {!isExpired && effectiveStatus !== "PURCHASED" && (
-                <InlinePlayer
-                  track={{
-                    id:       p.track.id,
-                    title:    p.track.title,
-                    artist:   p.producer.displayName,
-                    src:      p.track.fileUrl,
-                    coverArt: p.track.coverArtUrl ?? undefined,
-                  }}
+              {/* Beat player — shown unless expired-and-unpurchased */}
+              {effectiveStatus !== "EXPIRED" && (
+                <BeatPreviewPlayer
+                  trackId={p.track.id}
+                  title={p.track.title}
+                  producerName={p.producer.displayName}
+                  fileUrl={p.track.fileUrl}
+                  coverArtUrl={p.track.coverArtUrl ?? undefined}
+                  isOwned={effectiveStatus === "PURCHASED"}
                   onPlay={() => markListened(p)}
                   className="mt-2 w-full"
                 />
@@ -452,7 +453,7 @@ function BrowseBeats() {
       ) : (
         <div className="grid grid-cols-1 gap-3">
           {filtered.map((t) => {
-            const isThis = currentTrack?.id === t.id;
+            const isThis       = currentTrack?.id === t.id;
             const producerName = t.artist.artistName ?? t.artist.name;
 
             return (
@@ -477,7 +478,7 @@ function BrowseBeats() {
                   {!t.coverArtUrl && <Music2 size={18} className="text-muted-foreground" />}
                 </div>
 
-                {/* Track info + inline player */}
+                {/* Track info + ownership-aware beat player */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-foreground truncate">{t.title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -493,36 +494,39 @@ function BrowseBeats() {
                   {t.plays > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>
                   )}
-                  <InlinePlayer
-                    track={{
-                      id:       t.id,
-                      title:    t.title,
-                      artist:   producerName,
-                      src:      t.fileUrl,
-                      coverArt: t.coverArtUrl ?? undefined,
-                    }}
+                  {/* BeatPreviewPlayer: watermark + Preview badge if not owned;
+                      full quality + Owned badge if licensed */}
+                  <BeatPreviewPlayer
+                    trackId={t.id}
+                    title={t.title}
+                    producerName={producerName}
+                    fileUrl={t.fileUrl}
+                    coverArtUrl={t.coverArtUrl ?? undefined}
+                    isOwned={t.isOwned}
                     className="mt-2 w-full"
                   />
                 </div>
 
                 {/* Price */}
-                {t.price && (
+                {t.price && !t.isOwned && (
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-foreground">${t.price.toFixed(2)}</p>
                     <p className="text-[11px] text-muted-foreground">license</p>
                   </div>
                 )}
 
-                {/* License action */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                    onClick={() => openLicenseModal(t)}
-                  >
-                    <ShoppingCart size={12} /> License
-                  </button>
-                </div>
+                {/* License action — hidden once owned (BeatPreviewPlayer shows Owned badge) */}
+                {!t.isOwned && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                      onClick={() => openLicenseModal(t)}
+                    >
+                      <ShoppingCart size={12} /> License
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -33,6 +33,12 @@ export interface BeatPreviewPlayerProps {
   isOwned: boolean;
   /** Known track duration in seconds (optional; used for display before playback). */
   duration?: number;
+  /**
+   * Optional callback fired the first time the user presses play on this track
+   * (i.e. when it wasn't already the active store track).
+   * Useful for side-effects like marking a preview as "listened".
+   */
+  onPlay?: () => void;
   className?: string;
 }
 
@@ -164,6 +170,7 @@ export default function BeatPreviewPlayer({
   coverArtUrl,
   isOwned,
   duration,
+  onPlay,
   className = "",
 }: BeatPreviewPlayerProps) {
   // ── Store subscriptions ─────────────────────────────────────────────────────
@@ -237,6 +244,7 @@ export default function BeatPreviewPlayer({
         coverArt: coverArtUrl ?? undefined,
         duration,
       });
+      onPlay?.();   // notify parent (e.g. mark as listened)
     } else if (isPlaying) {
       pause();
     } else {
