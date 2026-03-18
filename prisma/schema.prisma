@@ -238,6 +238,13 @@ enum ReferralRewardTier {
   LIFETIME_REIGN
 }
 
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -324,6 +331,8 @@ model User {
   youtubeReferences  YoutubeReference[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
+  affiliate          Affiliate?
+  affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
 }
 
 model Studio {
@@ -968,5 +977,51 @@ model Referral {
   referred        User      @relation("ReferredReferrals", fields: [referredUserId],  references: [id])
 
   @@index([referrerUserId])
+  @@index([isActive])
+}
+
+// ─── Affiliate Program ────────────────────────────────────────────────────────
+
+model Affiliate {
+  id                        String          @id @default(cuid())
+  userId                    String          @unique
+  status                    AffiliateStatus @default(PENDING)
+  /// Landing page URL: indiethis.com/go/[customSlug]
+  customSlug                String          @unique
+  /// Discount code their audience uses at signup (10% off first 3 months)
+  discountCode              String          @unique
+  commissionRate            Float           @default(0.20)
+  commissionDurationMonths  Int             @default(12)
+  totalEarned               Float           @default(0)
+  pendingPayout             Float           @default(0)
+  /// Stripe Connect account for commission payouts
+  stripeConnectAccountId    String?
+  appliedAt                 DateTime        @default(now())
+  approvedAt                DateTime?
+  createdAt                 DateTime        @default(now())
+
+  user      User                @relation(fields: [userId], references: [id])
+  referrals AffiliateReferral[]
+
+  @@index([status])
+}
+
+model AffiliateReferral {
+  id                   String    @id @default(cuid())
+  affiliateId          String
+  referredUserId       String    @unique   // a user can only be referred by one affiliate
+  /// Snapshot of commissionRate at time of referral (locked in)
+  commissionRate       Float
+  /// Months of commission remaining; decrements each billing cycle
+  monthsRemaining      Int       @default(12)
+  totalCommissionPaid  Float     @default(0)
+  /// true while the referred user has an active paid subscription
+  isActive             Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+
+  affiliate    Affiliate @relation(fields: [affiliateId], references: [id])
+  referredUser User      @relation("AffiliateReferredUser", fields: [referredUserId], references: [id])
+
+  @@index([affiliateId])
   @@index([isActive])
 }
