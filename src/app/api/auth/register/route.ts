@@ -77,14 +77,30 @@ export async function POST(req: NextRequest) {
     // Create user
     const user = await db.user.create({
       data: {
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
+        name:          name.trim(),
+        email:         email.toLowerCase().trim(),
         passwordHash,
-        role: userRole,
-        referralCode: newReferralCode,
+        role:          userRole,
+        referralCode:  newReferralCode,
         referredById,
+        // Store the literal referral code that was entered (for display/auditing)
+        referredByCode: referredById ? usedReferralCode?.toUpperCase() : undefined,
       },
     });
+
+    // Create a Referral record linking referrer → new user (isActive=false until
+    // the new user activates a paid subscription — handled by Stripe webhook).
+    if (referredById) {
+      db.referral.create({
+        data: {
+          referrerUserId: referredById,
+          referredUserId: user.id,
+          isActive:       false,
+        },
+      }).catch((err) => {
+        console.warn("[register] failed to create Referral record:", err);
+      });
+    }
 
     // Send welcome email — fire-and-forget (don't block response)
     sendWelcomeEmail({

@@ -8,6 +8,7 @@ import {
   applyStudioCreditsToStripeInvoice,
 } from "@/lib/studio-referral";
 import { cancelFollowUpByEmail } from "@/lib/email-sequence";
+import { activateReferral, deactivateReferral } from "@/lib/referral-tracking";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -171,6 +172,9 @@ export async function POST(req: NextRequest) {
         // Credit any studios that referred this artist (fire-and-forget)
         void creditStudioForArtistPurchase(userId, "SUBSCRIPTION");
 
+        // Activate the user-referral record if this user was referred
+        void activateReferral(userId);
+
         // Cancel any pending follow-up sequences for this user —
         // no point sending "you should subscribe" to someone who just did.
         const subscribedUser = await db.user.findUnique({
@@ -262,11 +266,19 @@ export async function POST(req: NextRequest) {
     }
 
     case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
+      const sub            = event.data.object as Stripe.Subscription;
+      const cancelledUserId = sub.metadata?.userId;
+
       await db.subscription.updateMany({
         where: { stripeSubscriptionId: sub.id },
-        data: { status: "CANCELLED" },
+        data:  { status: "CANCELLED" },
       });
+
+      // Deactivate the referral record — referrer no longer earns credit
+      // for a subscriber who has churned.
+      if (cancelledUserId) {
+        void deactivateReferral(cancelledUserId);
+      }
       break;
     }
 
