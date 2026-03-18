@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { scheduleFollowUpSequence } from "@/lib/email-sequence";
 
 // POST /api/studio/quick-send — create a quick-send delivery link
 export async function POST(req: NextRequest) {
@@ -57,6 +58,18 @@ export async function POST(req: NextRequest) {
         type: "FILES_DELIVERED",
         description: `Quick send delivery to ${recipientEmail} (${fileUrls.length} file${fileUrls.length === 1 ? "" : "s"})`,
       },
+    });
+  }
+
+  // Schedule follow-up email sequence if requested and studio has it enabled
+  if (sendFollowUpSequence && studio.emailSequenceEnabled && studio.emailTemplates) {
+    await scheduleFollowUpSequence({
+      studioId:       studio.id,
+      contactId:      contactId ?? null,
+      contactEmail:   recipientEmail.toLowerCase().trim(),
+      quickSendId:    quickSend.id,
+      deliveredAt:    quickSend.createdAt,
+      emailTemplates: studio.emailTemplates,
     });
   }
 

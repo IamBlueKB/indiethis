@@ -215,6 +215,20 @@ enum AIJobTrigger {
   STUDIO
 }
 
+enum SequenceStep {
+  DAY_1
+  DAY_3
+  DAY_7
+  DAY_14
+}
+
+enum ScheduledEmailStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -373,6 +387,7 @@ model Studio {
   contactSubmissions ContactSubmission[]
   generationLogs     GenerationLog[]
   pageViews          PageView[]
+  scheduledEmails    ScheduledEmail[]
 }
 
 model StudioArtist {
@@ -900,4 +915,26 @@ model AIJob {
   @@index([studioId])
   @@index([status])
   @@index([type])
+}
+
+// ─── Email Sequence Scheduler ─────────────────────────────────────────────────
+
+model ScheduledEmail {
+  id           String               @id @default(cuid())
+  studioId     String
+  contactId    String?
+  contactEmail String
+  quickSendId  String?
+  sequenceStep SequenceStep
+  scheduledFor DateTime
+  status       ScheduledEmailStatus @default(PENDING)
+  sentAt       DateTime?
+  errorMessage String?
+  createdAt    DateTime             @default(now())
+
+  studio       Studio               @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+  @@index([status, scheduledFor])
+  @@index([quickSendId])
 }
