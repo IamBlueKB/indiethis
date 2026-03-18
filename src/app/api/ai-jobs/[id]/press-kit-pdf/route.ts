@@ -57,7 +57,7 @@ export async function GET(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const buffer = await renderToBuffer(
-    createElement(PressKitPDF, { content, photoUrl, jobId: id }) as any,
+    createElement(PressKitPDF, { content, photoUrl }) as any,
   );
 
   const filename = `press-kit-${content.artistName?.replace(/\s+/g, "-").toLowerCase() ?? id.slice(-8)}.pdf`;
