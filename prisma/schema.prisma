@@ -1002,6 +1002,8 @@ model Affiliate {
   stripeConnectAccountId    String?
   /// Raw application form data: socialLinks, audienceSize, creatorType, promotionPlan
   applicationData           Json?
+  /// Payout history: Array<{ amount: number, date: string, stripeTransferId: string, status: 'paid' }>
+  payoutHistory             Json?
   appliedAt                 DateTime        @default(now())
   approvedAt                DateTime?
   createdAt                 DateTime        @default(now())
