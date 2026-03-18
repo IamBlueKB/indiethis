@@ -16,6 +16,7 @@
 import { db } from "@/lib/db";
 import { AIJobStatus, type AIJob } from "@prisma/client";
 import OpenAI, { toFile } from "openai";
+import Replicate from "replicate";
 import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
 
@@ -36,8 +37,132 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
 
 async function handleCoverArt(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing COVER_ART job ${job.id} via ${job.provider}`);
-  // Step 5: wire Replicate (SDXL / Flux) here
-  return { outputData: { stub: true, type: "COVER_ART" } };
+
+  // ── Env checks ───────────────────────────────────────────────────────────
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  const anthropicKey   = process.env.ANTHROPIC_API_KEY;
+
+  if (!replicateToken || replicateToken.startsWith("your_"))
+    throw new Error("REPLICATE_API_TOKEN is not configured — add it to .env.local to use Cover Art generation.");
+  if (!anthropicKey || anthropicKey === "sk-ant-...")
+    throw new Error("ANTHROPIC_API_KEY is not configured — add it to .env.local to use Cover Art generation.");
+
+  // ── Extract inputs ────────────────────────────────────────────────────────
+  const input = (job.inputData ?? {}) as Record<string, string>;
+  const { artistPrompt, style, mood } = input;
+
+  if (!artistPrompt?.trim())
+    throw new Error("COVER_ART job missing required input: artistPrompt");
+
+  let totalCost = 0;
+
+  // ── Step 1: Claude — optimize the prompt for SDXL ────────────────────────
+  console.log(`[cover-art] optimizing prompt via Claude`);
+
+  const claudeResponse = await claude.messages.create({
+    model:      SONNET,
+    max_tokens: 400,
+    messages: [{
+      role:    "user",
+      content: `Convert this artist's cover art request into an optimized image generation prompt for Stable Diffusion XL.
+
+The artist said: "${artistPrompt}"
+Style: ${style ?? "Not specified"}
+Mood: ${mood ?? "Not specified"}
+
+Write a detailed, specific image prompt that will produce professional album cover art. Include composition, lighting, color palette, and artistic technique details. The output must work as album art — typically square, visually striking, and legible at small sizes.
+
+Return only the prompt text, nothing else. No intro, no explanation.`,
+    }],
+  });
+
+  const optimizedPrompt = claudeResponse.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+
+  // Claude cost
+  const cIn  = claudeResponse.usage.input_tokens;
+  const cOut = claudeResponse.usage.output_tokens;
+  totalCost += (cIn / 1_000_000) * 3 + (cOut / 1_000_000) * 15;
+
+  console.log(`[cover-art] optimized prompt (${optimizedPrompt.length} chars): ${optimizedPrompt.slice(0, 120)}…`);
+
+  // ── Step 2: Replicate — run SDXL ×4 with varied seeds ───────────────────
+  // Model: stability-ai/sdxl — latest public version
+  // Cost: ~$0.0023 per image at 1024×1024
+  const SDXL_MODEL = "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37ec2475f07bb2f1d00be8ee";
+  const NUM_IMAGES = 4;
+  const BASE_SEED  = Math.floor(Math.random() * 100_000);
+
+  console.log(`[cover-art] running SDXL ×${NUM_IMAGES} on Replicate (base seed ${BASE_SEED})`);
+
+  const replicate = new Replicate({ auth: replicateToken });
+
+  // Build negative prompt from style/mood to avoid common cover-art pitfalls
+  const negativePrompt =
+    "text, watermark, logo, signature, blurry, low quality, disfigured, ugly, " +
+    "oversaturated, amateur, generic stock photo, multiple panels, collage";
+
+  // Fire all 4 runs in parallel with seeds BASE_SEED + 0,1,2,3
+  const predictions = await Promise.allSettled(
+    Array.from({ length: NUM_IMAGES }, (_, i) =>
+      replicate.run(SDXL_MODEL, {
+        input: {
+          prompt:          optimizedPrompt,
+          negative_prompt: negativePrompt,
+          width:           1024,
+          height:          1024,
+          num_outputs:     1,
+          scheduler:       "K_EULER",
+          num_inference_steps: 40,
+          guidance_scale:  7.5,
+          seed:            BASE_SEED + i,
+          refine:          "expert_ensemble_refiner",
+          high_noise_frac: 0.8,
+        },
+      })
+    ),
+  );
+
+  // Collect successful image URLs
+  const imageUrls: string[] = [];
+  for (const result of predictions) {
+    if (result.status === "fulfilled") {
+      const output = result.value;
+      // Replicate returns string[] for num_outputs:1
+      const url = Array.isArray(output) ? (output[0] as string) : (output as unknown as string);
+      if (url) imageUrls.push(url);
+    } else {
+      console.warn(`[cover-art] one SDXL prediction failed: ${result.reason}`);
+    }
+  }
+
+  if (imageUrls.length === 0)
+    throw new Error("All Replicate SDXL predictions failed — no images generated.");
+
+  // Cost: $0.0023 per 1024×1024 image
+  const replicateCost = imageUrls.length * 0.0023;
+  totalCost += replicateCost;
+
+  console.log(
+    `[cover-art] SDXL complete — ${imageUrls.length}/${NUM_IMAGES} images. ` +
+    `Total cost: $${totalCost.toFixed(4)}`,
+  );
+
+  return {
+    outputData: {
+      imageUrls,
+      optimizedPrompt,
+      originalPrompt: artistPrompt,
+      style:          style ?? null,
+      mood:           mood  ?? null,
+      model:          SDXL_MODEL,
+      seeds:          Array.from({ length: NUM_IMAGES }, (_, i) => BASE_SEED + i),
+    },
+    costToUs: totalCost,
+  };
 }
 
 async function handleMastering(job: AIJob): Promise<HandlerResult> {
