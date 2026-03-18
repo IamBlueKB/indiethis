@@ -1,9 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users } from "lucide-react";
+import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users, Gift, CheckCircle2, ArrowDownCircle } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
+import { parseHistory, type CreditEvent } from "@/lib/studio-referral";
 
 // AI generation limits by studio tier
 const AI_LIMITS: Record<string, number> = { PRO: 3, ELITE: 10 };
@@ -61,6 +62,8 @@ export default async function StudioAnalyticsPage() {
       studioTier: true,
       generationsUsedThisMonth: true,
       generationResetDate: true,
+      referralCredits:       true,
+      referralCreditHistory: true,
     },
   });
 
@@ -251,6 +254,16 @@ export default async function StudioAnalyticsPage() {
   const aiUsed = studio.generationsUsedThisMonth;
   const aiLimit = AI_LIMITS[studio.studioTier] ?? 3;
   const aiPct = Math.min(100, Math.round((aiUsed / aiLimit) * 100));
+
+  // ── Referral credits ──────────────────────────────────────────────────────
+  const STUDIO_MONTHLY_PRICE: Record<string, number> = { PRO: 49, ELITE: 99 };
+  const monthlyPrice   = STUDIO_MONTHLY_PRICE[studio.studioTier] ?? 49;
+  const creditBalance  = studio.referralCredits ?? 0;
+  const fullMonths     = Math.floor(creditBalance / monthlyPrice);
+  const remainder      = creditBalance - fullMonths * monthlyPrice;
+  const creditHistory  = parseHistory(studio.referralCreditHistory)
+    .slice()
+    .reverse(); // newest first
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -517,6 +530,146 @@ export default async function StudioAnalyticsPage() {
                 Connect a Brevo open-tracking webhook to see open rates per step.
               </p>
             </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Referral Credits ──────────────────────────────────────────────── */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <Gift size={14} style={{ color: "#D4A843" }} />
+            <p className="text-sm font-semibold text-foreground">Referral Credits</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Earned when your CRM contacts subscribe to IndieThis</p>
+        </div>
+
+        {/* Balance + coverage row */}
+        <div
+          className="grid grid-cols-3 gap-px border-b"
+          style={{ borderColor: "var(--border)", backgroundColor: "var(--border)" }}
+        >
+          {/* Balance */}
+          <div className="px-5 py-5 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Balance</p>
+            <p className="text-3xl font-bold font-display" style={{ color: "#D4A843" }}>
+              ${creditBalance.toFixed(2)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Applied automatically on next invoice
+            </p>
+          </div>
+
+          {/* Months covered */}
+          <div className="px-5 py-5 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Service Covered</p>
+            {fullMonths > 0 ? (
+              <>
+                <p className="text-3xl font-bold text-foreground font-display">{fullMonths}</p>
+                <p className="text-xs text-muted-foreground">
+                  full month{fullMonths !== 1 ? "s" : ""} free
+                  {remainder > 0 && ` + $${remainder.toFixed(2)} toward next`}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-muted-foreground font-display">—</p>
+                <p className="text-xs text-muted-foreground">
+                  {creditBalance > 0
+                    ? `$${creditBalance.toFixed(2)} toward next invoice ($${monthlyPrice}/mo plan)`
+                    : `Earn $5 per artist who subscribes`}
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Total earned (EARNED events only) */}
+          <div className="px-5 py-5 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Earned</p>
+            <p className="text-3xl font-bold text-foreground font-display">
+              ${creditHistory
+                .filter((e: CreditEvent) => e.type === "EARNED")
+                .reduce((sum: number, e: CreditEvent) => sum + e.amount, 0)
+                .toFixed(2)}
+            </p>
+            <p className="text-xs text-muted-foreground">all time</p>
+          </div>
+        </div>
+
+        {/* Credit history */}
+        {creditHistory.length === 0 ? (
+          <div className="px-5 py-12 text-center space-y-2">
+            <Gift size={28} className="mx-auto opacity-30" style={{ color: "#D4A843" }} />
+            <p className="text-sm font-medium text-foreground">No credits yet</p>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              When a BOOKING or MANUAL contact in your CRM subscribes to IndieThis,
+              you&apos;ll earn $5 per artist — automatically credited to your account.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Column headers */}
+            <div
+              className="grid text-xs font-semibold uppercase tracking-wider text-muted-foreground px-5 py-3 border-b"
+              style={{ borderColor: "var(--border)", gridTemplateColumns: "1fr 100px 120px" }}
+            >
+              <span>Description</span>
+              <span>Amount</span>
+              <span>Date</span>
+            </div>
+
+            {creditHistory.map((event: CreditEvent) => (
+              <div
+                key={event.id}
+                className="grid items-center px-5 py-3.5 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)", gridTemplateColumns: "1fr 100px 120px" }}
+              >
+                {/* Icon + description */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                    style={{
+                      backgroundColor: event.type === "EARNED"
+                        ? "rgba(52,199,89,0.12)"
+                        : "rgba(90,200,250,0.12)",
+                    }}
+                  >
+                    {event.type === "EARNED"
+                      ? <CheckCircle2 size={13} style={{ color: "#34C759" }} />
+                      : <ArrowDownCircle size={13} style={{ color: "#5AC8FA" }} />
+                    }
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground truncate">{event.reason}</p>
+                    {event.artistEmail && (
+                      <p className="text-xs text-muted-foreground truncate">{event.artistEmail}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: event.type === "EARNED" ? "#34C759" : "#5AC8FA" }}
+                >
+                  {event.type === "EARNED" ? "+" : ""}${Math.abs(event.amount).toFixed(2)}
+                </p>
+
+                {/* Date */}
+                <p className="text-xs text-muted-foreground">
+                  {new Date(event.date).toLocaleDateString("en-US", {
+                    month: "short", day: "numeric", year: "numeric",
+                  })}
+                </p>
+              </div>
+            ))}
           </>
         )}
       </div>
