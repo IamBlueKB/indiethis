@@ -347,6 +347,7 @@ model Studio {
   invoices           Invoice[]
   contactSubmissions ContactSubmission[]
   generationLogs     GenerationLog[]
+  pageViews          PageView[]
 }
 
 model StudioArtist {
@@ -799,6 +800,21 @@ model GenerationLog {
   wasPaid        Boolean        @default(false)
 
   studio         Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}
+
+// ─── Page View Tracking ───────────────────────────────────────────────────────
+
+model PageView {
+  id       String   @id @default(cuid())
+  studioId String
+  viewedAt DateTime @default(now())
+  ipHash   String
+
+  studio   Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+  @@index([studioId, viewedAt])
+  @@index([studioId, ipHash, viewedAt])
 }
 
 // ─── AI Feedback & Learning Models ───────────────────────────────────────────

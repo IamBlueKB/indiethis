@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   Music2,
   LayoutDashboard,
+  BarChart2,
   Calendar,
   Users,
   BookUser,
@@ -31,6 +32,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/studio", icon: LayoutDashboard },
+  { label: "Analytics", href: "/studio/analytics", icon: BarChart2 },
   { label: "Bookings", href: "/studio/bookings", icon: Calendar },
   { label: "Artists", href: "/studio/artists", icon: Users },
   { label: "Contacts", href: "/studio/contacts", icon: BookUser },

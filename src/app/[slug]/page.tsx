@@ -11,6 +11,7 @@ import { CinematicTemplate } from "@/components/studio-public/templates/Cinemati
 import { GridTemplate } from "@/components/studio-public/templates/GridTemplate";
 import { ConfigRenderer } from "@/components/studio-public/ConfigRenderer";
 import type { PageConfig } from "@/types/page-config";
+import PageViewTracker from "@/components/studio/PageViewTracker";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -187,32 +188,40 @@ export default async function SlugPage({
     }
 
     // CLEAN / CINEMATIC / GRID — always use their own renderer, never pageConfig
-    if (template === "CLEAN")      return <CleanTemplate     {...templateProps} />;
-    if (template === "CINEMATIC")  return <CinematicTemplate {...templateProps} />;
-    if (template === "GRID")       return <GridTemplate      {...templateProps} />;
+    if (template === "CLEAN")      return <><PageViewTracker studioId={studio.id} /><CleanTemplate     {...templateProps} /></>;
+    if (template === "CINEMATIC")  return <><PageViewTracker studioId={studio.id} /><CinematicTemplate {...templateProps} /></>;
+    if (template === "GRID")       return <><PageViewTracker studioId={studio.id} /><GridTemplate      {...templateProps} /></>;
 
     // CUSTOM — always use CustomTemplate
-    if (template === "CUSTOM")     return <CustomTemplate    {...templateProps} />;
+    if (template === "CUSTOM")     return <><PageViewTracker studioId={studio.id} /><CustomTemplate    {...templateProps} /></>;
 
     // CLASSIC / BOLD / EDITORIAL — use generated pageConfig if available, else DefaultTemplate fallback
     const pageConfig = studio.pageConfig as PageConfig | null;
     if (pageConfig?.sections?.length) {
       return (
-        <ConfigRenderer
-          studio={studio}
-          config={pageConfig}
-          services={services}
-          testimonials={testimonials}
-          featuredArtists={featuredArtists}
-          fullAddress={fullAddress}
-          mapQuery={mapQuery}
-          socials={socials}
-        />
+        <>
+          <PageViewTracker studioId={studio.id} />
+          <ConfigRenderer
+            studio={studio}
+            config={pageConfig}
+            services={services}
+            testimonials={testimonials}
+            featuredArtists={featuredArtists}
+            fullAddress={fullAddress}
+            mapQuery={mapQuery}
+            socials={socials}
+          />
+        </>
       );
     }
 
     const style = (template === "BOLD" || template === "EDITORIAL") ? template : "CLASSIC";
-    return <DefaultTemplate {...templateProps} templateStyle={style} />;
+    return (
+      <>
+        <PageViewTracker studioId={studio.id} />
+        <DefaultTemplate {...templateProps} templateStyle={style} />
+      </>
+    );
   }
 
   // ── Artist? ───────────────────────────────────────────────────────────────
