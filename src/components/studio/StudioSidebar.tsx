@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import {
-  Music2,
   LayoutDashboard,
   BarChart2,
   Calendar,
@@ -74,16 +73,9 @@ export default function StudioSidebar() {
     >
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
-        <Link href="/studio" className="flex items-center gap-2.5 no-underline">
-          <div className="w-8 h-8 rounded-[9px] bg-gradient-to-br from-accent to-cta flex items-center justify-center shrink-0">
-            <Music2 size={16} className="text-background" strokeWidth={2.5} />
-          </div>
-          <div>
-            <p className="font-display font-bold text-[15px] text-foreground tracking-tight leading-tight">
-              IndieThis
-            </p>
-            <p className="text-[10px] text-muted-foreground leading-tight">Studio Panel</p>
-          </div>
+        <Link href="/studio" className="flex flex-col gap-0.5 no-underline">
+          <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "24px", width: "auto" }} />
+          <p className="text-[10px] text-muted-foreground leading-tight ml-0.5">Studio Panel</p>
         </Link>
       </div>
 

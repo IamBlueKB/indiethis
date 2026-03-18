@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40">
+  <!-- Icon -->
+  <rect x="0" y="4" width="32" height="32" rx="7" fill="#D4A843"/>
+  <rect x="13" y="14" width="4.5" height="15" rx="2.25" fill="#0A0A0A"/>
+  <polygon points="12,5 12,12.5 19,8.75" fill="#E85D4A"/>
+  <!-- Wordmark -->
+  <text x="40" y="27" fill="#F5F5F5" font-family="'DM Sans', sans-serif" font-size="18" font-weight="700" letter-spacing="-0.3px">IndieThis</text>
+</svg>

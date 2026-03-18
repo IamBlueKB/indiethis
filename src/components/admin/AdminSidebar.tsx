@@ -9,7 +9,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  ShieldCheck,
   Cpu,
   ShieldAlert,
   Brain,
@@ -56,17 +55,9 @@ export default function AdminSidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
         <Link href="/admin" className="flex items-center gap-2.5 no-underline">
-          <div
-            className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
-            style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
-          >
-            <ShieldCheck size={16} className="text-white" strokeWidth={2.5} />
-          </div>
-          <div>
-            <p className="font-display font-bold text-[15px] text-foreground tracking-tight leading-tight">
-              IndieThis
-            </p>
-            <p className="text-[10px] text-muted-foreground leading-tight">Platform Admin</p>
+          <div className="flex flex-col gap-0.5">
+            <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "24px", width: "auto" }} />
+            <p className="text-[10px] text-muted-foreground leading-tight ml-0.5">Platform Admin</p>
           </div>
         </Link>
       </div>

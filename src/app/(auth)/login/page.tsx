@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Music2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,9 +50,7 @@ export default function LoginPage() {
       <CardHeader className="text-center pb-2">
         {/* Logo */}
         <div className="flex justify-center mb-4">
-          <div className="w-11 h-11 rounded-[12px] bg-gradient-to-br from-accent to-cta flex items-center justify-center">
-            <Music2 size={22} className="text-background" strokeWidth={2.5} />
-          </div>
+          <img src="/images/brand/indiethis-icon.svg" alt="IndieThis" style={{ width: "44px", height: "44px" }} />
         </div>
         <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">
           Welcome back

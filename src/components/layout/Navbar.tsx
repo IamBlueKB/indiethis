@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X, Music2 } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -35,12 +35,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 no-underline">
-          <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-accent to-cta flex items-center justify-center shrink-0">
-            <Music2 size={18} className="text-background" strokeWidth={2.5} />
-          </div>
-          <span className="font-display font-bold text-xl text-foreground tracking-tight">
-            IndieThis
-          </span>
+          <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "28px", width: "auto" }} />
         </Link>
 
         {/* Desktop Nav */}

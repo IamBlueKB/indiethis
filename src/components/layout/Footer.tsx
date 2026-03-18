@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Music2, Instagram, Twitter, Youtube, Facebook } from "lucide-react";
+import { Instagram, Twitter, Youtube, Facebook } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -61,10 +61,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 mb-16">
           <div>
             <Link href="/" className="inline-flex items-center gap-2.5 no-underline mb-4">
-              <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-accent to-cta flex items-center justify-center">
-                <Music2 size={18} className="text-background" strokeWidth={2.5} />
-              </div>
-              <span className="font-display font-bold text-xl text-foreground tracking-tight">IndieThis</span>
+              <img src="/images/brand/indiethis-logo-full.svg" alt="IndieThis" style={{ height: "28px", width: "auto" }} />
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-[320px] mb-6">
               The platform built for independent music artists and recording studios.

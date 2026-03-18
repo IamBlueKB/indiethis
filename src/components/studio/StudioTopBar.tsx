@@ -19,7 +19,6 @@ import {
   CreditCard,
   FileText,
   Settings,
-  Music2,
   ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -140,9 +139,7 @@ export default function StudioTopBar({ studioSlug }: { studioSlug: string | null
           <SheetHeader className="h-16 flex flex-row items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
             <SheetTitle className="p-0 m-0">
               <Link href="/studio" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5 no-underline">
-                <div className="w-8 h-8 rounded-[9px] bg-gradient-to-br from-accent to-cta flex items-center justify-center shrink-0">
-                  <Music2 size={16} className="text-background" strokeWidth={2.5} />
-                </div>
+                <img src="/images/brand/indiethis-icon.svg" alt="IndieThis" style={{ width: "32px", height: "32px" }} />
                 <span className="font-display font-bold text-[17px] text-foreground tracking-tight">
                   Studio Panel
                 </span>

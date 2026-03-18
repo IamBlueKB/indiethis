@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Music2, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,10 +90,7 @@ function ResetPasswordForm() {
     <Card className="w-full max-w-[420px]" style={{ backgroundColor: "var(--card)" }}>
       <CardHeader className="text-center pb-2">
         <div className="flex justify-center mb-4">
-          <div className="w-11 h-11 rounded-[12px] flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #D4A843, #E85D4A)" }}>
-            <Music2 size={22} className="text-white" strokeWidth={2.5} />
-          </div>
+          <img src="/images/brand/indiethis-icon.svg" alt="IndieThis" style={{ width: "44px", height: "44px" }} />
         </div>
         <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">
           Set new password
