@@ -2,7 +2,7 @@
 
 import { useAudioStore } from "@/store";
 import AudioPlayer from "./AudioPlayer";
-import { Play, Pause, X, Volume2, VolumeX } from "lucide-react";
+import { Play, Pause, X, Volume2, VolumeX, SkipBack, SkipForward } from "lucide-react";
 
 /**
  * MiniPlayer — Persistent bottom-bar audio player.
@@ -19,6 +19,8 @@ export default function MiniPlayer() {
   const pause        = useAudioStore((s) => s.pause);
   const resume       = useAudioStore((s) => s.resume);
   const stop         = useAudioStore((s) => s.stop);
+  const next         = useAudioStore((s) => s.next);
+  const prev         = useAudioStore((s) => s.prev);
   const setVolume    = useAudioStore((s) => s.setVolume);
   const toggleMute   = useAudioStore((s) => s.toggleMute);
 
@@ -65,15 +67,35 @@ export default function MiniPlayer() {
         </div>
       </div>
 
-      {/* ── Play / Pause ──────────────────────────────────────────────── */}
-      <button
-        onClick={() => (isPlaying ? pause() : resume())}
-        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
-        style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        aria-label={isPlaying ? "Pause" : "Play"}
-      >
-        {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-      </button>
+      {/* ── Prev / Play / Next ────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={prev}
+          className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
+          style={{ color: "var(--muted-foreground)" }}
+          aria-label="Previous track"
+        >
+          <SkipBack size={14} />
+        </button>
+
+        <button
+          onClick={() => (isPlaying ? pause() : resume())}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
+          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          aria-label={isPlaying ? "Pause" : "Play"}
+        >
+          {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+        </button>
+
+        <button
+          onClick={next}
+          className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
+          style={{ color: "var(--muted-foreground)" }}
+          aria-label="Next track"
+        >
+          <SkipForward size={14} />
+        </button>
+      </div>
 
       {/* ── Waveform + time (fills remaining space) ───────────────────── */}
       <AudioPlayer />
