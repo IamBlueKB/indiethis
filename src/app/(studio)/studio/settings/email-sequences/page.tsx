@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  Mail, ChevronDown, ChevronUp, Check, Loader2, ToggleLeft, ToggleRight,
+  Mail, ChevronDown, ChevronUp, Check, Loader2,
+  ToggleLeft, ToggleRight, Eye, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +22,28 @@ type EmailTemplates = {
 };
 
 type StepKey = keyof EmailTemplates;
+
+// ─── Platform pricing (used in preview sample data) ───────────────────────────
+
+const PLATFORM_PRICES = {
+  masteringPrice: "$14.99",
+  coverArtPrice:  "$9.99",
+  arReportPrice:  "$19.99",
+};
+
+// ─── Preview sample data ──────────────────────────────────────────────────────
+
+function renderPreview(text: string, studioName: string): string {
+  return text
+    .replace(/\{artistName\}/g,     "Jordan")
+    .replace(/\{sessionDate\}/g,    "March 15, 2026")
+    .replace(/\{studioName\}/g,     studioName)
+    .replace(/\{studioPhone\}/g,    "(555) 012-3456")
+    .replace(/\{downloadLink\}/g,   "https://indiethis.com/dl/example-link")
+    .replace(/\{masteringPrice\}/g, PLATFORM_PRICES.masteringPrice)
+    .replace(/\{coverArtPrice\}/g,  PLATFORM_PRICES.coverArtPrice)
+    .replace(/\{arReportPrice\}/g,  PLATFORM_PRICES.arReportPrice);
+}
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -90,22 +113,136 @@ const VARIABLES = [
 const inputCls =
   "w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 transition-shadow";
 
+// ─── Preview Modal ────────────────────────────────────────────────────────────
+
+function PreviewModal({
+  meta,
+  template,
+  studioName,
+  onClose,
+}: {
+  meta: typeof STEP_META[number];
+  template: EmailTemplate;
+  studioName: string;
+  onClose: () => void;
+}) {
+  const renderedSubject = renderPreview(template.subject, studioName);
+  const renderedBody    = renderPreview(template.body,    studioName);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        style={{ maxHeight: "90vh" }}
+      >
+        {/* Modal chrome header (dark, matches app) */}
+        <div
+          className="flex items-center justify-between px-5 py-3 shrink-0"
+          style={{ backgroundColor: "var(--card)", borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={14} style={{ color: "#D4A843" }} />
+            <span className="text-sm font-semibold text-foreground">
+              Preview — {meta.day}: {meta.title}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Email client chrome (light — emails render on white) */}
+        <div className="overflow-y-auto" style={{ backgroundColor: "#f4f4f5" }}>
+          {/* Email header meta */}
+          <div
+            className="px-6 py-4 space-y-1 border-b"
+            style={{ backgroundColor: "#ffffff", borderColor: "#e4e4e7" }}
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 w-14 shrink-0">From</span>
+              <span className="text-sm text-gray-800">{studioName} &lt;noreply@indiethis.com&gt;</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 w-14 shrink-0">To</span>
+              <span className="text-sm text-gray-800">Jordan &lt;jordan@example.com&gt;</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 w-14 shrink-0">Subject</span>
+              <span className="text-sm font-semibold text-gray-900">{renderedSubject}</span>
+            </div>
+          </div>
+
+          {/* Email body */}
+          <div className="px-6 py-6" style={{ backgroundColor: "#ffffff", margin: "16px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            {/* Studio avatar / branding strip */}
+            <div
+              className="flex items-center gap-3 pb-5 mb-5"
+              style={{ borderBottom: "1px solid #e4e4e7" }}
+            >
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {studioName[0]?.toUpperCase() ?? "S"}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{studioName}</p>
+                <p className="text-[11px] text-gray-500">via IndieThis</p>
+              </div>
+            </div>
+
+            {/* Body text — preserve newlines */}
+            <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+              {renderedBody}
+            </div>
+
+            {/* Footer */}
+            <div
+              className="mt-6 pt-5 text-[11px] text-gray-400"
+              style={{ borderTop: "1px solid #e4e4e7" }}
+            >
+              You received this email because you recorded at {studioName}. Powered by IndieThis.
+            </div>
+          </div>
+
+          {/* Sample data note */}
+          <div className="px-6 pb-5">
+            <p className="text-[11px] text-gray-500 text-center">
+              Sample data — artistName: <strong>Jordan</strong> · sessionDate: <strong>March 15, 2026</strong> · prices from platform defaults
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Step Card ────────────────────────────────────────────────────────────────
 
 function StepCard({
   meta,
   template,
+  studioName,
   onChange,
   onSave,
 }: {
   meta: typeof STEP_META[number];
   template: EmailTemplate;
+  studioName: string;
   onChange: (t: EmailTemplate) => void;
   onSave: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(meta.key === "day1");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [open, setOpen]         = useState(meta.key === "day1");
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -116,130 +253,152 @@ function StepCard({
   }
 
   return (
-    <div
-      className="rounded-2xl border overflow-hidden"
-      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-    >
-      {/* Header row */}
-      <div
-        className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
-        onClick={() => setOpen((v) => !v)}
-      >
-        {/* Step badge */}
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0"
-          style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
-        >
-          {meta.day}
-        </span>
-
-        {/* Title + description */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">{meta.title}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{meta.description}</p>
-        </div>
-
-        {/* Toggle */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onChange({ ...template, enabled: !template.enabled });
-          }}
-          className="shrink-0 transition-opacity"
-          title={template.enabled ? "Disable this step" : "Enable this step"}
-        >
-          {template.enabled ? (
-            <ToggleRight size={28} style={{ color: "#D4A843" }} />
-          ) : (
-            <ToggleLeft size={28} className="text-muted-foreground" />
-          )}
-        </button>
-
-        {/* Expand chevron */}
-        <div className="shrink-0 text-muted-foreground ml-1">
-          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
-      </div>
-
-      {/* Body */}
-      {open && (
-        <div
-          className="px-5 pb-5 space-y-4 border-t"
-          style={{ borderColor: "var(--border)" }}
-        >
-          {/* Enabled status line */}
-          <p className="text-[11px] text-muted-foreground pt-3">
-            Status:{" "}
-            <span
-              className="font-semibold"
-              style={{ color: template.enabled ? "#34C759" : "var(--muted-foreground)" }}
-            >
-              {template.enabled ? "Enabled — this email will send automatically" : "Disabled — this step is skipped"}
-            </span>
-          </p>
-
-          {/* Subject */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Subject Line
-            </label>
-            <input
-              value={template.subject}
-              onChange={(e) => onChange({ ...template, subject: e.target.value })}
-              className={inputCls}
-              style={{ borderColor: "var(--border)" }}
-              placeholder="Email subject…"
-            />
-          </div>
-
-          {/* Body */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Email Body
-            </label>
-            <textarea
-              value={template.body}
-              onChange={(e) => onChange({ ...template, body: e.target.value })}
-              rows={12}
-              className={inputCls + " resize-y leading-relaxed"}
-              style={{ borderColor: "var(--border)" }}
-              placeholder="Email body…"
-            />
-          </div>
-
-          {/* Save button */}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 transition-colors"
-              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-            >
-              {saving ? (
-                <><Loader2 size={14} className="animate-spin" /> Saving…</>
-              ) : saved ? (
-                <><Check size={14} /> Saved</>
-              ) : (
-                "Save Template"
-              )}
-            </button>
-          </div>
-        </div>
+    <>
+      {previewing && (
+        <PreviewModal
+          meta={meta}
+          template={template}
+          studioName={studioName}
+          onClose={() => setPreviewing(false)}
+        />
       )}
-    </div>
+
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Header row */}
+        <div
+          className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {/* Step badge */}
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0"
+            style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
+          >
+            {meta.day}
+          </span>
+
+          {/* Title + description */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">{meta.title}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{meta.description}</p>
+          </div>
+
+          {/* Per-step toggle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange({ ...template, enabled: !template.enabled });
+            }}
+            className="shrink-0 transition-opacity"
+            title={template.enabled ? "Disable this step" : "Enable this step"}
+          >
+            {template.enabled ? (
+              <ToggleRight size={28} style={{ color: "#D4A843" }} />
+            ) : (
+              <ToggleLeft size={28} className="text-muted-foreground" />
+            )}
+          </button>
+
+          {/* Expand chevron */}
+          <div className="shrink-0 text-muted-foreground ml-1">
+            {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
+        </div>
+
+        {/* Expanded body */}
+        {open && (
+          <div
+            className="px-5 pb-5 space-y-4 border-t"
+            style={{ borderColor: "var(--border)" }}
+          >
+            {/* Status line */}
+            <p className="text-[11px] text-muted-foreground pt-3">
+              Status:{" "}
+              <span
+                className="font-semibold"
+                style={{ color: template.enabled ? "#34C759" : "var(--muted-foreground)" }}
+              >
+                {template.enabled
+                  ? "Enabled — this email will send automatically"
+                  : "Disabled — this step is skipped"}
+              </span>
+            </p>
+
+            {/* Subject */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Subject Line
+              </label>
+              <input
+                value={template.subject}
+                onChange={(e) => onChange({ ...template, subject: e.target.value })}
+                className={inputCls}
+                style={{ borderColor: "var(--border)" }}
+                placeholder="Email subject…"
+              />
+            </div>
+
+            {/* Body */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Email Body
+              </label>
+              <textarea
+                value={template.body}
+                onChange={(e) => onChange({ ...template, body: e.target.value })}
+                rows={8}
+                className={inputCls + " resize-y leading-relaxed"}
+                style={{ borderColor: "var(--border)" }}
+                placeholder="Email body…"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 transition-colors"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {saving ? (
+                  <><Loader2 size={14} className="animate-spin" /> Saving…</>
+                ) : saved ? (
+                  <><Check size={14} /> Saved</>
+                ) : (
+                  "Save Template"
+                )}
+              </button>
+
+              <button
+                onClick={() => setPreviewing(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                <Eye size={14} />
+                Preview
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EmailSequencesPage() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]               = useState(true);
   const [sequenceEnabled, setSequenceEnabled] = useState(false);
-  const [templates, setTemplates] = useState<EmailTemplates>(DEFAULTS);
+  const [templates, setTemplates]           = useState<EmailTemplates>(DEFAULTS);
+  const [studioName, setStudioName]         = useState("Your Studio");
 
-  // Master save state
   const [masterSaving, setMasterSaving] = useState(false);
-  const [masterSaved, setMasterSaved] = useState(false);
+  const [masterSaved,  setMasterSaved]  = useState(false);
 
   // ── Load studio settings ───────────────────────────────────────────────────
   useEffect(() => {
@@ -248,6 +407,7 @@ export default function EmailSequencesPage() {
       .then((d) => {
         const s = d.studio;
         if (!s) return;
+        if (s.name) setStudioName(s.name);
         setSequenceEnabled(s.emailSequenceEnabled ?? false);
         const raw = s.emailTemplates;
         if (raw && typeof raw === "object") {
@@ -274,7 +434,7 @@ export default function EmailSequencesPage() {
     });
   }
 
-  // ── Toggle master sequence on/off ──────────────────────────────────────────
+  // ── Toggle master sequence ─────────────────────────────────────────────────
   async function handleMasterToggle() {
     const next = !sequenceEnabled;
     setSequenceEnabled(next);
@@ -379,6 +539,7 @@ export default function EmailSequencesPage() {
             key={meta.key}
             meta={meta}
             template={templates[meta.key]}
+            studioName={studioName}
             onChange={(t) => setTemplates((prev) => ({ ...prev, [meta.key]: t }))}
             onSave={() => saveStep(meta.key)}
           />
