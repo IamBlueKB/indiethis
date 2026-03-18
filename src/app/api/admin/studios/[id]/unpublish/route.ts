@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
+import { logModerationAction } from "@/lib/ai-log";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -11,11 +12,15 @@ export async function POST(
 
   const { id } = await params;
 
-  const studio = await db.studio.update({
-    where: { id },
-    data: { isPublished: false },
-    select: { id: true, isPublished: true },
-  });
+  const [studio] = await Promise.all([
+    db.studio.update({
+      where: { id },
+      data: { isPublished: false },
+      select: { id: true, isPublished: true },
+    }),
+    // If there's a recent moderation scan, log this as unpublished action
+    logModerationAction(id, "unpublished"),
+  ]);
 
   return NextResponse.json(studio);
 }

@@ -516,6 +516,10 @@ export default function PublicPageEditor() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved]   = useState(false);
 
+  // AI generation tracking for feedback diffing
+  const [originalConfig, setOriginalConfig] = useState<PageConfig | null>(null);
+  const [latestLogId, setLatestLogId]       = useState<string | null>(null);
+
   // Editor UI
   const [mobile, setMobile]                 = useState(false);
   const [selectedSection, setSelectedSection] = useState("hero");
@@ -571,6 +575,17 @@ export default function PublicPageEditor() {
         }
       })
       .finally(() => setLoading(false));
+
+    // Also fetch the latest AI generation log for feedback diffing
+    fetch("/api/studio/generation-log/latest")
+      .then((r) => r.json())
+      .then(({ log }) => {
+        if (log?.configSnapshot) {
+          setOriginalConfig(log.configSnapshot as PageConfig);
+          setLatestLogId(log.id as string);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Build draft studio for postMessage ──
@@ -660,9 +675,16 @@ export default function PublicPageEditor() {
       });
       const data = await res.json();
       if (!res.ok) { setGenerateError(data.error ?? "Generation failed."); return; }
-      setPageConfig(data.pageConfig as PageConfig);
+      const generated = data.pageConfig as PageConfig;
+      setPageConfig(generated);
+      setOriginalConfig(generated); // reset baseline for feedback diffing
       setGenerationsUsed((prev) => prev + 1);
       setSelectedSection("ai-sections");
+      // Refresh logId for the new generation
+      fetch("/api/studio/generation-log/latest")
+        .then((r) => r.json())
+        .then(({ log }) => { if (log?.id) setLatestLogId(log.id as string); })
+        .catch(() => {});
     } finally { setGenerating(false); }
   }
 
@@ -689,8 +711,87 @@ export default function PublicPageEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pageConfig }),
       });
-      if (res.ok) { setConfigSaved(true); setTimeout(() => setConfigSaved(false), 3000); }
+      if (res.ok) {
+        setConfigSaved(true);
+        setTimeout(() => setConfigSaved(false), 3000);
+
+        // Diff against AI original and log any changes as GenerationFeedback
+        if (originalConfig) {
+          void logGenerationFeedback(pageConfig, originalConfig, latestLogId);
+        }
+      }
     } finally { setSavingConfig(false); }
+  }
+
+  // ── Log field-level diffs vs AI original ──
+  async function logGenerationFeedback(
+    current: PageConfig,
+    original: PageConfig,
+    logId: string | null
+  ) {
+    const feedbacks: Array<{
+      sectionType: string;
+      fieldChanged: string;
+      aiOriginalValue: string;
+      userEditedValue: string;
+    }> = [];
+
+    // Diff section content fields
+    for (const currSection of current.sections) {
+      const origSection = original.sections.find((s) => s.type === currSection.type);
+      if (!origSection) continue;
+
+      // Check visibility toggle
+      if (currSection.visible !== origSection.visible) {
+        feedbacks.push({
+          sectionType: currSection.type,
+          fieldChanged: "visible",
+          aiOriginalValue: String(origSection.visible),
+          userEditedValue: String(currSection.visible),
+        });
+      }
+
+      // Check position / order
+      const currIdx = current.sections.indexOf(currSection);
+      const origIdx = original.sections.indexOf(origSection);
+      if (currIdx !== origIdx) {
+        feedbacks.push({
+          sectionType: currSection.type,
+          fieldChanged: "order",
+          aiOriginalValue: String(origIdx),
+          userEditedValue: String(currIdx),
+        });
+      }
+
+      // Diff content fields
+      const currContent = (currSection.content ?? {}) as Record<string, unknown>;
+      const origContent = (origSection.content ?? {}) as Record<string, unknown>;
+      for (const key of Object.keys({ ...origContent, ...currContent })) {
+        const origVal = origContent[key];
+        const currVal = currContent[key];
+        if (
+          typeof origVal === "string" &&
+          typeof currVal === "string" &&
+          origVal !== currVal
+        ) {
+          feedbacks.push({
+            sectionType: currSection.type,
+            fieldChanged: key,
+            aiOriginalValue: origVal,
+            userEditedValue: currVal,
+          });
+        }
+      }
+    }
+
+    // Post each feedback (fire-and-forget, batched)
+    for (const fb of feedbacks) {
+      fetch("/api/studio/generation-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...fb, generationLogId: logId }),
+      }).catch(() => {});
+    }
   }
 
   // ── Publish ──

@@ -2,10 +2,12 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { cacheGet, cacheSet, TTL_7D } from "@/lib/admin-cache";
+import { logInsight, getChurnAccuracyContext } from "@/lib/ai-log";
 import { NextResponse } from "next/server";
 
 export type ChurnRisk = {
   id: string;
+  logId: string;        // AIInsightsLog id for this prediction — used for thumbs up/down
   name: string;
   email: string;
   tier: string;
@@ -14,6 +16,7 @@ export type ChurnRisk = {
   sessionCount: number;
   riskLevel: "High" | "Medium" | "Low";
   reasoning: string;
+  accuracy?: boolean;   // set by admin thumbs up/down
 };
 
 const CACHE_KEY = "admin:churn";
@@ -44,7 +47,7 @@ export async function GET() {
       },
     },
     take: 50,
-    orderBy: { createdAt: "asc" }, // oldest subs first (more history)
+    orderBy: { createdAt: "asc" },
   });
 
   if (subscribers.length === 0) {
@@ -71,9 +74,12 @@ export async function GET() {
     };
   });
 
+  // Fetch accuracy calibration from previous admin ratings
+  const accuracyContext = await getChurnAccuracyContext();
+
   const prompt = `You are a churn prediction assistant for IndieThis, a music studio management SaaS.
 
-Analyze the following active subscribers and identify users at risk of canceling their subscription. Consider: inactivity (days since login), low usage (sessions/AI uses), subscription age vs engagement.
+Analyze the following active subscribers and identify users at risk of canceling their subscription. Consider: inactivity (days since login), low usage (sessions/AI uses), subscription age vs engagement.${accuracyContext}
 
 Users:
 ${userSummaries.map((u, i) => `${i + 1}. ${u.name} (${u.email}) — Tier: ${u.tier}, Sub age: ${u.subAgeDays} days, Last login: ${u.daysSinceLogin} days ago, Sessions: ${u.sessionCount}, AI uses: ${u.aiUses}`).join("\n")}
@@ -100,15 +106,30 @@ Return only the JSON array, no markdown.`;
     const text = message.content[0].type === "text" ? message.content[0].text.trim() : "[]";
     const aiRisks = JSON.parse(text) as Array<{ id: string; riskLevel: "High" | "Medium" | "Low"; reasoning: string }>;
 
-    // Merge AI results with full user data
+    // Merge AI results with full user data + create per-user log entries
     const riskMap = new Map(aiRisks.map((r) => [r.id, r]));
     const risks: ChurnRisk[] = [];
 
     for (const sub of subscribers) {
       const aiResult = riskMap.get(sub.user.id);
       if (!aiResult) continue;
+
+      const userInput = userSummaries.find((u) => u.id === sub.user.id);
+      const userInputStr = userInput
+        ? `${userInput.name} (${userInput.email}) — Tier: ${userInput.tier}, Sub age: ${userInput.subAgeDays}d, Last login: ${userInput.daysSinceLogin}d ago, Sessions: ${userInput.sessionCount}, AI uses: ${userInput.aiUses}`
+        : sub.user.id;
+
+      // Create a per-user log entry so admin can rate accuracy per row
+      const logEntry = await logInsight({
+        insightType: "CHURN_PREDICTION",
+        referenceId: sub.user.id,
+        input: userInputStr,
+        output: JSON.stringify({ riskLevel: aiResult.riskLevel, reasoning: aiResult.reasoning }),
+      });
+
       risks.push({
         id: sub.user.id,
+        logId: logEntry,
         name: sub.user.name,
         email: sub.user.email,
         tier: sub.tier,

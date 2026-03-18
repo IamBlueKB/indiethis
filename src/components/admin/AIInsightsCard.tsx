@@ -2,6 +2,7 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { cacheGet, cacheSet, TTL_24H } from "@/lib/admin-cache";
+import { logInsight } from "@/lib/ai-log";
 import { Sparkles, Clock } from "lucide-react";
 
 const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
@@ -69,6 +70,13 @@ Write only the summary paragraph, no headers or labels.`;
       message.content[0].type === "text"
         ? message.content[0].text.trim()
         : `MRR is $${mrr.toLocaleString()} with ${activeSubCount} active subscriptions.`;
+
+    // Log to AIInsightsLog
+    void logInsight({
+      insightType: "REVENUE_SUMMARY",
+      input: prompt,
+      output: summary,
+    }).catch(() => {});
 
     const result = { summary, generatedAt: new Date().toISOString() };
     cacheSet(CACHE_KEY, result);

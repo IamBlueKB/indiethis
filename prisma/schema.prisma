@@ -182,6 +182,18 @@ enum ModerationStatus {
   REVIEWING
 }
 
+enum PageType {
+  STUDIO
+  ARTIST
+}
+
+enum InsightType {
+  REVENUE_SUMMARY
+  CHURN_PREDICTION
+  MODERATION_SCAN
+  SUPPORT_QUERY
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -787,4 +799,36 @@ model GenerationLog {
   wasPaid        Boolean        @default(false)
 
   studio         Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}
+
+// ─── AI Feedback & Learning Models ───────────────────────────────────────────
+
+model GenerationFeedback {
+  id              String   @id @default(cuid())
+  pageType        PageType
+  ownerId         String
+  generationLogId String?
+  sectionType     String
+  fieldChanged    String
+  aiOriginalValue String   @db.Text
+  userEditedValue String   @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([fieldChanged])
+  @@index([sectionType])
+}
+
+model AIInsightsLog {
+  id          String      @id @default(cuid())
+  insightType InsightType
+  referenceId String?
+  input       String      @db.Text
+  output      String      @db.Text
+  actionTaken String?
+  accuracy    Boolean?
+  createdAt   DateTime    @default(now())
+
+  @@index([insightType])
+  @@index([referenceId])
 }

@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
+import { logModerationAction } from "@/lib/ai-log";
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/admin/moderation/[studioId]/approve — clear the flag
@@ -12,10 +13,14 @@ export async function POST(
 
   const { studioId } = await params;
 
-  await db.studio.update({
-    where: { id: studioId },
-    data: { moderationStatus: "CLEAN", moderationReason: null },
-  });
+  await Promise.all([
+    db.studio.update({
+      where: { id: studioId },
+      data: { moderationStatus: "CLEAN", moderationReason: null },
+    }),
+    // Log actionTaken on the most recent moderation scan for this studio
+    logModerationAction(studioId, "approved"),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

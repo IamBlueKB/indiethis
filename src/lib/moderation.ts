@@ -5,6 +5,7 @@
 
 import { db } from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
+import { logInsight, getModerationAccuracyContext } from "@/lib/ai-log";
 
 export async function runModerationScan(studioId: string): Promise<void> {
   // Fetch studio content
@@ -55,7 +56,6 @@ export async function runModerationScan(studioId: string): Promise<void> {
   }
 
   if (parts.length === 0) {
-    // Nothing to moderate
     await db.studio.update({
       where: { id: studioId },
       data: { moderationStatus: "CLEAN", moderationScannedAt: new Date() },
@@ -64,6 +64,9 @@ export async function runModerationScan(studioId: string): Promise<void> {
   }
 
   const content = parts.join("\n");
+
+  // Include accuracy calibration from past admin decisions
+  const accuracyContext = await getModerationAccuracyContext();
 
   const prompt = `You are a content moderation assistant for a music studio booking platform called IndieThis.
 
@@ -75,7 +78,7 @@ Flag content if it contains:
 - False or exaggerated claims (e.g. "Grammy-winning" with no context, "worked with Jay-Z" etc. that seem fabricated)
 - Adult/NSFW content
 - Contact info or external links embedded in description fields to bypass the platform
-- Plagiarized or clearly copy-pasted boilerplate text with no customization
+- Plagiarized or clearly copy-pasted boilerplate text with no customization${accuracyContext}
 
 Content to review:
 ${content}
@@ -95,6 +98,14 @@ OR
     const text = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     const result = JSON.parse(text) as { flagged: boolean; reason?: string };
 
+    // Log to AIInsightsLog
+    void logInsight({
+      insightType: "MODERATION_SCAN",
+      referenceId: studioId,
+      input: content,
+      output: text,
+    }).catch(() => {});
+
     await db.studio.update({
       where: { id: studioId },
       data: {
@@ -105,7 +116,6 @@ OR
     });
   } catch (err) {
     console.error("[moderation] scan failed for studio", studioId, err);
-    // Don't block the studio — just mark as REVIEWING if scan errors
     await db.studio.update({
       where: { id: studioId },
       data: { moderationStatus: "REVIEWING", moderationScannedAt: new Date() },

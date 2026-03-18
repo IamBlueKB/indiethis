@@ -2,29 +2,11 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { cacheGet, cacheSet, TTL_7D } from "@/lib/admin-cache";
-import Link from "next/link";
-
-type ChurnRisk = {
-  id: string;
-  name: string;
-  email: string;
-  tier: string;
-  lastLoginAt: string | null;
-  sessionCount: number;
-  riskLevel: "High" | "Medium" | "Low";
-  reasoning: string;
-};
+import { logInsight, getChurnAccuracyContext } from "@/lib/ai-log";
+import type { ChurnRisk } from "@/app/api/admin/churn/route";
+import ChurnTableClient from "./ChurnTableClient";
 
 const CACHE_KEY = "admin:churn:table";
-const RISK_COLOR = { High: "#E85D4A", Medium: "#FF9F0A", Low: "#D4A843" };
-
-function daysSince(d: string | null): string {
-  if (!d) return "Never";
-  const days = Math.floor((Date.now() - new Date(d).getTime()) / (1000 * 60 * 60 * 24));
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return `${days}d ago`;
-}
 
 async function getChurnPredictions(): Promise<ChurnRisk[]> {
   const session = await getAdminSession();
@@ -73,9 +55,11 @@ async function getChurnPredictions(): Promise<ChurnRisk[]> {
     };
   });
 
+  const accuracyContext = await getChurnAccuracyContext();
+
   const prompt = `You are a churn prediction assistant for IndieThis, a music studio management SaaS.
 
-Analyze these active subscribers and identify users at risk of canceling. Consider inactivity, low usage, and subscription age vs. engagement. Only flag users with genuine risk.
+Analyze these active subscribers and identify users at risk of canceling. Consider inactivity, low usage, and subscription age vs. engagement. Only flag users with genuine risk.${accuracyContext}
 
 Users:
 ${userSummaries.map((u, i) => `${i + 1}. ${u.name} (${u.email}) — Tier: ${u.tier}, Sub age: ${u.subAgeDays}d, Last login: ${u.daysSinceLogin} days ago, Sessions: ${u.sessionCount}, AI uses: ${u.aiUses}`).join("\n")}
@@ -99,11 +83,27 @@ Return only JSON, no markdown.`;
     for (const sub of subscribers) {
       const aiResult = riskMap.get(sub.user.id);
       if (!aiResult) continue;
+
+      const userInput = userSummaries.find((u) => u.id === sub.user.id);
+      const userInputStr = userInput
+        ? `${userInput.name} — Tier: ${userInput.tier}, Sub age: ${userInput.subAgeDays}d, Last login: ${userInput.daysSinceLogin}d ago, Sessions: ${userInput.sessionCount}`
+        : sub.user.id;
+
+      // Per-user log entry for accuracy tracking
+      const logId = await logInsight({
+        insightType: "CHURN_PREDICTION",
+        referenceId: sub.user.id,
+        input: userInputStr,
+        output: JSON.stringify({ riskLevel: aiResult.riskLevel, reasoning: aiResult.reasoning }),
+      });
+
       risks.push({
         id: sub.user.id,
+        logId,
         name: sub.user.name,
         email: sub.user.email,
         tier: sub.tier,
+        createdAt: sub.createdAt.toISOString(),
         lastLoginAt: sub.user.lastLoginAt?.toISOString() ?? null,
         sessionCount: sub.user._count.sessions,
         riskLevel: aiResult.riskLevel,
@@ -123,78 +123,5 @@ Return only JSON, no markdown.`;
 export default async function ChurnPredictionTable() {
   const risks = await getChurnPredictions();
   if (risks.length === 0) return null;
-
-  return (
-    <div
-      className="rounded-2xl border overflow-hidden"
-      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-    >
-      <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
-        <div>
-          <p className="text-sm font-semibold text-foreground">At-Risk Users</p>
-          <p className="text-[11px] text-muted-foreground">AI churn prediction · refreshes weekly</p>
-        </div>
-        <span
-          className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-          style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}
-        >
-          {risks.filter((r) => r.riskLevel === "High").length} high risk
-        </span>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b" style={{ borderColor: "var(--border)" }}>
-              {["User", "Plan", "Last Active", "Sessions", "Risk", "Reason"].map((h) => (
-                <th key={h} className="text-left px-5 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {risks.map((risk) => (
-              <tr key={risk.id} className="border-b last:border-b-0 hover:bg-white/3 transition-colors" style={{ borderColor: "var(--border)" }}>
-                <td className="px-5 py-3">
-                  <Link href={`/admin/users/${risk.id}`} className="no-underline hover:underline">
-                    <p className="font-medium text-foreground">{risk.name}</p>
-                    <p className="text-xs text-muted-foreground">{risk.email}</p>
-                  </Link>
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
-                  >
-                    {risk.tier}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-muted-foreground text-xs">
-                  {daysSince(risk.lastLoginAt)}
-                </td>
-                <td className="px-5 py-3 text-center text-muted-foreground text-sm">
-                  {risk.sessionCount}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: `${RISK_COLOR[risk.riskLevel]}18`,
-                      color: RISK_COLOR[risk.riskLevel],
-                    }}
-                  >
-                    {risk.riskLevel}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-xs text-muted-foreground max-w-xs">
-                  {risk.reasoning}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  return <ChurnTableClient risks={risks} />;
 }

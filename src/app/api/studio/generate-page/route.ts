@@ -15,6 +15,25 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
+/** Fetch the 10 most commonly edited AI-generated fields to guide generation */
+async function getTopFeedbackEdits(): Promise<string> {
+  try {
+    const topEdits = await db.generationFeedback.groupBy({
+      by: ["fieldChanged", "sectionType"],
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    });
+    if (topEdits.length === 0) return "";
+    const lines = topEdits.map(
+      (e) => `- ${e.sectionType}.${e.fieldChanged} (edited ${e._count.id}x by studio owners)`
+    );
+    return `\n\nFEEDBACK FROM STUDIO OWNERS (fields most commonly rewritten after AI generation — write these especially well):\n${lines.join("\n")}\nFor these fields, be more specific and authentic rather than generic. Draw directly from the studio's actual bio, tagline, and service details.`;
+  } catch {
+    return "";
+  }
+}
+
 const GENERATION_LIMITS: Record<string, number> = {
   PRO: 3,
   ELITE: 10,
@@ -248,12 +267,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Call Claude API
+  const feedbackContext = await getTopFeedbackEdits();
+  const systemPromptWithFeedback = SYSTEM_PROMPT + feedbackContext;
+
   let rawText: string;
   try {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: systemPromptWithFeedback,
       messages: [{ role: "user", content: buildPrompt(studio, baseStyle) }],
     });
 

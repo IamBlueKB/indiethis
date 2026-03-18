@@ -1,6 +1,7 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
+import { logInsight } from "@/lib/ai-log";
 import { NextRequest, NextResponse } from "next/server";
 
 const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
@@ -91,6 +92,14 @@ Answer admin questions about the platform concisely and accurately using these s
       response.content[0].type === "text"
         ? response.content[0].text.trim()
         : "Sorry, I couldn't generate a response.";
+
+    // Log the question + answer
+    const lastUserMsg = messages[messages.length - 1];
+    void logInsight({
+      insightType: "SUPPORT_QUERY",
+      input: JSON.stringify({ question: lastUserMsg?.content ?? "" }),
+      output: reply,
+    }).catch(() => {});
 
     return NextResponse.json({ reply });
   } catch (err) {
