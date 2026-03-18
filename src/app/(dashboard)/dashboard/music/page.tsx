@@ -277,8 +277,8 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground truncate">{track.title}</p>
-        <div className="flex items-center gap-3 mt-0.5">
+        <p className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">{track.title}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
           {track.projectName && (
             <span className="text-[11px] text-muted-foreground">{track.projectName}</span>
           )}
@@ -287,9 +287,9 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
               ${track.price.toFixed(2)}
             </span>
           )}
-          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Play size={8} fill="currentColor" strokeWidth={0} />
-            {track.plays.toLocaleString()}
+            {track.plays.toLocaleString()} plays
           </span>
         </div>
       </div>
