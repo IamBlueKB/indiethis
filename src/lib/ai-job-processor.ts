@@ -677,9 +677,111 @@ async function handleMastering(job: AIJob): Promise<HandlerResult> {
 }
 
 async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
-  console.log(`[ai-jobs] processing LYRIC_VIDEO job ${job.id} via ${job.provider}`);
-  // Step 7: wire Remotion Lambda here
-  return { outputData: { stub: true, type: "LYRIC_VIDEO" } };
+  console.log(`[ai-jobs] processing LYRIC_VIDEO job ${job.id} — Step 10a: Whisper transcription`);
+
+  // ── Env check ────────────────────────────────────────────────────────────
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey || openaiKey.startsWith("your_"))
+    throw new Error("OPENAI_API_KEY is not configured — add it to .env.local to use Lyric Video generation.");
+
+  // ── Extract inputs ────────────────────────────────────────────────────────
+  const input = (job.inputData ?? {}) as Record<string, unknown>;
+  const {
+    trackUrl,
+    visualStyle  = "gradient",   // background style for Remotion render (Step 11)
+    fontStyle    = "bold",        // lyric text font style
+    accentColor  = "#D4A843",     // highlight color for active word (gold default)
+    aspectRatio  = "16:9",        // video dimensions
+  } = input as {
+    trackUrl?:    string;
+    visualStyle?: string;
+    fontStyle?:   string;
+    accentColor?: string;
+    aspectRatio?: string;
+  };
+
+  if (!trackUrl?.trim())
+    throw new Error("LYRIC_VIDEO job missing required input: trackUrl");
+
+  // ── Step 10a: Whisper — word-level transcription ──────────────────────────
+  console.log(`[lyric-video] fetching audio: ${trackUrl}`);
+
+  const openai = new OpenAI({ apiKey: openaiKey });
+
+  const audioRes = await fetch(trackUrl);
+  if (!audioRes.ok) throw new Error(`Failed to fetch audio: ${audioRes.statusText}`);
+
+  const audioBuffer = await audioRes.arrayBuffer();
+  const audioName   = trackUrl.split("/").pop() ?? "track.mp3";
+  const audioFile   = await toFile(Buffer.from(audioBuffer), audioName, {
+    type: audioRes.headers.get("content-type") ?? "audio/mpeg",
+  });
+
+  console.log(`[lyric-video] transcribing with Whisper (word-level timestamps)…`);
+
+  const transcription = await openai.audio.transcriptions.create({
+    model:                   "whisper-1",
+    file:                    audioFile,
+    response_format:         "verbose_json",
+    timestamp_granularities: ["word", "segment"],
+  });
+
+  // Cost: $0.006 per minute
+  const audioDurationMinutes = (transcription.duration ?? 0) / 60;
+  const costToUs = audioDurationMinutes * 0.006;
+
+  // Word-level entries: [{ word, start, end }]
+  type WhisperWord    = { word: string; start: number; end: number };
+  type WhisperSegment = { id: number; start: number; end: number; text: string };
+
+  const words    = (transcription.words    ?? []) as WhisperWord[];
+  const segments = (transcription.segments ?? []) as WhisperSegment[];
+  const fullText = transcription.text ?? "";
+
+  console.log(
+    `[lyric-video] Whisper complete — ${words.length} words, ` +
+    `${segments.length} segments, ${audioDurationMinutes.toFixed(2)} min. ` +
+    `Cost: $${costToUs.toFixed(4)}`,
+  );
+
+  // ── Write transcription to DB — status stays PROCESSING ──────────────────
+  // The user reviews and optionally corrects lyrics before rendering begins.
+  // Step 11 (Remotion render) is triggered via POST /api/ai-jobs/[id]/approve-lyrics.
+  await db.aIJob.update({
+    where: { id: job.id },
+    data: {
+      outputData: {
+        // Transcription output
+        transcriptionReady: true,
+        words,               // [{ word, start, end }] — used by Remotion for word-by-word animation
+        segments,            // sentence-level segments with start/end times
+        text:        fullText,
+        duration:    transcription.duration ?? null,
+        whisperModel: "whisper-1",
+        transcriptionCostToUs: costToUs,
+
+        // Render metadata saved for Step 11
+        trackUrl,
+        visualStyle,
+        fontStyle,
+        accentColor,
+        aspectRatio,
+      } as Prisma.InputJsonValue,
+      costToUs,
+      // status intentionally NOT changed — stays PROCESSING until user approves lyrics
+    },
+  });
+
+  console.log(
+    `[lyric-video] transcription saved to job ${job.id}. ` +
+    `Artist reviews lyrics → POST /api/ai-jobs/${job.id}/approve-lyrics to start render.`,
+  );
+
+  return {
+    outputData:   {},   // already written above
+    costToUs,
+    skipComplete: true, // stays PROCESSING until lyrics are approved
+  };
 }
 
 async function handleARReport(job: AIJob): Promise<HandlerResult> {
