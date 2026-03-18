@@ -167,8 +167,219 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
 
 async function handleMastering(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing MASTERING job ${job.id} via ${job.provider}`);
-  // Step 6: wire Dolby.io mastering here
-  return { outputData: { stub: true, type: "MASTERING" } };
+
+  // ── Env checks ───────────────────────────────────────────────────────────
+  const dolbyKey    = process.env.DOLBY_API_KEY    ?? process.env.DOLBY_APP_KEY;
+  const dolbySecret = process.env.DOLBY_API_SECRET ?? process.env.DOLBY_APP_SECRET;
+
+  if (!dolbyKey    || dolbyKey.startsWith("your_"))
+    throw new Error("DOLBY_API_KEY is not configured — add it to .env.local to use AI Mastering.");
+  if (!dolbySecret || dolbySecret.startsWith("your_"))
+    throw new Error("DOLBY_API_SECRET is not configured — add it to .env.local to use AI Mastering.");
+
+  // ── Extract inputs ────────────────────────────────────────────────────────
+  const input = (job.inputData ?? {}) as Record<string, string>;
+  const { trackUrl } = input;
+
+  if (!trackUrl?.trim())
+    throw new Error("MASTERING job missing required input: trackUrl");
+
+  // ── Dolby auth ────────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dolbyToken: any = await dolbyClient.media.authentication.getApiAccessToken(
+    dolbyKey, dolbySecret, 1800,
+  );
+
+  // ── Step 1: upload source audio to Dolby temporary storage ───────────────
+  console.log(`[mastering] fetching source audio: ${trackUrl}`);
+  const audioRes = await fetch(trackUrl);
+  if (!audioRes.ok) throw new Error(`Failed to fetch audio: ${audioRes.statusText}`);
+  const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+  const filename    = trackUrl.split("/").pop() ?? "source.mp3";
+
+  console.log(`[mastering] uploading ${audioBuffer.length} bytes to Dolby storage`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uploadResult: any = await dolbyClient.media.io.getUploadUrl(dolbyToken, filename);
+  const dlbInputUrl: string = uploadResult?.url ?? uploadResult?.dlb_url;
+  const signedPutUrl: string = uploadResult?.signed_url ?? uploadResult?.upload_url;
+
+  if (!dlbInputUrl || !signedPutUrl)
+    throw new Error("Dolby did not return upload URL — check DOLBY_API_KEY is valid.");
+
+  // PUT the audio to Dolby's signed S3 URL
+  const putRes = await fetch(signedPutUrl, {
+    method:  "PUT",
+    body:    audioBuffer,
+    headers: { "Content-Type": audioRes.headers.get("content-type") ?? "audio/mpeg" },
+  });
+  if (!putRes.ok) throw new Error(`Dolby upload PUT failed: ${putRes.statusText}`);
+  console.log(`[mastering] source uploaded → ${dlbInputUrl}`);
+
+  // ── Step 2: define the 3 mastering profiles ───────────────────────────────
+  const PROFILES = [
+    {
+      label:       "Warm",
+      description: "Boosted low-mids, gentle compression — ideal for late-night listening",
+      preset:      "C",    // Warm / bass-forward
+      loudness:    -14,    // Streaming standard
+      peak:        -1.0,
+      dlbOutputUrl: `dlb://mastering-${job.id}-warm`,
+    },
+    {
+      label:       "Punchy",
+      description: "Emphasized transients, tighter compression — energetic and club-ready",
+      preset:      "D",    // Dynamic
+      loudness:    -9,     // Aggressive / commercial
+      peak:        -1.0,
+      dlbOutputUrl: `dlb://mastering-${job.id}-punchy`,
+    },
+    {
+      label:       "Broadcast Ready",
+      description: "Loudness normalized to -14 LUFS, balanced EQ — Spotify / Apple Music compliant",
+      preset:      "A",    // Balanced
+      loudness:    -14,
+      peak:        -1.5,   // Slightly conservative for broadcast compliance
+      dlbOutputUrl: `dlb://mastering-${job.id}-broadcast`,
+    },
+  ] as const;
+
+  // ── Step 3: start all 3 mastering jobs in parallel ────────────────────────
+  console.log(`[mastering] starting 3 mastering jobs in parallel`);
+
+  const jobIds = await Promise.all(
+    PROFILES.map(async (profile) => {
+      const body = JSON.stringify({
+        inputs:  [{ source: dlbInputUrl }],
+        outputs: [{
+          destination: profile.dlbOutputUrl,
+          master: {
+            dynamic_eq: { enable: true, preset: profile.preset },
+            loudness: {
+              enable:              true,
+              dialog_intelligence: false,
+              peak:                profile.peak,
+              loudness:            profile.loudness,
+            },
+          },
+        }],
+      });
+      const jobId = await dolbyClient.media.mastering.start(dolbyToken, body) as string;
+      console.log(`[mastering] ${profile.label} job started: ${jobId}`);
+      return { profile, jobId };
+    }),
+  );
+
+  // ── Step 4: poll all 3 jobs in parallel ──────────────────────────────────
+  console.log(`[mastering] polling all 3 jobs for completion`);
+
+  const MAX_WAIT_MS = 600_000; // 10 minutes — mastering can be slow
+  const POLL_MS     = 6_000;
+
+  const pollOne = async (jobId: string, label: string): Promise<{ status: string; result: unknown }> => {
+    const started = Date.now();
+    while (Date.now() - started < MAX_WAIT_MS) {
+      await new Promise((r) => setTimeout(r, POLL_MS));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = await dolbyClient.media.mastering.getResults(dolbyToken, jobId);
+      const status = res?.status as string;
+      console.log(`[mastering] ${label} status: ${status}`);
+      if (["Success", "Failed", "Canceled", "Expired"].includes(status)) {
+        return { status, result: res };
+      }
+    }
+    return { status: "Timeout", result: null };
+  };
+
+  const pollResults = await Promise.allSettled(
+    jobIds.map(({ profile, jobId }) => pollOne(jobId, profile.label)),
+  );
+
+  // ── Step 5: collect download URLs for completed jobs ─────────────────────
+  type MasteringOutput = {
+    label:        string;
+    description:  string;
+    preset:       string;
+    loudnessLUFS: number;
+    downloadUrl:  string | null;
+    measuredLUFS: number | null;
+    status:       string;
+  };
+
+  const outputs: MasteringOutput[] = [];
+
+  for (let i = 0; i < jobIds.length; i++) {
+    const { profile }  = jobIds[i];
+    const pollResult   = pollResults[i];
+
+    if (pollResult.status === "rejected" || pollResult.value.status !== "Success") {
+      const reason = pollResult.status === "rejected"
+        ? String(pollResult.reason)
+        : `Job ended with status: ${pollResult.value.status}`;
+      console.warn(`[mastering] ${profile.label} failed: ${reason}`);
+      outputs.push({
+        label:        profile.label,
+        description:  profile.description,
+        preset:       profile.preset,
+        loudnessLUFS: profile.loudness,
+        downloadUrl:  null,
+        measuredLUFS: null,
+        status:       pollResult.status === "rejected" ? "Failed" : pollResult.value.status,
+      });
+      continue;
+    }
+
+    // Get signed HTTPS download URL for this dlb:// output
+    let downloadUrl: string | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dlResult: any = await dolbyClient.media.io.getDownloadUrl(dolbyToken, profile.dlbOutputUrl);
+      downloadUrl = (dlResult?.url ?? dlResult?.signed_url) as string;
+    } catch (e) {
+      console.warn(`[mastering] could not get download URL for ${profile.label}: ${e}`);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = pollResult.value.result as any;
+    const measuredLUFS = r?.result?.loudness?.measured_loudness ?? null;
+
+    outputs.push({
+      label:        profile.label,
+      description:  profile.description,
+      preset:       profile.preset,
+      loudnessLUFS: profile.loudness,
+      downloadUrl,
+      measuredLUFS,
+      status:       "Success",
+    });
+
+    console.log(
+      `[mastering] ${profile.label} complete — measured ${measuredLUFS} LUFS. ` +
+      `Download: ${downloadUrl?.slice(0, 60)}…`,
+    );
+  }
+
+  const successCount = outputs.filter((o) => o.status === "Success").length;
+  if (successCount === 0)
+    throw new Error("All 3 Dolby mastering jobs failed. Check DOLBY_API_KEY and try again.");
+
+  // Dolby mastering cost: ~$0.006 per minute per job
+  const audioDurationMinutes = audioBuffer.length / (1411 * 125); // rough estimate at 1411kbps
+  const costToUs = successCount * audioDurationMinutes * 0.006;
+
+  console.log(
+    `[mastering] done — ${successCount}/3 succeeded. ` +
+    `Est. cost: $${costToUs.toFixed(4)}`,
+  );
+
+  return {
+    outputData: {
+      outputs,           // array of { label, description, downloadUrl, measuredLUFS, status }
+      sourceTrackUrl: trackUrl,
+      dlbInputUrl,
+      successCount,
+    },
+    costToUs,
+  };
 }
 
 async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
