@@ -276,11 +276,11 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
       </div>
 
       {/* Info — single row: title truncates first, metadata stays visible */}
-      <div className="flex items-center gap-0 flex-1 min-w-0 overflow-hidden">
-        <p className="text-sm font-semibold text-foreground truncate shrink min-w-0">
+      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+        <p className="text-sm font-semibold text-foreground truncate flex-1 min-w-0">
           {track.title}
         </p>
-        <div className="flex items-center gap-1.5 shrink-0 ml-2 whitespace-nowrap">
+        <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           {track.price != null && (
             <>
               <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
