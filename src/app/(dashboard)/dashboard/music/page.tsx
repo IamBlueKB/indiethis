@@ -275,19 +275,21 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
         }
       </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">{track.title}</p>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {track.projectName && (
-            <span className="text-[11px] text-muted-foreground">{track.projectName}</span>
-          )}
+      {/* Info — single row: title truncates first, metadata stays visible */}
+      <div className="flex items-center gap-0 flex-1 min-w-0 overflow-hidden">
+        <p className="text-sm font-semibold text-foreground truncate shrink min-w-0">
+          {track.title}
+        </p>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2 whitespace-nowrap">
           {track.price != null && (
-            <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
-              ${track.price.toFixed(2)}
-            </span>
+            <>
+              <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+                ${track.price.toFixed(2)}
+              </span>
+              <span className="text-[11px] text-muted-foreground">·</span>
+            </>
           )}
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
             <Play size={8} fill="currentColor" strokeWidth={0} />
             {track.plays.toLocaleString()} plays
           </span>
