@@ -229,6 +229,15 @@ enum ScheduledEmailStatus {
   FAILED
 }
 
+enum ReferralRewardTier {
+  NONE
+  CREDIT_1
+  FREE_MONTH
+  DISCOUNT_20
+  LIFETIME_PUSH
+  LIFETIME_REIGN
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -281,9 +290,11 @@ model User {
   passwordResetToken   String?   @unique
   passwordResetExpiry  DateTime?
   igFollowClaimed  Boolean  @default(false)
-  referralCode     String?  @unique
-  referredById     String?
-  artistSlug       String?  @unique
+  referralCode         String?             @unique
+  referredById         String?
+  referredByCode       String?
+  referralRewardTier   ReferralRewardTier  @default(NONE)
+  artistSlug           String?             @unique
   isComped         Boolean   @default(false)
   compExpiresAt    DateTime?
   isSuspended      Boolean   @default(false)
@@ -311,6 +322,8 @@ model User {
   producerLicenses   BeatLicense[]      @relation("ProducerLicenses")
   artistLicenses     BeatLicense[]      @relation("ArtistLicenses")
   youtubeReferences  YoutubeReference[]
+  referralsGiven     Referral[]         @relation("ReferrerReferrals")
+  referralReceived   Referral?          @relation("ReferredReferrals")
 }
 
 model Studio {
@@ -938,4 +951,22 @@ model ScheduledEmail {
   @@index([studioId])
   @@index([status, scheduledFor])
   @@index([quickSendId])
+}
+
+// ─── Referral Tracking ────────────────────────────────────────────────────────
+
+model Referral {
+  id              String    @id @default(cuid())
+  referrerUserId  String
+  referredUserId  String    @unique          // a user can only be referred once
+  isActive        Boolean   @default(false)  // true while referred user has active subscription
+  activatedAt     DateTime?                  // when isActive first became true
+  deactivatedAt   DateTime?                  // when isActive last became false (churn)
+  createdAt       DateTime  @default(now())
+
+  referrer        User      @relation("ReferrerReferrals", fields: [referrerUserId], references: [id])
+  referred        User      @relation("ReferredReferrals", fields: [referredUserId],  references: [id])
+
+  @@index([referrerUserId])
+  @@index([isActive])
 }
