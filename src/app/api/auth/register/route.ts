@@ -13,13 +13,31 @@ function generateReferralCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, password, role, referralCode: usedReferralCode, affiliateId } = body as {
+    const {
+      name,
+      email,
+      password,
+      role,
+      referralCode: usedReferralCode,
+      affiliateId,
+      // Attribution params
+      source,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      landingPage,
+    } = body as {
       name: string;
       email: string;
       password: string;
       role?: string;
       referralCode?: string;
       affiliateId?: string;
+      source?: string;
+      utmSource?: string;
+      utmMedium?: string;
+      utmCampaign?: string;
+      landingPage?: string;
     };
 
     // Validate required fields
@@ -100,6 +118,25 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err) => {
         console.warn("[register] failed to create Referral record:", err);
+      });
+    }
+
+    // Attribution tracking — store channel/UTM data for analytics
+    const hasAttribution = usedReferralCode || affiliateId || source || utmSource || utmMedium || utmCampaign || landingPage;
+    if (hasAttribution) {
+      db.userAttribution.create({
+        data: {
+          userId:     user.id,
+          ref:        usedReferralCode ?? null,
+          affiliateId: affiliateId ?? null,
+          source:     source ?? null,
+          utmSource:  utmSource ?? null,
+          utmMedium:  utmMedium ?? null,
+          utmCampaign: utmCampaign ?? null,
+          landingPage: landingPage ?? null,
+        },
+      }).catch((err) => {
+        console.warn("[register] failed to create UserAttribution:", err);
       });
     }
 

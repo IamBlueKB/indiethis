@@ -333,6 +333,7 @@ model User {
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
   affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
+  attribution        UserAttribution?
 }
 
 model Studio {
@@ -1033,4 +1034,33 @@ model AffiliateReferral {
 
   @@index([affiliateId])
   @@index([isActive])
+}
+
+// ─── Attribution Tracking ─────────────────────────────────────────────────────
+
+model UserAttribution {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+
+  /// Platform referral code (?ref=)
+  ref           String?
+  /// Affiliate ID (?affiliate=)
+  affiliateId   String?
+  /// Acquisition channel: file_delivery | studio_page | artist_page | social | direct | ad
+  source        String?
+  /// UTM parameters
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  /// First URL the user hit before signing up (populated by client)
+  landingPage   String?
+
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([source])
+  @@index([utmSource])
+  @@index([utmCampaign])
 }

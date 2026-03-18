@@ -16,10 +16,18 @@ type RoleOption = "ARTIST" | "STUDIO_ADMIN";
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialRole = searchParams.get("role") === "STUDIO_ADMIN" ? "STUDIO_ADMIN" : "ARTIST";
-  const refCode      = searchParams.get("ref")       ?? undefined;
-  const affiliateId  = searchParams.get("affiliate") ?? undefined;
-  const discountCode = searchParams.get("discount")  ?? undefined;
+  const initialRole  = searchParams.get("role") === "STUDIO_ADMIN" ? "STUDIO_ADMIN" : "ARTIST";
+  const refCode      = searchParams.get("ref")          ?? undefined;
+  const affiliateId  = searchParams.get("affiliate")    ?? undefined;
+  const discountCode = searchParams.get("discount")     ?? undefined;
+  const source       = searchParams.get("source")       ?? undefined;
+  const utmSource    = searchParams.get("utm_source")   ?? undefined;
+  const utmMedium    = searchParams.get("utm_medium")   ?? undefined;
+  const utmCampaign  = searchParams.get("utm_campaign") ?? undefined;
+  // Capture landing page once on mount (lazy useState initializer runs client-side only)
+  const [landingPage] = useState<string | undefined>(() =>
+    typeof window !== "undefined" ? (document.referrer || window.location.href) : undefined
+  );
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -48,7 +56,19 @@ function SignupForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role, referralCode: refCode, affiliateId }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          referralCode: refCode,
+          affiliateId,
+          source,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          landingPage,
+        }),
       });
 
       const data = await res.json();
