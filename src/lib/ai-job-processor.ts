@@ -90,6 +90,33 @@ const KLING_COST_PER_SEC = 0.029;
 // Runway Gen-3 Alpha Turbo cost: ~$0.05 per second
 const RUNWAY_COST_PER_SEC = 0.05;
 
+// ─── Tiered pricing for AI video generation ───────────────────────────────────
+
+/**
+ * Three duration tiers for AI music video generation.
+ *
+ * The `maxSeconds` cap is enforced at Phase 1 so both preview approval
+ * and Phase 2 clip generation always respect the purchased tier.
+ * `price` is the flat fee charged to the artist (USD).
+ */
+export const VIDEO_DURATION_TIERS = {
+  SHORT:  { maxSeconds: 30,  price: 19, label: "Up to 30 seconds" },
+  MEDIUM: { maxSeconds: 60,  price: 29, label: "Up to 1 minute"   },
+  FULL:   { maxSeconds: 180, price: 49, label: "Up to 3 minutes"  },
+} as const;
+
+export type VideoDurationTier = keyof typeof VIDEO_DURATION_TIERS;
+
+/**
+ * Infer the tier from a raw duration (seconds) when no explicit tier is provided.
+ * Rounds up to the smallest tier that covers the requested duration.
+ */
+function inferTier(seconds: number): VideoDurationTier {
+  if (seconds <= 30)  return "SHORT";
+  if (seconds <= 60)  return "MEDIUM";
+  return "FULL";
+}
+
 /**
  * Generate video via Kling 1.6 Pro on fal.ai (primary provider).
  * Returns { videoUrl, provider: "kling" } on success.
@@ -243,18 +270,36 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
   const input = (job.inputData ?? {}) as Record<string, unknown>;
   const {
     imageUrl,
-    style           = "cinematic",
-    aspectRatio     = "16:9",
-    durationSeconds = 60,   // full video duration; Phase 1 always uses 10s
+    style            = "cinematic",
+    aspectRatio      = "16:9",
+    durationSeconds: rawDurationSeconds = 60,
+    durationTier:    rawTier,
   } = input as {
-    imageUrl?:        string;
-    style?:           string;
-    aspectRatio?:     string;
-    durationSeconds?: number;
+    imageUrl?:         string;
+    style?:            string;
+    aspectRatio?:      string;
+    durationSeconds?:  number;
+    durationTier?:     string;
   };
 
   if (!imageUrl?.trim())
     throw new Error("VIDEO job missing required input: imageUrl");
+
+  // ── Resolve duration tier and enforce cap ─────────────────────────────────
+  // Accept an explicit tier from the client; infer from raw seconds otherwise.
+  const tier: VideoDurationTier =
+    rawTier && rawTier in VIDEO_DURATION_TIERS
+      ? (rawTier as VideoDurationTier)
+      : inferTier(Number(rawDurationSeconds));
+
+  const tierDef       = VIDEO_DURATION_TIERS[tier];
+  const priceCharged  = tierDef.price;                               // artist-facing price
+  // Cap the requested duration to what the tier permits
+  const durationSeconds = Math.min(Number(rawDurationSeconds), tierDef.maxSeconds);
+
+  console.log(
+    `[video] tier ${tier} ($${priceCharged}) — capped duration: ${durationSeconds}s / ${tierDef.maxSeconds}s max`,
+  );
 
   const stylePrompt = VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
 
@@ -308,19 +353,22 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
         provider:        providerUsed,
         style,
         aspectRatio,
-        durationSeconds,      // saved for Phase 2 full render
+        durationSeconds,      // tier-capped value — used by Phase 2 full render
+        durationTier:    tier,
+        priceCharged,
         stylePrompt,
         previewCostToUs: costToUs,
         ...extraMeta,
       } as import("@prisma/client").Prisma.InputJsonValue,
       costToUs,
+      priceCharged,     // flat artist-facing price persisted on the job record
       // status intentionally NOT changed — stays PROCESSING until user approves
     },
   });
 
   console.log(
-    `[video] Phase 1 complete (${providerUsed}) — cost $${costToUs.toFixed(3)}. ` +
-    `Job ${job.id} awaiting user approval for Phase 2.`,
+    `[video] Phase 1 complete (${providerUsed}) — tier ${tier} ($${priceCharged}), ` +
+    `provider cost $${costToUs.toFixed(3)}. Job ${job.id} awaiting user approval for Phase 2.`,
   );
 
   return {
