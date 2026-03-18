@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
   const body = await req.json();
-  const { recipientEmail, recipientPhone, fileUrls, message, contactId, senderName, sendFollowUpSequence } = body as {
+  const { recipientEmail, recipientPhone, fileUrls, message, contactId, senderName, sendFollowUpSequence, enabledStepKeys } = body as {
     recipientEmail: string;
     recipientPhone?: string;
     fileUrls: string[];
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     contactId?: string;
     senderName?: string;
     sendFollowUpSequence?: boolean;
+    enabledStepKeys?: string[];
   };
 
   if (!recipientEmail?.trim() || !fileUrls?.length) {
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
       quickSendId:    quickSend.id,
       deliveredAt:    quickSend.createdAt,
       emailTemplates: studio.emailTemplates,
+      enabledStepKeys: Array.isArray(enabledStepKeys) ? enabledStepKeys : undefined,
     });
   }
 

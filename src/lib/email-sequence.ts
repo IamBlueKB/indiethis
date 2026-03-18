@@ -37,6 +37,13 @@ export type ScheduleInput = {
   deliveredAt:  Date;
   /** Studio's emailTemplates JSON field — pass studio.emailTemplates directly */
   emailTemplates: unknown;
+  /**
+   * Optional per-delivery step override. When provided, only steps whose key
+   * appears in this array will be scheduled (regardless of template.enabled).
+   * Keys are "day1" | "day3" | "day7" | "day14".
+   * When omitted, falls back to each step's template.enabled flag.
+   */
+  enabledStepKeys?: string[];
 };
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
@@ -81,12 +88,17 @@ export async function scheduleFollowUpSequence(input: ScheduleInput): Promise<nu
   } = input;
 
   const templates = parseTemplates(emailTemplates);
+  const { enabledStepKeys } = input;
 
-  // Build create-many payload — only for enabled steps with non-empty templates
+  // Build create-many payload — only for steps with non-empty content that are
+  // either explicitly selected (per-delivery checklist) or globally enabled.
   const data = STEPS
     .filter(({ key }) => {
       const step = templates[key];
-      return step?.enabled === true && step.subject?.trim() && step.body?.trim();
+      if (!step?.subject?.trim() || !step?.body?.trim()) return false;
+      // Per-delivery override takes precedence over global enabled flag
+      if (enabledStepKeys !== undefined) return enabledStepKeys.includes(key);
+      return step.enabled === true;
     })
     .map(({ prismaStep, offsetDays }) => ({
       studioId,

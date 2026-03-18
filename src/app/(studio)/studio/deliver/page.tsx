@@ -26,9 +26,18 @@ type Contact = { id: string; name: string; email: string | null };
 
 type StudioSettings = {
   emailSequenceEnabled: boolean;
-  emailTemplates: Record<string, unknown> | null;
+  emailTemplates: Record<string, { enabled?: boolean; subject?: string; body?: string }> | null;
   name: string;
 };
+
+// ─── Sequence step config ─────────────────────────────────────────────────────
+
+const SEQUENCE_STEPS = [
+  { key: "day1",  label: "Day 1",  fallback: "Session Files Ready" },
+  { key: "day3",  label: "Day 3",  fallback: "Track Follow-Up" },
+  { key: "day7",  label: "Day 7",  fallback: "Social Proof" },
+  { key: "day14", label: "Day 14", fallback: "Subscription Pitch" },
+] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +66,9 @@ export default function DeliverPage() {
   const [fileUrls, setFileUrls]             = useState("");
   const [message, setMessage]               = useState("");
   const [sendFollowUp, setSendFollowUp]     = useState(false);
+  const [stepChecks, setStepChecks]         = useState<Record<string, boolean>>({
+    day1: true, day3: true, day7: true, day14: true,
+  });
 
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -73,6 +85,14 @@ export default function DeliverPage() {
       setSendFollowUp(
         Boolean(s?.emailSequenceEnabled) && templatesConfigured(s)
       );
+      // Initialise step checkboxes from saved enabled flags (true if missing/unconfigured)
+      const t = s?.emailTemplates;
+      setStepChecks({
+        day1:  t?.day1?.enabled  !== false,
+        day3:  t?.day3?.enabled  !== false,
+        day7:  t?.day7?.enabled  !== false,
+        day14: t?.day14?.enabled !== false,
+      });
       setLoading(false);
     });
   }, []);
@@ -100,6 +120,9 @@ export default function DeliverPage() {
           fileUrls: urls,
           message,
           sendFollowUpSequence: sendFollowUp,
+          enabledStepKeys: sendFollowUp
+            ? Object.entries(stepChecks).filter(([, v]) => v).map(([k]) => k)
+            : [],
         }),
       });
       if (res.ok) {
@@ -108,10 +131,17 @@ export default function DeliverPage() {
         setShowCreate(false);
         setContactId(""); setRecipientEmail(""); setRecipientPhone("");
         setFileUrls(""); setMessage("");
-        // Reset toggle to studio default for next send
+        // Reset toggle + step checks to studio defaults for next send
         setSendFollowUp(
           Boolean(studioSettings?.emailSequenceEnabled) && templatesConfigured(studioSettings)
         );
+        const t = studioSettings?.emailTemplates;
+        setStepChecks({
+          day1:  t?.day1?.enabled  !== false,
+          day3:  t?.day3?.enabled  !== false,
+          day7:  t?.day7?.enabled  !== false,
+          day14: t?.day14?.enabled !== false,
+        });
       }
     } finally {
       setCreating(false);
@@ -235,70 +265,106 @@ export default function DeliverPage() {
 
           {/* ── Follow-up sequence toggle ──────────────────────────────────── */}
           <div
-            className="rounded-xl border p-3.5 flex items-start gap-3"
+            className="rounded-xl border overflow-hidden"
             style={{
               borderColor: sendFollowUp ? "rgba(212,168,67,0.4)" : "var(--border)",
               backgroundColor: sendFollowUp ? "rgba(212,168,67,0.05)" : "transparent",
             }}
           >
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-              style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
-            >
-              <Mail size={15} style={{ color: "#D4A843" }} />
+            {/* Toggle row */}
+            <div className="flex items-start gap-3 p-3.5">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
+              >
+                <Mail size={15} style={{ color: "#D4A843" }} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">
+                  Send follow-up email sequence to this client
+                </p>
+
+                {!hasTemplates && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <AlertCircle size={11} className="shrink-0" />
+                    Templates not configured.{" "}
+                    <Link href="/studio/settings/email-sequences" className="underline" style={{ color: "#D4A843" }}>
+                      Set up your follow-up emails first
+                    </Link>
+                  </p>
+                )}
+                {!sequenceActive && hasTemplates && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <AlertCircle size={11} className="shrink-0" />
+                    Sequence disabled globally.{" "}
+                    <Link href="/studio/settings/email-sequences" className="underline" style={{ color: "#D4A843" }}>
+                      Enable in settings
+                    </Link>
+                  </p>
+                )}
+                {!sendFollowUp && sequenceActive && hasTemplates && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    No follow-up emails will be sent for this delivery.
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={() => setSendFollowUp((v) => !v)}
+                title={sendFollowUp ? "Disable follow-up for this send" : "Enable follow-up for this send"}
+                className="shrink-0"
+              >
+                {sendFollowUp ? (
+                  <ToggleRight size={28} style={{ color: "#D4A843" }} />
+                ) : (
+                  <ToggleLeft size={28} className="text-muted-foreground" />
+                )}
+              </button>
             </div>
 
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">
-                Send follow-up email sequence to this client
-              </p>
-
-              {hasTemplates ? (
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {sendFollowUp
-                    ? "Day 1, 3, 7, and 14 follow-up emails will queue after delivery."
-                    : "No follow-up emails will be sent for this delivery."}
+            {/* Step checklist — shown when toggled on */}
+            {sendFollowUp && (
+              <div
+                className="border-t px-3.5 pb-3 pt-2.5 space-y-2"
+                style={{ borderColor: "rgba(212,168,67,0.25)" }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  Select which steps to send
                 </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <AlertCircle size={11} className="shrink-0" />
-                  Templates not configured.{" "}
-                  <Link
-                    href="/studio/settings/email-sequences"
-                    className="underline"
-                    style={{ color: "#D4A843" }}
-                  >
-                    Set up your follow-up emails first
-                  </Link>
-                </p>
-              )}
-
-              {!sequenceActive && hasTemplates && (
-                <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                  <AlertCircle size={11} className="shrink-0" />
-                  Sequence is disabled globally.{" "}
-                  <Link
-                    href="/studio/settings/email-sequences"
-                    className="underline"
-                    style={{ color: "#D4A843" }}
-                  >
-                    Enable it in settings
-                  </Link>
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={() => setSendFollowUp((v) => !v)}
-              title={sendFollowUp ? "Disable follow-up for this send" : "Enable follow-up for this send"}
-              className="shrink-0"
-            >
-              {sendFollowUp ? (
-                <ToggleRight size={28} style={{ color: "#D4A843" }} />
-              ) : (
-                <ToggleLeft size={28} className="text-muted-foreground" />
-              )}
-            </button>
+                {SEQUENCE_STEPS.map(({ key, label, fallback }) => {
+                  const subject = studioSettings?.emailTemplates?.[key]?.subject?.trim() || fallback;
+                  const checked = stepChecks[key] ?? true;
+                  return (
+                    <label
+                      key={key}
+                      className="flex items-center gap-2.5 cursor-pointer group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setStepChecks((prev) => ({ ...prev, [key]: e.target.checked }))
+                        }
+                        className="shrink-0 accent-[#D4A843] w-3.5 h-3.5"
+                      />
+                      <span
+                        className="text-[11px] font-bold shrink-0"
+                        style={{ color: checked ? "#D4A843" : "var(--muted-foreground)", minWidth: 36 }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        className="text-[11px] truncate"
+                        style={{ color: checked ? "var(--foreground)" : "var(--muted-foreground)" }}
+                      >
+                        {subject}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <button
