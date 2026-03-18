@@ -54,16 +54,24 @@ export async function GET(
     if (artistUser) youtubeReferences = artistUser.youtubeReferences;
   }
 
-  // Count pending follow-up emails for this contact
-  const pendingEmailCount = await db.scheduledEmail.count({
-    where: {
-      studioId: studio.id,
-      contactId: id,
-      status: "PENDING",
+  // Fetch all follow-up emails for this contact (all statuses, newest first)
+  const scheduledEmails = await db.scheduledEmail.findMany({
+    where: { studioId: studio.id, contactId: id },
+    orderBy: { scheduledFor: "asc" },
+    select: {
+      id:           true,
+      sequenceStep: true,
+      scheduledFor: true,
+      status:       true,
+      sentAt:       true,
+      errorMessage: true,
+      createdAt:    true,
     },
   });
 
-  return NextResponse.json({ contact, youtubeReferences, pendingEmailCount });
+  const pendingEmailCount = scheduledEmails.filter((e) => e.status === "PENDING").length;
+
+  return NextResponse.json({ contact, youtubeReferences, scheduledEmails, pendingEmailCount });
 }
 
 // PATCH /api/studio/contacts/[id] — update contact

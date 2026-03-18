@@ -6,13 +6,23 @@ import Link from "next/link";
 import {
   ArrowLeft, Mail, Phone, Instagram, Music2, DollarSign,
   Calendar, Send, FolderOpen, FileText, UserCircle2,
-  MessageSquare, Link2, Pencil, Check, X, Youtube, Tag, MailX,
+  MessageSquare, Link2, Pencil, Check, X, Youtube, Tag, MailX, MailCheck,
 } from "lucide-react";
 
 type ActivityLog = {
   id: string;
   type: string;
   description: string;
+  createdAt: string;
+};
+
+type ScheduledEmail = {
+  id: string;
+  sequenceStep: "DAY_1" | "DAY_3" | "DAY_7" | "DAY_14";
+  scheduledFor: string;
+  status: "PENDING" | "SENT" | "CANCELLED" | "FAILED";
+  sentAt: string | null;
+  errorMessage: string | null;
   createdAt: string;
 };
 
@@ -105,6 +115,7 @@ export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [contact, setContact] = useState<Contact | null>(null);
   const [youtubeRefs, setYoutubeRefs] = useState<YoutubeReference[]>([]);
+  const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState("");
@@ -122,6 +133,7 @@ fetch(`/api/studio/contacts/${id}`)
         setContact({ ...d.contact, aiVideoRequested });
         setNotes(d.contact?.notes ?? "");
         setYoutubeRefs(d.youtubeReferences ?? []);
+        setScheduledEmails(d.scheduledEmails ?? []);
         setPendingEmailCount(d.pendingEmailCount ?? 0);
         setLoading(false);
       });
@@ -133,10 +145,11 @@ fetch(`/api/studio/contacts/${id}`)
     try {
       const res = await fetch(`/api/studio/contacts/${id}/cancel-sequence`, { method: "POST" });
       if (res.ok) {
-        const data = await res.json();
         setPendingEmailCount(0);
-        // Log a note in the UI via the contact's activityLog if desired — for now just clear count
-        void data;
+        // Flip all PENDING rows to CANCELLED in local state
+        setScheduledEmails((prev) =>
+          prev.map((e) => e.status === "PENDING" ? { ...e, status: "CANCELLED" as const } : e)
+        );
       }
     } finally {
       setCancellingSequence(false);
@@ -246,27 +259,11 @@ fetch(`/api/studio/contacts/${id}`)
             )}
           </div>
         </div>
-        <div className="text-right shrink-0 space-y-2">
+        <div className="text-right shrink-0 space-y-1">
           <div className="flex items-center gap-1 text-emerald-400 font-bold text-lg justify-end">
             <DollarSign size={16} />{contact.totalSpent.toFixed(2)}
           </div>
           <p className="text-xs text-muted-foreground">Total Spent</p>
-          {pendingEmailCount > 0 && (
-            <button
-              onClick={cancelSequence}
-              disabled={cancellingSequence}
-              className="mt-1 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-              style={{
-                backgroundColor: "rgba(239,68,68,0.1)",
-                color: "#f87171",
-                border: "1px solid rgba(239,68,68,0.25)",
-              }}
-              title={`Cancel ${pendingEmailCount} pending follow-up email${pendingEmailCount === 1 ? "" : "s"}`}
-            >
-              <MailX size={12} />
-              {cancellingSequence ? "Cancelling…" : `Cancel sequence (${pendingEmailCount})`}
-            </button>
-          )}
         </div>
       </div>
 
@@ -439,6 +436,105 @@ fetch(`/api/studio/contacts/${id}`)
               </p>
             )}
           </div>
+
+          {/* Follow-Up Emails */}
+          {scheduledEmails.length > 0 && (
+            <div
+              className="rounded-2xl border overflow-hidden"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              {/* Header */}
+              <div
+                className="flex items-center justify-between px-5 py-3.5 border-b"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <MailCheck size={15} style={{ color: "#D4A843" }} />
+                  <h2 className="text-sm font-semibold text-foreground">Follow-Up Emails</h2>
+                  <span className="text-xs text-muted-foreground">
+                    ({scheduledEmails.length} step{scheduledEmails.length !== 1 ? "s" : ""})
+                  </span>
+                </div>
+                {pendingEmailCount > 0 && (
+                  <button
+                    onClick={cancelSequence}
+                    disabled={cancellingSequence}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor: "rgba(239,68,68,0.1)",
+                      color: "#f87171",
+                      border: "1px solid rgba(239,68,68,0.25)",
+                    }}
+                  >
+                    <MailX size={12} />
+                    {cancellingSequence ? "Cancelling…" : `Cancel remaining (${pendingEmailCount})`}
+                  </button>
+                )}
+              </div>
+
+              {/* Email rows */}
+              {scheduledEmails.map((email) => {
+                const STEP_LABEL: Record<string, string> = {
+                  DAY_1: "Day 1",
+                  DAY_3: "Day 3",
+                  DAY_7: "Day 7",
+                  DAY_14: "Day 14",
+                };
+                const statusConfig = {
+                  PENDING:   { label: "Pending",   bg: "rgba(234,179,8,0.12)",   color: "#eab308", border: "rgba(234,179,8,0.3)"   },
+                  SENT:      { label: "Sent",       bg: "rgba(34,197,94,0.12)",   color: "#22c55e", border: "rgba(34,197,94,0.3)"   },
+                  CANCELLED: { label: "Cancelled",  bg: "rgba(148,163,184,0.1)",  color: "#94a3b8", border: "rgba(148,163,184,0.2)" },
+                  FAILED:    { label: "Failed",     bg: "rgba(239,68,68,0.12)",   color: "#f87171", border: "rgba(239,68,68,0.25)"  },
+                }[email.status];
+
+                return (
+                  <div
+                    key={email.id}
+                    className="flex items-center justify-between px-5 py-3.5 border-b last:border-b-0"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    {/* Step label */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold"
+                        style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}
+                      >
+                        {STEP_LABEL[email.sequenceStep] ?? email.sequenceStep}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {STEP_LABEL[email.sequenceStep]} follow-up
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {email.status === "SENT" && email.sentAt
+                            ? `Sent ${new Date(email.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            : email.status === "PENDING"
+                            ? `Scheduled ${new Date(email.scheduledFor).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            : email.status === "CANCELLED"
+                            ? "Cancelled"
+                            : email.errorMessage
+                            ? `Failed: ${email.errorMessage}`
+                            : "Failed"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status badge */}
+                    <span
+                      className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: statusConfig.bg,
+                        color: statusConfig.color,
+                        border: `1px solid ${statusConfig.border}`,
+                      }}
+                    >
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right: Activity Log */}
