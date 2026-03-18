@@ -16,13 +16,14 @@ export async function POST(req: NextRequest) {
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
   const body = await req.json();
-  const { recipientEmail, recipientPhone, fileUrls, message, contactId, senderName } = body as {
+  const { recipientEmail, recipientPhone, fileUrls, message, contactId, senderName, sendFollowUpSequence } = body as {
     recipientEmail: string;
     recipientPhone?: string;
     fileUrls: string[];
     message?: string;
     contactId?: string;
     senderName?: string;
+    sendFollowUpSequence?: boolean;
   };
 
   if (!recipientEmail?.trim() || !fileUrls?.length) {
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       message: message?.trim() || null,
       token,
       expiresAt,
+      sendFollowUpSequence: sendFollowUpSequence === true,
     },
   });
 
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   const downloadUrl = `${process.env.NEXTAUTH_URL ?? ""}/dl/${token}`;
 
-  return NextResponse.json({ quickSend, downloadUrl }, { status: 201 });
+  return NextResponse.json({ send: quickSend, downloadUrl }, { status: 201 });
 }
 
 // GET /api/studio/quick-send — list recent quick sends

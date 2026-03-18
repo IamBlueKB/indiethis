@@ -712,10 +712,11 @@ model QuickSend {
   recipientPhone String?
   fileUrls       String[]
   message        String?
-  token          String    @unique
-  expiresAt      DateTime
-  downloadedAt   DateTime?
-  createdAt      DateTime  @default(now())
+  token                String    @unique
+  expiresAt            DateTime
+  downloadedAt         DateTime?
+  sendFollowUpSequence Boolean   @default(false)
+  createdAt            DateTime  @default(now())
 
   studio   Studio   @relation(fields: [studioId], references: [id])
 }
