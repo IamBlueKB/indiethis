@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Download, Music2, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Download, Music2, AlertTriangle, CheckCircle2, Clock, Sparkles, ArrowRight } from "lucide-react";
 
 type DownloadData = {
-  senderName: string;
-  message: string | null;
-  fileUrls: string[];
-  expiresAt: string;
+  senderName:   string;
+  message:      string | null;
+  fileUrls:     string[];
+  expiresAt:    string;
   downloadedAt: string | null;
+  studioSlug:   string;
+  hasAccount:   boolean;
 };
 
 export default function DownloadPage() {
@@ -138,6 +140,64 @@ fetch(`/api/dl/${token}`)
                 </a>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Join IndieThis CTA — only for non-members on non-expired links ── */}
+        {!isExpired && !data.hasAccount && (
+          <div
+            className="rounded-2xl border p-5 space-y-4"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            {/* Icon + heading */}
+            <div className="flex items-start gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
+              >
+                <Sparkles size={16} style={{ color: "#D4A843" }} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground leading-snug">
+                  Powered by IndieThis
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  This studio uses IndieThis to manage sessions, deliver files,
+                  and power AI tools for their artists.
+                </p>
+              </div>
+            </div>
+
+            {/* Feature bullets */}
+            <div className="space-y-2 pl-12">
+              {[
+                "AI music video, lyric video & cover art generation",
+                "A&R reports and press kit builder",
+                "Session booking and file delivery tools",
+              ].map((feat) => (
+                <div key={feat} className="flex items-center gap-2">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: "#D4A843" }}
+                  />
+                  <p className="text-xs text-muted-foreground">{feat}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA button */}
+            <a
+              href={`/signup?ref=${encodeURIComponent(data.studioSlug)}&source=file_delivery`}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              Join IndieThis — Free to explore
+              <ArrowRight size={14} />
+            </a>
+
+            <p className="text-center text-xs text-muted-foreground">
+              No credit card required · Free plan available
+            </p>
           </div>
         )}
 
