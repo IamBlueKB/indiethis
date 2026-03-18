@@ -17,7 +17,9 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialRole = searchParams.get("role") === "STUDIO_ADMIN" ? "STUDIO_ADMIN" : "ARTIST";
-  const refCode = searchParams.get("ref") ?? undefined;
+  const refCode      = searchParams.get("ref")       ?? undefined;
+  const affiliateId  = searchParams.get("affiliate") ?? undefined;
+  const discountCode = searchParams.get("discount")  ?? undefined;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,7 +48,7 @@ function SignupForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role, referralCode: refCode }),
+        body: JSON.stringify({ name, email, password, role, referralCode: refCode, affiliateId }),
       });
 
       const data = await res.json();
@@ -108,8 +110,22 @@ function SignupForm() {
       </CardHeader>
 
       <CardContent className="pt-4">
+        {/* Affiliate discount banner — shown when arriving from an affiliate link */}
+        {affiliateId && discountCode && (
+          <div
+            className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-4 text-xs font-medium"
+            style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}
+          >
+            <Gift size={13} className="shrink-0 mt-0.5" />
+            <span>
+              <strong>10% off your first 3 months</strong> — discount code{" "}
+              <code className="font-mono">{discountCode}</code> will auto-apply at checkout.
+            </span>
+          </div>
+        )}
+
         {/* Referral banner */}
-        {refCode && (
+        {!affiliateId && refCode && (
           <div
             className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-4 text-xs font-medium"
             style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}

@@ -13,12 +13,13 @@ function generateReferralCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, password, role, referralCode: usedReferralCode } = body as {
+    const { name, email, password, role, referralCode: usedReferralCode, affiliateId } = body as {
       name: string;
       email: string;
       password: string;
       role?: string;
       referralCode?: string;
+      affiliateId?: string;
     };
 
     // Validate required fields
@@ -99,6 +100,28 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err) => {
         console.warn("[register] failed to create Referral record:", err);
+      });
+    }
+
+    // Affiliate attribution — create AffiliateReferral if user arrived via an affiliate link.
+    // isActive=false until the user activates a paid subscription (handled by Stripe webhook).
+    if (affiliateId) {
+      db.affiliate.findUnique({
+        where: { id: affiliateId, status: "APPROVED" },
+        select: { id: true, commissionRate: true },
+      }).then((affiliate) => {
+        if (!affiliate) return;
+        return db.affiliateReferral.create({
+          data: {
+            affiliateId:    affiliate.id,
+            referredUserId: user.id,
+            commissionRate: affiliate.commissionRate,
+            monthsRemaining: 12,
+            isActive:        false,
+          },
+        });
+      }).catch((err) => {
+        console.warn("[register] failed to create AffiliateReferral:", err);
       });
     }
 

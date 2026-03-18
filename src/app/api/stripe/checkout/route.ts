@@ -23,11 +23,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Get or create Stripe customer
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: { email: true, name: true, stripeCustomerId: true },
-  });
+  // Get or create Stripe customer; also check for a pending affiliate referral
+  // so we can auto-apply the 10% / 3-month discount at checkout.
+  const [user, affiliateRef] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true, name: true, stripeCustomerId: true },
+    }),
+    db.affiliateReferral.findUnique({
+      where: { referredUserId: session.user.id },
+      select: {
+        monthsRemaining: true,
+        affiliate: { select: { discountCode: true, status: true } },
+      },
+    }),
+  ]);
 
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -48,6 +58,35 @@ export async function POST(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
+  // Resolve affiliate discount coupon — applies 10% off for the first 3 months.
+  // Only applies if the user was referred via an affiliate link and the affiliate is still APPROVED.
+  let affiliateCouponId: string | undefined;
+  const hasAffiliateDiscount =
+    affiliateRef &&
+    affiliateRef.monthsRemaining > 0 &&
+    affiliateRef.affiliate.status === "APPROVED";
+
+  if (hasAffiliateDiscount) {
+    const AFFILIATE_COUPON_ID = "affiliate-10pct-3mo";
+    try {
+      // Ensure the coupon exists in Stripe (idempotent — no-op if already present)
+      await stripe.coupons.retrieve(AFFILIATE_COUPON_ID).catch(async () => {
+        await stripe.coupons.create({
+          id:                   AFFILIATE_COUPON_ID,
+          percent_off:          10,
+          duration:             "repeating",
+          duration_in_months:   3,
+          name:                 "Affiliate Referral — 10% off for 3 months",
+          metadata:             { source: "affiliate_program" },
+        });
+      });
+      affiliateCouponId = AFFILIATE_COUPON_ID;
+    } catch (err) {
+      // Non-fatal — proceed without discount rather than blocking checkout
+      console.error("[checkout] failed to ensure affiliate coupon:", err);
+    }
+  }
+
   const checkoutSession = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
@@ -58,7 +97,10 @@ export async function POST(req: NextRequest) {
       metadata: { userId: session.user.id, tier: planConfig.tier },
     },
     metadata: { userId: session.user.id, tier: planConfig.tier },
-    allow_promotion_codes: true,
+    // Auto-apply affiliate coupon if eligible; otherwise allow manual promo codes
+    ...(affiliateCouponId
+      ? { discounts: [{ coupon: affiliateCouponId }] }
+      : { allow_promotion_codes: true }),
   });
 
   return NextResponse.json({ url: checkoutSession.url });
