@@ -17,6 +17,7 @@ import {
   X,
   Gift,
   Zap,
+  Share2,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { label: "Sessions", href: "/dashboard/sessions", icon: Calendar },
   { label: "Earnings", href: "/dashboard/earnings", icon: TrendingUp },
   { label: "Referrals", href: "/dashboard/referrals", icon: Gift },
+  { label: "Affiliate", href: "/dashboard/affiliate", icon: Share2 },
   { label: "Upgrade", href: "/dashboard/upgrade", icon: Zap },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

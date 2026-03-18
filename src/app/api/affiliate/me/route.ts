@@ -47,6 +47,15 @@ export async function GET(_req: NextRequest) {
           monthsRemaining: true,
           totalCommissionPaid: true,
           createdAt: true,
+          referredUser: {
+            select: {
+              name: true,
+              createdAt: true,
+              subscription: {
+                select: { tier: true, status: true },
+              },
+            },
+          },
         },
       },
     },
@@ -76,6 +85,15 @@ export async function GET(_req: NextRequest) {
             monthsRemaining: true,
             totalCommissionPaid: true,
             createdAt: true,
+            referredUser: {
+              select: {
+                name: true,
+                createdAt: true,
+                subscription: {
+                  select: { tier: true, status: true },
+                },
+              },
+            },
           },
         },
       },
