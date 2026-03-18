@@ -283,11 +283,11 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
             <span className="text-[11px] text-muted-foreground">{track.projectName}</span>
           )}
           {track.price != null && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
-              <DollarSign size={9} />{track.price.toFixed(2)}
+            <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+              ${track.price.toFixed(2)}
             </span>
           )}
-          <span className="text-[11px] text-muted-foreground">{track.plays} plays</span>
+          <span className="text-[11px] text-muted-foreground">{track.plays.toLocaleString()} plays</span>
         </div>
       </div>
 
