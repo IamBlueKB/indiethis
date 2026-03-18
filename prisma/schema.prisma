@@ -351,6 +351,8 @@ model Studio {
   onboardingCompleted      Boolean   @default(false)
   generationsUsedThisMonth Int       @default(0)
   generationResetDate      DateTime?
+  referralCredits          Float     @default(0)
+  referralCreditHistory    Json?
   ownerId      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -619,11 +621,12 @@ model Contact {
   instagramHandle String?
   genre           String?
   notes           String?
-  source          ContactSource @default(MANUAL)
-  totalSpent      Float         @default(0)
-  lastSessionDate DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  source               ContactSource @default(MANUAL)
+  totalSpent           Float         @default(0)
+  lastSessionDate      DateTime?
+  referredToIndieThis  Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   studio             Studio            @relation(fields: [studioId], references: [id])
   sessions           BookingSession[]

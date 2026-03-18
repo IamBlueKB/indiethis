@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { sendWelcomeEmail } from "@/lib/brevo";
+import { markContactsAsReferred } from "@/lib/studio-referral";
 import type { Role } from "@prisma/client";
 
 function generateReferralCode(): string {
@@ -93,6 +94,13 @@ export async function POST(req: NextRequest) {
     }).catch(() => {
       // Silently ignore email failures — user is still created
     });
+
+    // If this is an artist, check whether any studio has them as a BOOKING or
+    // MANUAL contact — mark those contacts as referred so they become eligible
+    // for the studio referral credit when the artist makes a purchase.
+    if (userRole === "ARTIST") {
+      markContactsAsReferred(user.email, user.id).catch(() => {});
+    }
 
     return NextResponse.json(
       { message: "Account created successfully." },

@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import type { LicenseType } from "@prisma/client";
+import {
+  creditStudioForArtistPurchase,
+  applyStudioCreditsToStripeInvoice,
+} from "@/lib/studio-referral";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -162,6 +166,10 @@ export async function POST(req: NextRequest) {
             pressKitCreditsUsed: 0,
           },
         });
+
+        // Credit any studios that referred this artist (fire-and-forget)
+        void creditStudioForArtistPurchase(userId, "SUBSCRIPTION");
+
         break;
       }
 
@@ -210,6 +218,10 @@ export async function POST(req: NextRequest) {
             pressKitCreditsUsed: 0,
           },
         });
+
+        // Credit any studios that referred this artist (fire-and-forget)
+        void creditStudioForArtistPurchase(userId, "PAY_PER_USE");
+
         break;
       }
 
@@ -257,6 +269,20 @@ export async function POST(req: NextRequest) {
           where: { stripeSubscriptionId: subId },
           data: { status: "PAST_DUE" },
         });
+      }
+      break;
+    }
+
+    // Apply studio referral credits before each subscription invoice is
+    // finalised so the credit reduces what the studio owner actually pays.
+    case "invoice.upcoming": {
+      const upcomingInvoice = event.data.object as Stripe.Invoice;
+      const customerId =
+        typeof upcomingInvoice.customer === "string"
+          ? upcomingInvoice.customer
+          : (upcomingInvoice.customer as { id: string } | null)?.id;
+      if (customerId) {
+        void applyStudioCreditsToStripeInvoice(customerId);
       }
       break;
     }

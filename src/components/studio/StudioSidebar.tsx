@@ -21,6 +21,7 @@ import {
   Globe,
   ExternalLink,
   Wand2,
+  Gift,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { label: "Invoices", href: "/studio/invoices", icon: FileText },
   { label: "Payments", href: "/studio/payments", icon: CreditCard },
   { label: "AI Tools", href: "/studio/ai-tools", icon: Wand2 },
+  { label: "Credits", href: "/studio/credits", icon: Gift },
   { label: "Settings", href: "/studio/settings", icon: Settings },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
 ];
