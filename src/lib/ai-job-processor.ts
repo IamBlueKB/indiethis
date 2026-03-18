@@ -13,14 +13,26 @@
  *   Step 5+ — remaining handlers wired in subsequent steps
  */
 
+import os from "os";
+import path from "path";
+import fs from "fs";
 import { db } from "@/lib/db";
-import { AIJobStatus, type AIJob } from "@prisma/client";
+import { AIJobStatus, type AIJob, type Prisma } from "@prisma/client";
 import OpenAI, { toFile } from "openai";
 import Replicate from "replicate";
 import { fal } from "@fal-ai/client";
 import type { QueueStatus } from "@fal-ai/client";
+import ffmpegFluent from "fluent-ffmpeg";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
+import { UTApi } from "uploadthing/server";
 import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
+
+// Set the static ffmpeg binary path once at module load
+ffmpegFluent.setFfmpegPath(ffmpegInstaller.path);
+
+// ─── UploadThing server client ────────────────────────────────────────────────
+const utapi = new UTApi();
 
 // ─── Handler result type ──────────────────────────────────────────────────────
 
@@ -1102,182 +1114,429 @@ export async function processAIJob(jobId: string): Promise<void> {
   }
 }
 
+// ─── Phase 2 types ────────────────────────────────────────────────────────────
+
+type VideoClip = {
+  index:       number;
+  url:         string | null;
+  status:      "pending" | "generating" | "success" | "failed";
+  retries:     number;
+  costToUs:    number;
+  provider?:   "kling" | "runway";
+};
+
+// ─── Phase 2 low-level helpers ────────────────────────────────────────────────
+
+/** Persist Phase 2 progress to DB without touching job status. */
+async function saveVideoPhase2State(
+  jobId: string,
+  outputData: Record<string, unknown>,
+): Promise<void> {
+  await db.aIJob.update({
+    where: { id: jobId },
+    data:  { outputData: outputData as Prisma.InputJsonValue },
+  });
+}
+
+/**
+ * Generate one 10-second clip using Kling (primary) or Runway (fallback).
+ * Returns { url, costToUs, providerUsed }.
+ */
+async function generateSingleClip(
+  imageUrl:    string,
+  prompt:      string,
+  aspectRatio: string,
+): Promise<{ url: string; costToUs: number; providerUsed: "kling" | "runway" }> {
+  const klingAvailable = !!(process.env.FAL_KEY) && !process.env.FAL_KEY.startsWith("your_");
+
+  if (klingAvailable) {
+    try {
+      const res = await generateWithKling(imageUrl, prompt, aspectRatio, 10);
+      return { url: res.videoUrl, costToUs: 10 * KLING_COST_PER_SEC, providerUsed: "kling" };
+    } catch (err) {
+      console.warn(`[video/clip] Kling failed — falling back to Runway: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  const res = await generateWithRunway(imageUrl, prompt, aspectRatio, 10);
+  return { url: res.videoUrl, costToUs: 10 * RUNWAY_COST_PER_SEC, providerUsed: "runway" };
+}
+
+/**
+ * Extract the last frame from a video URL as a JPEG buffer.
+ * Downloads the video to a temp file, runs ffmpeg, returns the JPEG.
+ */
+async function extractLastFrame(videoUrl: string): Promise<Buffer> {
+  const tmpDir   = path.join(os.tmpdir(), `indiethis-frames-${Date.now()}`);
+  const videoPath = path.join(tmpDir, "clip.mp4");
+  const framePath = path.join(tmpDir, "last.jpg");
+
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    // Download the video
+    const res = await fetch(videoUrl);
+    if (!res.ok) throw new Error(`Failed to fetch video: ${res.statusText}`);
+    fs.writeFileSync(videoPath, Buffer.from(await res.arrayBuffer()));
+
+    // Extract last frame: seek to 0.5 s before end
+    await new Promise<void>((resolve, reject) => {
+      ffmpegFluent()
+        .addInput(videoPath)
+        .addInputOptions(["-sseof -0.5"])
+        .frames(1)
+        .output(framePath)
+        .on("end",   () => resolve())
+        .on("error", (e) => reject(e))
+        .run();
+    });
+
+    const frameBuffer = fs.readFileSync(framePath);
+    return frameBuffer;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Upload a buffer to UploadThing server-side and return the public URL.
+ */
+async function uploadBufferToUT(
+  buffer:   Buffer,
+  filename: string,
+  mimeType: string,
+): Promise<string> {
+  const file = new File([new Uint8Array(buffer)], filename, { type: mimeType });
+  const res  = await utapi.uploadFiles(file);
+  if (res.error) throw new Error(`UploadThing upload failed: ${res.error.message}`);
+  if (!res.data?.url) throw new Error("UploadThing returned no URL");
+  return res.data.url;
+}
+
+/**
+ * Download all clip videos, concatenate them with ffmpeg, and return the
+ * stitched MP4 as a Buffer.
+ */
+async function stitchClipsToBuffer(clipUrls: string[], jobId: string): Promise<Buffer> {
+  const tmpDir     = path.join(os.tmpdir(), `indiethis-stitch-${jobId}`);
+  const outputPath = path.join(tmpDir, "output.mp4");
+  const listPath   = path.join(tmpDir, "list.txt");
+
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    // Download each clip to a temp file
+    const clipPaths: string[] = [];
+
+    for (let i = 0; i < clipUrls.length; i++) {
+      const clipPath = path.join(tmpDir, `clip-${i}.mp4`);
+      const res = await fetch(clipUrls[i]);
+      if (!res.ok) throw new Error(`Failed to download clip ${i}: ${res.statusText}`);
+      fs.writeFileSync(clipPath, Buffer.from(await res.arrayBuffer()));
+      clipPaths.push(clipPath);
+      console.log(`[video/stitch] downloaded clip ${i + 1}/${clipUrls.length}`);
+    }
+
+    // Write ffmpeg concat list (paths must use forward slashes on all platforms)
+    const listContent = clipPaths
+      .map((p) => `file '${p.replace(/\\/g, "/")}'`)
+      .join("\n");
+    fs.writeFileSync(listPath, listContent);
+
+    // Concatenate with ffmpeg (stream copy — no re-encode, very fast)
+    await new Promise<void>((resolve, reject) => {
+      ffmpegFluent()
+        .addInput(listPath)
+        .addInputOptions(["-f concat", "-safe 0"])
+        .outputOptions(["-c copy"])
+        .output(outputPath)
+        .on("end",   () => resolve())
+        .on("error", (e) => reject(e))
+        .run();
+    });
+
+    console.log(`[video/stitch] stitched ${clipUrls.length} clips → ${outputPath}`);
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Stitch all clips, upload to UploadThing, and mark the job COMPLETE.
+ * Called when every clip in the array has status "success".
+ */
+async function stitchAndFinalize(
+  jobId:        string,
+  clips:        VideoClip[],
+  currentOutput: Record<string, unknown>,
+): Promise<void> {
+  const previewCostToUs = Number(currentOutput.previewCostToUs ?? 0);
+
+  // Mark stitching in progress
+  await saveVideoPhase2State(jobId, { ...currentOutput, clips, stitching: true });
+  console.log(`[video/stitch] starting stitch for job ${jobId}`);
+
+  const clipUrls = clips.map((c) => c.url!);
+  const stitchedBuffer = await stitchClipsToBuffer(clipUrls, jobId);
+
+  // Upload to UploadThing
+  const finalVideoUrl = await uploadBufferToUT(
+    stitchedBuffer,
+    `video-${jobId}.mp4`,
+    "video/mp4",
+  );
+
+  const phase2CostToUs = clips.reduce((sum, c) => sum + (c.costToUs ?? 0), 0);
+  const totalCostToUs  = previewCostToUs + phase2CostToUs;
+
+  await db.aIJob.update({
+    where: { id: jobId },
+    data: {
+      status: AIJobStatus.COMPLETE,
+      outputData: {
+        ...currentOutput,
+        clips,
+        stitching:      false,
+        finalVideoUrl,
+        phase:          2,
+        phase2CostToUs,
+        totalCostToUs,
+      } as Prisma.InputJsonValue,
+      costToUs:    totalCostToUs,
+      completedAt: new Date(),
+    },
+  });
+
+  console.log(`[video/stitch] job ${jobId} COMPLETE — final video: ${finalVideoUrl} (cost $${totalCostToUs.toFixed(3)})`);
+}
+
 // ─── Phase 2: full video render (called after user approves the preview) ──────
 
 /**
  * continueVideoPhase2(jobId)
  *
  * Called by the approve-video API route after the artist watches the Phase 1
- * preview and clicks "Approve Full Render".
+ * preview clip and clicks "Approve Full Render".
  *
- * Reads Phase 1 outputData from the job, generates the full-duration video
- * via the same provider that succeeded in Phase 1 (Kling preferred, Runway
- * fallback), then sets the job to COMPLETE with the final video URL.
- *
- * For Kling: supports up to 180 seconds (3 min) at 4K 60fps via sequential
- * 10-second segment calls — fal.ai handles scheduling automatically.
- * For Runway: capped at 10 seconds per call; longer videos are not supported
- * as a Runway fallback (Kling is strongly preferred for full renders).
+ * Generates all clips sequentially:
+ *   - Clip 0 starts from the original imageUrl
+ *   - Each subsequent clip starts from the last frame of the previous clip
+ *     (extracted via ffmpeg) for visual continuity
+ * Stitches all clips with ffmpeg and uploads the result to UploadThing.
+ * Tracks per-clip state in outputData so failed clips can be individually
+ * regenerated via POST /api/ai-jobs/[id]/regenerate-clip.
  */
 export async function continueVideoPhase2(jobId: string): Promise<void> {
   const job = await db.aIJob.findUnique({ where: { id: jobId } });
 
-  if (!job) {
-    console.error(`[video/phase2] job ${jobId} not found`);
-    return;
-  }
-
-  // Guard: must be a VIDEO job in PROCESSING with Phase 1 complete
-  if (job.type !== "VIDEO") {
-    console.error(`[video/phase2] job ${jobId} is type ${job.type}, not VIDEO`);
-    return;
-  }
+  if (!job) { console.error(`[video/phase2] job ${jobId} not found`); return; }
+  if (job.type !== "VIDEO") { console.error(`[video/phase2] job ${jobId} wrong type`); return; }
   if (job.status !== AIJobStatus.PROCESSING) {
-    console.warn(`[video/phase2] job ${jobId} is ${job.status} — skipping`);
-    return;
+    console.warn(`[video/phase2] job ${jobId} is ${job.status} — skipping`); return;
   }
 
   const phase1Output = (job.outputData ?? {}) as Record<string, unknown>;
   if (!phase1Output.previewReady) {
-    console.error(`[video/phase2] job ${jobId} has no Phase 1 preview — cannot continue`);
-    return;
+    console.error(`[video/phase2] job ${jobId} has no Phase 1 preview`); return;
   }
 
+  // ── Extract Phase 1 metadata ───────────────────────────────────────────────
   const {
-    imageUrl: _imageUrl,
     style           = "cinematic",
     aspectRatio     = "16:9",
     durationSeconds = 60,
-    stylePrompt: savedPrompt,
-    provider: phase1Provider,
-    previewCostToUs = 0,
+    stylePrompt:      savedPrompt,
   } = phase1Output as {
-    imageUrl?:         string;
-    style?:            string;
-    aspectRatio?:      string;
-    durationSeconds?:  number;
-    stylePrompt?:      string;
-    provider?:         string;
-    previewCostToUs?:  number;
+    style?:           string;
+    aspectRatio?:     string;
+    durationSeconds?: number;
+    stylePrompt?:     string;
   };
 
-  // Recover imageUrl from inputData if not saved in outputData
-  const inputData  = (job.inputData ?? {}) as Record<string, unknown>;
-  const imageUrl   = (phase1Output.imageUrl ?? inputData.imageUrl) as string | undefined;
-  const prompt     = savedPrompt ?? VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
-  const fullSecs   = Math.min(Number(durationSeconds), 180); // Kling max: 3 min
-
+  const inputData = (job.inputData ?? {}) as Record<string, unknown>;
+  const imageUrl  = (phase1Output.imageUrl ?? inputData.imageUrl) as string | undefined;
   if (!imageUrl?.trim()) {
     await db.aIJob.update({
       where: { id: jobId },
-      data: { status: AIJobStatus.FAILED, errorMessage: "Phase 2: imageUrl missing from job", completedAt: new Date() },
+      data: { status: AIJobStatus.FAILED, errorMessage: "Phase 2: imageUrl missing", completedAt: new Date() },
     });
     return;
   }
 
-  console.log(
-    `[video/phase2] starting full render — ${fullSecs}s, style: ${style}, ` +
-    `provider hint: ${phase1Provider ?? "auto"}`,
-  );
+  const prompt     = savedPrompt ?? VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
+  const fullSecs   = Math.min(Number(durationSeconds), 180);
+  const totalClips = Math.ceil(fullSecs / 10); // 10 s per clip, max 18 clips
 
-  try {
-    let finalVideoUrl: string;
-    let providerUsed: "kling" | "runway";
-    let phase2Meta: Record<string, unknown> = {};
-    let phase2Cost: number;
+  console.log(`[video/phase2] job ${jobId}: ${totalClips} clips × 10s = ${totalClips * 10}s`);
 
-    const klingAvailable =
-      !!(process.env.FAL_KEY) && !process.env.FAL_KEY.startsWith("your_");
+  // ── Initialize clips array and save to DB ──────────────────────────────────
+  const clips: VideoClip[] = Array.from({ length: totalClips }, (_, i) => ({
+    index:    i,
+    url:      null,
+    status:   "pending",
+    retries:  0,
+    costToUs: 0,
+  }));
 
-    if (klingAvailable) {
-      // ── Kling full render ─────────────────────────────────────────────────
-      // Kling natively supports 5s and 10s clips per API call.
-      // For >10s, we chain calls sequentially (each uses the previous frame
-      // as the seed image — basic continuity approach).
-      // For simplicity and reliability, we request a single 10s clip for
-      // durations ≤ 10s, or the full duration chunked for longer renders.
-      //
-      // NOTE: For v1 we generate a single 10s clip regardless of durationSeconds
-      // to keep the first full-render implementation straightforward. Chunked
-      // long-form rendering is a future enhancement.
-      const clipSecs = Math.min(fullSecs, 10) as 5 | 10;
+  const currentOutput = { ...phase1Output, phase: 2, totalClips, clips, stitching: false };
+  await saveVideoPhase2State(jobId, currentOutput);
 
-      console.log(`[video/phase2/kling] generating ${clipSecs}s clip`);
+  // ── Generate clips sequentially ────────────────────────────────────────────
+  // Each clip's start frame = last frame of the previous clip (visual continuity).
+  // If last-frame extraction fails, fall back to the original imageUrl.
+  let lastFrameUrl = imageUrl; // seed for clip 0
 
-      fal.config({ credentials: process.env.FAL_KEY! });
+  for (let i = 0; i < totalClips; i++) {
+    clips[i].status = "generating";
+    await saveVideoPhase2State(jobId, { ...currentOutput, clips });
 
-      const result = await fal.subscribe("fal-ai/kling-video/v1.6/pro/image-to-video", {
-        input: {
-          image_url:    imageUrl,
-          prompt,
-          duration:     String(clipSecs) as "5" | "10",
-          aspect_ratio: (KLING_RATIO_MAP[aspectRatio] ?? "16:9") as "16:9" | "9:16" | "1:1",
-        },
-        logs: true,
-        onQueueUpdate(update: QueueStatus) {
-          if (update.status === "IN_PROGRESS" && "logs" in update && Array.isArray(update.logs) && update.logs.length) {
-            console.log(`[video/phase2/kling] ${(update.logs as Array<{ message: string }>).at(-1)?.message}`);
-          }
-        },
-      });
+    try {
+      const startFrame = i === 0 ? imageUrl : lastFrameUrl;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      finalVideoUrl = (result.data as any)?.video?.url as string;
-      if (!finalVideoUrl) throw new Error("Kling Phase 2 returned no video URL");
+      const { url, costToUs: clipCost, providerUsed } =
+        await generateSingleClip(startFrame, prompt, aspectRatio);
 
-      providerUsed = "kling";
-      phase2Cost   = clipSecs * KLING_COST_PER_SEC;
-      phase2Meta   = { falModel: "fal-ai/kling-video/v1.6/pro/image-to-video", renderedSecs: clipSecs };
+      clips[i].url      = url;
+      clips[i].status   = "success";
+      clips[i].costToUs = clipCost;
+      clips[i].provider = providerUsed;
 
-    } else {
-      // ── Runway fallback (10s max) ─────────────────────────────────────────
-      console.log(`[video/phase2/runway] generating full clip (max 10s)`);
-      const res    = await generateWithRunway(imageUrl, prompt, aspectRatio, Math.min(fullSecs, 10));
-      finalVideoUrl = res.videoUrl;
-      providerUsed  = res.provider;
-      phase2Cost    = Math.min(fullSecs, 10) * RUNWAY_COST_PER_SEC;
-      phase2Meta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo" };
+      // Extract last frame for the next clip's continuity
+      // Upload to UploadThing so Kling (which needs a URL) can use it
+      try {
+        const frameBuffer = await extractLastFrame(url);
+        lastFrameUrl = await uploadBufferToUT(
+          frameBuffer,
+          `frame-${jobId}-${i}.jpg`,
+          "image/jpeg",
+        );
+        console.log(`[video/phase2] clip ${i + 1}/${totalClips} ✓ — last frame uploaded`);
+      } catch (frameErr) {
+        console.warn(`[video/phase2] clip ${i} frame extraction failed, using original: ${frameErr instanceof Error ? frameErr.message : frameErr}`);
+        lastFrameUrl = imageUrl;
+      }
+    } catch (clipErr: unknown) {
+      clips[i].status = "failed";
+      console.error(`[video/phase2] clip ${i} failed: ${clipErr instanceof Error ? clipErr.message : clipErr}`);
+      // Continue to generate remaining clips — failed clips can be regenerated individually
     }
 
-    const totalCost = Number(previewCostToUs) + phase2Cost;
+    await saveVideoPhase2State(jobId, { ...currentOutput, clips });
+  }
 
+  // ── Check outcome ──────────────────────────────────────────────────────────
+  const failedCount = clips.filter((c) => c.status === "failed").length;
+
+  if (failedCount > 0) {
     console.log(
-      `[video/phase2] render complete (${providerUsed}) — cost $${phase2Cost.toFixed(3)}. ` +
-      `Total job cost: $${totalCost.toFixed(3)}`,
+      `[video/phase2] ${failedCount}/${totalClips} clips failed — job stays PROCESSING. ` +
+      `Use POST /api/ai-jobs/${jobId}/regenerate-clip to retry individual clips.`,
     );
+    // Job stays PROCESSING — user regenerates failed clips via the API
+    return;
+  }
 
-    // ── Mark COMPLETE ─────────────────────────────────────────────────────
-    await db.aIJob.update({
-      where: { id: jobId },
-      data: {
-        status: AIJobStatus.COMPLETE,
-        outputData: {
-          ...phase1Output,          // includes previewUrl, previewReady, style, etc.
-          finalVideoUrl,
-          phase:        2,
-          phase2Provider: providerUsed,
-          phase2CostToUs: phase2Cost,
-          totalCostToUs:  totalCost,
-          ...phase2Meta,
-        } as import("@prisma/client").Prisma.InputJsonValue,
-        costToUs:    totalCost,
-        completedAt: new Date(),
-      },
-    });
+  // All clips succeeded — stitch and finalize
+  await stitchAndFinalize(jobId, clips, { ...currentOutput, clips });
+}
 
-    console.log(`[video/phase2] job ${jobId} COMPLETE — final video: ${finalVideoUrl}`);
+// ─── Exported: regenerate a single failed clip ────────────────────────────────
 
+/**
+ * regenerateVideoClip(jobId, clipIndex)
+ *
+ * Re-generates one failed clip (up to MAX_CLIP_RETRIES per clip).
+ * If the regeneration succeeds AND all other clips are also successful,
+ * stitching is triggered automatically to complete the job.
+ *
+ * Called by POST /api/ai-jobs/[id]/regenerate-clip.
+ */
+export const MAX_CLIP_RETRIES = 3;
+
+export async function regenerateVideoClip(jobId: string, clipIndex: number): Promise<void> {
+  const job = await db.aIJob.findUnique({ where: { id: jobId } });
+
+  if (!job) throw new Error(`Job ${jobId} not found`);
+  if (job.type !== "VIDEO") throw new Error(`Job ${jobId} is not a VIDEO job`);
+  if (job.status !== AIJobStatus.PROCESSING)
+    throw new Error(`Job ${jobId} is ${job.status} — can only regenerate while PROCESSING`);
+
+  const currentOutput = (job.outputData ?? {}) as Record<string, unknown>;
+  const clips = ((currentOutput.clips ?? []) as VideoClip[]).map((c) => ({ ...c })); // shallow copy
+
+  if (clipIndex < 0 || clipIndex >= clips.length)
+    throw new Error(`Clip index ${clipIndex} out of range (0–${clips.length - 1})`);
+
+  const clip = clips[clipIndex];
+
+  if (clip.retries >= MAX_CLIP_RETRIES)
+    throw new Error(`Clip ${clipIndex} has reached the maximum of ${MAX_CLIP_RETRIES} retries`);
+
+  // ── Resolve inputs ─────────────────────────────────────────────────────────
+  const {
+    style        = "cinematic",
+    aspectRatio  = "16:9",
+    stylePrompt: savedPrompt,
+  } = currentOutput as { style?: string; aspectRatio?: string; stylePrompt?: string };
+
+  const inputData = (job.inputData ?? {}) as Record<string, unknown>;
+  const imageUrl  = (currentOutput.imageUrl ?? inputData.imageUrl) as string | undefined;
+  if (!imageUrl?.trim()) throw new Error("regenerateVideoClip: imageUrl missing from job");
+
+  const prompt = savedPrompt ?? VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
+
+  // ── Determine start frame for this clip ────────────────────────────────────
+  let startFrame = imageUrl;
+  if (clipIndex > 0) {
+    const prevClip = clips[clipIndex - 1];
+    if (prevClip.url) {
+      try {
+        const frameBuffer = await extractLastFrame(prevClip.url);
+        startFrame = await uploadBufferToUT(
+          frameBuffer,
+          `frame-regen-${jobId}-${clipIndex}.jpg`,
+          "image/jpeg",
+        );
+      } catch {
+        startFrame = imageUrl; // fallback to original on extraction failure
+      }
+    }
+  }
+
+  // ── Mark clip as generating ────────────────────────────────────────────────
+  clip.retries += 1;
+  clip.status   = "generating";
+  clips[clipIndex] = clip;
+  await saveVideoPhase2State(jobId, { ...currentOutput, clips });
+
+  // ── Generate ───────────────────────────────────────────────────────────────
+  try {
+    const { url, costToUs: clipCost, providerUsed } =
+      await generateSingleClip(startFrame, prompt, aspectRatio);
+
+    clip.url      = url;
+    clip.status   = "success";
+    clip.costToUs = clipCost;
+    clip.provider = providerUsed;
+    clips[clipIndex] = clip;
+
+    console.log(`[video/regen] clip ${clipIndex} regenerated successfully (attempt ${clip.retries})`);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[video/phase2] job ${jobId} FAILED: ${message}`);
+    clip.status = "failed";
+    clips[clipIndex] = clip;
+    await saveVideoPhase2State(jobId, { ...currentOutput, clips });
+    throw new Error(`Clip ${clipIndex} regeneration failed: ${err instanceof Error ? err.message : err}`);
+  }
 
-    await db.aIJob.update({
-      where: { id: jobId },
-      data: {
-        status:       AIJobStatus.FAILED,
-        errorMessage: `Phase 2 failed: ${message}`,
-        completedAt:  new Date(),
-      },
-    });
+  await saveVideoPhase2State(jobId, { ...currentOutput, clips });
+
+  // ── If all clips now succeeded, stitch and finalize ────────────────────────
+  if (clips.every((c) => c.status === "success")) {
+    console.log(`[video/regen] all ${clips.length} clips successful — triggering stitch`);
+    await stitchAndFinalize(jobId, clips, { ...currentOutput, clips });
+  } else {
+    const remaining = clips.filter((c) => c.status === "failed").length;
+    console.log(`[video/regen] clip ${clipIndex} fixed — ${remaining} clip(s) still failed`);
   }
 }
