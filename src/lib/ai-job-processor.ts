@@ -27,6 +27,7 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { UTApi } from "uploadthing/server";
 import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
+import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 
 // Set the static ffmpeg binary path once at module load
 ffmpegFluent.setFfmpegPath(ffmpegInstaller.path);
@@ -1641,4 +1642,284 @@ export async function regenerateVideoClip(jobId: string, clipIndex: number): Pro
     const remaining = clips.filter((c) => c.status === "failed").length;
     console.log(`[video/regen] clip ${clipIndex} fixed — ${remaining} clip(s) still failed`);
   }
+}
+
+// ─── Step 11: Lyric Video Phase 2 — Remotion Lambda render ───────────────────
+
+/** Word-level timestamp from Whisper (mirrors the inline type in handleLyricVideo). */
+export type WhisperWord = { word: string; start: number; end: number };
+
+/**
+ * continueLyricVideoRender(jobId, correctedWords?)
+ *
+ * Called by POST /api/ai-jobs/[id]/approve-lyrics after the artist reviews and
+ * (optionally) edits the Whisper transcript.
+ *
+ *  1. Groups words into lyric lines using the saved segment timestamps.
+ *  2. Calls Claude Sonnet to generate a Remotion animation script (JSON array).
+ *  3. Renders the lyric video on AWS Lambda via @remotion/lambda.
+ *  4. Polls for completion (max 30 min), then uploads the output URL to outputData.
+ *  5. Marks the job COMPLETE.
+ *
+ * @param jobId          - The AIJob id.
+ * @param correctedWords - Optional artist-corrected word array.  Falls back to
+ *                         the words saved during Step 10a transcription.
+ */
+export async function continueLyricVideoRender(
+  jobId:           string,
+  correctedWords?: WhisperWord[],
+): Promise<void> {
+  const job = await db.aIJob.findUnique({ where: { id: jobId } });
+
+  if (!job) { console.error(`[lyric-video/phase2] job ${jobId} not found`); return; }
+  if (job.type !== "LYRIC_VIDEO") { console.error(`[lyric-video/phase2] job ${jobId} wrong type`); return; }
+  if (job.status !== AIJobStatus.PROCESSING) {
+    console.warn(`[lyric-video/phase2] job ${jobId} is ${job.status} — skipping`); return;
+  }
+
+  const savedOutput = (job.outputData ?? {}) as Record<string, unknown>;
+
+  if (!savedOutput.transcriptionReady) {
+    await db.aIJob.update({
+      where: { id: jobId },
+      data: { status: AIJobStatus.FAILED, errorMessage: "Lyric video Phase 2: transcription not ready", completedAt: new Date() },
+    });
+    return;
+  }
+
+  // ── Env checks ────────────────────────────────────────────────────────────
+  const serveUrl      = process.env.REMOTION_SERVE_URL;
+  const functionName  = process.env.REMOTION_FUNCTION_NAME;
+  const awsRegion     = process.env.AWS_REGION ?? "us-east-1";
+  const anthropicKey  = process.env.ANTHROPIC_API_KEY;
+
+  if (!serveUrl || serveUrl.startsWith("your_"))
+    throw new Error("REMOTION_SERVE_URL is not configured — add it to .env.local");
+  if (!functionName || functionName.startsWith("remotion-render") && functionName === "remotion-render-4-0-436-mem2048mb-disk2048mb-120sec")
+    console.warn("[lyric-video/phase2] REMOTION_FUNCTION_NAME looks like the default placeholder — make sure it is set to your actual deployed function name");
+  if (!anthropicKey || anthropicKey === "sk-ant-...")
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+
+  // ── Resolve word list (corrected or from transcription) ───────────────────
+  const words: WhisperWord[] =
+    correctedWords ??
+    ((savedOutput.words ?? []) as WhisperWord[]);
+
+  type SavedSegment = { id: number; start: number; end: number; text: string };
+  const segments = (savedOutput.segments ?? []) as SavedSegment[];
+
+  const {
+    trackUrl,
+    visualStyle = "cinematic",
+    fontStyle   = "default",
+    accentColor = "#FFFFFF",
+    aspectRatio = "16:9",
+  } = savedOutput as {
+    trackUrl?:    string;
+    visualStyle?: string;
+    fontStyle?:   string;
+    accentColor?: string;
+    aspectRatio?: string;
+  };
+
+  if (!trackUrl?.trim())
+    throw new Error("Lyric video Phase 2: trackUrl missing from outputData");
+
+  // ── Group words into lines using segment boundaries ───────────────────────
+  // Each segment from Whisper corresponds to one lyric line.
+  // We attach the word-level timing to each line for fine-grained animation.
+  type LyricLine = {
+    lineIndex:      number;
+    text:           string;
+    lineStartSec:   number;
+    lineEndSec:     number;
+    words:          Array<{ word: string; startSec: number; endSec: number }>;
+  };
+
+  const lyricsLines: LyricLine[] = segments.map((seg, i) => {
+    const lineWords = words.filter(
+      (w) => w.start >= seg.start - 0.05 && w.end <= seg.end + 0.05,
+    );
+    return {
+      lineIndex:    i,
+      text:         seg.text.trim(),
+      lineStartSec: seg.start,
+      lineEndSec:   seg.end,
+      words:        lineWords.map((w) => ({
+        word:     w.word,
+        startSec: w.start,
+        endSec:   w.end,
+      })),
+    };
+  });
+
+  // ── Step 11a: Claude Sonnet — generate Remotion animation script ──────────
+  console.log(`[lyric-video/phase2] generating animation script via Claude (${lyricsLines.length} lines)…`);
+
+  const claudePrompt = `Generate a Remotion animation script for a lyric video. For each line, specify: animation type (fadeIn, typewriter, slideUp, bounce), timing (start frame, end frame based on timestamps at 30fps), position on screen, any emphasis words that should animate differently. Return as JSON array.
+
+Visual style: ${visualStyle}
+Font style: ${fontStyle}
+Accent color: ${accentColor}
+Aspect ratio: ${aspectRatio}
+
+Lyrics with word-level timing:
+${JSON.stringify(lyricsLines, null, 2)}
+
+Return ONLY a valid JSON array. Each element must have:
+{
+  "lineIndex": number,
+  "text": string,
+  "animation": "fadeIn" | "typewriter" | "slideUp" | "bounce",
+  "lineStartFrame": number,
+  "lineEndFrame": number,
+  "position": "top" | "center" | "bottom",
+  "y": number (0–100 percentage from top),
+  "words": [{ "word": string, "startFrame": number, "endFrame": number, "emphasize": boolean }]
+}
+
+Use 30fps for frame calculation (multiply seconds by 30). Vary animations to match the energy of the lyrics. Use emphasis sparingly for emotionally significant words.`;
+
+  const claudeRes = await claude.messages.create({
+    model:      SONNET,
+    max_tokens: 4096,
+    messages: [{ role: "user", content: claudePrompt }],
+  });
+
+  // Parse Claude's JSON response
+  const rawText = claudeRes.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+
+  // Strip possible markdown fences
+  const jsonText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let animationScript: any[];
+  try {
+    animationScript = JSON.parse(jsonText) as unknown[];
+  } catch {
+    throw new Error(`Claude returned invalid JSON for animation script:\n${rawText.slice(0, 500)}`);
+  }
+
+  const claudeCostToUs =
+    (claudeRes.usage.input_tokens  / 1_000_000) * 3 +
+    (claudeRes.usage.output_tokens / 1_000_000) * 15;
+
+  console.log(`[lyric-video/phase2] animation script ready — ${animationScript.length} lines, Claude cost $${claudeCostToUs.toFixed(4)}`);
+
+  // Save animation script to job output (so artist can inspect it if needed)
+  await db.aIJob.update({
+    where: { id: jobId },
+    data: {
+      outputData: {
+        ...savedOutput,
+        animationScript,
+        renderStartedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+      costToUs: (Number(savedOutput.transcriptionCostToUs ?? 0)) + claudeCostToUs,
+    },
+  });
+
+  // ── Step 11b: Remotion Lambda — render the lyric video ────────────────────
+  console.log(`[lyric-video/phase2] dispatching Remotion Lambda render for job ${jobId}…`);
+
+  const totalDurationFrames = Math.ceil(
+    (Number(savedOutput.duration ?? 180)) * 30,
+  );
+
+  const { renderId, bucketName } = await renderMediaOnLambda({
+    region:          awsRegion as Parameters<typeof renderMediaOnLambda>[0]["region"],
+    functionName:    functionName!,
+    serveUrl,
+    composition:     "LyricVideo",
+    inputProps: {
+      trackUrl,
+      animationScript,
+      visualStyle,
+      fontStyle,
+      accentColor,
+      aspectRatio,
+      durationInFrames: totalDurationFrames,
+    },
+    codec:           "h264",
+    imageFormat:     "jpeg",
+    maxRetries:      2,
+    privacy:         "public",
+    outName:         `lyric-video-${jobId}.mp4`,
+  });
+
+  console.log(`[lyric-video/phase2] render dispatched — renderId: ${renderId}, bucket: ${bucketName}`);
+
+  // ── Step 11c: Poll for completion (max 30 min) ────────────────────────────
+  const MAX_RENDER_MS  = 30 * 60 * 1_000;
+  const POLL_INTERVAL  = 10_000; // 10 s
+  const renderStart    = Date.now();
+
+  let finalVideoUrl: string | null = null;
+
+  while (Date.now() - renderStart < MAX_RENDER_MS) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+
+    const progress = await getRenderProgress({
+      renderId,
+      bucketName,
+      functionName: functionName!,
+      region:       awsRegion as Parameters<typeof getRenderProgress>[0]["region"],
+    });
+
+    const pct = Math.round((progress.overallProgress ?? 0) * 100);
+    console.log(`[lyric-video/phase2] render ${renderId}: ${pct}%`);
+
+    if (progress.fatalErrorEncountered) {
+      const errMsg = progress.errors?.[0]?.message ?? "Unknown Remotion render error";
+      throw new Error(`Remotion render failed: ${errMsg}`);
+    }
+
+    if (progress.done) {
+      finalVideoUrl = progress.outputFile ?? null;
+      break;
+    }
+  }
+
+  if (!finalVideoUrl) {
+    throw new Error("Remotion render timed out after 30 minutes");
+  }
+
+  console.log(`[lyric-video/phase2] render complete — output: ${finalVideoUrl}`);
+
+  // ── Mark job COMPLETE ─────────────────────────────────────────────────────
+  const transcriptionCost = Number(savedOutput.transcriptionCostToUs ?? 0);
+  // Remotion Lambda cost is primarily AWS Lambda + S3 — estimate based on duration
+  // ~$0.0000166667/GB-second; 2GB RAM × (durationFrames/30) seconds ≈ rough estimate
+  const renderSecs        = totalDurationFrames / 30;
+  const remotionCostEst   = renderSecs * 2 * 0.0000166667;
+  const totalCostToUs     = transcriptionCost + claudeCostToUs + remotionCostEst;
+
+  await db.aIJob.update({
+    where: { id: jobId },
+    data: {
+      status: AIJobStatus.COMPLETE,
+      outputData: {
+        ...savedOutput,
+        animationScript,
+        finalVideoUrl,
+        renderId,
+        bucketName,
+        renderCompletedAt:  new Date().toISOString(),
+        claudeScriptCost:   claudeCostToUs,
+        remotionCostEst,
+        totalCostToUs,
+      } as Prisma.InputJsonValue,
+      costToUs:    totalCostToUs,
+      completedAt: new Date(),
+    },
+  });
+
+  console.log(
+    `[lyric-video/phase2] job ${jobId} COMPLETE — ` +
+    `video: ${finalVideoUrl}, total cost $${totalCostToUs.toFixed(4)}`,
+  );
 }
