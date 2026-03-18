@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2,
-  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil,
+  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import InlinePlayer from "@/components/audio/InlinePlayer";
@@ -287,7 +287,10 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
               ${track.price.toFixed(2)}
             </span>
           )}
-          <span className="text-[11px] text-muted-foreground">{track.plays.toLocaleString()} plays</span>
+          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+            <Play size={8} fill="currentColor" strokeWidth={0} />
+            {track.plays.toLocaleString()}
+          </span>
         </div>
       </div>
 
