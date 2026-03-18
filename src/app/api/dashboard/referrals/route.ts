@@ -18,8 +18,25 @@ export async function GET() {
   const user = await db.user.findUnique({
     where: { id: session.user.id },
     select: {
-      referralCode: true,
-      _count: { select: { referrals: true } },
+      referralCode:       true,
+      referralRewardTier: true,
+      referralsGiven: {
+        select: {
+          isActive:    true,
+          activatedAt: true,
+          createdAt:   true,
+          referred: {
+            select: {
+              name:      true,
+              createdAt: true,
+              subscription: {
+                select: { tier: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -28,7 +45,6 @@ export async function GET() {
   // Auto-generate a referral code if none exists
   let code = user.referralCode;
   if (!code) {
-    // Ensure uniqueness — retry on collision (extremely rare)
     for (let attempts = 0; attempts < 10; attempts++) {
       const candidate = generateReferralCode();
       const existing = await db.user.findUnique({ where: { referralCode: candidate } });
@@ -40,8 +56,21 @@ export async function GET() {
     }
   }
 
+  const totalCount  = user.referralsGiven.length;
+  const activeCount = user.referralsGiven.filter((r) => r.isActive).length;
+
+  const referredUsers = user.referralsGiven.map((r) => ({
+    firstName: (r.referred.name ?? "Unknown").split(" ")[0],
+    tier:      r.referred.subscription?.tier ?? null,
+    isActive:  r.isActive,
+    createdAt: r.referred.createdAt.toISOString(),
+  }));
+
   return NextResponse.json({
     referralCode: code ?? null,
-    referralCount: user._count.referrals,
+    totalCount,
+    activeCount,
+    currentTier:  user.referralRewardTier,
+    referredUsers,
   });
 }
