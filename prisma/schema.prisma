@@ -194,6 +194,27 @@ enum InsightType {
   SUPPORT_QUERY
 }
 
+enum AIJobType {
+  VIDEO
+  COVER_ART
+  MASTERING
+  LYRIC_VIDEO
+  AR_REPORT
+  PRESS_KIT
+}
+
+enum AIJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+enum AIJobTrigger {
+  ARTIST
+  STUDIO
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -847,4 +868,30 @@ model AIInsightsLog {
 
   @@index([insightType])
   @@index([referenceId])
+}
+
+// ─── Unified AI Job Queue ──────────────────────────────────────────────────────
+
+model AIJob {
+  id              String       @id @default(cuid())
+  type            AIJobType
+  status          AIJobStatus  @default(QUEUED)
+  triggeredBy     AIJobTrigger
+  triggeredById   String
+  artistId        String?
+  studioId        String?
+  inputData       Json?
+  outputData      Json?
+  provider        String
+  costToUs        Float?
+  priceCharged    Float?
+  errorMessage    String?
+  createdAt       DateTime     @default(now())
+  completedAt     DateTime?
+
+  @@index([triggeredById])
+  @@index([artistId])
+  @@index([studioId])
+  @@index([status])
+  @@index([type])
 }
