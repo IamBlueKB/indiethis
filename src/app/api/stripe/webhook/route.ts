@@ -10,6 +10,11 @@ import {
 import { cancelFollowUpByEmail } from "@/lib/email-sequence";
 import { activateReferral, deactivateReferral } from "@/lib/referral-tracking";
 import { applyReferralRewardsToInvoice } from "@/lib/referral-billing";
+import {
+  activateAffiliateReferral,
+  processAffiliateCommission,
+  deactivateAffiliateReferral,
+} from "@/lib/affiliate-commissions";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -176,6 +181,9 @@ export async function POST(req: NextRequest) {
         // Activate the user-referral record if this user was referred
         void activateReferral(userId);
 
+        // Activate the affiliate referral if this user arrived via an affiliate link
+        void activateAffiliateReferral(userId);
+
         // Cancel any pending follow-up sequences for this user —
         // no point sending "you should subscribe" to someone who just did.
         const subscribedUser = await db.user.findUnique({
@@ -279,6 +287,8 @@ export async function POST(req: NextRequest) {
       // for a subscriber who has churned.
       if (cancelledUserId) {
         void deactivateReferral(cancelledUserId);
+        // Also deactivate affiliate commission tracking for this user
+        void deactivateAffiliateReferral(cancelledUserId);
       }
       break;
     }
@@ -294,6 +304,35 @@ export async function POST(req: NextRequest) {
           data: { status: "PAST_DUE" },
         });
       }
+      break;
+    }
+
+    // Track affiliate commissions on every successful subscription invoice payment.
+    // Fires for both the initial payment and every monthly renewal.
+    case "invoice.paid": {
+      // Cast to any — Stripe SDK type for Invoice varies by version;
+      // the existing invoice.payment_failed handler uses the same pattern.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const paidInvoice = event.data.object as any;
+
+      // Only process subscription invoices (not one-off payments)
+      const subId: string | undefined =
+        typeof paidInvoice.subscription === "string"
+          ? paidInvoice.subscription
+          : (paidInvoice.subscription as { id: string } | null)?.id;
+
+      if (!subId) break;
+
+      // stripeSubscriptionId is not @unique — use findFirst
+      const sub = await db.subscription.findFirst({
+        where: { stripeSubscriptionId: subId },
+        select: { userId: true },
+      });
+
+      if (!sub?.userId) break;
+
+      // amount_paid is in cents
+      void processAffiliateCommission(sub.userId, (paidInvoice.amount_paid as number) ?? 0);
       break;
     }
 
