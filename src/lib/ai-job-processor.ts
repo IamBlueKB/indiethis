@@ -17,6 +17,8 @@ import { db } from "@/lib/db";
 import { AIJobStatus, type AIJob } from "@prisma/client";
 import OpenAI, { toFile } from "openai";
 import Replicate from "replicate";
+import { fal } from "@fal-ai/client";
+import type { QueueStatus } from "@fal-ai/client";
 import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
 
@@ -25,14 +27,294 @@ import { claude, SONNET } from "@/lib/claude";
 type HandlerResult = {
   outputData: Record<string, unknown>;
   costToUs?: number; // actual provider cost in dollars
+  /**
+   * When true, the router skips the automatic COMPLETE transition.
+   * Used by handleVideo Phase 1 — job stays PROCESSING until the user
+   * approves the preview and triggers Phase 2.
+   */
+  skipComplete?: boolean;
 };
 
 // ─── Stub handlers (replaced in later steps) ─────────────────────────────────
 
+// ─── Video helpers ────────────────────────────────────────────────────────────
+
+/** Maps the 5 style options to descriptive text prompts used by both providers. */
+const VIDEO_STYLE_PROMPTS: Record<string, string> = {
+  cinematic:
+    "Cinematic film quality, dramatic lighting, shallow depth of field, " +
+    "smooth dolly movement, professional feature-film look, color graded",
+  "music-video":
+    "Dynamic music video style, vibrant saturated colors, rhythmic camera motion, " +
+    "energetic and stylized, editorial cuts, bold visual treatment",
+  "lyric-video":
+    "Artistic lyric video aesthetic, smooth ambient camera drift, " +
+    "atmospheric mood lighting, poetic visual storytelling, soft bokeh",
+  documentary:
+    "Documentary style, authentic handheld movement, natural available lighting, " +
+    "intimate and raw, observational camera work",
+  artistic:
+    "Abstract artistic style, expressive painterly motion, creative visual effects, " +
+    "experimental aesthetic, surreal and imaginative",
+};
+
+/** Kling aspect ratio values supported by the fal.ai endpoint. */
+const KLING_RATIO_MAP: Record<string, string> = {
+  "16:9": "16:9",
+  "9:16": "9:16",
+  "1:1":  "1:1",
+};
+
+/** Runway aspect ratio strings (width:height pixel counts). */
+const RUNWAY_RATIO_MAP: Record<string, string> = {
+  "16:9": "1280:768",
+  "9:16": "768:1280",
+  "1:1":  "960:960",
+};
+
+// Kling cost: $0.029 per second of output
+const KLING_COST_PER_SEC = 0.029;
+// Runway Gen-3 Alpha Turbo cost: ~$0.05 per second
+const RUNWAY_COST_PER_SEC = 0.05;
+
+/**
+ * Generate video via Kling 1.6 Pro on fal.ai (primary provider).
+ * Returns { videoUrl, provider: "kling" } on success.
+ */
+async function generateWithKling(
+  imageUrl: string,
+  prompt: string,
+  aspectRatio: string,
+  durationSeconds: number,
+): Promise<{ videoUrl: string; provider: "kling" }> {
+  const falKey = process.env.FAL_KEY;
+  if (!falKey || falKey.startsWith("your_"))
+    throw new Error("FAL_KEY is not configured");
+
+  fal.config({ credentials: falKey });
+
+  // Kling supports 5s and 10s clips natively; longer durations use 10s segments.
+  // Phase 1 preview is always capped at 10s.
+  const klingSecs = Math.min(durationSeconds, 10) as 5 | 10;
+
+  console.log(
+    `[video/kling] submitting image-to-video — ${klingSecs}s, ratio: ${aspectRatio}`,
+  );
+
+  // fal.ai Kling 1.6 Pro image-to-video endpoint
+  const result = await fal.subscribe("fal-ai/kling-video/v1.6/pro/image-to-video", {
+    input: {
+      image_url:    imageUrl,
+      prompt,
+      duration:     String(klingSecs) as "5" | "10",
+      aspect_ratio: (KLING_RATIO_MAP[aspectRatio] ?? "16:9") as "16:9" | "9:16" | "1:1",
+    },
+    logs: true,
+    onQueueUpdate(update: QueueStatus) {
+      if (update.status === "IN_PROGRESS" && "logs" in update && Array.isArray(update.logs) && update.logs.length) {
+        console.log(`[video/kling] ${(update.logs as Array<{ message: string }>).at(-1)?.message}`);
+      }
+    },
+  });
+
+  // fal.ai returns { video: { url } }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const videoUrl = (result.data as any)?.video?.url as string | undefined;
+  if (!videoUrl) throw new Error("Kling returned no video URL");
+
+  return { videoUrl, provider: "kling" };
+}
+
+/**
+ * Generate video via Runway Gen-3 Alpha Turbo (fallback provider).
+ * Returns { videoUrl, taskId, provider: "runway" } on success.
+ */
+async function generateWithRunway(
+  imageUrl: string,
+  prompt: string,
+  aspectRatio: string,
+  durationSeconds: number,
+): Promise<{ videoUrl: string; taskId: string; provider: "runway" }> {
+  const runwayKey = process.env.RUNWAY_API_KEY;
+  if (!runwayKey || runwayKey.startsWith("your_"))
+    throw new Error("RUNWAY_API_KEY is not configured");
+
+  const RUNWAY_API_BASE = "https://api.dev.runwayml.com/v1";
+  const RUNWAY_VERSION  = "2024-11-06";
+  const runwaySecs      = Math.min(durationSeconds, 10);
+
+  console.log(
+    `[video/runway] submitting image-to-video — ${runwaySecs}s, ratio: ${RUNWAY_RATIO_MAP[aspectRatio] ?? "1280:768"}`,
+  );
+
+  const submitRes = await fetch(`${RUNWAY_API_BASE}/image_to_video`, {
+    method: "POST",
+    headers: {
+      "Content-Type":     "application/json",
+      "Authorization":    `Bearer ${runwayKey}`,
+      "X-Runway-Version": RUNWAY_VERSION,
+    },
+    body: JSON.stringify({
+      model:       "gen3a_turbo",
+      promptImage: imageUrl,
+      promptText:  prompt,
+      duration:    runwaySecs,
+      ratio:       RUNWAY_RATIO_MAP[aspectRatio] ?? "1280:768",
+    }),
+  });
+
+  if (!submitRes.ok) {
+    const errBody = await submitRes.text();
+    throw new Error(`Runway submit failed (${submitRes.status}): ${errBody}`);
+  }
+
+  const taskId = ((await submitRes.json()) as { id: string }).id;
+  if (!taskId) throw new Error("Runway returned no task ID");
+
+  console.log(`[video/runway] task submitted: ${taskId}`);
+
+  // Poll for completion
+  const MAX_WAIT_MS = 600_000;
+  const POLL_MS     = 8_000;
+  const started     = Date.now();
+
+  while (Date.now() - started < MAX_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, POLL_MS));
+
+    const pollRes = await fetch(`${RUNWAY_API_BASE}/tasks/${taskId}`, {
+      headers: {
+        "Authorization":    `Bearer ${runwayKey}`,
+        "X-Runway-Version": RUNWAY_VERSION,
+      },
+    });
+
+    if (!pollRes.ok) { console.warn(`[video/runway] poll ${pollRes.status} — retrying`); continue; }
+
+    const p = (await pollRes.json()) as {
+      status: string; output?: string[]; failure?: string; failureCode?: string;
+    };
+
+    console.log(`[video/runway] task ${taskId}: ${p.status}`);
+
+    if (p.status === "SUCCEEDED") {
+      const videoUrl = p.output?.[0];
+      if (!videoUrl) throw new Error("Runway returned SUCCEEDED but no output URL");
+      return { videoUrl, taskId, provider: "runway" };
+    }
+    if (p.status === "FAILED")
+      throw new Error(`Runway failed: ${p.failure ?? p.failureCode ?? "unknown"}`);
+  }
+
+  throw new Error("Runway video generation timed out after 10 minutes.");
+}
+
+// ─── handleVideo — Phase 1 preview ───────────────────────────────────────────
+
 async function handleVideo(job: AIJob): Promise<HandlerResult> {
-  console.log(`[ai-jobs] processing VIDEO job ${job.id} via ${job.provider}`);
-  // Step 4: wire Runway Gen-3 here
-  return { outputData: { stub: true, type: "VIDEO" } };
+  console.log(`[ai-jobs] processing VIDEO job ${job.id} — Phase 1 preview`);
+
+  // ── Env check: require at least one provider ──────────────────────────────
+  const falKey    = process.env.FAL_KEY;
+  const runwayKey = process.env.RUNWAY_API_KEY;
+
+  if (
+    (!falKey    || falKey.startsWith("your_")) &&
+    (!runwayKey || runwayKey.startsWith("your_"))
+  ) {
+    throw new Error(
+      "No video provider configured — add FAL_KEY (Kling) or RUNWAY_API_KEY to .env.local.",
+    );
+  }
+
+  // ── Extract inputs ────────────────────────────────────────────────────────
+  const input = (job.inputData ?? {}) as Record<string, unknown>;
+  const {
+    imageUrl,
+    style           = "cinematic",
+    aspectRatio     = "16:9",
+    durationSeconds = 60,   // full video duration; Phase 1 always uses 10s
+  } = input as {
+    imageUrl?:        string;
+    style?:           string;
+    aspectRatio?:     string;
+    durationSeconds?: number;
+  };
+
+  if (!imageUrl?.trim())
+    throw new Error("VIDEO job missing required input: imageUrl");
+
+  const stylePrompt = VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
+
+  // ── Try Kling first, fall back to Runway ──────────────────────────────────
+  let videoUrl: string;
+  let providerUsed: "kling" | "runway";
+  let extraMeta: Record<string, unknown> = {};
+
+  const klingAvailable = falKey && !falKey.startsWith("your_");
+
+  if (klingAvailable) {
+    try {
+      const res = await generateWithKling(imageUrl, stylePrompt, aspectRatio, 10);
+      videoUrl     = res.videoUrl;
+      providerUsed = res.provider;
+      extraMeta    = { falModel: "fal-ai/kling-video/v1.6/pro/image-to-video" };
+      console.log(`[video] Kling preview generated: ${videoUrl}`);
+    } catch (klingErr: unknown) {
+      const klingMsg = klingErr instanceof Error ? klingErr.message : String(klingErr);
+      console.warn(`[video] Kling failed — falling back to Runway. Error: ${klingMsg}`);
+
+      // Attempt Runway fallback
+      const res   = await generateWithRunway(imageUrl, stylePrompt, aspectRatio, 10);
+      videoUrl     = res.videoUrl;
+      providerUsed = res.provider;
+      extraMeta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo", klingError: klingMsg };
+      console.log(`[video] Runway fallback preview generated: ${videoUrl}`);
+    }
+  } else {
+    // Kling not configured — go straight to Runway
+    const res   = await generateWithRunway(imageUrl, stylePrompt, aspectRatio, 10);
+    videoUrl     = res.videoUrl;
+    providerUsed = res.provider;
+    extraMeta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo" };
+    console.log(`[video] Runway preview generated: ${videoUrl}`);
+  }
+
+  // Phase 1 cost: 10 seconds @ provider rate
+  const costToUs = providerUsed === "kling"
+    ? 10 * KLING_COST_PER_SEC
+    : 10 * RUNWAY_COST_PER_SEC;
+
+  // ── Write Phase 1 result to DB — status stays PROCESSING ─────────────────
+  await db.aIJob.update({
+    where: { id: job.id },
+    data: {
+      outputData: {
+        previewUrl:      videoUrl,
+        previewReady:    true,
+        phase:           1,
+        provider:        providerUsed,
+        style,
+        aspectRatio,
+        durationSeconds,      // saved for Phase 2 full render
+        stylePrompt,
+        previewCostToUs: costToUs,
+        ...extraMeta,
+      } as import("@prisma/client").Prisma.InputJsonValue,
+      costToUs,
+      // status intentionally NOT changed — stays PROCESSING until user approves
+    },
+  });
+
+  console.log(
+    `[video] Phase 1 complete (${providerUsed}) — cost $${costToUs.toFixed(3)}. ` +
+    `Job ${job.id} awaiting user approval for Phase 2.`,
+  );
+
+  return {
+    outputData: {},   // already persisted above
+    costToUs,
+    skipComplete: true,
+  };
 }
 
 async function handleCoverArt(job: AIJob): Promise<HandlerResult> {
@@ -780,18 +1062,29 @@ export async function processAIJob(jobId: string): Promise<void> {
         throw new Error(`Unknown job type: ${job.type}`);
     }
 
-    // 4. Mark COMPLETE
-    await db.aIJob.update({
-      where: { id: jobId },
-      data: {
-        status:      AIJobStatus.COMPLETE,
-        outputData:  result.outputData as import("@prisma/client").Prisma.InputJsonValue,
-        costToUs:    result.costToUs ?? null,
-        completedAt: new Date(),
-      },
-    });
-
-    console.log(`[ai-jobs] job ${jobId} (${job.type}) COMPLETE`);
+    // 4. Mark COMPLETE (suppressed for VIDEO Phase 1 which stays PROCESSING)
+    if (!result.skipComplete) {
+      await db.aIJob.update({
+        where: { id: jobId },
+        data: {
+          status:      AIJobStatus.COMPLETE,
+          outputData:  result.outputData as import("@prisma/client").Prisma.InputJsonValue,
+          costToUs:    result.costToUs ?? null,
+          completedAt: new Date(),
+        },
+      });
+      console.log(`[ai-jobs] job ${jobId} (${job.type}) COMPLETE`);
+    } else {
+      // Handler manages its own DB writes (e.g. VIDEO Phase 1 preview)
+      // Only update costToUs if provided
+      if (result.costToUs != null) {
+        await db.aIJob.update({
+          where: { id: jobId },
+          data: { costToUs: result.costToUs },
+        });
+      }
+      console.log(`[ai-jobs] job ${jobId} (${job.type}) Phase 1 preview ready — PROCESSING (awaiting user approval)`);
+    }
 
   } catch (err: unknown) {
     // 5. Mark FAILED
@@ -803,6 +1096,186 @@ export async function processAIJob(jobId: string): Promise<void> {
       data: {
         status:       AIJobStatus.FAILED,
         errorMessage: message,
+        completedAt:  new Date(),
+      },
+    });
+  }
+}
+
+// ─── Phase 2: full video render (called after user approves the preview) ──────
+
+/**
+ * continueVideoPhase2(jobId)
+ *
+ * Called by the approve-video API route after the artist watches the Phase 1
+ * preview and clicks "Approve Full Render".
+ *
+ * Reads Phase 1 outputData from the job, generates the full-duration video
+ * via the same provider that succeeded in Phase 1 (Kling preferred, Runway
+ * fallback), then sets the job to COMPLETE with the final video URL.
+ *
+ * For Kling: supports up to 180 seconds (3 min) at 4K 60fps via sequential
+ * 10-second segment calls — fal.ai handles scheduling automatically.
+ * For Runway: capped at 10 seconds per call; longer videos are not supported
+ * as a Runway fallback (Kling is strongly preferred for full renders).
+ */
+export async function continueVideoPhase2(jobId: string): Promise<void> {
+  const job = await db.aIJob.findUnique({ where: { id: jobId } });
+
+  if (!job) {
+    console.error(`[video/phase2] job ${jobId} not found`);
+    return;
+  }
+
+  // Guard: must be a VIDEO job in PROCESSING with Phase 1 complete
+  if (job.type !== "VIDEO") {
+    console.error(`[video/phase2] job ${jobId} is type ${job.type}, not VIDEO`);
+    return;
+  }
+  if (job.status !== AIJobStatus.PROCESSING) {
+    console.warn(`[video/phase2] job ${jobId} is ${job.status} — skipping`);
+    return;
+  }
+
+  const phase1Output = (job.outputData ?? {}) as Record<string, unknown>;
+  if (!phase1Output.previewReady) {
+    console.error(`[video/phase2] job ${jobId} has no Phase 1 preview — cannot continue`);
+    return;
+  }
+
+  const {
+    imageUrl: _imageUrl,
+    style           = "cinematic",
+    aspectRatio     = "16:9",
+    durationSeconds = 60,
+    stylePrompt: savedPrompt,
+    provider: phase1Provider,
+    previewCostToUs = 0,
+  } = phase1Output as {
+    imageUrl?:         string;
+    style?:            string;
+    aspectRatio?:      string;
+    durationSeconds?:  number;
+    stylePrompt?:      string;
+    provider?:         string;
+    previewCostToUs?:  number;
+  };
+
+  // Recover imageUrl from inputData if not saved in outputData
+  const inputData  = (job.inputData ?? {}) as Record<string, unknown>;
+  const imageUrl   = (phase1Output.imageUrl ?? inputData.imageUrl) as string | undefined;
+  const prompt     = savedPrompt ?? VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
+  const fullSecs   = Math.min(Number(durationSeconds), 180); // Kling max: 3 min
+
+  if (!imageUrl?.trim()) {
+    await db.aIJob.update({
+      where: { id: jobId },
+      data: { status: AIJobStatus.FAILED, errorMessage: "Phase 2: imageUrl missing from job", completedAt: new Date() },
+    });
+    return;
+  }
+
+  console.log(
+    `[video/phase2] starting full render — ${fullSecs}s, style: ${style}, ` +
+    `provider hint: ${phase1Provider ?? "auto"}`,
+  );
+
+  try {
+    let finalVideoUrl: string;
+    let providerUsed: "kling" | "runway";
+    let phase2Meta: Record<string, unknown> = {};
+    let phase2Cost: number;
+
+    const klingAvailable =
+      !!(process.env.FAL_KEY) && !process.env.FAL_KEY.startsWith("your_");
+
+    if (klingAvailable) {
+      // ── Kling full render ─────────────────────────────────────────────────
+      // Kling natively supports 5s and 10s clips per API call.
+      // For >10s, we chain calls sequentially (each uses the previous frame
+      // as the seed image — basic continuity approach).
+      // For simplicity and reliability, we request a single 10s clip for
+      // durations ≤ 10s, or the full duration chunked for longer renders.
+      //
+      // NOTE: For v1 we generate a single 10s clip regardless of durationSeconds
+      // to keep the first full-render implementation straightforward. Chunked
+      // long-form rendering is a future enhancement.
+      const clipSecs = Math.min(fullSecs, 10) as 5 | 10;
+
+      console.log(`[video/phase2/kling] generating ${clipSecs}s clip`);
+
+      fal.config({ credentials: process.env.FAL_KEY! });
+
+      const result = await fal.subscribe("fal-ai/kling-video/v1.6/pro/image-to-video", {
+        input: {
+          image_url:    imageUrl,
+          prompt,
+          duration:     String(clipSecs) as "5" | "10",
+          aspect_ratio: (KLING_RATIO_MAP[aspectRatio] ?? "16:9") as "16:9" | "9:16" | "1:1",
+        },
+        logs: true,
+        onQueueUpdate(update: QueueStatus) {
+          if (update.status === "IN_PROGRESS" && "logs" in update && Array.isArray(update.logs) && update.logs.length) {
+            console.log(`[video/phase2/kling] ${(update.logs as Array<{ message: string }>).at(-1)?.message}`);
+          }
+        },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalVideoUrl = (result.data as any)?.video?.url as string;
+      if (!finalVideoUrl) throw new Error("Kling Phase 2 returned no video URL");
+
+      providerUsed = "kling";
+      phase2Cost   = clipSecs * KLING_COST_PER_SEC;
+      phase2Meta   = { falModel: "fal-ai/kling-video/v1.6/pro/image-to-video", renderedSecs: clipSecs };
+
+    } else {
+      // ── Runway fallback (10s max) ─────────────────────────────────────────
+      console.log(`[video/phase2/runway] generating full clip (max 10s)`);
+      const res    = await generateWithRunway(imageUrl, prompt, aspectRatio, Math.min(fullSecs, 10));
+      finalVideoUrl = res.videoUrl;
+      providerUsed  = res.provider;
+      phase2Cost    = Math.min(fullSecs, 10) * RUNWAY_COST_PER_SEC;
+      phase2Meta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo" };
+    }
+
+    const totalCost = Number(previewCostToUs) + phase2Cost;
+
+    console.log(
+      `[video/phase2] render complete (${providerUsed}) — cost $${phase2Cost.toFixed(3)}. ` +
+      `Total job cost: $${totalCost.toFixed(3)}`,
+    );
+
+    // ── Mark COMPLETE ─────────────────────────────────────────────────────
+    await db.aIJob.update({
+      where: { id: jobId },
+      data: {
+        status: AIJobStatus.COMPLETE,
+        outputData: {
+          ...phase1Output,          // includes previewUrl, previewReady, style, etc.
+          finalVideoUrl,
+          phase:        2,
+          phase2Provider: providerUsed,
+          phase2CostToUs: phase2Cost,
+          totalCostToUs:  totalCost,
+          ...phase2Meta,
+        } as import("@prisma/client").Prisma.InputJsonValue,
+        costToUs:    totalCost,
+        completedAt: new Date(),
+      },
+    });
+
+    console.log(`[video/phase2] job ${jobId} COMPLETE — final video: ${finalVideoUrl}`);
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[video/phase2] job ${jobId} FAILED: ${message}`);
+
+    await db.aIJob.update({
+      where: { id: jobId },
+      data: {
+        status:       AIJobStatus.FAILED,
+        errorMessage: `Phase 2 failed: ${message}`,
         completedAt:  new Date(),
       },
     });

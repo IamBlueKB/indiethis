@@ -13,6 +13,7 @@
     "@auth/prisma-adapter": "1.6.0",
     "@base-ui/react": "^1.3.0",
     "@dolbyio/dolbyio-rest-apis-client": "^6.2.0",
+    "@fal-ai/client": "^1.9.4",
     "@getbrevo/brevo": "^5.0.1",
     "@prisma/client": "5.22.0",
     "@react-pdf/renderer": "^4.3.2",
