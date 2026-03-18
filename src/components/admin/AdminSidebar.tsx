@@ -12,6 +12,7 @@ import {
   Cpu,
   ShieldAlert,
   Brain,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,8 @@ const navItems: NavItem[] = [
   { label: "AI Usage", href: "/admin/ai-usage", icon: Cpu },
   { label: "Moderation", href: "/admin/moderation", icon: ShieldAlert },
   { label: "AI Learning", href: "/admin/ai-learning", icon: Brain },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Affiliates",  href: "/admin/affiliates",  icon: Link2 },
+  { label: "Settings",    href: "/admin/settings",    icon: Settings },
 ];
 
 export default function AdminSidebar() {

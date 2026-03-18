@@ -373,6 +373,69 @@ export async function sendLowCreditsWarning(user: {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Affiliate program emails
+// ---------------------------------------------------------------------------
+
+export async function sendAffiliateApprovalEmail(affiliate: {
+  name: string;
+  email: string;
+  customSlug: string;
+  discountCode: string;
+  affiliateLink: string;
+  dashboardUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: affiliate.email, name: affiliate.name },
+    subject: "You're approved — welcome to the IndieThis Affiliate Program 🎉",
+    htmlContent: `
+      <h1>Welcome to the IndieThis Affiliate Program, ${affiliate.name}!</h1>
+      <p>Your application has been approved. Here are your unique details:</p>
+      <table cellpadding="8" style="border-collapse:collapse;width:100%;max-width:480px;">
+        <tr style="background:#f5f5f5;">
+          <td style="font-weight:bold;border:1px solid #e0e0e0;">Your affiliate link</td>
+          <td style="border:1px solid #e0e0e0;">
+            <a href="${affiliate.affiliateLink}" style="color:#D4A843;">${affiliate.affiliateLink}</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:bold;border:1px solid #e0e0e0;">Your discount code</td>
+          <td style="border:1px solid #e0e0e0;font-family:monospace;font-size:16px;font-weight:bold;color:#D4A843;">
+            ${affiliate.discountCode}
+          </td>
+        </tr>
+      </table>
+      <h2 style="margin-top:24px;">How it works</h2>
+      <ul>
+        <li>Share your affiliate link or discount code with your audience.</li>
+        <li>Your audience gets <strong>10% off their first 3 months</strong> when they use your code.</li>
+        <li>You earn <strong>20% commission for 12 months</strong> on every paying artist you refer.</li>
+        <li>Commissions are paid out monthly via Stripe Connect once you connect your account.</li>
+      </ul>
+      <p style="margin-top:24px;">
+        <a href="${affiliate.dashboardUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold;">
+          View Your Affiliate Dashboard →
+        </a>
+      </p>
+      <p style="color:#888;font-size:12px;margin-top:24px;">
+        Questions? Reply to this email and we'll help you out.
+      </p>
+    `,
+    textContent: `
+Welcome to the IndieThis Affiliate Program, ${affiliate.name}!
+
+Your affiliate link: ${affiliate.affiliateLink}
+Your discount code: ${affiliate.discountCode}
+
+Your audience gets 10% off their first 3 months when they use your code.
+You earn 20% commission for 12 months on every paying referral.
+
+View your dashboard: ${affiliate.dashboardUrl}
+    `.trim(),
+    tags: ["affiliate", "approval"],
+  });
+}
+
 export async function sendSubscriptionRenewalReminder(user: {
   email: string;
   displayName: string;

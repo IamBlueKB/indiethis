@@ -984,26 +984,33 @@ model Referral {
 
 model Affiliate {
   id                        String          @id @default(cuid())
-  userId                    String          @unique
+  /// Linked account — nullable so non-account applicants can apply; set on approval or on account creation
+  userId                    String?         @unique
+  /// Applicant identity captured from the form (for pre-account applicants)
+  applicantName             String
+  applicantEmail            String
   status                    AffiliateStatus @default(PENDING)
-  /// Landing page URL: indiethis.com/go/[customSlug]
-  customSlug                String          @unique
-  /// Discount code their audience uses at signup (10% off first 3 months)
-  discountCode              String          @unique
+  /// Landing page URL: indiethis.com/go/[customSlug] — generated at approval
+  customSlug                String?         @unique
+  /// Discount code their audience uses at signup (10% off first 3 months) — generated at approval
+  discountCode              String?         @unique
   commissionRate            Float           @default(0.20)
   commissionDurationMonths  Int             @default(12)
   totalEarned               Float           @default(0)
   pendingPayout             Float           @default(0)
   /// Stripe Connect account for commission payouts
   stripeConnectAccountId    String?
+  /// Raw application form data: socialLinks, audienceSize, creatorType, promotionPlan
+  applicationData           Json?
   appliedAt                 DateTime        @default(now())
   approvedAt                DateTime?
   createdAt                 DateTime        @default(now())
 
-  user      User                @relation(fields: [userId], references: [id])
+  user      User?               @relation(fields: [userId], references: [id])
   referrals AffiliateReferral[]
 
   @@index([status])
+  @@index([applicantEmail])
 }
 
 model AffiliateReferral {
