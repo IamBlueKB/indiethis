@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Mail, ChevronDown, ChevronUp, Check, Loader2,
   ToggleLeft, ToggleRight, Eye, X,
@@ -232,12 +232,14 @@ function StepCard({
   studioName,
   onChange,
   onSave,
+  onFieldFocus,
 }: {
   meta: typeof STEP_META[number];
   template: EmailTemplate;
   studioName: string;
   onChange: (t: EmailTemplate) => void;
   onSave: () => Promise<void>;
+  onFieldFocus: (field: "subject" | "body", el: HTMLInputElement | HTMLTextAreaElement) => void;
 }) {
   const [open, setOpen]         = useState(meta.key === "day1");
   const [saving, setSaving]     = useState(false);
@@ -335,6 +337,7 @@ function StepCard({
               <input
                 value={template.subject}
                 onChange={(e) => onChange({ ...template, subject: e.target.value })}
+                onFocus={(e) => onFieldFocus("subject", e.currentTarget)}
                 className={inputCls}
                 style={{ borderColor: "var(--border)" }}
                 placeholder="Email subject…"
@@ -349,6 +352,7 @@ function StepCard({
               <textarea
                 value={template.body}
                 onChange={(e) => onChange({ ...template, body: e.target.value })}
+                onFocus={(e) => onFieldFocus("body", e.currentTarget)}
                 rows={8}
                 className={inputCls + " resize-y leading-relaxed"}
                 style={{ borderColor: "var(--border)" }}
@@ -391,6 +395,14 @@ function StepCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// ─── Active field tracking (for click-to-insert) ─────────────────────────────
+
+type ActiveField = {
+  stepKey: StepKey;
+  field: "subject" | "body";
+  el: HTMLInputElement | HTMLTextAreaElement;
+};
+
 export default function EmailSequencesPage() {
   const [loading, setLoading]               = useState(true);
   const [sequenceEnabled, setSequenceEnabled] = useState(false);
@@ -399,6 +411,34 @@ export default function EmailSequencesPage() {
 
   const [masterSaving, setMasterSaving] = useState(false);
   const [masterSaved,  setMasterSaved]  = useState(false);
+
+  // Track the last-focused subject/body field so variable clicks insert there
+  const activeFieldRef = useRef<ActiveField | null>(null);
+  const [hasActiveField, setHasActiveField] = useState(false);
+
+  function handleFieldFocus(stepKey: StepKey, field: "subject" | "body", el: HTMLInputElement | HTMLTextAreaElement) {
+    activeFieldRef.current = { stepKey, field, el };
+    setHasActiveField(true);
+  }
+
+  function insertVariable(token: string) {
+    const active = activeFieldRef.current;
+    if (!active) return;
+    const { stepKey, field, el } = active;
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    const newValue = el.value.slice(0, start) + token + el.value.slice(end);
+    setTemplates((prev) => ({
+      ...prev,
+      [stepKey]: { ...prev[stepKey], [field]: newValue },
+    }));
+    // Restore focus + cursor after React re-renders the controlled input
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + token.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
 
   // ── Load studio settings ───────────────────────────────────────────────────
   useEffect(() => {
@@ -510,22 +550,37 @@ export default function EmailSequencesPage() {
         className="rounded-2xl border p-5 space-y-3"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Available Placeholder Variables
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Available Placeholder Variables
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {hasActiveField
+              ? "Click any variable to insert at cursor"
+              : "Focus a subject or body field, then click to insert"}
+          </p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {VARIABLES.map(({ token, desc }) => (
             <div key={token} className="flex items-start gap-2">
-              <code
-                className="text-[11px] font-mono px-1.5 py-0.5 rounded-md shrink-0 leading-tight"
-                style={{
-                  backgroundColor: "rgba(212,168,67,0.1)",
-                  color: "#D4A843",
-                  border: "1px solid rgba(212,168,67,0.2)",
-                }}
+              <button
+                type="button"
+                onClick={() => insertVariable(token)}
+                title={hasActiveField ? `Insert ${token}` : "Focus a field first"}
+                className="shrink-0 text-left transition-opacity hover:opacity-70 active:scale-95"
               >
-                {token}
-              </code>
+                <code
+                  className="text-[11px] font-mono px-1.5 py-0.5 rounded-md leading-tight block"
+                  style={{
+                    backgroundColor: "rgba(212,168,67,0.1)",
+                    color: "#D4A843",
+                    border: "1px solid rgba(212,168,67,0.2)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {token}
+                </code>
+              </button>
               <span className="text-[11px] text-muted-foreground leading-tight pt-0.5">{desc}</span>
             </div>
           ))}
@@ -542,6 +597,7 @@ export default function EmailSequencesPage() {
             studioName={studioName}
             onChange={(t) => setTemplates((prev) => ({ ...prev, [meta.key]: t }))}
             onSave={() => saveStep(meta.key)}
+            onFieldFocus={(field, el) => handleFieldFocus(meta.key, field, el)}
           />
         ))}
       </div>
