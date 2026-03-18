@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap } from "lucide-react";
+import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
 
@@ -87,6 +87,11 @@ export default async function StudioAnalyticsPage() {
     newContactsLastMonth,
     contactsBySource,
     recentCampaigns,
+    seqSentThisMonth,
+    seqSentLastMonth,
+    seqPendingNow,
+    seqAllSentEmails,
+    seqStepBreakdown,
   ] = await Promise.all([
     db.pageView.count({
       where: { studioId: studio.id, viewedAt: { gte: startOfMonth } },
@@ -135,6 +140,27 @@ export default async function StudioAnalyticsPage() {
       orderBy: { sentAt: "desc" },
       take: 6,
     }),
+    // ── Email sequence stats ──────────────────────────────────────────────
+    db.scheduledEmail.count({
+      where: { studioId: studio.id, status: "SENT", sentAt: { gte: startOfMonth } },
+    }),
+    db.scheduledEmail.count({
+      where: { studioId: studio.id, status: "SENT", sentAt: { gte: lastMonthStart, lt: startOfMonth } },
+    }),
+    db.scheduledEmail.count({
+      where: { studioId: studio.id, status: "PENDING" },
+    }),
+    // All ever-sent emails (for conversion calculation)
+    db.scheduledEmail.findMany({
+      where: { studioId: studio.id, status: "SENT" },
+      select: { contactEmail: true, sentAt: true },
+    }),
+    // Per-step breakdown: count by sequenceStep + status
+    db.scheduledEmail.groupBy({
+      by: ["sequenceStep", "status"],
+      where: { studioId: studio.id },
+      _count: { id: true },
+    }),
   ]);
 
   // ── Build chart data ─────────────────────────────────────────────────────
@@ -182,6 +208,44 @@ export default async function StudioAnalyticsPage() {
   const inquiriesDelta = calcDelta(contactSubsThisMonth, contactSubsLastMonth);
   const bookingsDelta = calcDelta(intakeSubsThisMonth, intakeSubsLastMonth);
   const contactsDelta = calcDelta(newContactsThisMonth, newContactsLastMonth);
+
+  // ── Email sequence stats ─────────────────────────────────────────────────
+
+  const seqSentDelta = calcDelta(seqSentThisMonth, seqSentLastMonth);
+
+  // Conversion: unique emails that ever received a sequence email → are now subscribers
+  const uniqueSentEmails = [...new Set(seqAllSentEmails.map((e) => e.contactEmail))];
+  const seqConverted = uniqueSentEmails.length > 0
+    ? await db.user.count({
+        where: {
+          email: { in: uniqueSentEmails },
+          subscription: { status: "ACTIVE" },
+        },
+      })
+    : 0;
+  const seqConversionRate = uniqueSentEmails.length > 0
+    ? Math.round((seqConverted / uniqueSentEmails.length) * 100)
+    : null;
+
+  // Per-step breakdown table: { step, sent, pending, cancelled }
+  const STEP_ORDER = ["DAY_1", "DAY_3", "DAY_7", "DAY_14"] as const;
+  const STEP_LABEL: Record<string, string> = { DAY_1: "Day 1", DAY_3: "Day 3", DAY_7: "Day 7", DAY_14: "Day 14" };
+
+  type StepRow = { step: string; label: string; sent: number; pending: number; cancelled: number; failed: number };
+  const seqBreakdownRows: StepRow[] = STEP_ORDER.map((step) => {
+    const rows = seqStepBreakdown.filter((r) => r.sequenceStep === step);
+    const count = (status: string) => rows.find((r) => r.status === status)?._count.id ?? 0;
+    return {
+      step,
+      label: STEP_LABEL[step],
+      sent:      count("SENT"),
+      pending:   count("PENDING"),
+      cancelled: count("CANCELLED"),
+      failed:    count("FAILED"),
+    };
+  });
+
+  const seqHasData = seqBreakdownRows.some((r) => r.sent + r.pending + r.cancelled + r.failed > 0);
 
   // ── AI usage ─────────────────────────────────────────────────────────────
   const aiUsed = studio.generationsUsedThisMonth;
@@ -312,6 +376,149 @@ export default async function StudioAnalyticsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Follow-Up Email Sequence Performance ────────────────────────────── */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Section header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            <MailCheck size={14} style={{ color: "#D4A843" }} />
+            <p className="text-sm font-semibold text-foreground">Follow-Up Email Sequence</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Automated post-delivery emails</p>
+        </div>
+
+        {!seqHasData ? (
+          <div className="px-5 py-12 text-center space-y-2">
+            <MailCheck size={28} className="mx-auto opacity-30" style={{ color: "#D4A843" }} />
+            <p className="text-sm font-medium text-foreground">No sequences sent yet</p>
+            <p className="text-xs text-muted-foreground">
+              Enable follow-up sequences on your next file delivery to see stats here.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Mini stat tiles */}
+            <div
+              className="grid grid-cols-3 gap-px border-b"
+              style={{ borderColor: "var(--border)", backgroundColor: "var(--border)" }}
+            >
+              {/* Sent this month */}
+              <div className="px-5 py-4 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+                <div className="flex items-center gap-1.5">
+                  <SendHorizonal size={13} style={{ color: "#D4A843" }} />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sent This Month</p>
+                </div>
+                <p className="text-2xl font-bold text-foreground font-display">{seqSentThisMonth}</p>
+                {seqSentDelta !== null ? (
+                  <p
+                    className="text-xs font-semibold flex items-center gap-0.5"
+                    style={{ color: seqSentDelta >= 0 ? "#34C759" : "#E85D4A" }}
+                  >
+                    {seqSentDelta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    {Math.abs(seqSentDelta)}% vs last month
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">first month</p>
+                )}
+              </div>
+
+              {/* Pending / queued */}
+              <div className="px-5 py-4 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+                <div className="flex items-center gap-1.5">
+                  <Clock size={13} className="text-muted-foreground" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Queued</p>
+                </div>
+                <p className="text-2xl font-bold text-foreground font-display">{seqPendingNow}</p>
+                <p className="text-xs text-muted-foreground">scheduled, not yet sent</p>
+              </div>
+
+              {/* Conversion */}
+              <div className="px-5 py-4 space-y-1" style={{ backgroundColor: "var(--card)" }}>
+                <div className="flex items-center gap-1.5">
+                  <Users size={13} className="text-muted-foreground" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Conversion</p>
+                </div>
+                {seqConversionRate !== null ? (
+                  <>
+                    <p className="text-2xl font-bold text-foreground font-display">{seqConversionRate}%</p>
+                    <p className="text-xs text-muted-foreground">
+                      {seqConverted} of {uniqueSentEmails.length} subscribed
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-muted-foreground font-display">—</p>
+                    <p className="text-xs text-muted-foreground">no emails sent yet</p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Per-step breakdown table */}
+            <div
+              className="grid text-xs font-semibold uppercase tracking-wider text-muted-foreground px-5 py-3 border-b"
+              style={{ borderColor: "var(--border)", gridTemplateColumns: "100px 1fr 1fr 1fr 1fr" }}
+            >
+              <span>Step</span>
+              <span>Sent</span>
+              <span>Pending</span>
+              <span>Cancelled</span>
+              <span>Failed</span>
+            </div>
+            {seqBreakdownRows.map((row) => (
+              <div
+                key={row.step}
+                className="grid items-center px-5 py-3.5 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)", gridTemplateColumns: "100px 1fr 1fr 1fr 1fr" }}
+              >
+                {/* Step pill */}
+                <span
+                  className="inline-flex items-center justify-center w-14 py-0.5 rounded-full text-xs font-bold"
+                  style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
+                >
+                  {row.label}
+                </span>
+
+                <p className="text-sm font-semibold text-foreground">
+                  {row.sent > 0 ? row.sent : <span className="text-muted-foreground">0</span>}
+                </p>
+
+                <p className="text-sm text-muted-foreground">
+                  {row.pending > 0 ? (
+                    <span className="font-semibold" style={{ color: "#eab308" }}>{row.pending}</span>
+                  ) : "0"}
+                </p>
+
+                <p className="text-sm text-muted-foreground">{row.cancelled > 0 ? row.cancelled : "0"}</p>
+
+                <p className="text-sm text-muted-foreground">
+                  {row.failed > 0 ? (
+                    <span className="font-semibold" style={{ color: "#f87171" }}>{row.failed}</span>
+                  ) : "0"}
+                </p>
+              </div>
+            ))}
+
+            {/* Open rate note */}
+            <div
+              className="px-5 py-3 flex items-center gap-2"
+              style={{ borderTop: "1px solid var(--border)" }}
+            >
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Open rate</span> — not tracked yet.
+                Connect a Brevo open-tracking webhook to see open rates per step.
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Email blast performance */}
