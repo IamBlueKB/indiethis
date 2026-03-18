@@ -151,9 +151,12 @@ export async function creditStudioForArtistPurchase(
 
 /**
  * Called from the Stripe webhook on invoice.upcoming.
- * If the Stripe customer ID maps to a studio owner who has referral credits,
- * creates a negative Stripe balance transaction so the credit is automatically
- * applied when the invoice is finalised.
+ *
+ * Applies referral credits to the upcoming invoice, capped at the invoice
+ * amount so the studio never receives cash — only subscription credits.
+ * Any excess remains in referralCredits and rolls over to the next month.
+ *
+ * Example: $15 credits, $10 invoice → $10 applied, $5 carried forward.
  */
 export async function applyStudioCreditsToStripeInvoice(
   stripeCustomerId: string,
@@ -166,7 +169,7 @@ export async function applyStudioCreditsToStripeInvoice(
     const owner = await db.user.findFirst({
       where:  { stripeCustomerId },
       select: {
-        id:          true,
+        id:           true,
         ownedStudios: {
           select: { id: true, referralCredits: true, referralCreditHistory: true },
           take:   1,
@@ -178,36 +181,69 @@ export async function applyStudioCreditsToStripeInvoice(
     const studio = owner.ownedStudios[0];
     if (!studio || studio.referralCredits <= 0) return;
 
-    const creditsInCents = Math.round(studio.referralCredits * 100);
+    // ── Fetch the upcoming invoice to know the exact amount due ─────────────
+    let invoiceAmountDueCents: number;
+    try {
+      const upcoming = await stripe.invoices.createPreview({
+        customer: stripeCustomerId,
+      });
+      invoiceAmountDueCents = upcoming.amount_due; // already in cents
+    } catch {
+      // No upcoming invoice exists for this customer — nothing to apply.
+      return;
+    }
 
-    // Stripe balance transaction: negative = credit applied to customer
+    if (invoiceAmountDueCents <= 0) return;
+
+    // ── Cap applied amount at the invoice total ──────────────────────────────
+    const availableCents  = Math.round(studio.referralCredits * 100);
+    const applyCents      = Math.min(availableCents, invoiceAmountDueCents);
+    const applyDollars    = applyCents / 100;
+    const remainingCents  = availableCents - applyCents;
+    const remainingDollars = remainingCents / 100;
+
+    // ── Create Stripe negative balance transaction ───────────────────────────
+    // Stripe auto-applies this to the next finalised invoice up to amount_due.
     const txn = await stripe.customers.createBalanceTransaction(
       stripeCustomerId,
       {
-        amount:      -creditsInCents,
+        amount:      -applyCents,
         currency:    "usd",
-        description: `IndieThis referral credit — $${studio.referralCredits.toFixed(2)}`,
+        description: `IndieThis referral credit — $${applyDollars.toFixed(2)}`,
       },
     );
 
-    // Record the APPLIED event
+    // ── Build log entry ──────────────────────────────────────────────────────
+    const carryNote  = remainingDollars > 0
+      ? ` — $${remainingDollars.toFixed(2)} carried forward`
+      : "";
+
     const history = parseHistory(studio.referralCreditHistory);
     const event: CreditEvent = {
       id:        randomBytes(6).toString("hex"),
       type:      "APPLIED",
-      amount:    -studio.referralCredits,
-      reason:    `Applied $${studio.referralCredits.toFixed(2)} as Stripe invoice credit`,
+      amount:    -applyDollars,
+      reason:    `Applied $${applyDollars.toFixed(2)} as Stripe invoice credit${carryNote}`,
       invoiceId: txn.id,
       date:      new Date().toISOString(),
     };
 
+    // ── Persist: deduct only the applied amount, keep excess for next month ──
     await db.studio.update({
       where: { id: studio.id },
       data: {
-        referralCredits:      0,
+        referralCredits:       remainingDollars,
         referralCreditHistory: [...history, event] as unknown as Prisma.InputJsonValue,
       },
     });
+
+    console.log(
+      `[studio-referral] applied $${applyDollars.toFixed(2)} to invoice for ` +
+      `customer ${stripeCustomerId}` +
+      (remainingDollars > 0
+        ? ` — $${remainingDollars.toFixed(2)} carried forward to next month`
+        : ""),
+    );
   } catch (err) {
     console.error("[studio-referral] applyStudioCreditsToStripeInvoice failed:", err);
   }

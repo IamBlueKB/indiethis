@@ -28,6 +28,8 @@ const REFERRAL_COUPON_ID = "referral-20pct";
 export async function applyReferralRewardsToInvoice(
   stripeCustomerId: string,
 ): Promise<void> {
+  if (!stripe) return; // STRIPE_SECRET_KEY not configured
+
   try {
     const user = await db.user.findFirst({
       where:  { stripeCustomerId },
@@ -66,7 +68,7 @@ export async function applyReferralRewardsToInvoice(
         if (!subId) break;
 
         // Fetch the upcoming invoice to know the amount to waive.
-        const upcoming = await stripe.invoices.retrieveUpcoming({
+        const upcoming = await stripe.invoices.createPreview({
           customer: stripeCustomerId,
         });
 
@@ -91,9 +93,9 @@ export async function applyReferralRewardsToInvoice(
 
         await ensureReferralCoupon();
 
-        // Apply coupon to subscription (replaces any existing referral discount).
+        // Apply coupon to subscription via discounts array (replaces any existing referral discount).
         await stripe.subscriptions.update(subId, {
-          coupon: REFERRAL_COUPON_ID,
+          discounts: [{ coupon: REFERRAL_COUPON_ID }],
         });
         console.log(`[referral-billing] DISCOUNT_20 — applied ${REFERRAL_COUPON_ID} to subscription ${subId}`);
         break;
@@ -156,6 +158,7 @@ export async function applyReferralRewardsToInvoice(
  * Creates it if not found (idempotent — uses a stable ID).
  */
 async function ensureReferralCoupon(): Promise<void> {
+  if (!stripe) return;
   try {
     await stripe.coupons.retrieve(REFERRAL_COUPON_ID);
   } catch {
@@ -175,18 +178,25 @@ async function ensureReferralCoupon(): Promise<void> {
  * Called when tier drops to NONE so the discount stops on the next cycle.
  */
 async function removeReferralDiscount(subscriptionId: string): Promise<void> {
+  if (!stripe) return;
   try {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
 
-    // stripe.subscriptions.retrieve returns discount as a Discount object or null.
-    const couponId =
-      sub.discount?.coupon &&
-      typeof sub.discount.coupon === "object"
-        ? sub.discount.coupon.id
-        : (sub.discount?.coupon as string | null | undefined);
+    // In the current Stripe SDK, discounts is Array<string | Discount>.
+    // Coupon info lives on d.source.coupon (not d.coupon directly).
+    const hasReferralDiscount = sub.discounts?.some((d) => {
+      if (typeof d === "string") return false; // bare ID — can't inspect coupon
+      const src      = d.source;
+      const couponId =
+        src?.coupon && typeof src.coupon === "object"
+          ? (src.coupon as { id: string }).id
+          : (src?.coupon as string | null | undefined);
+      return couponId === REFERRAL_COUPON_ID;
+    }) ?? false;
 
-    if (couponId === REFERRAL_COUPON_ID) {
-      await stripe.subscriptions.deleteDiscount(subscriptionId);
+    if (hasReferralDiscount) {
+      // Clear subscription-level discounts (only the referral coupon is applied here).
+      await stripe.subscriptions.update(subscriptionId, { discounts: [] });
       console.log(`[referral-billing] removed referral discount from subscription ${subscriptionId}`);
     }
   } catch (err) {
