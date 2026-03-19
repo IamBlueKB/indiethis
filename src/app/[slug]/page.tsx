@@ -13,6 +13,7 @@ import ShowCapture from "./ShowCapture";
 import AboutSection from "./AboutSection";
 import BookingSection from "./BookingSection";
 import ArtistFooter from "./ArtistFooter";
+import ArtistPageViewTracker from "./ArtistPageViewTracker";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -89,6 +90,9 @@ async function ArtistSite({ slug }: { slug: string }) {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
 
+      {/* ── Page view tracker — fires once on mount, skips owner + dedup ── */}
+      <ArtistPageViewTracker artistSlug={slug} />
+
       {/* ── Full-bleed hero (client component — handles auto-load + Listen CTA) */}
       <ArtistHero
         displayName={displayName}
@@ -156,6 +160,7 @@ async function ArtistSite({ slug }: { slug: string }) {
           <TrackList
             tracks={artist.tracks}
             artistName={displayName}
+            artistSlug={slug}
             followGateEnabled={site.followGateEnabled ?? false}
             instagramHandle={artist.instagramHandle ?? null}
             spotifyUrl={artist.spotifyUrl ?? null}

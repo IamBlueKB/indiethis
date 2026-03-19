@@ -45,7 +45,7 @@ const PLATFORM_ICONS: Record<string, (props: { size: number }) => React.ReactEle
   ),
 };
 
-// ─── Streaming link row (device-aware) ────────────────────────────────────────
+// ─── Streaming link row (device-aware, with click tracking) ──────────────────
 
 function StreamingLinks({
   spotifyUrl,
@@ -53,12 +53,16 @@ function StreamingLinks({
   youtubeChannel,
   soundcloudUrl,
   device,
+  artistSlug,
+  trackId,
 }: {
   spotifyUrl?: string | null;
   appleMusicUrl?: string | null;
   youtubeChannel?: string | null;
   soundcloudUrl?: string | null;
   device: DeviceType;
+  artistSlug?: string;
+  trackId?: string;
 }) {
   const links = buildStreamingLinks(
     { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl },
@@ -66,6 +70,15 @@ function StreamingLinks({
   );
 
   if (!links.length) return null;
+
+  function handleClick(platform: string) {
+    if (!artistSlug) return;
+    fetch("/api/public/artist-linkclick", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ artistSlug, platform, trackId: trackId ?? null }),
+    }).catch(() => {});
+  }
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -77,6 +90,7 @@ function StreamingLinks({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => handleClick(key)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold no-underline
                        transition-all hover:brightness-110 hover:scale-[1.02]"
             style={{ backgroundColor: bg, color }}
@@ -237,6 +251,7 @@ function CoverArt({
 export default function TrackList({
   tracks,
   artistName,
+  artistSlug,
   followGateEnabled = false,
   instagramHandle = null,
   spotifyUrl = null,
@@ -246,6 +261,7 @@ export default function TrackList({
 }: {
   tracks: Track[];
   artistName?: string;
+  artistSlug?: string;
   followGateEnabled?: boolean;
   instagramHandle?: string | null;
   /** Artist-level streaming links shown on each track */
@@ -277,7 +293,16 @@ export default function TrackList({
   const featured   = tracks[0]  ?? null;
   const rest       = tracks.slice(1);       // up to 9 more (page.tsx already caps at 10)
 
-  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl, device };
+  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl, device, artistSlug };
+
+  function fireTrackPlay(trackId: string) {
+    if (!artistSlug) return;
+    fetch("/api/public/artist-trackplay", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ trackId, artistSlug }),
+    }).catch(() => {});
+  }
 
   function handleDownload(track: Track) {
     if (followGateEnabled && instagramHandle && track.price === null) {
@@ -298,6 +323,7 @@ export default function TrackList({
       { id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined },
       audioContext,
     );
+    fireTrackPlay(track.id);
   }
 
   function toggleExpand(id: string) {
@@ -366,11 +392,12 @@ export default function TrackList({
             <InlinePlayer
               track={featuredAudio}
               context={audioContext}
+              onPlay={() => fireTrackPlay(featured.id)}
             />
 
             {/* Streaming + download row */}
             <div className="flex flex-wrap items-center gap-2">
-              <StreamingLinks {...streamingProps} />
+              <StreamingLinks {...streamingProps} trackId={featured.id} />
               {followGateEnabled && instagramHandle && featured.price === null && (
                 <button
                   onClick={() => handleDownload(featured)}

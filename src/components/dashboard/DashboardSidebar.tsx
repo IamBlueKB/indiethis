@@ -20,6 +20,7 @@ import {
   Video,
   Mic2,
   Users,
+  BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { label: "Videos", href: "/dashboard/videos", icon: Video },
   { label: "Shows", href: "/dashboard/shows", icon: Mic2 },
   { label: "Fans", href: "/dashboard/fans", icon: Users },
+  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
   { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
