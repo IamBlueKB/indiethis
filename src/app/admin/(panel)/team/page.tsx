@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/require-admin-access";
 import { ShieldCheck, UsersRound, Circle } from "lucide-react";
 import TeamActions from "./TeamActions";
+import TeamRowActions from "./TeamRowActions";
 
 // ─── Role config ──────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ function initials(name: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AdminTeamPage() {
-  await requireAdminAccess("team");
+  const { session } = await requireAdminAccess("team");
 
   const admins = await db.adminAccount.findMany({
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
@@ -117,7 +118,7 @@ export default async function AdminTeamPage() {
           className="grid text-xs font-semibold uppercase tracking-wider text-muted-foreground px-5 py-3 border-b"
           style={{
             borderColor: "var(--border)",
-            gridTemplateColumns: "1fr 180px 120px 110px 110px",
+            gridTemplateColumns: "1fr 180px 120px 110px 110px 44px",
           }}
         >
           <span>Admin</span>
@@ -125,6 +126,7 @@ export default async function AdminTeamPage() {
           <span>Status</span>
           <span>Last Login</span>
           <span>Added</span>
+          <span />
         </div>
 
         {admins.length === 0 ? (
@@ -142,7 +144,7 @@ export default async function AdminTeamPage() {
                 className="grid items-center px-5 py-4 border-b last:border-b-0"
                 style={{
                   borderColor: "var(--border)",
-                  gridTemplateColumns: "1fr 180px 120px 110px 110px",
+                  gridTemplateColumns: "1fr 180px 120px 110px 110px 44px",
                   opacity: admin.isActive ? 1 : 0.55,
                 }}
               >
@@ -187,6 +189,18 @@ export default async function AdminTeamPage() {
 
                 {/* Created */}
                 <span className="text-xs text-muted-foreground">{fmt(admin.createdAt)}</span>
+
+                {/* Row actions */}
+                <div className="flex items-center justify-end">
+                  <TeamRowActions
+                    targetId={admin.id}
+                    targetName={admin.name}
+                    targetRole={role}
+                    targetActive={admin.isActive}
+                    sessionId={session.id}
+                    sessionRole={session.role as AdminRole}
+                  />
+                </div>
               </div>
             );
           })

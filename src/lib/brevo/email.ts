@@ -493,6 +493,52 @@ Sign in at: ${admin.loginUrl}
   });
 }
 
+export async function sendAdminPasswordResetEmail(admin: {
+  name: string;
+  email: string;
+  temporaryPassword: string;
+  resetBy: string;
+  loginUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: admin.email, name: admin.name },
+    subject: "Your IndieThis admin password has been reset",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a;">
+        <h1 style="font-size:22px;font-weight:700;margin-bottom:8px;">Password Reset — IndieThis Admin</h1>
+        <p style="color:#555;margin-bottom:24px;">
+          Hi ${admin.name}, your admin account password was reset by <strong>${admin.resetBy}</strong>.
+        </p>
+        <div style="background:#f7f7f7;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Your new temporary credentials</p>
+          <p style="margin:0 0 6px;font-size:14px;"><strong>Email:</strong> ${admin.email}</p>
+          <p style="margin:0 0 6px;font-size:14px;"><strong>Temporary password:</strong> <code style="background:#e8e8e8;padding:2px 6px;border-radius:4px;">${admin.temporaryPassword}</code></p>
+          <p style="margin:0;font-size:13px;color:#E85D4A;">⚠ Please change your password immediately after logging in.</p>
+        </div>
+        <a href="${admin.loginUrl}"
+           style="background:#E85D4A;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;font-size:14px;">
+          Sign In to Admin Panel →
+        </a>
+        <p style="margin-top:24px;font-size:12px;color:#888;">
+          If you didn't expect this reset, contact your Super Admin immediately.
+        </p>
+      </div>
+    `,
+    textContent: `
+Password Reset — IndieThis Admin
+
+Hi ${admin.name}, your admin password was reset by ${admin.resetBy}.
+
+New temporary password: ${admin.temporaryPassword}
+
+Please change your password immediately after logging in.
+
+Sign in at: ${admin.loginUrl}
+    `.trim(),
+    tags: ["admin", "password-reset"],
+  });
+}
+
 export async function sendSubscriptionRenewalReminder(user: {
   email: string;
   displayName: string;
