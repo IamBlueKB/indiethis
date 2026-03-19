@@ -9,29 +9,36 @@ function getSecret() {
   return new TextEncoder().encode(raw);
 }
 
-export async function createAdminToken(): Promise<string> {
-  return new SignJWT({ admin: true })
+export interface AdminPayload {
+  admin: true;
+  id: string;
+  email: string;
+  role: string;
+}
+
+export async function createAdminToken(payload: Omit<AdminPayload, "admin">): Promise<string> {
+  return new SignJWT({ admin: true, ...payload } satisfies AdminPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(EXPIRY)
     .sign(getSecret());
 }
 
-export async function verifyAdminToken(token: string): Promise<boolean> {
+export async function verifyAdminToken(token: string): Promise<AdminPayload | null> {
   try {
-    await jwtVerify(token, getSecret());
-    return true;
+    const { payload } = await jwtVerify(token, getSecret());
+    if (payload.admin !== true) return null;
+    return payload as unknown as AdminPayload;
   } catch {
-    return false;
+    return null;
   }
 }
 
-export async function getAdminSession(): Promise<{ admin: true } | null> {
+export async function getAdminSession(): Promise<AdminPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  const valid = await verifyAdminToken(token);
-  return valid ? { admin: true } : null;
+  return verifyAdminToken(token);
 }
 
 export { COOKIE_NAME };
