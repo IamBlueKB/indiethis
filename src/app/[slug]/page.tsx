@@ -4,6 +4,7 @@ import Link from "next/link";
 import TrackList from "./TrackList";
 import MerchGrid from "./MerchGrid";
 import ArtistHero from "./ArtistHero";
+import PreSaveCampaignCard from "./PreSaveCampaignCard";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -42,6 +43,13 @@ async function ArtistSite({ slug }: { slug: string }) {
   const displayName = artist.artistName || artist.name;
   const bio         = site.bioContent || artist.bio;
   const studioSlug  = artist.studios[0]?.studio?.slug;
+
+  // Active pre-save campaign (most recently created one)
+  const campaign = await db.preSaveCampaign.findFirst({
+    where:   { artistId: artist.id, isActive: true },
+    orderBy: { createdAt: "desc" },
+    select:  { title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
+  });
 
   // Build AudioTrack objects for the store queue
   const audioTracks = artist.tracks.map((t) => ({
@@ -91,6 +99,17 @@ async function ArtistSite({ slug }: { slug: string }) {
               </Link>
             )}
           </div>
+        )}
+
+        {/* Pre-save / release card */}
+        {campaign && (
+          <PreSaveCampaignCard
+            title={campaign.title}
+            artUrl={campaign.artUrl ?? null}
+            releaseDate={campaign.releaseDate.toISOString()}
+            spotifyUrl={campaign.spotifyUrl ?? null}
+            appleMusicUrl={campaign.appleMusicUrl ?? null}
+          />
         )}
 
         {/* Music */}

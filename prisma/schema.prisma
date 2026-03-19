@@ -335,6 +335,7 @@ model User {
   producerLicenses   BeatLicense[]      @relation("ProducerLicenses")
   artistLicenses     BeatLicense[]      @relation("ArtistLicenses")
   youtubeReferences  YoutubeReference[]
+  preSaveCampaigns   PreSaveCampaign[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -1069,6 +1070,25 @@ model UserAttribution {
   @@index([source])
   @@index([utmSource])
   @@index([utmCampaign])
+}
+
+// ─── Pre-Save Campaigns ───────────────────────────────────────────────────────
+
+model PreSaveCampaign {
+  id            String   @id @default(cuid())
+  artistId      String
+  title         String
+  artUrl        String?
+  releaseDate   DateTime
+  spotifyUrl    String?
+  appleMusicUrl String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  artist        User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
 }
 
 // ─── Admin Accounts ───────────────────────────────────────────────────────────
