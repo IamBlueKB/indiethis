@@ -349,6 +349,7 @@ model User {
   showInterests      ShowInterest[]
   artistSupports          ArtistSupport[]
   fanContacts             FanContact[]
+  fanScores               FanScore[]
   artistBookingInquiries  ArtistBookingInquiry[]
   artistPageViews         PageView[]         @relation("ArtistPageViews")
   artistTrackPlays        TrackPlay[]        @relation("ArtistTrackPlays")
@@ -1242,6 +1243,29 @@ model FanContact {
   @@unique([artistId, email, source])
   @@index([artistId])
   @@index([artistId, source])
+}
+
+// ─── Fan Score (cached spend ranking per artist) ─────────────────────────────
+// Recomputed on every MERCH and SUPPORT_TIP webhook event.
+// Also rebuilt on demand via POST /api/dashboard/fan-scores/refresh.
+
+model FanScore {
+  id          String    @id @default(cuid())
+  artistId    String
+  email       String
+  totalSpend  Float     @default(0)
+  merchSpend  Float     @default(0)
+  tipSpend    Float     @default(0)
+  orderCount  Int       @default(0)
+  tipCount    Int       @default(0)
+  lastSpentAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  artist      User      @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email])
+  @@index([artistId])
+  @@index([artistId, totalSpend])
 }
 
 // ─── Artist Booking Inquiries (public contact form) ──────────────────────────

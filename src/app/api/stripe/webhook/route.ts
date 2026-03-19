@@ -15,6 +15,7 @@ import {
   processAffiliateCommission,
   deactivateAffiliateReferral,
 } from "@/lib/affiliate-commissions";
+import { upsertFanScore } from "@/lib/fan-scores";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -115,6 +116,9 @@ export async function POST(req: NextRequest) {
               stripePaymentId,
             },
           });
+
+          // Update fan spend ranking
+          void upsertFanScore(artistId, supporterEmail, { tip: paidAmount });
         }
         break;
       }
@@ -149,6 +153,9 @@ export async function POST(req: NextRequest) {
                   : checkSession.id,
             },
           });
+
+          // Update fan spend ranking
+          if (buyerEmail) void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
         }
         break;
       }
