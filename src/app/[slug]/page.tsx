@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
-import { Instagram, Youtube, Music2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import TrackList from "./TrackList";
 import MerchGrid from "./MerchGrid";
+import ArtistHero from "./ArtistHero";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -38,67 +38,79 @@ async function ArtistSite({ slug }: { slug: string }) {
 
   if (!artist || !artist.artistSite?.isPublished) return null;
 
-  const site = artist.artistSite;
+  const site        = artist.artistSite;
   const displayName = artist.artistName || artist.name;
-  const bio = site.bioContent || artist.bio;
-  const studioSlug = artist.studios[0]?.studio?.slug;
+  const bio         = site.bioContent || artist.bio;
+  const studioSlug  = artist.studios[0]?.studio?.slug;
 
-  const socials = [
-    { label: "Instagram", href: artist.instagramHandle ? `https://instagram.com/${artist.instagramHandle}` : null, icon: Instagram },
-    { label: "YouTube", href: artist.youtubeChannel, icon: Youtube },
-    { label: "Spotify", href: artist.spotifyUrl, icon: Music2 },
-    { label: "Apple Music", href: artist.appleMusicUrl, icon: ExternalLink },
-  ].filter((s) => s.href);
+  // Build AudioTrack objects for the store queue
+  const audioTracks = artist.tracks.map((t) => ({
+    id:       t.id,
+    title:    t.title,
+    artist:   displayName,
+    src:      t.fileUrl,
+    coverArt: t.coverArtUrl ?? undefined,
+  }));
+  const firstTrack = audioTracks[0] ?? null;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--background)" }}>
-      <div className="relative h-64 flex items-end"
-        style={{ background: site.heroImage
-          ? `linear-gradient(to bottom, transparent 40%, var(--background)), url(${site.heroImage}) center/cover`
-          : "linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)" }}>
-        <div className="max-w-3xl mx-auto w-full px-6 pb-6 flex items-end gap-5">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold shrink-0 border-2"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--accent)", color: "var(--accent)",
-              backgroundImage: artist.photo ? `url(${artist.photo})` : undefined,
-              backgroundSize: "cover", backgroundPosition: "center" }}>
-            {!artist.photo && displayName[0].toUpperCase()}
-          </div>
-          <div className="pb-1">
-            <h1 className="text-2xl font-bold text-white">{displayName}</h1>
-            {artist.artistName && artist.name !== displayName && <p className="text-sm text-white/60">{artist.name}</p>}
-          </div>
-        </div>
-      </div>
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-10">
-        <div className="space-y-4">
-          {bio && <p className="text-sm text-muted-foreground leading-relaxed">{bio}</p>}
-          <div className="flex flex-wrap gap-3">
-            {socials.map(({ label, href, icon: Icon }) => (
-              <a key={label} href={href!} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border no-underline hover:border-accent/60 transition-colors text-muted-foreground hover:text-foreground"
-                style={{ borderColor: "var(--border)" }}>
-                <Icon size={13} /> {label}
-              </a>
-            ))}
+    <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
+
+      {/* ── Full-bleed hero (client component — handles auto-load + Listen CTA) */}
+      <ArtistHero
+        displayName={displayName}
+        photo={artist.photo ?? null}
+        heroImage={site.heroImage ?? null}
+        identityLine={null}
+        instagramHandle={artist.instagramHandle ?? null}
+        tiktokHandle={artist.tiktokHandle ?? null}
+        youtubeChannel={artist.youtubeChannel ?? null}
+        spotifyUrl={artist.spotifyUrl ?? null}
+        appleMusicUrl={artist.appleMusicUrl ?? null}
+        followGateEnabled={site.followGateEnabled ?? false}
+        firstTrack={firstTrack}
+        allTracks={audioTracks}
+      />
+
+      {/* ── Body content ─────────────────────────────────────────────────── */}
+      <div className="max-w-3xl mx-auto px-6 py-10 space-y-10">
+
+        {/* Bio + Book a Session */}
+        {(bio || studioSlug) && (
+          <div className="space-y-4">
+            {bio && (
+              <p className="text-sm text-muted-foreground leading-relaxed">{bio}</p>
+            )}
             {studioSlug && (
-              <Link href={`/${studioSlug}/intake`}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold no-underline"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+              <Link
+                href={`/${studioSlug}/intake`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold no-underline"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
                 Book a Session
               </Link>
             )}
           </div>
-        </div>
-        {artist.tracks.length > 0 && (
-          <TrackList tracks={artist.tracks} artistName={displayName}
-            followGateEnabled={site.followGateEnabled ?? false}
-            instagramHandle={artist.instagramHandle ?? null} />
         )}
+
+        {/* Music */}
+        {artist.tracks.length > 0 && (
+          <TrackList
+            tracks={artist.tracks}
+            artistName={displayName}
+            followGateEnabled={site.followGateEnabled ?? false}
+            instagramHandle={artist.instagramHandle ?? null}
+          />
+        )}
+
+        {/* Merch */}
         {artist.merchProducts.length > 0 && (
           <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
         )}
+
         <p className="text-center text-xs text-muted-foreground pb-8">
-          Powered by <span className="font-semibold" style={{ color: "#D4A843" }}>IndieThis</span>
+          Powered by{" "}
+          <span className="font-semibold" style={{ color: "#D4A843" }}>IndieThis</span>
         </p>
       </div>
     </div>

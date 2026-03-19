@@ -23,23 +23,52 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
 
+  // ── Studio metadata ──────────────────────────────────────────────────────
   const studio = await db.studio.findUnique({
-    where: { slug },
+    where:  { slug },
     select: { name: true, tagline: true, logoUrl: true },
   });
 
-  if (!studio) return {};
+  if (studio) {
+    const faviconUrl = studio.logoUrl ?? "/favicon.ico";
+    return {
+      title:       studio.name,
+      description: studio.tagline ?? undefined,
+      icons:       { icon: faviconUrl, apple: faviconUrl },
+    };
+  }
 
-  const faviconUrl = studio.logoUrl ?? "/favicon.ico";
-
-  return {
-    title: studio.name,
-    description: studio.tagline ?? undefined,
-    icons: {
-      icon: faviconUrl,
-      apple: faviconUrl,
+  // ── Artist metadata ───────────────────────────────────────────────────────
+  const artist = await db.user.findUnique({
+    where:  { artistSlug: slug },
+    select: {
+      name:       true,
+      artistName: true,
+      bio:        true,
+      photo:      true,
+      artistSite: { select: { isPublished: true, bioContent: true, heroImage: true } },
     },
-  };
+  });
+
+  if (artist?.artistSite?.isPublished) {
+    const displayName = artist.artistName || artist.name;
+    const description = artist.artistSite.bioContent || artist.bio || undefined;
+    const ogImage     = artist.photo || artist.artistSite.heroImage || undefined;
+
+    return {
+      title:       displayName,
+      description,
+      openGraph:   ogImage ? { images: [{ url: ogImage }] } : undefined,
+      twitter:     {
+        card:        "summary_large_image",
+        title:       displayName,
+        description,
+        images:      ogImage ? [ogImage] : [],
+      },
+    };
+  }
+
+  return {};
 }
 
 export default function SlugLayout({ children }: { children: ReactNode }) {

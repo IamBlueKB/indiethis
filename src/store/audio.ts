@@ -26,6 +26,8 @@ type AudioActions = {
   play: (track: AudioTrack) => void;
   /** Play a track and load its siblings into the queue for next/prev navigation. */
   playInContext: (track: AudioTrack, context: AudioTrack[]) => void;
+  /** Load a track into the player (shows in MiniPlayer) without starting playback. */
+  load: (track: AudioTrack, queue?: AudioTrack[]) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -40,6 +42,8 @@ type AudioActions = {
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   toggleMute: () => void;
+  /** Explicitly set muted state (vs. toggling). */
+  setMuted: (muted: boolean) => void;
   toggleMinimize: () => void;
 };
 
@@ -58,6 +62,10 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
 
   playInContext: (track, context) =>
     set({ currentTrack: track, queue: context, isPlaying: true, currentTime: 0 }),
+
+  load: (track, queue) =>
+    set({ currentTrack: track, queue: queue ?? [track], isPlaying: false, currentTime: 0 }),
+
   pause: () => set({ isPlaying: false }),
   resume: () => set({ isPlaying: true }),
   stop: () => set({ currentTrack: null, isPlaying: false, currentTime: 0 }),
@@ -97,5 +105,6 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   setCurrentTime: (currentTime) => set({ currentTime }),
   setDuration: (duration) => set({ duration }),
   toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  setMuted: (muted) => set({ isMuted: muted }),
   toggleMinimize: () => set((state) => ({ isMinimized: !state.isMinimized })),
 }));
