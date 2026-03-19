@@ -95,6 +95,30 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      // --- Support tip (fan → artist, no platform userId) ---
+      if (checkSession.metadata?.type === "SUPPORT_TIP") {
+        const { artistId, supporterEmail, message } = checkSession.metadata;
+        const paidAmount = checkSession.amount_total ? checkSession.amount_total / 100 : 0;
+
+        if (artistId && supporterEmail && paidAmount > 0) {
+          const stripePaymentId =
+            typeof checkSession.payment_intent === "string"
+              ? checkSession.payment_intent
+              : checkSession.id;
+
+          await db.artistSupport.create({
+            data: {
+              artistId,
+              supporterEmail,
+              amount:  paidAmount,
+              message: message || null,
+              stripePaymentId,
+            },
+          });
+        }
+        break;
+      }
+
       // --- Merch purchase (no userId — buyer is a fan, not a platform user) ---
       if (checkSession.metadata?.type === "MERCH") {
         const { productId, artistId, buyerEmail, quantity: qtyStr } = checkSession.metadata;

@@ -7,6 +7,7 @@ import ArtistHero from "./ArtistHero";
 import PreSaveCampaignCard from "./PreSaveCampaignCard";
 import VideoSection from "./VideoSection";
 import ShowsSection from "./ShowsSection";
+import SupportSection from "./SupportSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -30,7 +31,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true,
-      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true } },
+      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true } },
       tracks: { where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, take: 10,
         select: { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true } },
       merchProducts: { where: { isActive: true }, orderBy: { createdAt: "desc" }, take: 6,
@@ -157,6 +158,11 @@ async function ArtistSite({ slug }: { slug: string }) {
         {/* Merch */}
         {artist.merchProducts.length > 0 && (
           <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
+        )}
+
+        {/* Support / Tip Jar */}
+        {site.pwywEnabled && (
+          <SupportSection artistSlug={slug} artistName={displayName} />
         )}
 
         <p className="text-center text-xs text-muted-foreground pb-8">

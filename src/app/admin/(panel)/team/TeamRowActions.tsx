@@ -142,7 +142,9 @@ export default function TeamRowActions({
   const [loading, setLoading] = useState<Action | null>(null);
   const [modal,   setModal]   = useState<Action | null>(null);
   const [error,   setError]   = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const menuRef   = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -154,6 +156,18 @@ export default function TeamRowActions({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  function openMenu() {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPos({
+        top:   rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setOpen((v) => !v);
+    setError(null);
+  }
 
   // ── Visibility rules ────────────────────────────────────────────────────
   // Non-super-admins see no actions
@@ -210,9 +224,10 @@ export default function TeamRowActions({
   return (
     <>
       {/* Dropdown trigger */}
-      <div ref={menuRef} className="relative">
+      <div className="relative">
         <button
-          onClick={() => { setOpen((v) => !v); setError(null); }}
+          ref={buttonRef}
+          onClick={openMenu}
           disabled={busy}
           className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors hover:bg-white/5 disabled:opacity-40"
           title="Actions"
@@ -224,10 +239,16 @@ export default function TeamRowActions({
           )}
         </button>
 
-        {open && (
+        {open && menuPos && (
           <div
-            className="absolute right-0 top-full mt-1 z-30 w-48 rounded-xl border shadow-xl overflow-hidden"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            ref={menuRef}
+            className="fixed z-[9999] w-48 rounded-xl border shadow-xl overflow-hidden"
+            style={{
+              top:             menuPos.top,
+              right:           menuPos.right,
+              backgroundColor: "var(--card)",
+              borderColor:     "var(--border)",
+            }}
           >
             {canChangeRole && (
               <MenuItem

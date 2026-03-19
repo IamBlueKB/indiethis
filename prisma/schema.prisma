@@ -104,6 +104,7 @@ enum ReceiptType {
   MERCH_SALE
   BEAT_PURCHASE
   SESSION_PAYMENT
+  SUPPORT_TIP
 }
 
 enum InvoiceStatus {
@@ -339,6 +340,7 @@ model User {
   artistVideos       ArtistVideo[]
   artistShows        ArtistShow[]
   showInterests      ShowInterest[]
+  artistSupports     ArtistSupport[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -588,6 +590,7 @@ model ArtistSite {
   showMerch         Boolean            @default(true)
   showContact       Boolean            @default(false)
   followGateEnabled Boolean            @default(false)
+  pwywEnabled       Boolean            @default(false)
   customDomain      String?
   isPublished       Boolean            @default(false)
   draftMode         Boolean            @default(true)
@@ -1150,6 +1153,23 @@ model ShowInterest {
 
   @@unique([artistId, email])
   @@index([artistId])
+}
+
+// ─── Artist Support (Pay-What-You-Want Tips) ──────────────────────────────────
+
+model ArtistSupport {
+  id               String   @id @default(cuid())
+  artistId         String
+  supporterEmail   String
+  amount           Float                    // in dollars
+  message          String?
+  stripePaymentId  String?
+  createdAt        DateTime @default(now())
+
+  artist           User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([artistId, supporterEmail])
 }
 
 // ─── Admin Accounts ───────────────────────────────────────────────────────────

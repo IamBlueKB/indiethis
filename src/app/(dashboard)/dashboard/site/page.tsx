@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram } from "lucide-react";
+import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { useArtistSite, useUpdateSite } from "@/hooks/queries";
 import Link from "next/link";
@@ -19,6 +19,7 @@ export default function ArtistSitePage() {
   const [bio, setBio]                     = useState("");
   const [savingBio, setSavingBio]         = useState(false);
   const [togglingGate, setTogglingGate]   = useState(false);
+  const [togglingPwyw, setTogglingPwyw]   = useState(false);
 
   // Sync bio from server data when it first loads
   const bioValue = editingBio ? bio : (site?.bioContent ?? "");
@@ -61,6 +62,15 @@ export default function ArtistSitePage() {
     updateSite(
       { followGateEnabled: !site.followGateEnabled } as never,
       { onSettled: () => setTogglingGate(false) }
+    );
+  }
+
+  async function togglePwyw() {
+    if (!site) return;
+    setTogglingPwyw(true);
+    updateSite(
+      { pwywEnabled: !site.pwywEnabled } as never,
+      { onSettled: () => setTogglingPwyw(false) }
     );
   }
 
@@ -288,6 +298,46 @@ export default function ArtistSitePage() {
               <p className="mt-3 text-xs text-emerald-400/80 flex items-center gap-1.5">
                 <Check size={11} />
                 Active — fans must follow @{instagramHandle} to download free tracks
+              </p>
+            )}
+          </div>
+
+          {/* Pay What You Want */}
+          <div
+            className="rounded-2xl border p-5"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: site.pwywEnabled ? "rgba(232,93,74,0.15)" : "rgba(255,255,255,0.06)" }}
+                >
+                  <Heart size={16} style={{ color: site.pwywEnabled ? "#E85D4A" : undefined }} className={site.pwywEnabled ? "" : "text-muted-foreground"} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Support / Tip Jar</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Let fans support you with a pay-what-you-want tip directly on your page
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={togglePwyw}
+                disabled={togglingPwyw || saving}
+                className="relative w-11 h-6 rounded-full transition-colors disabled:opacity-40"
+                style={{ backgroundColor: site.pwywEnabled ? "#E85D4A" : "var(--border)" }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                  style={{ left: site.pwywEnabled ? "calc(100% - 22px)" : "2px" }}
+                />
+              </button>
+            </div>
+            {site.pwywEnabled && (
+              <p className="mt-3 text-xs text-emerald-400/80 flex items-center gap-1.5">
+                <Check size={11} />
+                Active — a &quot;Support&quot; section is visible on your artist page
               </p>
             )}
           </div>

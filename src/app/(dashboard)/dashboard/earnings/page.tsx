@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, Receipt, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, Receipt, TrendingUp, Heart, ChevronDown, ChevronUp } from "lucide-react";
 import { useEarnings } from "@/hooks/queries";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -9,6 +10,15 @@ const TYPE_LABELS: Record<string, string> = {
   MERCH_SALE:      "Merch Sale",
   BEAT_PURCHASE:   "Beat Purchase",
   SESSION_PAYMENT: "Studio Session",
+  SUPPORT_TIP:     "Fan Support",
+};
+
+type Supporter = {
+  email:    string;
+  total:    number;
+  count:    number;
+  latest:   string;
+  messages: string[];
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -17,10 +27,36 @@ const TYPE_COLORS: Record<string, string> = {
   MERCH_SALE:      "text-emerald-400",
   BEAT_PURCHASE:   "text-amber-400",
   SESSION_PAYMENT: "text-rose-400",
+  SUPPORT_TIP:     "text-pink-400",
 };
 
 export default function EarningsPage() {
   const { data: receipts = [], isLoading, isError } = useEarnings();
+
+  const [supporters,     setSupporters]     = useState<Supporter[]>([]);
+  const [totalTips,      setTotalTips]      = useState(0);
+  const [totalTipCount,  setTotalTipCount]  = useState(0);
+  const [loadingSup,     setLoadingSup]     = useState(true);
+  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/dashboard/supporters")
+      .then((r) => r.json())
+      .then(({ supporters: s = [], totalTips: tt = 0, totalTipCount: tc = 0 }) => {
+        setSupporters(s);
+        setTotalTips(tt);
+        setTotalTipCount(tc);
+      })
+      .finally(() => setLoadingSup(false));
+  }, []);
+
+  function toggleExpand(email: string) {
+    setExpandedEmails((prev) => {
+      const next = new Set(prev);
+      next.has(email) ? next.delete(email) : next.add(email);
+      return next;
+    });
+  }
 
   const totalSpent = receipts.reduce((s, r) => s + r.amount, 0);
 
@@ -55,6 +91,104 @@ export default function EarningsPage() {
           </div>
         ))}
       </div>
+
+      {/* Supporters / Tips */}
+      {(totalTipCount > 0 || !loadingSup) && (
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        >
+          <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <Heart size={14} className="text-pink-400" />
+              <p className="text-sm font-semibold text-foreground">Fan Supporters</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">{totalTipCount} tip{totalTipCount !== 1 ? "s" : ""}</span>
+              <span className="text-sm font-bold" style={{ color: "#D4A843" }}>
+                ${totalTips.toFixed(2)} total
+              </span>
+            </div>
+          </div>
+
+          {loadingSup ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-5 h-5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            </div>
+          ) : supporters.length === 0 ? (
+            <div className="py-10 text-center">
+              <Heart size={28} className="mx-auto text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No supporters yet.</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Enable the Tip Jar on your Site settings to start receiving support.
+              </p>
+            </div>
+          ) : (
+            supporters.map((sup, i) => (
+              <div
+                key={sup.email}
+                className="border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/3 transition-colors cursor-pointer"
+                  onClick={() => sup.messages.length > 0 && toggleExpand(sup.email)}
+                >
+                  {/* Rank */}
+                  <span className="text-xs font-bold text-muted-foreground/50 w-5 text-center tabular-nums shrink-0">
+                    #{i + 1}
+                  </span>
+
+                  {/* Avatar placeholder */}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ backgroundColor: "rgba(232,93,74,0.15)", color: "#E85D4A" }}
+                  >
+                    {sup.email[0].toUpperCase()}
+                  </div>
+
+                  {/* Email + meta */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{sup.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sup.count} tip{sup.count !== 1 ? "s" : ""}
+                      {sup.messages.length > 0 && (
+                        <span className="text-pink-400/70"> · {sup.messages.length} message{sup.messages.length !== 1 ? "s" : ""}</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Total */}
+                  <span className="text-sm font-bold text-foreground shrink-0">
+                    ${sup.total.toFixed(2)}
+                  </span>
+
+                  {/* Expand chevron if has messages */}
+                  {sup.messages.length > 0 && (
+                    expandedEmails.has(sup.email)
+                      ? <ChevronUp size={13} className="text-muted-foreground shrink-0" />
+                      : <ChevronDown size={13} className="text-muted-foreground shrink-0" />
+                  )}
+                </div>
+
+                {/* Messages panel */}
+                {expandedEmails.has(sup.email) && sup.messages.length > 0 && (
+                  <div
+                    className="px-14 pb-3 space-y-1.5"
+                    style={{ borderTop: "1px solid var(--border)" }}
+                  >
+                    {sup.messages.map((msg, mi) => (
+                      <p key={mi} className="text-xs text-muted-foreground italic leading-relaxed">
+                        &ldquo;{msg}&rdquo;
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Receipt list */}
       <div
