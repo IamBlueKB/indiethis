@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/require-admin-access";
 import { ShieldCheck, UsersRound, Circle } from "lucide-react";
+import TeamActions from "./TeamActions";
 
 // ─── Role config ──────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ export default async function AdminTeamPage() {
             {inactive > 0 ? ` · ${inactive} deactivated` : ""}
           </p>
         </div>
+        <TeamActions />
       </div>
 
       {/* Stats row */}
