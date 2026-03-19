@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { bioContent, draftMode, isPublished, heroImage, followGateEnabled, pwywEnabled, credentials } = body;
+  const { bioContent, draftMode, isPublished, heroImage, followGateEnabled, pwywEnabled, credentials, bookingRate } = body;
 
   const data: Record<string, unknown> = {};
   if (bioContent !== undefined) data.bioContent = bioContent;
@@ -33,6 +33,7 @@ export async function PATCH(req: NextRequest) {
   if (followGateEnabled !== undefined) data.followGateEnabled = followGateEnabled;
   if (pwywEnabled !== undefined) data.pwywEnabled = pwywEnabled;
   if (credentials !== undefined && Array.isArray(credentials)) data.credentials = credentials;
+  if (bookingRate !== undefined) data.bookingRate = bookingRate === null ? null : Number(bookingRate);
 
   const site = await db.artistSite.upsert({
     where: { artistId: session.user.id },

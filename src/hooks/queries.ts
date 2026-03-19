@@ -47,6 +47,7 @@ export type ArtistSite = {
   followGateEnabled: boolean;
   pwywEnabled: boolean;
   credentials: string[];
+  bookingRate: number | null;
   createdAt: string;
 };
 

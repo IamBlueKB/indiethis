@@ -11,6 +11,7 @@ import SupportSection from "./SupportSection";
 import ReleaseCapture from "./ReleaseCapture";
 import ShowCapture from "./ShowCapture";
 import AboutSection from "./AboutSection";
+import BookingSection from "./BookingSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -34,7 +35,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true,
-      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true, credentials: true } },
+      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true, credentials: true, bookingRate: true } },
       tracks: { where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, take: 10,
         select: { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true } },
       merchProducts: { where: { isActive: true }, orderBy: { createdAt: "desc" }, take: 6,
@@ -189,6 +190,13 @@ async function ArtistSite({ slug }: { slug: string }) {
         {site.pwywEnabled && (
           <SupportSection artistSlug={slug} artistName={displayName} />
         )}
+
+        {/* Booking / Contact */}
+        <BookingSection
+          artistSlug={slug}
+          artistName={displayName}
+          bookingRate={site.bookingRate ?? null}
+        />
 
         <p className="text-center text-xs text-muted-foreground pb-8">
           Powered by{" "}

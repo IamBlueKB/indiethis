@@ -124,6 +124,7 @@ enum ContactSource {
   INSTAGRAM
   WALK_IN
   FAN_SIGNUP
+  BOOKING_INQUIRY
 }
 
 enum FanContactSource {
@@ -346,8 +347,9 @@ model User {
   artistVideos       ArtistVideo[]
   artistShows        ArtistShow[]
   showInterests      ShowInterest[]
-  artistSupports     ArtistSupport[]
-  fanContacts        FanContact[]
+  artistSupports          ArtistSupport[]
+  fanContacts             FanContact[]
+  artistBookingInquiries  ArtistBookingInquiry[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -599,6 +601,7 @@ model ArtistSite {
   followGateEnabled Boolean            @default(false)
   pwywEnabled       Boolean            @default(false)
   credentials       String[]
+  bookingRate       Float?
   customDomain      String?
   isPublished       Boolean            @default(false)
   draftMode         Boolean            @default(true)
@@ -1196,6 +1199,22 @@ model FanContact {
   @@unique([artistId, email, source])
   @@index([artistId])
   @@index([artistId, source])
+}
+
+// ─── Artist Booking Inquiries (public contact form) ──────────────────────────
+
+model ArtistBookingInquiry {
+  id          String   @id @default(cuid())
+  artistId    String
+  name        String
+  email       String
+  inquiryType String   // "Booking" | "Feature" | "Press" | "Management" | "Other"
+  message     String
+  createdAt   DateTime @default(now())
+
+  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
 }
 
 // ─── Admin Accounts ───────────────────────────────────────────────────────────

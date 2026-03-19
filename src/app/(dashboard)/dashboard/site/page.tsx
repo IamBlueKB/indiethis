@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X } from "lucide-react";
+import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X, DollarSign } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { useArtistSite, useUpdateSite } from "@/hooks/queries";
 import Link from "next/link";
@@ -22,6 +22,9 @@ export default function ArtistSitePage() {
   const [togglingPwyw,    setTogglingPwyw]    = useState(false);
   const [newCredential,   setNewCredential]   = useState("");
   const [savingCreds,     setSavingCreds]     = useState(false);
+  const [bookingRateInput, setBookingRateInput] = useState("");
+  const [editingRate,      setEditingRate]      = useState(false);
+  const [savingRate,       setSavingRate]       = useState(false);
 
   // Sync bio from server data when it first loads
   const bioValue = editingBio ? bio : (site?.bioContent ?? "");
@@ -77,6 +80,19 @@ export default function ArtistSitePage() {
   }
 
   const currentCredentials: string[] = (site as { credentials?: string[] })?.credentials ?? [];
+  const currentBookingRate: number | null = (site as { bookingRate?: number | null })?.bookingRate ?? null;
+
+  async function saveBookingRate() {
+    setSavingRate(true);
+    const parsed = bookingRateInput.trim() === "" ? null : parseFloat(bookingRateInput);
+    updateSite(
+      { bookingRate: isNaN(parsed as number) ? null : parsed } as never,
+      {
+        onSuccess: () => setEditingRate(false),
+        onSettled: () => setSavingRate(false),
+      }
+    );
+  }
 
   async function addCredential() {
     const trimmed = newCredential.trim();
@@ -442,6 +458,78 @@ export default function ArtistSitePage() {
               <p className="mt-3 text-xs text-emerald-400/80 flex items-center gap-1.5">
                 <Check size={11} />
                 Active — a &quot;Support&quot; section is visible on your artist page
+              </p>
+            )}
+          </div>
+
+          {/* Booking Rate */}
+          <div
+            className="rounded-2xl border p-5 space-y-3"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: "rgba(212,168,67,0.10)" }}
+                >
+                  <DollarSign size={16} className="text-accent" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Booking Rate</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Display a starting rate on your booking form (optional)
+                  </p>
+                </div>
+              </div>
+              {!editingRate ? (
+                <button
+                  onClick={() => {
+                    setBookingRateInput(currentBookingRate !== null ? String(currentBookingRate) : "");
+                    setEditingRate(true);
+                  }}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                >
+                  <Pencil size={13} />
+                </button>
+              ) : (
+                <div className="flex gap-1">
+                  <button
+                    onClick={saveBookingRate}
+                    disabled={savingRate}
+                    className="p-1.5 rounded-lg text-emerald-400 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    {savingRate ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                  </button>
+                  <button
+                    onClick={() => setEditingRate(false)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+            {editingRate ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={bookingRateInput}
+                  onChange={(e) => setBookingRateInput(e.target.value)}
+                  placeholder="e.g. 500"
+                  className="w-36 px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                  style={{ borderColor: "var(--border)" }}
+                />
+                <span className="text-xs text-muted-foreground">Leave blank to hide</span>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {currentBookingRate !== null && currentBookingRate > 0
+                  ? <span>Shown as <span className="font-semibold" style={{ color: "#D4A843" }}>${currentBookingRate.toLocaleString()}</span> on your booking form</span>
+                  : "Not set — no rate will be shown on your booking form"}
               </p>
             )}
           </div>
