@@ -123,6 +123,12 @@ enum ContactSource {
   REFERRAL
   INSTAGRAM
   WALK_IN
+  FAN_SIGNUP
+}
+
+enum FanContactSource {
+  RELEASE_NOTIFY
+  SHOW_NOTIFY
 }
 
 enum NotificationType {
@@ -341,6 +347,7 @@ model User {
   artistShows        ArtistShow[]
   showInterests      ShowInterest[]
   artistSupports     ArtistSupport[]
+  fanContacts        FanContact[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -1170,6 +1177,24 @@ model ArtistSupport {
 
   @@index([artistId])
   @@index([artistId, supporterEmail])
+}
+
+// ─── Fan Contacts (artist page email/SMS capture) ─────────────────────────────
+
+model FanContact {
+  id        String          @id @default(cuid())
+  artistId  String
+  email     String
+  phone     String?
+  zip       String?
+  source    FanContactSource
+  createdAt DateTime        @default(now())
+
+  artist    User            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email, source])
+  @@index([artistId])
+  @@index([artistId, source])
 }
 
 // ─── Admin Accounts ───────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import PreSaveCampaignCard from "./PreSaveCampaignCard";
 import VideoSection from "./VideoSection";
 import ShowsSection from "./ShowsSection";
 import SupportSection from "./SupportSection";
+import ReleaseCapture from "./ReleaseCapture";
+import ShowCapture from "./ShowCapture";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -145,6 +147,11 @@ async function ArtistSite({ slug }: { slug: string }) {
           />
         )}
 
+        {/* Release capture — between music and videos */}
+        {artist.tracks.length > 0 && (
+          <ReleaseCapture artistSlug={slug} artistName={displayName} />
+        )}
+
         {/* Videos */}
         {videos.length > 0 && <VideoSection videos={videos} />}
 
@@ -154,6 +161,9 @@ async function ArtistSite({ slug }: { slug: string }) {
           artistName={displayName}
           artistId={artist.id}
         />
+
+        {/* Show capture — after shows section */}
+        <ShowCapture artistSlug={slug} artistName={displayName} />
 
         {/* Merch */}
         {artist.merchProducts.length > 0 && (

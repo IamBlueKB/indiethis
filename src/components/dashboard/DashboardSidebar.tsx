@@ -19,6 +19,7 @@ import {
   Share2,
   Video,
   Mic2,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { label: "Music", href: "/dashboard/music", icon: Music },
   { label: "Videos", href: "/dashboard/videos", icon: Video },
   { label: "Shows", href: "/dashboard/shows", icon: Mic2 },
+  { label: "Fans", href: "/dashboard/fans", icon: Users },
   { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
