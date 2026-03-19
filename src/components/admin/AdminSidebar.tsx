@@ -15,6 +15,7 @@ import {
   Link2,
   Target,
   MessageSquare,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -38,6 +39,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Support",     href: "/admin/support-chat", icon: MessageSquare,   page: "support-chat" },
   { label: "Affiliates",  href: "/admin/affiliates",   icon: Link2,           page: "affiliates"   },
   { label: "Attribution", href: "/admin/attribution",  icon: Target,          page: "attribution"  },
+  { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",     icon: Settings,        page: "settings"     },
 ];
 
