@@ -46,6 +46,7 @@ export type ArtistSite = {
   isPublished: boolean;
   followGateEnabled: boolean;
   pwywEnabled: boolean;
+  credentials: string[];
   createdAt: string;
 };
 

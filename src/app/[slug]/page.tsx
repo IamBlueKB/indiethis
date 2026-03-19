@@ -10,6 +10,7 @@ import ShowsSection from "./ShowsSection";
 import SupportSection from "./SupportSection";
 import ReleaseCapture from "./ReleaseCapture";
 import ShowCapture from "./ShowCapture";
+import AboutSection from "./AboutSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -33,7 +34,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true,
-      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true } },
+      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true, credentials: true } },
       tracks: { where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, take: 10,
         select: { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true } },
       merchProducts: { where: { isActive: true }, orderBy: { createdAt: "desc" }, take: 6,
@@ -105,12 +106,15 @@ async function ArtistSite({ slug }: { slug: string }) {
       {/* ── Body content ─────────────────────────────────────────────────── */}
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-10">
 
-        {/* Bio + Book a Session */}
-        {(bio || studioSlug) && (
+        {/* About section — only renders when bio exists */}
+        {bio && (
           <div className="space-y-4">
-            {bio && (
-              <p className="text-sm text-muted-foreground leading-relaxed">{bio}</p>
-            )}
+            <AboutSection
+              bio={bio}
+              photo={artist.photo ?? null}
+              displayName={displayName}
+              credentials={site.credentials ?? []}
+            />
             {studioSlug && (
               <Link
                 href={`/${studioSlug}/intake`}
@@ -121,6 +125,17 @@ async function ArtistSite({ slug }: { slug: string }) {
               </Link>
             )}
           </div>
+        )}
+
+        {/* Book a Session — if no bio but studio linked */}
+        {!bio && studioSlug && (
+          <Link
+            href={`/${studioSlug}/intake`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold no-underline"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          >
+            Book a Session
+          </Link>
         )}
 
         {/* Pre-save / release card */}

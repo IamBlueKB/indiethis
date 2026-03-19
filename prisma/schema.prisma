@@ -598,6 +598,7 @@ model ArtistSite {
   showContact       Boolean            @default(false)
   followGateEnabled Boolean            @default(false)
   pwywEnabled       Boolean            @default(false)
+  credentials       String[]
   customDomain      String?
   isPublished       Boolean            @default(false)
   draftMode         Boolean            @default(true)

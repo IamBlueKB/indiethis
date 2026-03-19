@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart } from "lucide-react";
+import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { useArtistSite, useUpdateSite } from "@/hooks/queries";
 import Link from "next/link";
@@ -18,8 +18,10 @@ export default function ArtistSitePage() {
   const [editingBio, setEditingBio]       = useState(false);
   const [bio, setBio]                     = useState("");
   const [savingBio, setSavingBio]         = useState(false);
-  const [togglingGate, setTogglingGate]   = useState(false);
-  const [togglingPwyw, setTogglingPwyw]   = useState(false);
+  const [togglingGate,    setTogglingGate]    = useState(false);
+  const [togglingPwyw,    setTogglingPwyw]    = useState(false);
+  const [newCredential,   setNewCredential]   = useState("");
+  const [savingCreds,     setSavingCreds]     = useState(false);
 
   // Sync bio from server data when it first loads
   const bioValue = editingBio ? bio : (site?.bioContent ?? "");
@@ -71,6 +73,31 @@ export default function ArtistSitePage() {
     updateSite(
       { pwywEnabled: !site.pwywEnabled } as never,
       { onSettled: () => setTogglingPwyw(false) }
+    );
+  }
+
+  const currentCredentials: string[] = (site as { credentials?: string[] })?.credentials ?? [];
+
+  async function addCredential() {
+    const trimmed = newCredential.trim();
+    if (!trimmed || currentCredentials.includes(trimmed)) return;
+    setSavingCreds(true);
+    const next = [...currentCredentials, trimmed];
+    updateSite(
+      { credentials: next } as never,
+      {
+        onSuccess: () => setNewCredential(""),
+        onSettled: () => setSavingCreds(false),
+      }
+    );
+  }
+
+  async function removeCredential(badge: string) {
+    setSavingCreds(true);
+    const next = currentCredentials.filter((c) => c !== badge);
+    updateSite(
+      { credentials: next } as never,
+      { onSettled: () => setSavingCreds(false) }
     );
   }
 
@@ -248,6 +275,83 @@ export default function ArtistSitePage() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {bioValue || "No bio yet. Click the pencil to add one."}
               </p>
+            )}
+          </div>
+
+          {/* Credential Badges */}
+          <div
+            className="rounded-2xl border p-5 space-y-4"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: "rgba(212,168,67,0.10)" }}
+              >
+                <Award size={16} className="text-accent" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Credential Badges</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Highlight achievements shown on your About section (e.g. &quot;500K+ Streams&quot;)
+                </p>
+              </div>
+            </div>
+
+            {/* Existing badges */}
+            {currentCredentials.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {currentCredentials.map((badge) => (
+                  <span
+                    key={badge}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                      backgroundColor: "rgba(212,168,67,0.10)",
+                      border:          "1px solid rgba(212,168,67,0.20)",
+                      color:           "#D4A843",
+                    }}
+                  >
+                    {badge}
+                    <button
+                      onClick={() => removeCredential(badge)}
+                      disabled={savingCreds}
+                      className="hover:opacity-70 transition-opacity disabled:opacity-40 ml-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Add new badge */}
+            {currentCredentials.length < 8 && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCredential}
+                  onChange={(e) => setNewCredential(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCredential()}
+                  placeholder="e.g. 500K+ Streams"
+                  maxLength={60}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                  style={{ borderColor: "var(--border)" }}
+                />
+                <button
+                  onClick={addCredential}
+                  disabled={savingCreds || !newCredential.trim()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border disabled:opacity-40 transition-colors hover:bg-white/5 shrink-0"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  {savingCreds
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Plus size={12} />}
+                  Add
+                </button>
+              </div>
+            )}
+            {currentCredentials.length >= 8 && (
+              <p className="text-xs text-muted-foreground">Maximum 8 badges reached.</p>
             )}
           </div>
 
