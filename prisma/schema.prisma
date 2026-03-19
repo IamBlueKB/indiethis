@@ -350,6 +350,7 @@ model User {
   artistSupports          ArtistSupport[]
   fanContacts             FanContact[]
   fanScores               FanScore[]
+  broadcastLogs           BroadcastLog[]
   artistBookingInquiries  ArtistBookingInquiry[]
   artistPageViews         PageView[]         @relation("ArtistPageViews")
   artistTrackPlays        TrackPlay[]        @relation("ArtistTrackPlays")
@@ -1266,6 +1267,23 @@ model FanScore {
   @@unique([artistId, email])
   @@index([artistId])
   @@index([artistId, totalSpend])
+}
+
+// ─── SMS Broadcast Log ────────────────────────────────────────────────────────
+
+model BroadcastLog {
+  id             String   @id @default(cuid())
+  artistId       String
+  message        String   @db.Text
+  segment        String   // e.g. "ALL" | "RELEASE_NOTIFY" | "SHOW_NOTIFY" | "TOP_SPENDERS" | "MERCH_BUYERS" | "ZIP:90210"
+  recipientCount Int
+  successCount   Int      @default(0)
+  sentAt         DateTime @default(now())
+
+  artist         User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([artistId, sentAt])
 }
 
 // ─── Artist Booking Inquiries (public contact form) ──────────────────────────
