@@ -14,31 +14,52 @@ import {
   Brain,
   Link2,
   Target,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canAccess } from "@/lib/admin-permissions";
+import type { AdminRole } from "@prisma/client";
 
 type NavItem = {
   label: string;
   href: string;
   icon: React.ElementType;
+  page: string;
 };
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Studios", href: "/admin/studios", icon: Building2 },
-  { label: "Revenue", href: "/admin/revenue", icon: BarChart3 },
-  { label: "AI Usage", href: "/admin/ai-usage", icon: Cpu },
-  { label: "Moderation", href: "/admin/moderation", icon: ShieldAlert },
-  { label: "AI Learning", href: "/admin/ai-learning", icon: Brain },
-  { label: "Affiliates",   href: "/admin/affiliates",   icon: Link2   },
-  { label: "Attribution",  href: "/admin/attribution",  icon: Target  },
-  { label: "Settings",     href: "/admin/settings",     icon: Settings },
+const ALL_NAV_ITEMS: NavItem[] = [
+  { label: "Dashboard",   href: "/admin",             icon: LayoutDashboard, page: "dashboard"    },
+  { label: "Users",       href: "/admin/users",        icon: Users,           page: "users"        },
+  { label: "Studios",     href: "/admin/studios",      icon: Building2,       page: "studios"      },
+  { label: "Revenue",     href: "/admin/revenue",      icon: BarChart3,       page: "revenue"      },
+  { label: "AI Usage",    href: "/admin/ai-usage",     icon: Cpu,             page: "ai-usage"     },
+  { label: "Moderation",  href: "/admin/moderation",   icon: ShieldAlert,     page: "moderation"   },
+  { label: "AI Learning", href: "/admin/ai-learning",  icon: Brain,           page: "ai-usage"     },
+  { label: "Support",     href: "/admin/support-chat", icon: MessageSquare,   page: "support-chat" },
+  { label: "Affiliates",  href: "/admin/affiliates",   icon: Link2,           page: "affiliates"   },
+  { label: "Attribution", href: "/admin/attribution",  icon: Target,          page: "attribution"  },
+  { label: "Settings",    href: "/admin/settings",     icon: Settings,        page: "settings"     },
 ];
 
-export default function AdminSidebar() {
+const ROLE_LABEL: Record<AdminRole, string> = {
+  SUPER_ADMIN:   "Super Admin",
+  OPS_ADMIN:     "Ops Admin",
+  SUPPORT_ADMIN: "Support Admin",
+};
+
+export default function AdminSidebar({
+  role,
+  name,
+  email,
+}: {
+  role: AdminRole;
+  name: string;
+  email: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+
+  const navItems = ALL_NAV_ITEMS.filter((item) => canAccess(role, item.page));
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
@@ -51,6 +72,13 @@ export default function AdminSidebar() {
     router.refresh();
   }
 
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <aside
       className="hidden md:flex flex-col w-[240px] h-screen shrink-0 border-r"
@@ -60,7 +88,7 @@ export default function AdminSidebar() {
       <div className="h-16 flex items-center px-5 border-b" style={{ borderColor: "var(--border)" }}>
         <Link href="/admin" className="flex items-center gap-2.5 no-underline">
           <div className="flex flex-col gap-0.5">
-            <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "24px", width: "auto" }} />
+            <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "36px", width: "auto" }} />
             <p className="text-[10px] text-muted-foreground leading-tight ml-0.5">Platform Admin</p>
           </div>
         </Link>
@@ -90,18 +118,18 @@ export default function AdminSidebar() {
         })}
       </nav>
 
-      {/* Bottom: sign out */}
+      {/* Bottom: account + sign out */}
       <div className="border-t p-3" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3 px-2 py-2 mb-1">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
+            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
             style={{ background: "linear-gradient(135deg, #E85D4A, #D4A843)" }}
           >
-            A
+            {initials}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Admin</p>
-            <p className="text-[11px]" style={{ color: "#E85D4A" }}>Platform Admin</p>
+            <p className="text-sm font-medium text-foreground truncate">{name}</p>
+            <p className="text-[11px] truncate" style={{ color: "#E85D4A" }}>{ROLE_LABEL[role]}</p>
           </div>
         </div>
         <button

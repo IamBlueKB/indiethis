@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/admin-auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminTopBar from "@/components/admin/AdminTopBar";
 import SupportChat from "@/components/admin/SupportChat";
+import type { AdminRole } from "@prisma/client";
 import type { ReactNode } from "react";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -11,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--background)" }}>
-      <AdminSidebar />
+      <AdminSidebar role={session.role as AdminRole} name={session.name} email={session.email} />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AdminTopBar />
         <main className="flex-1 overflow-y-auto p-6">

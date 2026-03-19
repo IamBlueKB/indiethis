@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
+  ShieldOff,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -17,6 +18,8 @@ import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
 import AIInsightsCard from "@/components/admin/AIInsightsCard";
 import ChurnPredictionTable from "@/components/admin/ChurnPredictionTable";
+import AdminViewOnlyBanner from "@/components/admin/AdminViewOnlyBanner";
+import { requireAdminAccess } from "@/lib/require-admin-access";
 
 const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
 
@@ -26,7 +29,13 @@ function pctDelta(current: number, prev: number): { delta: string; positive: boo
   return { delta: `${Math.abs(pct).toFixed(1)}%`, positive: pct >= 0 };
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ denied?: string }>;
+}) {
+  const { viewOnly } = await requireAdminAccess("dashboard");
+  const { denied } = await searchParams;
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -165,6 +174,20 @@ export default async function AdminDashboardPage() {
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">IndieThis platform overview</p>
       </div>
+
+      {/* Access denied notice when redirected from a restricted page */}
+      {denied && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl border text-sm"
+          style={{ backgroundColor: "rgba(232,93,74,0.08)", borderColor: "rgba(232,93,74,0.3)", color: "#E85D4A" }}
+        >
+          <ShieldOff size={15} className="shrink-0" />
+          <span>You don&apos;t have permission to access <strong>{denied}</strong>. Contact a Super Admin if you need access.</span>
+        </div>
+      )}
+
+      {/* View-only banner */}
+      {viewOnly && <AdminViewOnlyBanner page="dashboard" />}
 
       {/* AI Insights Card */}
       <Suspense fallback={

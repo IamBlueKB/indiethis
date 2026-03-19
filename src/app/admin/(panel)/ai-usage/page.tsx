@@ -3,6 +3,8 @@ import { Cpu, DollarSign, Zap,
          TrendingUp, AlertCircle, Clock, Users } from "lucide-react";
 import AdminLineChart    from "@/components/admin/charts/AdminLineChart";
 import JobsTable         from "./JobsTable";
+import { requireAdminAccess } from "@/lib/require-admin-access";
+import AdminViewOnlyBanner    from "@/components/admin/AdminViewOnlyBanner";
 
 // ─── Per-tool display config ───────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ function StatCard({
 // ─── Page (server component) ───────────────────────────────────────────────────
 
 export default async function AdminAIUsagePage() {
+  const { viewOnly } = await requireAdminAccess("ai-usage");
   const now           = new Date();
   const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -179,6 +182,8 @@ export default async function AdminAIUsagePage() {
           Unified AIJob queue — real revenue, cost, and queue health across all tools
         </p>
       </div>
+
+      {viewOnly && <AdminViewOnlyBanner page="AI usage" />}
 
       {/* ── Primary stats ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

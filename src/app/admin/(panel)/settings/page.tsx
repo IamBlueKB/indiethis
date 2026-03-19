@@ -1,6 +1,8 @@
 import { Settings, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
+import { requireAdminAccess } from "@/lib/require-admin-access";
 
 export default async function AdminSettingsPage() {
+  const { session } = await requireAdminAccess("settings");
 
   const integrations = [
     { name: "Brevo (Email)", key: "BREVO_API_KEY", env: process.env.BREVO_API_KEY },
@@ -52,10 +54,10 @@ export default async function AdminSettingsPage() {
           <h2 className="text-sm font-semibold text-foreground">Admin Account</h2>
         </div>
         <div className="space-y-1">
-          <p className="text-sm text-foreground">{session?.user?.name ?? "Admin"}</p>
-          <p className="text-xs text-muted-foreground">{session?.user?.email ?? ""}</p>
+          <p className="text-sm text-foreground">{session.name}</p>
+          <p className="text-xs text-muted-foreground">{session.email}</p>
           <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: "#E85D4A18", color: "#E85D4A" }}>
-            PLATFORM_ADMIN
+            {session.role}
           </span>
         </div>
       </div>

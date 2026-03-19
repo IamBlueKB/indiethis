@@ -30,7 +30,8 @@ export default function AffiliatePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     socialLinks: "",
     audienceSize: "",
@@ -44,7 +45,7 @@ export default function AffiliatePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.email || !form.audienceSize || !form.creatorType || !form.promotionPlan) {
+    if (!form.firstName || !form.lastName || !form.email || !form.audienceSize || !form.creatorType || !form.promotionPlan) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -54,7 +55,7 @@ export default function AffiliatePage() {
       const res = await fetch("/api/affiliate/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, name: `${form.firstName.trim()} ${form.lastName.trim()}` }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -105,14 +106,14 @@ export default function AffiliatePage() {
     >
       {/* Header */}
       <header
-        className="h-16 flex items-center px-6 border-b"
+        className="h-20 flex items-center px-6 border-b"
         style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
       >
         <Link href="/" className="no-underline">
           <img
             src="/images/brand/indiethis-logo-dark-bg.svg"
             alt="IndieThis"
-            style={{ height: "22px", width: "auto" }}
+            style={{ height: "40px", width: "auto" }}
           />
         </Link>
       </header>
@@ -159,37 +160,53 @@ export default function AffiliatePage() {
             className="rounded-2xl border p-7 space-y-5"
             style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
           >
-            {/* Name + Email */}
+            {/* First + Last Name */}
             <div className="grid grid-cols-2 gap-4">
               <label className="block space-y-1.5">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Full Name <span style={{ color: "#E85D4A" }}>*</span>
+                  First Name <span style={{ color: "#E85D4A" }}>*</span>
                 </span>
                 <input
                   type="text"
-                  value={form.name}
-                  onChange={(e) => set("name", e.target.value)}
-                  placeholder="Kendrick L."
+                  value={form.firstName}
+                  onChange={(e) => set("firstName", e.target.value)}
+                  placeholder="Your first name"
                   className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground bg-transparent placeholder:text-muted-foreground focus:outline-none focus:ring-1"
-                  style={{ borderColor: "var(--border)", focusRingColor: "#D4A843" } as React.CSSProperties}
+                  style={{ borderColor: "var(--border)" } as React.CSSProperties}
                   required
                 />
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Email <span style={{ color: "#E85D4A" }}>*</span>
+                  Last Name <span style={{ color: "#E85D4A" }}>*</span>
                 </span>
                 <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                  placeholder="you@example.com"
+                  type="text"
+                  value={form.lastName}
+                  onChange={(e) => set("lastName", e.target.value)}
+                  placeholder="Your last name"
                   className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground bg-transparent placeholder:text-muted-foreground focus:outline-none focus:ring-1"
                   style={{ borderColor: "var(--border)" } as React.CSSProperties}
                   required
                 />
               </label>
             </div>
+
+            {/* Email */}
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Email <span style={{ color: "#E85D4A" }}>*</span>
+              </span>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground bg-transparent placeholder:text-muted-foreground focus:outline-none focus:ring-1"
+                style={{ borderColor: "var(--border)" } as React.CSSProperties}
+                required
+              />
+            </label>
 
             {/* Creator type */}
             <label className="block space-y-1.5">

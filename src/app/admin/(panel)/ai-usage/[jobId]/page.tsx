@@ -1,6 +1,7 @@
 import { notFound }    from "next/navigation";
 import Link            from "next/link";
 import { db }          from "@/lib/db";
+import { requireAdminAccess } from "@/lib/require-admin-access";
 import {
   ChevronLeft, CheckCircle2, AlertCircle, Clock, Zap,
   DollarSign, User, Building2, Cpu,
@@ -90,6 +91,7 @@ export default async function AIJobDetailPage({
 }: {
   params: Promise<{ jobId: string }>;
 }) {
+  await requireAdminAccess("ai-usage");
   const { jobId } = await params;
 
   const job = await db.aIJob.findUnique({

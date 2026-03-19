@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48">
+  <rect x="4" y="4" width="40" height="40" rx="10" fill="#D4A843"/>
+  <rect x="20.5" y="16" width="5" height="18" rx="2.5" fill="#0A0A0A"/>
+  <polygon points="18.5,7 18.5,15.5 27,11.25" fill="#E85D4A"/>
+  <text x="54" y="32" fill="#F5F5F5" font-family="'DM Sans',sans-serif" font-size="22" font-weight="700" letter-spacing="-2px">Indie<tspan fill="#D4A843" font-family="'Playfair Display',Georgia,serif" font-weight="400" font-style="italic" letter-spacing="-1.2px">This</tspan></text>
+</svg>
