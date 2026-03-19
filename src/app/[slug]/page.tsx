@@ -6,6 +6,7 @@ import MerchGrid from "./MerchGrid";
 import ArtistHero from "./ArtistHero";
 import PreSaveCampaignCard from "./PreSaveCampaignCard";
 import VideoSection from "./VideoSection";
+import ShowsSection from "./ShowsSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -54,6 +55,13 @@ async function ArtistSite({ slug }: { slug: string }) {
         select:  { id: true, url: true, title: true },
       })
     : [];
+
+  // Upcoming shows — sorted ascending, only future dates
+  const shows = await db.artistShow.findMany({
+    where:   { artistId: artist.id, date: { gte: new Date() } },
+    orderBy: { date: "asc" },
+    select:  { id: true, venueName: true, city: true, date: true, ticketUrl: true, isSoldOut: true },
+  });
 
   // Active pre-save campaign (most recently created one)
   const campaign = await db.preSaveCampaign.findFirst({
@@ -138,6 +146,13 @@ async function ArtistSite({ slug }: { slug: string }) {
 
         {/* Videos */}
         {videos.length > 0 && <VideoSection videos={videos} />}
+
+        {/* Shows */}
+        <ShowsSection
+          shows={shows.map((s) => ({ ...s, date: s.date.toISOString() }))}
+          artistName={displayName}
+          artistId={artist.id}
+        />
 
         {/* Merch */}
         {artist.merchProducts.length > 0 && (

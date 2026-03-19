@@ -337,6 +337,8 @@ model User {
   youtubeReferences  YoutubeReference[]
   preSaveCampaigns   PreSaveCampaign[]
   artistVideos       ArtistVideo[]
+  artistShows        ArtistShow[]
+  showInterests      ShowInterest[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -1104,6 +1106,49 @@ model ArtistVideo {
 
   artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
+  @@index([artistId])
+}
+
+// ─── Shows & Events ───────────────────────────────────────────────────────────
+
+model ArtistShow {
+  id        String         @id @default(cuid())
+  artistId  String
+  venueName String
+  city      String
+  date      DateTime
+  ticketUrl String?
+  isSoldOut Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  artist    User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  waitlist  ShowWaitlist[]
+
+  @@index([artistId])
+}
+
+model ShowWaitlist {
+  id        String     @id @default(cuid())
+  showId    String
+  email     String
+  createdAt DateTime   @default(now())
+
+  show      ArtistShow @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@unique([showId, email])
+  @@index([showId])
+}
+
+model ShowInterest {
+  id        String   @id @default(cuid())
+  artistId  String
+  email     String
+  createdAt DateTime @default(now())
+
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email])
   @@index([artistId])
 }
 
