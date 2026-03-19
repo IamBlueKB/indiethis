@@ -12,6 +12,7 @@ function getSecret() {
 export interface AdminPayload {
   admin: true;
   id: string;
+  name: string;
   email: string;
   role: string;
 }

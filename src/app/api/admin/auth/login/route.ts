@@ -16,11 +16,15 @@ export async function POST(req: NextRequest) {
 
   const account = await db.adminAccount.findUnique({
     where: { email: email.trim().toLowerCase() },
-    select: { id: true, email: true, role: true, passwordHash: true, isActive: true },
+    select: { id: true, name: true, email: true, role: true, passwordHash: true, isActive: true },
   });
 
-  if (!account || !account.isActive) {
+  if (!account) {
     return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
+  }
+
+  if (!account.isActive) {
+    return NextResponse.json({ error: "Account deactivated." }, { status: 401 });
   }
 
   const passwordMatch = await bcrypt.compare(password, account.passwordHash);
@@ -36,6 +40,7 @@ export async function POST(req: NextRequest) {
 
   const token = await createAdminToken({
     id: account.id,
+    name: account.name,
     email: account.email,
     role: account.role,
   });
