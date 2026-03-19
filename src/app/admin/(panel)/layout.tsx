@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
+  if (session.mustChangePassword) redirect("/admin/change-password");
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--background)" }}>

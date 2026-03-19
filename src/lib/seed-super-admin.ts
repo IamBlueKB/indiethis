@@ -30,11 +30,12 @@ export async function seedSuperAdminIfNeeded(): Promise<void> {
 
   await db.adminAccount.create({
     data: {
-      name: "Super Admin",
+      name:               "Super Admin",
       email,
       passwordHash,
-      role: "SUPER_ADMIN",
-      createdBy: null,
+      role:               "SUPER_ADMIN",
+      createdBy:          null,
+      mustChangePassword: false, // env-var bootstrap uses a known password, not a temp one
     },
   });
 

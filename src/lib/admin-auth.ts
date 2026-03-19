@@ -15,6 +15,7 @@ export interface AdminPayload {
   name: string;
   email: string;
   role: string;
+  mustChangePassword: boolean;
 }
 
 export async function createAdminToken(payload: Omit<AdminPayload, "admin">): Promise<string> {
@@ -29,7 +30,10 @@ export async function verifyAdminToken(token: string): Promise<AdminPayload | nu
   try {
     const { payload } = await jwtVerify(token, getSecret());
     if (payload.admin !== true) return null;
-    return payload as unknown as AdminPayload;
+    const p = payload as unknown as AdminPayload;
+    // Tokens issued before mustChangePassword was added default to false
+    if (typeof p.mustChangePassword !== "boolean") p.mustChangePassword = false;
+    return p;
   } catch {
     return null;
   }

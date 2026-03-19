@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const account = await db.adminAccount.findUnique({
     where: { email: email.trim().toLowerCase() },
-    select: { id: true, name: true, email: true, role: true, passwordHash: true, isActive: true },
+    select: { id: true, name: true, email: true, role: true, passwordHash: true, isActive: true, mustChangePassword: true },
   });
 
   if (!account) {
@@ -39,10 +39,11 @@ export async function POST(req: NextRequest) {
   }).catch(() => {});
 
   const token = await createAdminToken({
-    id: account.id,
-    name: account.name,
-    email: account.email,
-    role: account.role,
+    id:                account.id,
+    name:              account.name,
+    email:             account.email,
+    role:              account.role,
+    mustChangePassword: account.mustChangePassword,
   });
 
   const res = NextResponse.json({ ok: true });
