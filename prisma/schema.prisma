@@ -245,6 +245,12 @@ enum AffiliateStatus {
   SUSPENDED
 }
 
+enum AdminRole {
+  SUPER_ADMIN
+  OPS_ADMIN
+  SUPPORT_ADMIN
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -1063,4 +1069,22 @@ model UserAttribution {
   @@index([source])
   @@index([utmSource])
   @@index([utmCampaign])
+}
+
+// ─── Admin Accounts ───────────────────────────────────────────────────────────
+
+model AdminAccount {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(SUPPORT_ADMIN)
+  /// ID of the admin who created this account (null for the bootstrap super-admin)
+  createdBy    String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([email])
+  @@index([role])
 }
