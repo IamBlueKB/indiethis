@@ -119,6 +119,9 @@ async function ArtistSite({ slug }: { slug: string }) {
             artistName={displayName}
             followGateEnabled={site.followGateEnabled ?? false}
             instagramHandle={artist.instagramHandle ?? null}
+            spotifyUrl={artist.spotifyUrl ?? null}
+            appleMusicUrl={artist.appleMusicUrl ?? null}
+            youtubeChannel={artist.youtubeChannel ?? null}
           />
         )}
 
