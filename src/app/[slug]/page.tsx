@@ -12,6 +12,7 @@ import ReleaseCapture from "./ReleaseCapture";
 import ShowCapture from "./ShowCapture";
 import AboutSection from "./AboutSection";
 import BookingSection from "./BookingSection";
+import QrCodeFooter from "./QrCodeFooter";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -198,10 +199,14 @@ async function ArtistSite({ slug }: { slug: string }) {
           bookingRate={site.bookingRate ?? null}
         />
 
-        <p className="text-center text-xs text-muted-foreground pb-8">
-          Powered by{" "}
-          <span className="font-semibold" style={{ color: "#D4A843" }}>IndieThis</span>
-        </p>
+        {/* QR Code footer */}
+        <div className="flex flex-col items-center gap-4 pt-4 pb-2">
+          <QrCodeFooter artistSlug={slug} />
+          <p className="text-center text-xs text-muted-foreground">
+            Powered by{" "}
+            <span className="font-semibold" style={{ color: "#D4A843" }}>IndieThis</span>
+          </p>
+        </div>
       </div>
     </div>
   );
