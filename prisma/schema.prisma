@@ -336,6 +336,7 @@ model User {
   artistLicenses     BeatLicense[]      @relation("ArtistLicenses")
   youtubeReferences  YoutubeReference[]
   preSaveCampaigns   PreSaveCampaign[]
+  artistVideos       ArtistVideo[]
   referralsGiven     Referral[]         @relation("ReferrerReferrals")
   referralReceived   Referral?          @relation("ReferredReferrals")
   affiliate          Affiliate?
@@ -1087,6 +1088,21 @@ model PreSaveCampaign {
   updatedAt     DateTime @updatedAt
 
   artist        User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+// ─── Artist Videos ────────────────────────────────────────────────────────────
+
+model ArtistVideo {
+  id        String   @id @default(cuid())
+  artistId  String
+  url       String
+  title     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId])
 }

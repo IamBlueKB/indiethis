@@ -5,6 +5,7 @@ import TrackList from "./TrackList";
 import MerchGrid from "./MerchGrid";
 import ArtistHero from "./ArtistHero";
 import PreSaveCampaignCard from "./PreSaveCampaignCard";
+import VideoSection from "./VideoSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -28,7 +29,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true,
-      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true } },
+      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true } },
       tracks: { where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, take: 10,
         select: { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true } },
       merchProducts: { where: { isActive: true }, orderBy: { createdAt: "desc" }, take: 6,
@@ -43,6 +44,16 @@ async function ArtistSite({ slug }: { slug: string }) {
   const displayName = artist.artistName || artist.name;
   const bio         = site.bioContent || artist.bio;
   const studioSlug  = artist.studios[0]?.studio?.slug;
+
+  // Artist videos (for public page)
+  const videos = site.showVideos !== false
+    ? await db.artistVideo.findMany({
+        where:   { artistId: artist.id },
+        orderBy: { sortOrder: "asc" },
+        take:    6,
+        select:  { id: true, url: true, title: true },
+      })
+    : [];
 
   // Active pre-save campaign (most recently created one)
   const campaign = await db.preSaveCampaign.findFirst({
@@ -124,6 +135,9 @@ async function ArtistSite({ slug }: { slug: string }) {
             youtubeChannel={artist.youtubeChannel ?? null}
           />
         )}
+
+        {/* Videos */}
+        {videos.length > 0 && <VideoSection videos={videos} />}
 
         {/* Merch */}
         {artist.merchProducts.length > 0 && (

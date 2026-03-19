@@ -17,6 +17,7 @@ import {
   Zap,
   Gift,
   Share2,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -30,6 +31,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Music", href: "/dashboard/music", icon: Music },
+  { label: "Videos", href: "/dashboard/videos", icon: Video },
   { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
