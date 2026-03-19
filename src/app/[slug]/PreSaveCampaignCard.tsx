@@ -63,6 +63,7 @@ function CountUnit({ value, label }: { value: number; label: string }) {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface PreSaveCampaignCardProps {
+  campaignId:   string;
   title:        string;
   artUrl:       string | null;
   releaseDate:  string; // ISO string — safe to pass from server to client
@@ -73,12 +74,20 @@ export interface PreSaveCampaignCardProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PreSaveCampaignCard({
+  campaignId,
   title,
   artUrl,
   releaseDate,
   spotifyUrl,
   appleMusicUrl,
 }: PreSaveCampaignCardProps) {
+  function trackClick(platform: "SPOTIFY" | "APPLE_MUSIC") {
+    void fetch("/api/public/presave-click", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ campaignId, platform }),
+    });
+  }
   const release = new Date(releaseDate);
 
   const [timeLeft, setTimeLeft] = useState<ReturnType<typeof getTimeLeft>>(
@@ -164,6 +173,7 @@ export default function PreSaveCampaignCard({
                 href={spotifyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackClick("SPOTIFY")}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold
                            no-underline transition-all hover:brightness-110 hover:scale-[1.02]"
                 style={{ backgroundColor: "#1DB954", color: "#000" }}
@@ -177,6 +187,7 @@ export default function PreSaveCampaignCard({
                 href={appleMusicUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackClick("APPLE_MUSIC")}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold
                            no-underline transition-all hover:brightness-110 hover:scale-[1.02]"
                 style={{ backgroundColor: "#FA243C", color: "#fff" }}

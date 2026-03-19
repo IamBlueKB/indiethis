@@ -1137,20 +1137,40 @@ model UserAttribution {
 // ─── Pre-Save Campaigns ───────────────────────────────────────────────────────
 
 model PreSaveCampaign {
-  id            String   @id @default(cuid())
+  id            String          @id @default(cuid())
   artistId      String
   title         String
   artUrl        String?
   releaseDate   DateTime
   spotifyUrl    String?
   appleMusicUrl String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  artist        User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  artist        User            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  clicks        PreSaveClick[]
 
   @@index([artistId])
+}
+
+// ─── Pre-save click tracking ──────────────────────────────────────────────────
+
+model PreSaveClick {
+  id         String          @id @default(cuid())
+  campaignId String
+  platform   PreSavePlatform
+  clickedAt  DateTime        @default(now())
+
+  campaign   PreSaveCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([campaignId, platform])
+}
+
+enum PreSavePlatform {
+  SPOTIFY
+  APPLE_MUSIC
 }
 
 // ─── Artist Videos ────────────────────────────────────────────────────────────

@@ -74,7 +74,7 @@ async function ArtistSite({ slug }: { slug: string }) {
   const campaign = await db.preSaveCampaign.findFirst({
     where:   { artistId: artist.id, isActive: true },
     orderBy: { createdAt: "desc" },
-    select:  { title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
+    select:  { id: true, title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
   });
 
   // Build AudioTrack objects for the store queue
@@ -147,6 +147,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         {/* Pre-save / release card */}
         {campaign && (
           <PreSaveCampaignCard
+            campaignId={campaign.id}
             title={campaign.title}
             artUrl={campaign.artUrl ?? null}
             releaseDate={campaign.releaseDate.toISOString()}

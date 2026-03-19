@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2,
-  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play,
+  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play, Zap,
 } from "lucide-react";
+import PreSaveTab from "./PreSaveTab";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import InlinePlayer from "@/components/audio/InlinePlayer";
 
@@ -780,7 +781,7 @@ function ReferencesTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MusicPage() {
-  const [tab, setTab] = useState<"tracks" | "references">("tracks");
+  const [tab, setTab] = useState<"tracks" | "presave" | "references">("tracks");
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -793,6 +794,7 @@ export default function MusicPage() {
       <div className="flex gap-1 p-1 rounded-xl border w-fit" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
         {([
           { key: "tracks",     label: "My Tracks",  icon: Music2 },
+          { key: "presave",    label: "Pre-save",   icon: Zap },
           { key: "references", label: "References", icon: Link2 },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
@@ -810,7 +812,9 @@ export default function MusicPage() {
         ))}
       </div>
 
-      {tab === "tracks" ? <MyTracksTab /> : <ReferencesTab />}
+      {tab === "tracks"     && <MyTracksTab />}
+      {tab === "presave"    && <PreSaveTab />}
+      {tab === "references" && <ReferencesTab />}
     </div>
   );
 }
