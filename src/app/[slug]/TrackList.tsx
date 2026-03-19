@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Music2, Download, Instagram, ExternalLink, X, Check, Play, ChevronDown, ChevronUp } from "lucide-react";
 import { useAudioStore } from "@/store";
 import InlinePlayer from "@/components/audio/InlinePlayer";
 import type { AudioTrack } from "@/store";
+import { detectDevice, buildStreamingLinks } from "@/lib/smart-links";
+import type { DeviceType } from "@/lib/smart-links";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,78 +19,73 @@ type Track = {
   fileUrl: string;
 };
 
-// ─── Platform icons ───────────────────────────────────────────────────────────
+// ─── Platform SVG icons ───────────────────────────────────────────────────────
+// Keyed to match StreamingLink["key"] from smart-links.ts
 
-function SpotifyIcon({ size = 13 }: { size?: number }) {
-  return (
+const PLATFORM_ICONS: Record<string, (props: { size: number }) => React.ReactElement> = {
+  spotify: ({ size }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.51 17.31a.748.748 0 01-1.03.248c-2.82-1.723-6.37-2.112-10.553-1.157a.748.748 0 01-.353-1.453c4.576-1.047 8.502-.596 11.688 1.332a.748.748 0 01.248 1.03zm1.47-3.268a.937.937 0 01-1.288.308c-3.226-1.983-8.14-2.558-11.953-1.4a.937.937 0 01-.544-1.793c4.358-1.322 9.776-.681 13.477 1.596a.937.937 0 01.308 1.289zm.127-3.403c-3.868-2.297-10.248-2.508-13.942-1.388a1.124 1.124 0 01-.653-2.15c4.238-1.287 11.284-1.038 15.735 1.607a1.124 1.124 0 01-1.14 1.931z" />
     </svg>
-  );
-}
-
-function AppleMusicIcon({ size = 13 }: { size?: number }) {
-  return (
+  ),
+  apple: ({ size }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026C4.786.07 4.043.15 3.34.428 2.004.958 1.04 1.88.475 3.208A4.86 4.86 0 00.09 4.88c-.014.277-.021.554-.022.832V18.3c.003.28.012.56.03.838.051.824.227 1.626.62 2.372.684 1.296 1.768 2.15 3.19 2.545.525.145 1.062.208 1.608.225.293.01.586.015.878.015H18.56c.293 0 .586-.005.878-.015.546-.017 1.083-.08 1.608-.225 1.422-.395 2.506-1.249 3.19-2.545.393-.746.57-1.548.62-2.372.018-.278.027-.558.03-.838V5.71c0-.007-.003-.013-.003-.02l.003-.07c0-.007.003-.013.003-.02v-.496c-.001-.295-.018-.59-.037-.88zM12 18.83c-3.757 0-6.8-3.042-6.8-6.8S8.243 5.23 12 5.23s6.8 3.042 6.8 6.8-3.043 6.8-6.8 6.8zm0-11.09c-2.37 0-4.29 1.92-4.29 4.29S9.63 16.32 12 16.32s4.29-1.92 4.29-4.29S14.37 7.74 12 7.74zm6.96-2.95a1.59 1.59 0 110-3.18 1.59 1.59 0 010 3.18z" />
     </svg>
-  );
-}
-
-function YoutubeIcon({ size = 13 }: { size?: number }) {
-  return (
+  ),
+  youtube: ({ size }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
     </svg>
-  );
-}
-
-function SoundCloudIcon({ size = 13 }: { size?: number }) {
-  return (
+  ),
+  soundcloud: ({ size }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M1.175 12.225c-.017 0-.034.002-.05.006-.007-.068-.01-.137-.01-.206C1.115 9.5 3.1 7.5 5.6 7.5c.27 0 .536.024.792.07a5.8 5.8 0 015.208-3.25 5.8 5.8 0 015.8 5.8c0 .163-.008.325-.023.484A3.2 3.2 0 0119.2 16.5H1.175a1.175 1.175 0 010-2.35z" />
     </svg>
-  );
-}
+  ),
+};
 
-// ─── Streaming link row ────────────────────────────────────────────────────────
+// ─── Streaming link row (device-aware) ────────────────────────────────────────
 
 function StreamingLinks({
   spotifyUrl,
   appleMusicUrl,
   youtubeChannel,
   soundcloudUrl,
+  device,
 }: {
   spotifyUrl?: string | null;
   appleMusicUrl?: string | null;
   youtubeChannel?: string | null;
   soundcloudUrl?: string | null;
+  device: DeviceType;
 }) {
-  const links = [
-    spotifyUrl    && { label: "Spotify",     href: spotifyUrl,    Icon: SpotifyIcon,    bg: "#1DB954", color: "#000" },
-    appleMusicUrl && { label: "Apple Music", href: appleMusicUrl, Icon: AppleMusicIcon, bg: "#FA243C", color: "#fff" },
-    youtubeChannel && { label: "YouTube",   href: youtubeChannel, Icon: YoutubeIcon,    bg: "#FF0000", color: "#fff" },
-    soundcloudUrl && { label: "SoundCloud", href: soundcloudUrl,  Icon: SoundCloudIcon, bg: "#FF5500", color: "#fff" },
-  ].filter(Boolean) as { label: string; href: string; Icon: React.FC<{ size?: number }>; bg: string; color: string }[];
+  const links = buildStreamingLinks(
+    { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl },
+    device,
+  );
 
   if (!links.length) return null;
 
   return (
     <div className="flex flex-wrap gap-2">
-      {links.map(({ label, href, Icon, bg, color }) => (
-        <a
-          key={label}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold no-underline
-                     transition-all hover:brightness-110 hover:scale-[1.02]"
-          style={{ backgroundColor: bg, color }}
-        >
-          <Icon size={11} />
-          {label}
-        </a>
-      ))}
+      {links.map(({ key, label, href, bg, color }) => {
+        const Icon = PLATFORM_ICONS[key];
+        return (
+          <a
+            key={key}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold no-underline
+                       transition-all hover:brightness-110 hover:scale-[1.02]"
+            style={{ backgroundColor: bg, color }}
+          >
+            {Icon && <Icon size={11} />}
+            {label}
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -261,8 +258,12 @@ export default function TrackList({
   const isPlaying      = useAudioStore((s) => s.isPlaying);
   const playInContext  = useAudioStore((s) => s.playInContext);
 
-  const [gateTrack,      setGateTrack]      = useState<Track | null>(null);
-  const [expandedId,     setExpandedId]     = useState<string | null>(null);
+  const [gateTrack,  setGateTrack]  = useState<Track | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Device detection — starts as "desktop" (safe SSR default), updates after hydration
+  const [device, setDevice] = useState<DeviceType>("desktop");
+  useEffect(() => { setDevice(detectDevice()); }, []);
 
   // Build full queue context once — used for all InlinePlayers
   const audioContext: AudioTrack[] = tracks.map((t) => ({
@@ -276,7 +277,7 @@ export default function TrackList({
   const featured   = tracks[0]  ?? null;
   const rest       = tracks.slice(1);       // up to 9 more (page.tsx already caps at 10)
 
-  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl };
+  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl, device };
 
   function handleDownload(track: Track) {
     if (followGateEnabled && instagramHandle && track.price === null) {
