@@ -106,8 +106,8 @@ export default function BookingSection({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-2.5">
-        {/* Name + Email row */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Name + Email row — stacked on mobile, side-by-side on sm+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <input
             type="text"
             value={name}

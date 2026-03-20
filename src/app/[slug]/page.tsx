@@ -9,7 +9,6 @@ import VideoSection from "./VideoSection";
 import ShowsSection from "./ShowsSection";
 import SupportSection from "./SupportSection";
 import ReleaseCapture from "./ReleaseCapture";
-import ShowCapture from "./ShowCapture";
 import AboutSection from "./AboutSection";
 import BookingSection from "./BookingSection";
 import ArtistFooter from "./ArtistFooter";
@@ -93,7 +92,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       {/* ── Page view tracker — fires once on mount, skips owner + dedup ── */}
       <ArtistPageViewTracker artistSlug={slug} />
 
-      {/* ── Full-bleed hero (client component — handles auto-load + Listen CTA) */}
+      {/* ── Full-bleed hero ────────────────────────────────────────────── */}
       <ArtistHero
         displayName={displayName}
         photo={artist.photo ?? null}
@@ -110,9 +109,60 @@ async function ArtistSite({ slug }: { slug: string }) {
       />
 
       {/* ── Body content ─────────────────────────────────────────────────── */}
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-10">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
 
-        {/* About section — only renders when bio exists */}
+        {/* 1. Pre-save / release card — only when active campaign exists */}
+        {campaign && (
+          <PreSaveCampaignCard
+            campaignId={campaign.id}
+            title={campaign.title}
+            artUrl={campaign.artUrl ?? null}
+            releaseDate={campaign.releaseDate.toISOString()}
+            spotifyUrl={campaign.spotifyUrl ?? null}
+            appleMusicUrl={campaign.appleMusicUrl ?? null}
+          />
+        )}
+
+        {/* 2. Music — only when published tracks exist */}
+        {artist.tracks.length > 0 && (
+          <TrackList
+            tracks={artist.tracks}
+            artistName={displayName}
+            artistSlug={slug}
+            followGateEnabled={site.followGateEnabled ?? false}
+            instagramHandle={artist.instagramHandle ?? null}
+            spotifyUrl={artist.spotifyUrl ?? null}
+            appleMusicUrl={artist.appleMusicUrl ?? null}
+            youtubeChannel={artist.youtubeChannel ?? null}
+          />
+        )}
+
+        {/* 3. Videos — only when videos exist */}
+        {videos.length > 0 && <VideoSection videos={videos} />}
+
+        {/* 4. Shows — only when upcoming shows exist */}
+        {shows.length > 0 && (
+          <ShowsSection
+            shows={shows.map((s) => ({ ...s, date: s.date.toISOString() }))}
+            artistName={displayName}
+            artistId={artist.id}
+          />
+        )}
+
+        {/* 5. Email capture — release notifications (always visible) */}
+        <ReleaseCapture artistSlug={slug} artistName={displayName} />
+
+        {/* 6. Merch — only when active products exist */}
+        {artist.merchProducts.length > 0 && (
+          <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
+        )}
+
+        {/* 7. Support / Tip Jar — only when artist has enabled PWYW */}
+        {site.pwywEnabled && (
+          <SupportSection artistSlug={slug} artistName={displayName} />
+        )}
+
+        {/* 8. About — only when bio exists */}
         {bio && (
           <div className="space-y-4">
             <AboutSection
@@ -133,7 +183,7 @@ async function ArtistSite({ slug }: { slug: string }) {
           </div>
         )}
 
-        {/* Book a Session — if no bio but studio linked */}
+        {/* Studio session link — if no bio but studio linked */}
         {!bio && studioSlug && (
           <Link
             href={`/${studioSlug}/intake`}
@@ -144,68 +194,14 @@ async function ArtistSite({ slug }: { slug: string }) {
           </Link>
         )}
 
-        {/* Pre-save / release card */}
-        {campaign && (
-          <PreSaveCampaignCard
-            campaignId={campaign.id}
-            title={campaign.title}
-            artUrl={campaign.artUrl ?? null}
-            releaseDate={campaign.releaseDate.toISOString()}
-            spotifyUrl={campaign.spotifyUrl ?? null}
-            appleMusicUrl={campaign.appleMusicUrl ?? null}
-          />
-        )}
-
-        {/* Music */}
-        {artist.tracks.length > 0 && (
-          <TrackList
-            tracks={artist.tracks}
-            artistName={displayName}
-            artistSlug={slug}
-            followGateEnabled={site.followGateEnabled ?? false}
-            instagramHandle={artist.instagramHandle ?? null}
-            spotifyUrl={artist.spotifyUrl ?? null}
-            appleMusicUrl={artist.appleMusicUrl ?? null}
-            youtubeChannel={artist.youtubeChannel ?? null}
-          />
-        )}
-
-        {/* Release capture — between music and videos */}
-        {artist.tracks.length > 0 && (
-          <ReleaseCapture artistSlug={slug} artistName={displayName} />
-        )}
-
-        {/* Videos */}
-        {videos.length > 0 && <VideoSection videos={videos} />}
-
-        {/* Shows */}
-        <ShowsSection
-          shows={shows.map((s) => ({ ...s, date: s.date.toISOString() }))}
-          artistName={displayName}
-          artistId={artist.id}
-        />
-
-        {/* Show capture — after shows section */}
-        <ShowCapture artistSlug={slug} artistName={displayName} />
-
-        {/* Merch */}
-        {artist.merchProducts.length > 0 && (
-          <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
-        )}
-
-        {/* Support / Tip Jar */}
-        {site.pwywEnabled && (
-          <SupportSection artistSlug={slug} artistName={displayName} />
-        )}
-
-        {/* Booking / Contact */}
+        {/* 9. Booking / Contact — always visible */}
         <BookingSection
           artistSlug={slug}
           artistName={displayName}
           bookingRate={site.bookingRate ?? null}
         />
 
-        {/* Footer: social icons + Powered by + QR */}
+        {/* 10. Footer: social icons + Powered by + QR */}
         <ArtistFooter
           artistSlug={slug}
           instagramHandle={artist.instagramHandle ?? null}

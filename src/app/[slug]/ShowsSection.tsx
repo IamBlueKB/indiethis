@@ -262,26 +262,25 @@ export default function ShowsSection({
   artistName: string;
   artistId:   string;
 }) {
-  // Only show upcoming (future) shows, sorted ascending
+  // Only render when upcoming shows exist (page.tsx already filters to future dates)
   const upcoming = shows
     .filter((s) => new Date(s.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const hasShows = upcoming.length > 0;
+  if (!upcoming.length) return null;
 
   return (
     <section className="space-y-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">Shows</h2>
 
-      {hasShows ? (
-        <div className="space-y-3">
-          {upcoming.map((show) => (
-            <ShowCard key={show.id} show={show} />
-          ))}
-        </div>
-      ) : (
-        <WantToSeeLive artistName={artistName} artistId={artistId} />
-      )}
+      <div className="space-y-3">
+        {upcoming.map((show) => (
+          <ShowCard key={show.id} show={show} />
+        ))}
+      </div>
+
+      {/* Notify me of new shows — always offered below the show list */}
+      <WantToSeeLive artistName={artistName} artistId={artistId} />
     </section>
   );
 }

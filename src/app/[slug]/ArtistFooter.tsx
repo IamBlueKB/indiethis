@@ -1,11 +1,13 @@
+"use client";
+
 /**
- * ArtistFooter — server component
+ * ArtistFooter — client component
  *
  * Minimal footer rendered at the bottom of every published artist page.
  * - Row of social icons for any linked platforms (only renders icons that have a URL)
  * - "Powered by IndieThis" with the brand logo, linking to indiethis.com with
  *   attribution params: ?ref=[artistSlug]&source=artist_page
- * - Small QR code (from step 13) anchored to the trailing corner
+ * - Small QR code anchored to the trailing corner
  */
 
 import QrCodeFooter from "./QrCodeFooter";
@@ -131,10 +133,7 @@ export default function ArtistFooter({
               target="_blank"
               rel="noopener noreferrer"
               aria-label={label}
-              className="transition-opacity hover:opacity-100 no-underline"
-              style={{ color: "rgba(255,255,255,0.30)", opacity: 1 }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.80)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.30)")}
+              className="text-white/30 hover:text-white/80 transition-colors no-underline"
             >
               {icon}
             </a>

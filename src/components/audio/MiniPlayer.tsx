@@ -9,7 +9,11 @@ import { Play, Pause, X, Volume2, VolumeX, SkipBack, SkipForward } from "lucide-
  * Fixed to the bottom of the screen, visible whenever a track is loaded.
  * Survives client-side navigation because it lives in the layout.
  *
- * Layout:  [Cover + Info] [▶/⏸] [~~ Waveform + Time ~~] [Vol 🔊 ▬] [✕]
+ * Mobile  (<sm): [Cover] [Title/Artist] [▶/⏸] [✕]  — prev/next/volume/waveform hidden
+ * Desktop (≥sm): [Cover + Info 196px] [⏮ ▶/⏸ ⏭] [~~ Waveform + Time ~~] [🔊 Vol] [✕]
+ *
+ * AudioPlayer (WaveSurfer engine) is always in the DOM but visually hidden on mobile
+ * so the audio plays even when the waveform is not displayed.
  */
 export default function MiniPlayer() {
   const currentTrack = useAudioStore((s) => s.currentTrack);
@@ -30,16 +34,17 @@ export default function MiniPlayer() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-3 px-4 border-t"
+      className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 border-t"
       style={{
-        height: 72,
+        height:          72,
         backgroundColor: "var(--card)",
-        borderColor: "var(--border)",
-        backdropFilter: "blur(12px)",
+        borderColor:     "var(--border)",
+        backdropFilter:  "blur(12px)",
       }}
     >
-      {/* ── Cover art + track info ────────────────────────────────────── */}
-      <div className="flex items-center gap-3 shrink-0" style={{ width: 196 }}>
+      {/* ── Cover art + track info ────────────────────────────────────────── */}
+      {/* Mobile: flex-1 so it takes remaining space. Desktop: fixed 196px */}
+      <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-none sm:w-[196px] sm:shrink-0">
         {currentTrack.coverArt ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -67,41 +72,47 @@ export default function MiniPlayer() {
         </div>
       </div>
 
-      {/* ── Prev / Play / Next ────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={prev}
-          className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
-          style={{ color: "var(--muted-foreground)" }}
-          aria-label="Previous track"
-        >
-          <SkipBack size={14} />
-        </button>
+      {/* ── Prev — desktop only ───────────────────────────────────────────── */}
+      <button
+        onClick={prev}
+        className="hidden sm:flex w-7 h-7 rounded-full items-center justify-center transition-colors hover:text-foreground shrink-0"
+        style={{ color: "var(--muted-foreground)" }}
+        aria-label="Previous track"
+      >
+        <SkipBack size={14} />
+      </button>
 
-        <button
-          onClick={() => (isPlaying ? pause() : resume())}
-          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          aria-label={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-        </button>
+      {/* ── Play / Pause — always visible ────────────────────────────────── */}
+      <button
+        onClick={() => (isPlaying ? pause() : resume())}
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
+        style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+        aria-label={isPlaying ? "Pause" : "Play"}
+      >
+        {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+      </button>
 
-        <button
-          onClick={next}
-          className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:text-foreground"
-          style={{ color: "var(--muted-foreground)" }}
-          aria-label="Next track"
-        >
-          <SkipForward size={14} />
-        </button>
+      {/* ── Next — desktop only ──────────────────────────────────────────── */}
+      <button
+        onClick={next}
+        className="hidden sm:flex w-7 h-7 rounded-full items-center justify-center transition-colors hover:text-foreground shrink-0"
+        style={{ color: "var(--muted-foreground)" }}
+        aria-label="Next track"
+      >
+        <SkipForward size={14} />
+      </button>
+
+      {/* ── AudioPlayer: always in DOM (audio engine + waveform) ─────────── */}
+      {/* On mobile: w-0 overflow-hidden so WaveSurfer stays mounted (audio   */}
+      {/*   plays) but waveform takes no visual space. NOT display:none which */}
+      {/*   would prevent WaveSurfer initialization.                          */}
+      {/* On desktop: flex-1 to fill remaining space with waveform display.  */}
+      <div className="w-0 overflow-hidden sm:flex-1 sm:min-w-0" aria-hidden={true}>
+        <AudioPlayer />
       </div>
 
-      {/* ── Waveform + time (fills remaining space) ───────────────────── */}
-      <AudioPlayer />
-
-      {/* ── Volume control ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* ── Volume control — desktop only ────────────────────────────────── */}
+      <div className="hidden sm:flex items-center gap-2 shrink-0">
         <button
           onClick={toggleMute}
           className="transition-colors hover:text-foreground"
@@ -111,7 +122,6 @@ export default function MiniPlayer() {
           {isMuted || volume === 0 ? <VolumeX size={13} /> : <Volume2 size={13} />}
         </button>
 
-        {/* Custom-styled range input */}
         <div className="relative flex items-center" style={{ width: 80 }}>
           <input
             type="range"
@@ -126,14 +136,14 @@ export default function MiniPlayer() {
             }}
             className="w-full h-1 rounded-full cursor-pointer appearance-none"
             style={{
-              background: `linear-gradient(to right, #D4A843 ${effectiveVolume * 100}%, var(--border) ${effectiveVolume * 100}%)`,
+              background:  `linear-gradient(to right, #D4A843 ${effectiveVolume * 100}%, var(--border) ${effectiveVolume * 100}%)`,
               accentColor: "#D4A843",
             }}
           />
         </div>
       </div>
 
-      {/* ── Close / Stop ─────────────────────────────────────────────── */}
+      {/* ── Close / Stop — always visible ────────────────────────────────── */}
       <button
         onClick={stop}
         className="shrink-0 transition-colors hover:text-foreground"
