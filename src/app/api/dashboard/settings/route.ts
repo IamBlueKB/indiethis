@@ -40,13 +40,20 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
 
-  // Check slug uniqueness if being changed
+  // Check slug uniqueness across both artist pages and studios
   if (body.artistSlug) {
     const slug = body.artistSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    const existing = await db.user.findFirst({
-      where: { artistSlug: slug, NOT: { id: session.user.id } },
-    });
-    if (existing) {
+    const [artistConflict, studioConflict] = await Promise.all([
+      db.user.findFirst({
+        where:  { artistSlug: slug, NOT: { id: session.user.id } },
+        select: { id: true },
+      }),
+      db.studio.findFirst({
+        where:  { slug },
+        select: { id: true },
+      }),
+    ]);
+    if (artistConflict || studioConflict) {
       return NextResponse.json({ error: "That URL is already taken" }, { status: 409 });
     }
     body.artistSlug = slug;

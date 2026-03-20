@@ -29,10 +29,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ available: true });
   }
 
-  const conflict = await db.studio.findFirst({
-    where: { slug, id: { not: ownStudio.id } },
-    select: { id: true },
-  });
+  // Check conflict within studios (excluding own) AND against any artist slug
+  const [studioConflict, artistConflict] = await Promise.all([
+    db.studio.findFirst({
+      where:  { slug, id: { not: ownStudio.id } },
+      select: { id: true },
+    }),
+    db.user.findFirst({
+      where:  { artistSlug: slug },
+      select: { id: true },
+    }),
+  ]);
 
-  return NextResponse.json({ available: !conflict });
+  if (studioConflict || artistConflict) {
+    return NextResponse.json({ available: false });
+  }
+
+  return NextResponse.json({ available: true });
 }

@@ -31,10 +31,16 @@ export async function POST(req: NextRequest) {
     .replace(/-+/g, "-")
     .slice(0, 40);
 
-  // Ensure slug is unique
+  // Ensure slug is unique across both studios and artist pages
   let slug = baseSlug;
   let suffix = 1;
-  while (await db.studio.findUnique({ where: { slug } })) {
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const [studioTaken, artistTaken] = await Promise.all([
+      db.studio.findUnique({ where: { slug }, select: { id: true } }),
+      db.user.findFirst({ where: { artistSlug: slug }, select: { id: true } }),
+    ]);
+    if (!studioTaken && !artistTaken) break;
     slug = `${baseSlug}-${suffix++}`;
   }
 
