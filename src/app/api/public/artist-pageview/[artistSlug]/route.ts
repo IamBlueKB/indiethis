@@ -4,9 +4,10 @@
  * Records a page view for an artist's public page.
  * - Skips if the viewer is the artist (session owner check)
  * - Deduplicates: same hashed IP within 30 minutes = skip
+ * - Stores referrer ("qr" when fan arrived via QR scan)
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
@@ -17,7 +18,7 @@ function hashIp(ip: string): string {
 }
 
 export async function POST(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ artistSlug: string }> }
 ) {
   try {
@@ -38,6 +39,17 @@ export async function POST(
       return NextResponse.json({ ok: true, skipped: "owner" });
     }
 
+    // Parse optional referrer from body
+    let referrer: string | null = null;
+    try {
+      const body = await req.json() as { referrer?: string | null };
+      if (body.referrer && typeof body.referrer === "string") {
+        referrer = body.referrer.slice(0, 32); // cap length
+      }
+    } catch {
+      // body might be empty — that's fine
+    }
+
     // Hash IP
     const headersList = await headers();
     const forwarded   = headersList.get("x-forwarded-for");
@@ -46,7 +58,7 @@ export async function POST(
       : (headersList.get("x-real-ip") ?? "unknown");
     const ipHash = hashIp(ip);
 
-    // 30-minute dedup
+    // 30-minute dedup (same IP, same referrer within window)
     const cutoff = new Date(Date.now() - 30 * 60 * 1000);
     const recent = await db.pageView.findFirst({
       where:  { artistId: artist.id, ipHash, viewedAt: { gte: cutoff } },
@@ -57,7 +69,7 @@ export async function POST(
     }
 
     await db.pageView.create({
-      data: { artistId: artist.id, ipHash },
+      data: { artistId: artist.id, ipHash, referrer },
     });
 
     return NextResponse.json({ ok: true });

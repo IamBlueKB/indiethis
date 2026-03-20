@@ -904,6 +904,7 @@ model PageView {
   artistId String?
   viewedAt DateTime @default(now())
   ipHash   String
+  referrer String?  // "qr" when fan arrives via QR code scan
 
   studio   Studio?  @relation(fields: [studioId], references: [id], onDelete: Cascade)
   artist   User?    @relation("ArtistPageViews", fields: [artistId], references: [id], onDelete: Cascade)
@@ -914,6 +915,7 @@ model PageView {
   @@index([artistId])
   @@index([artistId, viewedAt])
   @@index([artistId, ipHash, viewedAt])
+  @@index([artistId, referrer])
 }
 
 // ─── Artist Track Plays ───────────────────────────────────────────────────────

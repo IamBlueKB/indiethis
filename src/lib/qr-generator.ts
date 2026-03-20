@@ -23,9 +23,15 @@ const ICON_SVG_PATH = path.join(process.cwd(), "public/images/brand/indiethis-ic
  * @param url  The URL to encode
  * @param size Output size in pixels (default 1024)
  */
+/** Append ?ref=qr so scans are tracked as QR-source page views */
+function qrUrl(url: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}ref=qr`;
+}
+
 export async function generateQrPng(url: string, size = 1024): Promise<Buffer> {
   // 1. Render QR code as PNG buffer
-  const qrBuffer = await QRCode.toBuffer(url, {
+  const qrBuffer = await QRCode.toBuffer(qrUrl(url), {
     width:                size,
     margin:               2,
     errorCorrectionLevel: "H",
@@ -74,7 +80,7 @@ export async function generateQrPng(url: string, size = 1024): Promise<Buffer> {
  * @param url The URL to encode
  */
 export async function generateQrSvg(url: string): Promise<string> {
-  const svgString = await QRCode.toString(url, {
+  const svgString = await QRCode.toString(qrUrl(url), {
     type:                 "svg",
     margin:               2,
     errorCorrectionLevel: "H",

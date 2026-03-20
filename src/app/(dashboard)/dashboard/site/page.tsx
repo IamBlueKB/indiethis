@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X, DollarSign, QrCode, Download } from "lucide-react";
+import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X, DollarSign, QrCode } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { useArtistSite, useUpdateSite } from "@/hooks/queries";
 import Link from "next/link";
@@ -535,67 +535,36 @@ export default function ArtistSitePage() {
             )}
           </div>
 
-          {/* QR Code */}
+          {/* QR Code — link to dedicated QR page */}
           {slug && isLive && (
-            <div
-              className="rounded-2xl border p-5 space-y-4"
+            <Link
+              href="/dashboard/qr"
+              className="rounded-2xl border p-4 flex items-center gap-4 no-underline transition-colors hover:bg-white/5"
               style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "rgba(212,168,67,0.10)" }}
-                >
-                  <QrCode size={16} className="text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">QR Code</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Share or print your artist page QR code
-                  </p>
-                </div>
+              {/* Thumbnail */}
+              <div
+                className="w-14 h-14 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
+                style={{ border: "1px solid var(--border)", backgroundColor: "white" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/api/dashboard/qr-code?format=png"
+                  alt="Your QR code"
+                  width={56}
+                  height={56}
+                  onLoad={() => setQrPreviewLoaded(true)}
+                  className={`w-full h-full object-cover transition-opacity ${qrPreviewLoaded ? "opacity-100" : "opacity-0"}`}
+                />
               </div>
-
-              <div className="flex items-center gap-5">
-                {/* Preview */}
-                <div
-                  className="w-20 h-20 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
-                  style={{ border: "1px solid var(--border)", backgroundColor: "white" }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/dashboard/qr-code?format=png`}
-                    alt="Your QR code"
-                    width={80}
-                    height={80}
-                    onLoad={() => setQrPreviewLoaded(true)}
-                    className={`w-full h-full object-cover transition-opacity ${qrPreviewLoaded ? "opacity-100" : "opacity-0"}`}
-                  />
-                </div>
-
-                {/* Download buttons */}
-                <div className="flex flex-col gap-2 flex-1">
-                  <a
-                    href="/api/dashboard/qr-code?format=png&download=1"
-                    download={`${slug}-qr.png`}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors hover:bg-white/5 no-underline"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                  >
-                    <Download size={12} />
-                    Download PNG (1024×1024)
-                  </a>
-                  <a
-                    href="/api/dashboard/qr-code?format=svg&download=1"
-                    download={`${slug}-qr.svg`}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors hover:bg-white/5 no-underline"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                  >
-                    <Download size={12} />
-                    Download SVG
-                  </a>
-                </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">QR Code</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Download PNG &amp; SVG, view scan stats
+                </p>
               </div>
-            </div>
+              <ExternalLink size={14} className="text-muted-foreground shrink-0" />
+            </Link>
           )}
 
           {/* View link */}

@@ -290,13 +290,13 @@ export async function GET() {
     const revenueThis = (revenueThisMerch._sum.artistEarnings ?? 0) + (revenueThisTips._sum.amount ?? 0);
     const revenueLast = (revenueLastMerch._sum.artistEarnings ?? 0) + (revenueLastTips._sum.amount ?? 0);
 
-    // ── Conversion rate (last 30d) ─────────────────────────────────────────
-    const signups30d = await db.fanContact.count({
-      where: { artistId, createdAt: { gte: thirtyDaysAgo } },
-    });
-    const views30d = await db.pageView.count({
-      where: { artistId, viewedAt: { gte: thirtyDaysAgo } },
-    });
+    // ── Conversion rate + QR scans (last 30d) ─────────────────────────────
+    const [signups30d, views30d, qrScansTotal, qrScans30d] = await Promise.all([
+      db.fanContact.count({ where: { artistId, createdAt: { gte: thirtyDaysAgo } } }),
+      db.pageView.count(  { where: { artistId, viewedAt:  { gte: thirtyDaysAgo } } }),
+      db.pageView.count(  { where: { artistId, referrer: "qr" } }),
+      db.pageView.count(  { where: { artistId, referrer: "qr", viewedAt: { gte: thirtyDaysAgo } } }),
+    ]);
 
     return NextResponse.json({
       // Stat cards
@@ -318,6 +318,8 @@ export async function GET() {
       topMerch,
       // Conversion
       conversion: { views30d, signups30d },
+      // QR scans
+      qrScans: { total: qrScansTotal, last30d: qrScans30d },
     });
   } catch (err) {
     console.error("[analytics]", err);
