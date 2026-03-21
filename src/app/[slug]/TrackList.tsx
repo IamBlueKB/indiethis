@@ -10,17 +10,26 @@ import type { DeviceType } from "@/lib/smart-links";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Track = {
-  id: string;
-  title: string;
+type TrackData = {
+  id:          string;
+  title:       string;
   coverArtUrl: string | null;
-  price: number | null;
-  plays: number;
-  fileUrl: string;
+  price:       number | null;
+  plays:       number;
+  fileUrl:     string;
+  releaseId?:  string | null;
+};
+
+type ReleaseData = {
+  id:          string;
+  title:       string;
+  coverUrl:    string | null;
+  releaseDate: string | null;
+  type:        string;
+  tracks:      TrackData[];
 };
 
 // ─── Platform SVG icons ───────────────────────────────────────────────────────
-// Keyed to match StreamingLink["key"] from smart-links.ts
 
 const PLATFORM_ICONS: Record<string, (props: { size: number }) => React.ReactElement> = {
   spotify: ({ size }) => (
@@ -38,64 +47,54 @@ const PLATFORM_ICONS: Record<string, (props: { size: number }) => React.ReactEle
       <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
     </svg>
   ),
-  soundcloud: ({ size }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M1.175 12.225c-.017 0-.034.002-.05.006-.007-.068-.01-.137-.01-.206C1.115 9.5 3.1 7.5 5.6 7.5c.27 0 .536.024.792.07a5.8 5.8 0 015.208-3.25 5.8 5.8 0 015.8 5.8c0 .163-.008.325-.023.484A3.2 3.2 0 0119.2 16.5H1.175a1.175 1.175 0 010-2.35z" />
-    </svg>
-  ),
 };
 
-// ─── Streaming link row (device-aware, with click tracking) ──────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function StreamingLinks({
-  spotifyUrl,
-  appleMusicUrl,
-  youtubeChannel,
-  soundcloudUrl,
-  device,
-  artistSlug,
-  trackId,
-}: {
-  spotifyUrl?: string | null;
-  appleMusicUrl?: string | null;
-  youtubeChannel?: string | null;
-  soundcloudUrl?: string | null;
-  device: DeviceType;
-  artistSlug?: string;
-  trackId?: string;
-}) {
-  const links = buildStreamingLinks(
-    { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl },
-    device,
+function formatDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function NowPlayingBars() {
+  return (
+    <div className="flex items-end gap-[2px]" style={{ width: 13, height: 13 }} aria-hidden>
+      <style>{`
+        @keyframes trackNpBar { 0%,100%{transform:scaleY(0.25)} 50%{transform:scaleY(1)} }
+      `}</style>
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ width: 3, height: "100%", borderRadius: 2, backgroundColor: "currentColor", transformOrigin: "bottom", animation: "trackNpBar 0.75s ease-in-out infinite", animationDelay: `${i * 0.18}s` }} />
+      ))}
+    </div>
   );
+}
 
+// ─── Streaming pills (gray mockup style + smart ordering) ─────────────────────
+
+function StreamingPills({
+  spotifyUrl, appleMusicUrl, youtubeChannel, device, artistSlug, trackId,
+}: {
+  spotifyUrl?: string | null; appleMusicUrl?: string | null;
+  youtubeChannel?: string | null; device: DeviceType;
+  artistSlug?: string; trackId?: string;
+}) {
+  const links = buildStreamingLinks({ spotifyUrl, appleMusicUrl, youtubeChannel }, device);
   if (!links.length) return null;
 
   function handleClick(platform: string) {
     if (!artistSlug) return;
-    fetch("/api/public/artist-linkclick", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ artistSlug, platform, trackId: trackId ?? null }),
-    }).catch(() => {});
+    fetch("/api/public/artist-linkclick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artistSlug, platform, trackId: trackId ?? null }) }).catch(() => {});
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {links.map(({ key, label, href, bg, color }) => {
+    <div className="flex flex-wrap gap-1.5 items-center">
+      {links.map(({ key, label, href }) => {
         const Icon = PLATFORM_ICONS[key];
         return (
-          <a
-            key={key}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => handleClick(key)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold no-underline
-                       transition-all hover:brightness-110 hover:scale-[1.02]"
-            style={{ backgroundColor: bg, color }}
-          >
-            {Icon && <Icon size={11} />}
+          <a key={key} href={href} target="_blank" rel="noopener noreferrer" onClick={() => handleClick(key)}
+            className="inline-flex items-center gap-1 px-2 py-[3px] rounded-[10px] text-[9px] no-underline transition-all hover:bg-white/10"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "#999" }}>
+            {Icon && <Icon size={9} />}
             {label}
           </a>
         );
@@ -104,152 +103,99 @@ function StreamingLinks({
   );
 }
 
-// ─── Now-playing bars (duplicated from InlinePlayer to avoid import coupling) ──
-
-function NowPlayingBars() {
-  return (
-    <div className="flex items-end gap-[2px]" style={{ width: 13, height: 13 }} aria-hidden>
-      <style>{`
-        @keyframes trackNpBar {
-          0%, 100% { transform: scaleY(0.25); }
-          50%       { transform: scaleY(1); }
-        }
-      `}</style>
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          style={{
-            width: 3, height: "100%", borderRadius: 2,
-            backgroundColor: "currentColor", transformOrigin: "bottom",
-            animation: "trackNpBar 0.75s ease-in-out infinite",
-            animationDelay: `${i * 0.18}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 // ─── Follow Gate Modal ────────────────────────────────────────────────────────
 
-function FollowGateModal({
-  track,
-  instagramHandle,
-  onClose,
-}: {
-  track: Track;
-  instagramHandle: string;
-  onClose: () => void;
-}) {
+function FollowGateModal({ track, instagramHandle, onClose }: { track: TrackData; instagramHandle: string; onClose: () => void }) {
   const [followed, setFollowed] = useState(false);
-
   function handleDownload() {
     const a = document.createElement("a");
-    a.href = track.fileUrl;
-    a.download = track.title;
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = track.fileUrl; a.download = track.title; a.target = "_blank";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     onClose();
   }
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.8)" }}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border overflow-hidden"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+      <div className="w-full max-w-sm rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
         <div className="relative px-6 pt-6 pb-4 text-center">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5"
-          >
-            <X size={14} />
-          </button>
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
-            style={{ background: "linear-gradient(135deg, #833AB4, #E1306C, #F77737)" }}
-          >
-            <Instagram size={22} className="text-white" />
-          </div>
+          <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5"><X size={14} /></button>
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg,#833AB4,#E1306C,#F77737)" }}><Instagram size={22} className="text-white" /></div>
           <h2 className="text-base font-bold text-foreground">Free Download</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Follow{" "}
-            <span className="font-semibold text-foreground">@{instagramHandle}</span>{" "}
-            on Instagram to download{" "}
-            <span className="font-semibold text-foreground">{track.title}</span>{" "}
-            for free.
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Follow <span className="font-semibold text-foreground">@{instagramHandle}</span> on Instagram to download <span className="font-semibold text-foreground">{track.title}</span> for free.</p>
         </div>
         <div className="px-6 pb-6 space-y-3">
-          <a
-            href={`https://instagram.com/${instagramHandle}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setFollowed(true)}
+          <a href={`https://instagram.com/${instagramHandle}`} target="_blank" rel="noopener noreferrer" onClick={() => setFollowed(true)}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold no-underline"
-            style={{ background: "linear-gradient(135deg, #833AB4, #E1306C, #F77737)", color: "white" }}
-          >
-            <Instagram size={16} />
-            Follow @{instagramHandle}
-            <ExternalLink size={12} className="opacity-70" />
+            style={{ background: "linear-gradient(135deg,#833AB4,#E1306C,#F77737)", color: "white" }}>
+            <Instagram size={16} /> Follow @{instagramHandle} <ExternalLink size={12} className="opacity-70" />
           </a>
-          <button
-            onClick={handleDownload}
-            disabled={!followed}
+          <button onClick={handleDownload} disabled={!followed}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-40 transition-opacity"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            {followed ? <Check size={15} /> : <Download size={15} />}
-            I Followed — Download Now
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+            {followed ? <Check size={15} /> : <Download size={15} />} I Followed — Download Now
           </button>
-          {!followed && (
-            <p className="text-center text-xs text-muted-foreground">
-              Click &ldquo;Follow&rdquo; first, then download will unlock.
-            </p>
-          )}
+          {!followed && <p className="text-center text-xs text-muted-foreground">Click &ldquo;Follow&rdquo; first, then download will unlock.</p>}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Cover art tile ────────────────────────────────────────────────────────────
+// ─── Numbered track row ────────────────────────────────────────────────────────
 
-function CoverArt({
-  url,
-  size,
-  className = "",
+function TrackRow({
+  track, index, isActive, isPlaying: trackIsPlaying, onPlay, onTip, onDownload, followGateEnabled, instagramHandle,
 }: {
-  url: string | null;
-  size: number;
-  className?: string;
+  track: TrackData; index: number; isActive: boolean; isPlaying: boolean;
+  onPlay: () => void; onTip: () => void; onDownload: () => void;
+  followGateEnabled: boolean; instagramHandle: string | null;
 }) {
   return (
-    <div
-      className={`shrink-0 flex items-center justify-center rounded-xl overflow-hidden ${className}`}
-      style={{
-        width: size,
-        height: size,
-        backgroundImage: url ? `url(${url})` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundColor: "rgba(212,168,67,0.06)",
-      }}
-    >
-      {!url && <Music2 size={size * 0.25} style={{ color: "rgba(212,168,67,0.3)" }} />}
+    <div className="flex items-center gap-2.5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      {/* Number / now-playing */}
+      <div className="w-[18px] shrink-0 text-center text-[11px]" style={{ color: "#666" }}>
+        {isActive && trackIsPlaying ? <NowPlayingBars /> : index + 1}
+      </div>
+
+      {/* Cover */}
+      <button onClick={onPlay} className="shrink-0 relative rounded-[4px] overflow-hidden transition-transform hover:scale-105" style={{ width: 36, height: 36 }}>
+        {track.coverArtUrl
+          ? <img src={track.coverArtUrl} alt="" className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "rgba(212,168,67,0.08)" }}><Music2 size={12} style={{ color: "rgba(212,168,67,0.4)" }} /></div>
+        }
+        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
+          {!isActive && <Play size={10} className="opacity-0 group-hover:opacity-100" style={{ color: "#D4A843", marginLeft: 1 }} />}
+        </div>
+      </button>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-medium text-[#F5F5F5] truncate" style={isActive ? { color: "#D4A843" } : {}}>{track.title}</p>
+        <p className="text-[10px]" style={{ color: "#666" }}>{track.plays.toLocaleString()} plays</p>
+      </div>
+
+      {/* Mini waveform (visual placeholder) */}
+      <div className="shrink-0 rounded-[3px]" style={{ width: 70, height: 18, backgroundColor: isActive ? "rgba(232,93,74,0.3)" : "rgba(212,168,67,0.20)" }} />
+
+      {/* Tip link */}
+      <button onClick={onTip} className="shrink-0 text-[9px] transition-opacity hover:opacity-70" style={{ color: "#D4A843" }}>
+        $ Tip
+      </button>
+
+      {/* Download (if free + gate) */}
+      {followGateEnabled && instagramHandle && track.price === null && (
+        <button onClick={onDownload} className="shrink-0 text-[9px] transition-opacity hover:opacity-70" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <Download size={10} />
+        </button>
+      )}
     </div>
   );
 }
 
-// ─── TrackList ────────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TrackList({
-  tracks,
+  releases = [],
+  looseTracks = [],
   artistName,
   artistSlug,
   followGateEnabled = false,
@@ -257,317 +203,232 @@ export default function TrackList({
   spotifyUrl = null,
   appleMusicUrl = null,
   youtubeChannel = null,
-  soundcloudUrl = null,
 }: {
-  tracks: Track[];
-  artistName?: string;
-  artistSlug?: string;
+  releases:         ReleaseData[];
+  looseTracks:      TrackData[];
+  artistName?:      string;
+  artistSlug?:      string;
   followGateEnabled?: boolean;
-  instagramHandle?: string | null;
-  /** Artist-level streaming links shown on each track */
-  spotifyUrl?: string | null;
-  appleMusicUrl?: string | null;
-  youtubeChannel?: string | null;
-  soundcloudUrl?: string | null;
+  instagramHandle?:   string | null;
+  spotifyUrl?:        string | null;
+  appleMusicUrl?:     string | null;
+  youtubeChannel?:    string | null;
 }) {
-  const currentTrackId = useAudioStore((s) => s.currentTrack?.id);
-  const isPlaying      = useAudioStore((s) => s.isPlaying);
-  const playInContext  = useAudioStore((s) => s.playInContext);
+  const currentId    = useAudioStore((s) => s.currentTrack?.id);
+  const isPlaying    = useAudioStore((s) => s.isPlaying);
+  const playInContext = useAudioStore((s) => s.playInContext);
 
-  const [gateTrack,  setGateTrack]  = useState<Track | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // Device detection — starts as "desktop" (safe SSR default), updates after hydration
-  const [device, setDevice] = useState<DeviceType>("desktop");
+  const [gateTrack,      setGateTrack]      = useState<TrackData | null>(null);
+  const [expandedRelId,  setExpandedRelId]  = useState<string | null>(null);
+  const [device,         setDevice]         = useState<DeviceType>("desktop");
   useEffect(() => { setDevice(detectDevice()); }, []);
 
-  // Build full queue context once — used for all InlinePlayers
-  const audioContext: AudioTrack[] = tracks.map((t) => ({
-    id:       t.id,
-    title:    t.title,
-    artist:   artistName ?? "",
-    src:      t.fileUrl,
-    coverArt: t.coverArtUrl ?? undefined,
+  const hasReleases = releases.length > 0;
+
+  // Build global audio context from all tracks
+  const allTracks: TrackData[] = hasReleases
+    ? [...releases.flatMap((r) => r.tracks), ...looseTracks]
+    : looseTracks;
+
+  const audioContext: AudioTrack[] = allTracks.map((t) => ({
+    id: t.id, title: t.title, artist: artistName ?? "", src: t.fileUrl, coverArt: t.coverArtUrl ?? undefined,
   }));
 
-  const featured   = tracks[0]  ?? null;
-  const rest       = tracks.slice(1);       // up to 9 more (page.tsx already caps at 10)
-
-  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, soundcloudUrl, device, artistSlug };
-
-  function fireTrackPlay(trackId: string) {
+  function firePlay(trackId: string) {
     if (!artistSlug) return;
-    fetch("/api/public/artist-trackplay", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ trackId, artistSlug }),
-    }).catch(() => {});
+    fetch("/api/public/artist-trackplay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trackId, artistSlug }) }).catch(() => {});
   }
 
-  function handleDownload(track: Track) {
+  function playTrack(track: TrackData) {
+    playInContext({ id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }, audioContext);
+    firePlay(track.id);
+  }
+
+  function handleTip() {
+    // Scroll to support section
+    document.getElementById("support")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function handleDownload(track: TrackData) {
     if (followGateEnabled && instagramHandle && track.price === null) {
       setGateTrack(track);
     } else {
       const a = document.createElement("a");
-      a.href = track.fileUrl;
-      a.download = track.title;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a.href = track.fileUrl; a.download = track.title; a.target = "_blank";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }
   }
 
-  function handleSmallCardPlay(track: Track) {
-    playInContext(
-      { id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined },
-      audioContext,
-    );
-    fireTrackPlay(track.id);
-  }
+  const streamingProps = { spotifyUrl, appleMusicUrl, youtubeChannel, device, artistSlug };
 
-  function toggleExpand(id: string) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  if (allTracks.length === 0) return null;
 
-  if (!featured) return null;
+  // ── MODE A: Release-based ──────────────────────────────────────────────────
+  if (hasReleases) {
+    const featured      = releases[0];
+    const otherReleases = releases.slice(1);
 
-  // ── Featured track audio object ──────────────────────────────────────────
-  const featuredAudio: AudioTrack = {
-    id:       featured.id,
-    title:    featured.title,
-    artist:   artistName ?? "",
-    src:      featured.fileUrl,
-    coverArt: featured.coverArtUrl ?? undefined,
-  };
+    const featuredAudio: AudioTrack = featured.tracks[0]
+      ? { id: featured.tracks[0].id, title: featured.title, artist: artistName ?? "", src: featured.tracks[0].fileUrl, coverArt: featured.coverUrl ?? undefined }
+      : null!;
 
-  return (
-    <section className="space-y-5">
+    return (
+      <section className="space-y-0">
+        {/* Section labels */}
+        <div style={{ fontSize: 10, color: "#D4A843", letterSpacing: "1.5px", marginBottom: 5 }}>LATEST RELEASE</div>
+        <h2 style={{ fontSize: 18, fontWeight: 600, color: "#F5F5F5", marginBottom: 12, letterSpacing: "-0.5px" }}>Music</h2>
 
-      {/* ── Section label ──────────────────────────────────────────────────── */}
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">Music</h2>
-
-      {/* ── Featured release card ──────────────────────────────────────────── */}
-      <div
-        className="rounded-2xl border overflow-hidden"
-        style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.03)" }}
-      >
-        <div className="flex flex-col sm:flex-row">
-
+        {/* Featured release card */}
+        <div className="rounded-[10px] flex gap-3.5 mb-3" style={{ backgroundColor: "#111", padding: 14 }}>
           {/* Cover art */}
-          <div
-            className="sm:w-48 sm:h-48 w-full aspect-square sm:aspect-auto shrink-0 flex items-center justify-center"
-            style={{
-              backgroundImage:    featured.coverArtUrl ? `url(${featured.coverArtUrl})` : undefined,
-              backgroundSize:     "cover",
-              backgroundPosition: "center",
-              backgroundColor:    "rgba(212,168,67,0.06)",
-            }}
-          >
-            {!featured.coverArtUrl && (
-              <Music2 size={40} style={{ color: "rgba(212,168,67,0.3)" }} />
-            )}
+          <div className="shrink-0 rounded-[8px] overflow-hidden flex items-center justify-center" style={{ width: 100, height: 100, backgroundColor: "rgba(212,168,67,0.06)" }}>
+            {featured.coverUrl
+              ? <img src={featured.coverUrl} alt="" className="w-full h-full object-cover" />
+              : <Music2 size={24} style={{ color: "rgba(212,168,67,0.3)" }} />
+            }
           </div>
 
-          {/* Right: title + player + links */}
-          <div className="flex-1 px-5 py-5 flex flex-col justify-between gap-4">
-
-            {/* Label + title + plays */}
+          {/* Info column */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-1 text-white/40">
-                Latest Release
-              </p>
-              <h3
-                className="font-bold text-white leading-tight"
-                style={{ fontSize: "clamp(1rem, 2.5vw, 1.25rem)" }}
-              >
-                {featured.title}
-              </h3>
-              <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-                {featured.plays.toLocaleString()} plays
+              <p className="font-semibold text-[15px] text-[#F5F5F5] leading-tight">{featured.title}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: "#666" }}>
+                {featured.type} {featured.releaseDate ? `· ${formatDate(featured.releaseDate)}` : ""}
               </p>
             </div>
 
             {/* Waveform player */}
-            <InlinePlayer
-              track={featuredAudio}
-              context={audioContext}
-              onPlay={() => fireTrackPlay(featured.id)}
-            />
+            {featuredAudio && (
+              <div className="my-2">
+                <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => featured.tracks[0] && firePlay(featured.tracks[0].id)} />
+              </div>
+            )}
 
-            {/* Streaming + download row */}
-            <div className="flex flex-wrap items-center gap-2">
-              <StreamingLinks {...streamingProps} trackId={featured.id} />
-              {followGateEnabled && instagramHandle && featured.price === null && (
-                <button
-                  onClick={() => handleDownload(featured)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all hover:bg-white/5"
-                  style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)" }}
-                >
-                  <Download size={11} />
-                  Free DL
-                </button>
-              )}
+            {/* Streaming pills + tip */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <StreamingPills {...streamingProps} trackId={featured.tracks[0]?.id} />
+              <button onClick={handleTip} className="ml-auto text-[9px] transition-opacity hover:opacity-70" style={{ color: "#D4A843" }}>$ Tip</button>
             </div>
+          </div>
+        </div>
+
+        {/* Track rows for featured release */}
+        <div>
+          {featured.tracks.slice(0, 10).map((track, i) => (
+            <TrackRow
+              key={track.id} track={track} index={i}
+              isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
+              onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => handleDownload(track)}
+              followGateEnabled={followGateEnabled} instagramHandle={instagramHandle}
+            />
+          ))}
+        </div>
+
+        {/* Other releases — horizontal scroll */}
+        {otherReleases.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <p className="text-[11px] font-semibold text-[#F5F5F5]">More Releases</p>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              {otherReleases.map((rel) => {
+                const isExp = expandedRelId === rel.id;
+                return (
+                  <div key={rel.id} className="shrink-0 cursor-pointer" style={{ width: 90 }} onClick={() => setExpandedRelId(isExp ? null : rel.id)}>
+                    <div className="relative rounded-[6px] overflow-hidden" style={{ width: 90, height: 90 }}>
+                      {rel.coverUrl
+                        ? <img src={rel.coverUrl} alt="" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "rgba(212,168,67,0.08)" }}><Music2 size={20} style={{ color: "rgba(212,168,67,0.3)" }} /></div>
+                      }
+                      <div className="absolute inset-0 bg-black/30 flex items-end p-1.5">
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.8)", color: "#0A0A0A" }}>{rel.type}</span>
+                      </div>
+                      {isExp && <div className="absolute inset-0" style={{ border: "2px solid #D4A843", borderRadius: 6 }} />}
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-[10px] text-[#F5F5F5] truncate flex-1">{rel.title}</p>
+                      {isExp ? <ChevronUp size={10} style={{ color: "#D4A843" }} /> : <ChevronDown size={10} style={{ color: "#666" }} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Expanded release track rows */}
+            {expandedRelId && (() => {
+              const rel = otherReleases.find((r) => r.id === expandedRelId);
+              if (!rel) return null;
+              return (
+                <div className="rounded-[10px] p-4" style={{ backgroundColor: "#111" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[13px] font-semibold text-[#F5F5F5]">{rel.title}</p>
+                    <button onClick={() => setExpandedRelId(null)} className="p-1 rounded hover:bg-white/5"><X size={12} style={{ color: "#666" }} /></button>
+                  </div>
+                  {rel.tracks.slice(0, 10).map((track, i) => (
+                    <TrackRow key={track.id} track={track} index={i}
+                      isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
+                      onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => handleDownload(track)}
+                      followGateEnabled={followGateEnabled} instagramHandle={instagramHandle}
+                    />
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Follow gate modal */}
+        {gateTrack && instagramHandle && (
+          <FollowGateModal track={gateTrack} instagramHandle={instagramHandle} onClose={() => setGateTrack(null)} />
+        )}
+      </section>
+    );
+  }
+
+  // ── MODE B: Flat list (no releases) ───────────────────────────────────────
+  const featured = looseTracks[0];
+  const rest     = looseTracks.slice(1);
+  if (!featured) return null;
+
+  const featuredAudio: AudioTrack = { id: featured.id, title: featured.title, artist: artistName ?? "", src: featured.fileUrl, coverArt: featured.coverArtUrl ?? undefined };
+
+  return (
+    <section className="space-y-0">
+      <div style={{ fontSize: 10, color: "#D4A843", letterSpacing: "1.5px", marginBottom: 5 }}>LATEST RELEASE</div>
+      <h2 style={{ fontSize: 18, fontWeight: 600, color: "#F5F5F5", marginBottom: 12, letterSpacing: "-0.5px" }}>Music</h2>
+
+      {/* Featured track card */}
+      <div className="rounded-[10px] flex gap-3.5 mb-3" style={{ backgroundColor: "#111", padding: 14 }}>
+        <div className="shrink-0 rounded-[8px] overflow-hidden flex items-center justify-center" style={{ width: 100, height: 100, backgroundColor: "rgba(212,168,67,0.06)" }}>
+          {featured.coverArtUrl
+            ? <img src={featured.coverArtUrl} alt="" className="w-full h-full object-cover" />
+            : <Music2 size={24} style={{ color: "rgba(212,168,67,0.3)" }} />
+          }
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-between">
+          <div>
+            <p className="font-semibold text-[15px] text-[#F5F5F5] leading-tight">{featured.title}</p>
+            <p className="text-[10px] mt-0.5" style={{ color: "#666" }}>{featured.plays.toLocaleString()} plays</p>
+          </div>
+          <div className="my-2">
+            <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => firePlay(featured.id)} />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <StreamingPills {...streamingProps} trackId={featured.id} />
+            <button onClick={handleTip} className="ml-auto text-[9px] transition-opacity hover:opacity-70" style={{ color: "#D4A843" }}>$ Tip</button>
           </div>
         </div>
       </div>
 
-      {/* ── Horizontal scroll row (remaining tracks) ────────────────────────── */}
-      {rest.length > 0 && (
-        <div className="space-y-3">
-
-          {/* Scroll container */}
-          <div
-            className="flex gap-3 overflow-x-auto pb-1"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {rest.map((track) => {
-              const isActive   = currentTrackId === track.id;
-              const isThisPlaying = isActive && isPlaying;
-              const isExpanded = expandedId === track.id;
-
-              return (
-                <div key={track.id} className="shrink-0" style={{ width: 120 }}>
-
-                  {/* Card */}
-                  <div
-                    className="relative rounded-xl overflow-hidden cursor-pointer group transition-transform hover:scale-[1.02]"
-                    style={{ width: 120, height: 120 }}
-                    onClick={() => toggleExpand(track.id)}
-                  >
-                    {/* Cover art */}
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        backgroundImage:    track.coverArtUrl ? `url(${track.coverArtUrl})` : undefined,
-                        backgroundSize:     "cover",
-                        backgroundPosition: "center",
-                        backgroundColor:    "rgba(212,168,67,0.06)",
-                      }}
-                    />
-                    {!track.coverArtUrl && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Music2 size={28} style={{ color: "rgba(212,168,67,0.3)" }} />
-                      </div>
-                    )}
-
-                    {/* Dark overlay */}
-                    <div
-                      className="absolute inset-0"
-                      style={{ backgroundColor: isExpanded ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.35)" }}
-                    />
-
-                    {/* Play button (center) */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleSmallCardPlay(track); }}
-                        className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-                        style={{
-                          backgroundColor: isActive ? "#D4A843" : "rgba(212,168,67,0.85)",
-                          color: "#0A0A0A",
-                        }}
-                        aria-label={isThisPlaying ? "Pause" : `Play ${track.title}`}
-                      >
-                        {isThisPlaying ? <NowPlayingBars /> : <Play size={14} style={{ marginLeft: 2 }} />}
-                      </button>
-                    </div>
-
-                    {/* Expand indicator (bottom-right) */}
-                    <div className="absolute bottom-2 right-2 opacity-60">
-                      {isExpanded
-                        ? <ChevronUp size={12} style={{ color: "#D4A843" }} />
-                        : <ChevronDown size={12} style={{ color: "rgba(255,255,255,0.6)" }} />
-                      }
-                    </div>
-
-                    {/* Active border */}
-                    {isActive && (
-                      <div
-                        className="absolute inset-0 rounded-xl pointer-events-none"
-                        style={{ border: "2px solid rgba(212,168,67,0.6)" }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Title */}
-                  <p
-                    className="text-xs font-medium mt-2 truncate"
-                    style={{ color: isActive ? "#D4A843" : "rgba(255,255,255,0.7)" }}
-                    title={track.title}
-                  >
-                    {track.title}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Expanded panel ────────────────────────────────────────────────── */}
-          {expandedId && (() => {
-            const track = rest.find((t) => t.id === expandedId);
-            if (!track) return null;
-            const trackAudio: AudioTrack = {
-              id:       track.id,
-              title:    track.title,
-              artist:   artistName ?? "",
-              src:      track.fileUrl,
-              coverArt: track.coverArtUrl ?? undefined,
-            };
-            return (
-              <div
-                className="rounded-2xl border px-4 py-4 space-y-3 transition-all"
-                style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.03)" }}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <CoverArt url={track.coverArtUrl} size={40} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{track.title}</p>
-                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                        {track.plays.toLocaleString()} plays
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setExpandedId(null)}
-                    className="shrink-0 p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-white/70 transition-colors"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-
-                {/* Waveform player */}
-                <InlinePlayer track={trackAudio} context={audioContext} />
-
-                {/* Streaming + download */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <StreamingLinks {...streamingProps} />
-                  {followGateEnabled && instagramHandle && track.price === null && (
-                    <button
-                      onClick={() => handleDownload(track)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all hover:bg-white/5"
-                      style={{ borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)" }}
-                    >
-                      <Download size={11} />
-                      Free DL
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Follow gate modal */}
-      {gateTrack && instagramHandle && (
-        <FollowGateModal
-          track={gateTrack}
-          instagramHandle={instagramHandle}
-          onClose={() => setGateTrack(null)}
+      {/* Track rows */}
+      {rest.map((track, i) => (
+        <TrackRow key={track.id} track={track} index={i + 1}
+          isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
+          onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => handleDownload(track)}
+          followGateEnabled={followGateEnabled} instagramHandle={instagramHandle}
         />
+      ))}
+
+      {gateTrack && instagramHandle && (
+        <FollowGateModal track={gateTrack} instagramHandle={instagramHandle} onClose={() => setGateTrack(null)} />
       )}
     </section>
   );
