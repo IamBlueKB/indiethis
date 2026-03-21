@@ -64,7 +64,7 @@ export async function GET() {
 
   const previews = await db.beatPreview.findMany({
     where: { producerId: session.user.id },
-    include: { track: { select: { title: true, coverArtUrl: true } } },
+    include: { track: { select: { title: true, coverArtUrl: true, bpm: true, musicalKey: true } } },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

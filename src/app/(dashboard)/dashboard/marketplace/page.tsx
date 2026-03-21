@@ -20,6 +20,8 @@ type BeatPreview = {
     coverArtUrl: string | null;
     price: number | null;
     projectName: string | null;
+    bpm: number | null;
+    musicalKey: string | null;
   };
   producer: { displayName: string };
 };
@@ -33,6 +35,8 @@ type BrowseTrack = {
   price: number | null;
   projectName: string | null;
   plays: number;
+  bpm: number | null;
+  musicalKey: string | null;
   createdAt: string;
   /** True when the current user holds an active BeatLicense for this track. */
   isOwned: boolean;
@@ -214,6 +218,19 @@ function MyPreviews() {
               <p className="text-sm font-bold text-foreground truncate">{p.track.title}</p>
               <p className="text-xs text-muted-foreground">by {p.producer.displayName}</p>
               {p.track.projectName && <p className="text-xs text-muted-foreground">{p.track.projectName}</p>}
+              {(p.track.bpm != null || p.track.musicalKey) && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {p.track.bpm != null && (
+                    <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{p.track.bpm} BPM</span>
+                  )}
+                  {p.track.bpm != null && p.track.musicalKey && (
+                    <span className="text-[11px] text-muted-foreground/40">·</span>
+                  )}
+                  {p.track.musicalKey && (
+                    <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{p.track.musicalKey}</span>
+                  )}
+                </div>
+              )}
               {/* Beat player — shown unless expired-and-unpurchased */}
               {effectiveStatus !== "EXPIRED" && (
                 <BeatPreviewPlayer
@@ -493,6 +510,19 @@ function BrowseBeats() {
                   </div>
                   {t.plays > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>
+                  )}
+                  {(t.bpm != null || t.musicalKey) && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {t.bpm != null && (
+                        <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{t.bpm} BPM</span>
+                      )}
+                      {t.bpm != null && t.musicalKey && (
+                        <span className="text-[11px] text-muted-foreground/40">·</span>
+                      )}
+                      {t.musicalKey && (
+                        <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{t.musicalKey}</span>
+                      )}
+                    </div>
                   )}
                   {/* BeatPreviewPlayer: watermark + Preview badge if not owned;
                       full quality + Owned badge if licensed */}

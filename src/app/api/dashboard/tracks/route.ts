@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { detectAudioFeatures } from "@/lib/audio-analysis";
 
 export async function GET() {
   const session = await auth();
@@ -43,6 +44,18 @@ export async function POST(req: NextRequest) {
       description: body.description?.trim() ?? null,
     },
   });
+
+  // Kick off audio analysis in the background — don't block the response
+  const fileUrl = body.fileUrl.trim();
+  const trackId = track.id;
+  void detectAudioFeatures(fileUrl).then(({ bpm, musicalKey }) => {
+    if (bpm !== null || musicalKey !== null) {
+      return db.track.update({
+        where: { id: trackId },
+        data: { bpm, musicalKey },
+      });
+    }
+  }).catch(() => { /* silent — analysis is best-effort */ });
 
   return NextResponse.json({ track }, { status: 201 });
 }

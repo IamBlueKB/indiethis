@@ -14,7 +14,17 @@ export async function GET() {
   const submissions = await db.intakeSubmission.findMany({
     where: { studioId: studio.id },
     orderBy: { createdAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      artistName: true,
+      genre: true,
+      projectDesc: true,
+      youtubeLinks: true,
+      fileUrls: true,
+      notes: true,
+      bpmDetected: true,
+      keyDetected: true,
+      createdAt: true,
       intakeLink: { select: { name: true, email: true } },
       contact: { select: { id: true, name: true } },
     },

@@ -528,6 +528,8 @@ model Track {
   earnings    Float       @default(0)
   projectName String?
   releaseId   String?
+  bpm         Int?
+  musicalKey  String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

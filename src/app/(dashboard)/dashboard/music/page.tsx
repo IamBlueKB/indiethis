@@ -22,6 +22,8 @@ type Track = {
   description: string | null;
   plays: number;
   downloads: number;
+  bpm: number | null;
+  musicalKey: string | null;
   createdAt: string;
 };
 
@@ -294,6 +296,22 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
             <Play size={8} fill="currentColor" strokeWidth={0} />
             {track.plays.toLocaleString()} plays
           </span>
+          {track.bpm != null && (
+            <>
+              <span className="text-[11px] text-muted-foreground">·</span>
+              <span className="flex items-center gap-0.5 text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+                <Zap size={8} />{track.bpm}
+              </span>
+            </>
+          )}
+          {track.musicalKey && (
+            <>
+              <span className="text-[11px] text-muted-foreground">·</span>
+              <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+                {track.musicalKey}
+              </span>
+            </>
+          )}
         </div>
       </div>
 

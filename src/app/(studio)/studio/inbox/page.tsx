@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Inbox, FileText, Music2, Youtube, ChevronDown, ChevronUp, ExternalLink, Trash2, CalendarClock, Mail, Phone } from "lucide-react";
+import { Inbox, FileText, Music2, Youtube, ChevronDown, ChevronUp, ExternalLink, Trash2, CalendarClock, Mail, Phone, Zap } from "lucide-react";
 
 type Submission = {
   id: string;
@@ -11,6 +11,8 @@ type Submission = {
   youtubeLinks: string[];
   fileUrls: string[];
   notes: string | null;
+  bpmDetected: number | null;
+  keyDetected: string | null;
   createdAt: string;
   intakeLink: { name: string; email: string };
   contact: { id: string; name: string } | null;
@@ -270,6 +272,20 @@ export default function StudioInboxPage() {
                               <FileText size={12} />{url.split("/").pop() ?? `File ${i + 1}`}
                             </a>
                           ))}
+                        </div>
+                      )}
+                      {(s.bpmDetected != null || s.keyDetected) && (
+                        <div className="flex items-center gap-2">
+                          {s.bpmDetected != null && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold" style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}>
+                              <Zap size={10} />{s.bpmDetected} BPM
+                            </span>
+                          )}
+                          {s.keyDetected && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold" style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}>
+                              ♪ {s.keyDetected}
+                            </span>
+                          )}
                         </div>
                       )}
                       {s.notes && (

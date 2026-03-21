@@ -30,6 +30,8 @@ export async function GET() {
         price: true,
         projectName: true,
         plays: true,
+        bpm: true,
+        musicalKey: true,
         createdAt: true,
         artist: {
           select: {
