@@ -60,11 +60,10 @@ export default function PreSaveCampaignCard({
 }: PreSaveCampaignCardProps) {
   const release = new Date(releaseDate);
 
-  const [timeLeft, setTimeLeft] = useState<ReturnType<typeof getTimeLeft>>(
-    () => getTimeLeft(release)
-  );
+  const [timeLeft, setTimeLeft] = useState<ReturnType<typeof getTimeLeft>>(null);
 
   useEffect(() => {
+    setTimeLeft(getTimeLeft(release));
     const id = setInterval(() => setTimeLeft(getTimeLeft(release)), 1000);
     return () => clearInterval(id);
   }, [releaseDate]); // eslint-disable-line react-hooks/exhaustive-deps
