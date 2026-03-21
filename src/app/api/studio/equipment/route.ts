@@ -11,8 +11,8 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const studio = await getStudio(session.user.id);
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
-  const credits = await db.studioCredit.findMany({ where: { studioId: studio.id }, orderBy: { sortOrder: "asc" } });
-  return NextResponse.json({ credits });
+  const equipment = await db.studioEquipment.findMany({ where: { studioId: studio.id }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }] });
+  return NextResponse.json({ equipment });
 }
 
 export async function POST(req: NextRequest) {
@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
   const studio = await getStudio(session.user.id);
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
   const body = await req.json();
-  const { artistName, artistPhotoUrl, projectName, artistSlug, sortOrder } = body;
-  if (!artistName) return NextResponse.json({ error: "artistName is required" }, { status: 400 });
-  const credit = await db.studioCredit.create({ data: { studioId: studio.id, artistName, artistPhotoUrl: artistPhotoUrl ?? null, projectName: projectName ?? null, artistSlug: artistSlug ?? null, sortOrder: sortOrder ?? 0 } });
-  return NextResponse.json({ credit }, { status: 201 });
+  const { category, name, sortOrder } = body;
+  if (!name || !category) return NextResponse.json({ error: "name and category are required" }, { status: 400 });
+  const item = await db.studioEquipment.create({ data: { studioId: studio.id, category, name, sortOrder: sortOrder ?? 0 } });
+  return NextResponse.json({ item }, { status: 201 });
 }

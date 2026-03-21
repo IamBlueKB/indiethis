@@ -21,6 +21,9 @@ import {
   ExternalLink,
   Wand2,
   Gift,
+  Music,
+  UserCheck,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -46,6 +49,10 @@ const navItems: NavItem[] = [
   { label: "Credits", href: "/studio/credits", icon: Gift },
   { label: "Settings", href: "/studio/settings", icon: Settings },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
+  { label: "Portfolio", href: "/studio/settings/portfolio", icon: Music },
+  { label: "Who Records Here", href: "/studio/settings/credits", icon: Users },
+  { label: "Engineers", href: "/studio/settings/engineers", icon: UserCheck },
+  { label: "Equipment", href: "/studio/settings/equipment", icon: Cpu },
 ];
 
 export default function StudioSidebar() {

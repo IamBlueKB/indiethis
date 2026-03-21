@@ -58,6 +58,10 @@ const EDITOR_SECTIONS = [
   { key: "contact",    label: "Contact" },
   { key: "socials",    label: "Social Links" },
   { key: "design",     label: "Design" },
+  { key: "portfolio",  label: "Portfolio" },
+  { key: "credits",    label: "Notable Artists" },
+  { key: "engineers",  label: "Engineers" },
+  { key: "equipment",  label: "Equipment" },
 ] as const;
 
 const INPUT = "w-full rounded-xl border px-4 py-2.5 text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/40";
@@ -415,6 +419,54 @@ function SectionEditPanel({
         </Field>
       </div>
     ),
+    portfolio: (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Show audio tracks mixed or mastered at your studio. Displays in a waveform player row under the "Hear Our Work" section.
+        </p>
+        <a href="/studio/settings/portfolio"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-center transition-opacity hover:opacity-90 no-underline"
+          style={{ backgroundColor: "var(--accent)", color: "#0A0A0A", display: "block", textAlign: "center" }}>
+          Manage Portfolio Tracks
+        </a>
+      </div>
+    ),
+    credits: (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Showcase artists who record at your studio. Shown as circular avatars in the "Who Records Here" section.
+        </p>
+        <a href="/studio/settings/credits"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-center transition-opacity hover:opacity-90 no-underline"
+          style={{ backgroundColor: "var(--accent)", color: "#0A0A0A", display: "block", textAlign: "center" }}>
+          Manage Notable Artists
+        </a>
+      </div>
+    ),
+    engineers: (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Show your engineering team with photos, roles, and specialties. Displayed as cards in the "Our Engineers" section.
+        </p>
+        <a href="/studio/settings/engineers"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-center transition-opacity hover:opacity-90 no-underline"
+          style={{ backgroundColor: "var(--accent)", color: "#0A0A0A", display: "block", textAlign: "center" }}>
+          Manage Engineers
+        </a>
+      </div>
+    ),
+    equipment: (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          List your studio gear by category (consoles, microphones, monitors, etc.). Shown as collapsible groups in the "Equipment" section.
+        </p>
+        <a href="/studio/settings/equipment"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-center transition-opacity hover:opacity-90 no-underline"
+          style={{ backgroundColor: "var(--accent)", color: "#0A0A0A", display: "block", textAlign: "center" }}>
+          Manage Equipment
+        </a>
+      </div>
+    ),
   };
 
   return (
@@ -453,7 +505,7 @@ function SectionEditPanel({
         )}
       </div>
 
-      {sectionKey !== "ai-sections" && (
+      {!["ai-sections", "portfolio", "credits", "engineers", "equipment"].includes(sectionKey) && (
         <div className="p-4 border-t shrink-0" style={{ borderColor: "var(--border)" }}>
           <button onClick={onSave} disabled={saving}
             className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"

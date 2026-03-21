@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Instagram, Twitter, Facebook, Youtube, Music2, ChevronLeft, ChevronRight } from "lucide-react";
+import { PortfolioSection, type PortfolioTrack } from "@/components/studio-public/sections/PortfolioSection";
+import { CreditsSection, type StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
+import { EngineersSection, type StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
+import { EquipmentSection, type EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BG      = "#0A0A0A";
@@ -24,6 +28,10 @@ type Studio = {
 interface Props {
   studio: Studio; services: ServiceItem[]; testimonials: Testimonial[];
   fullAddress: string; mapQuery: string; socials: Social[];
+  portfolioTracks?: PortfolioTrack[];
+  credits?: StudioCreditItem[];
+  engineers?: StudioEngineerItem[];
+  equipment?: EquipmentItem[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -201,7 +209,7 @@ function ParallaxHero({ studio, accent }: { studio: Studio; accent: string }) {
 }
 
 // ── Main Template ──────────────────────────────────────────────────────────────
-export function CinematicTemplate({ studio, services, testimonials, fullAddress, mapQuery, socials }: Props) {
+export function CinematicTemplate({ studio, services, testimonials, fullAddress, mapQuery, socials, portfolioTracks = [], credits = [], engineers = [], equipment = [] }: Props) {
   const { slug } = studio;
   const accent = studio.accentColor ?? "#D4A843";
   const gallery: string[] = Array.isArray(studio.galleryImages) ? studio.galleryImages as string[] : [];
@@ -279,6 +287,33 @@ export function CinematicTemplate({ studio, services, testimonials, fullAddress,
         </section>
       )}
 
+      {/* ── PORTFOLIO ────────────────────────────────────────────────────── */}
+      {portfolioTracks.length > 0 && (
+        <section style={{ backgroundColor: OFF, padding: "7rem 2rem" }}>
+          <div style={{ maxWidth: "860px", margin: "0 auto" }}>
+            <PortfolioSection tracks={portfolioTracks} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
+      {/* ── CREDITS ──────────────────────────────────────────────────────── */}
+      {credits.length > 0 && (
+        <section style={{ backgroundColor: BG, padding: "7rem 2rem" }}>
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <CreditsSection credits={credits} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
+      {/* ── ENGINEERS ────────────────────────────────────────────────────── */}
+      {engineers.length > 0 && (
+        <section style={{ backgroundColor: OFF, padding: "7rem 2rem" }}>
+          <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+            <EngineersSection engineers={engineers} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
       {/* ── GALLERY — horizontal carousel ────────────────────────────────── */}
       {gallery.length > 0 && (
         <section id="gallery" style={{ backgroundColor: BG, padding: "5rem 0" }}>
@@ -350,6 +385,15 @@ export function CinematicTemplate({ studio, services, testimonials, fullAddress,
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── EQUIPMENT ────────────────────────────────────────────────────── */}
+      {equipment.length > 0 && (
+        <section style={{ backgroundColor: BG, padding: "7rem 2rem" }}>
+          <div style={{ maxWidth: "860px", margin: "0 auto" }}>
+            <EquipmentSection equipment={equipment} accent={accent} dark />
           </div>
         </section>
       )}

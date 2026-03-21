@@ -125,6 +125,17 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Studio portfolio audio tracks — studio admin only
+  studioAudio: f({ audio: { maxFileSize: "256MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Studio file delivery
   deliveryFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 20 },

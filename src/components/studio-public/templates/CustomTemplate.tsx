@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { MapPin, Phone, Mail, Clock, Instagram, Youtube, Twitter, Facebook } from "lucide-react";
+import { PortfolioSection, type PortfolioTrack } from "@/components/studio-public/sections/PortfolioSection";
+import { CreditsSection, type StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
+import { EngineersSection, type StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
+import { EquipmentSection, type EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -192,6 +196,10 @@ interface CustomTemplateProps {
   fullAddress: string;
   mapQuery: string;
   socials: { label: string; href: string }[];
+  portfolioTracks?: PortfolioTrack[];
+  credits?: StudioCreditItem[];
+  engineers?: StudioEngineerItem[];
+  equipment?: EquipmentItem[];
 }
 
 export function CustomTemplate({
@@ -202,6 +210,10 @@ export function CustomTemplate({
   fullAddress,
   mapQuery,
   socials,
+  portfolioTracks = [],
+  credits = [],
+  engineers = [],
+  equipment = [],
 }: CustomTemplateProps) {
   const slug = studio.slug as string;
 
@@ -405,6 +417,33 @@ export function CustomTemplate({
         </div>
       </section>
 
+      {/* ── PORTFOLIO ────────────────────────────────────────────────────── */}
+      {portfolioTracks.length > 0 && (
+        <section className="py-28 px-6" style={{ backgroundColor: "#0d0d0d" }}>
+          <div className="max-w-4xl mx-auto">
+            <PortfolioSection tracks={portfolioTracks} accent={GOLD} dark />
+          </div>
+        </section>
+      )}
+
+      {/* ── CREDITS ──────────────────────────────────────────────────────── */}
+      {credits.length > 0 && (
+        <section className="py-28 px-6" style={{ backgroundColor: BG }}>
+          <div className="max-w-5xl mx-auto">
+            <CreditsSection credits={credits} accent={GOLD} dark />
+          </div>
+        </section>
+      )}
+
+      {/* ── ENGINEERS ────────────────────────────────────────────────────── */}
+      {engineers.length > 0 && (
+        <section className="py-28 px-6" style={{ backgroundColor: "#0d0d0d" }}>
+          <div className="max-w-5xl mx-auto">
+            <EngineersSection engineers={engineers} accent={GOLD} dark />
+          </div>
+        </section>
+      )}
+
       {/* ── GALLERY ───────────────────────────────────────────────────────── */}
       {galleryImages.length > 0 && (
         <section className="py-28 px-6" style={{ backgroundColor: "#0d0d0d" }}>
@@ -539,6 +578,15 @@ export function CustomTemplate({
                 )}
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* ── EQUIPMENT ────────────────────────────────────────────────────── */}
+      {equipment.length > 0 && (
+        <section className="py-28 px-6" style={{ backgroundColor: BG }}>
+          <div className="max-w-4xl mx-auto">
+            <EquipmentSection equipment={equipment} accent={GOLD} dark />
           </div>
         </section>
       )}

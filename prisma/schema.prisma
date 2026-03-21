@@ -184,6 +184,15 @@ enum StudioTemplate {
   GRID
 }
 
+enum EquipmentCategory {
+  CONSOLE
+  MONITORS
+  MICROPHONES
+  OUTBOARD
+  DAW
+  OTHER
+}
+
 enum ModerationStatus {
   CLEAN
   FLAGGED
@@ -448,6 +457,10 @@ model Studio {
   generationLogs     GenerationLog[]
   pageViews          PageView[]
   scheduledEmails    ScheduledEmail[]
+  portfolioTracks    StudioPortfolioTrack[]
+  credits            StudioCredit[]
+  engineers          StudioEngineer[]
+  equipment          StudioEquipment[]
 }
 
 model StudioArtist {
@@ -1439,4 +1452,74 @@ model ArtistPressItem {
   artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId])
+}
+
+// ─── Studio Portfolio Tracks ──────────────────────────────────────────────────
+
+model StudioPortfolioTrack {
+  id          String   @id @default(cuid())
+  studioId    String
+  title       String
+  artistName  String
+  audioUrl    String
+  coverUrl    String?
+  description String?
+  artistSlug  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+// ─── Studio Credits ───────────────────────────────────────────────────────────
+
+model StudioCredit {
+  id             String   @id @default(cuid())
+  studioId       String
+  artistName     String
+  artistPhotoUrl String?
+  projectName    String?
+  artistSlug     String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  studio         Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+// ─── Studio Engineers ─────────────────────────────────────────────────────────
+
+model StudioEngineer {
+  id          String   @id @default(cuid())
+  studioId    String
+  name        String
+  role        String
+  photoUrl    String?
+  specialties String[]
+  bio         String?
+  artistSlug  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+// ─── Studio Equipment ─────────────────────────────────────────────────────────
+
+model StudioEquipment {
+  id        String            @id @default(cuid())
+  studioId  String
+  category  EquipmentCategory @default(OTHER)
+  name      String
+  sortOrder Int               @default(0)
+  createdAt DateTime          @default(now())
+
+  studio    Studio            @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
 }

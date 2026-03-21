@@ -24,6 +24,10 @@ import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTem
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
 import { CinematicTemplate } from "@/components/studio-public/templates/CinematicTemplate";
 import { GridTemplate } from "@/components/studio-public/templates/GridTemplate";
+import type { PortfolioTrack } from "@/components/studio-public/sections/PortfolioSection";
+import type { StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
+import type { StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
+import type { EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
 import { ConfigRenderer } from "@/components/studio-public/ConfigRenderer";
 import type { PageConfig } from "@/types/page-config";
 import PageViewTracker from "@/components/studio/PageViewTracker";
@@ -345,6 +349,10 @@ export default async function SlugPage({
           },
         },
       },
+      portfolioTracks: { orderBy: { sortOrder: "asc" }, take: 6 },
+      credits:         { orderBy: { sortOrder: "asc" }, take: 12 },
+      engineers:       { orderBy: { sortOrder: "asc" }, take: 6 },
+      equipment:       { orderBy: [{ category: "asc" }, { sortOrder: "asc" }] },
     },
   });
 
@@ -384,7 +392,23 @@ export default async function SlugPage({
     ].filter(Boolean) as { label: string; href: string }[];
 
     const galleryImages: string[] = Array.isArray(studio.galleryImages) ? studio.galleryImages as string[] : [];
-    const templateProps = { studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages };
+
+    const portfolioTracks: PortfolioTrack[] = studio.portfolioTracks;
+    const credits: StudioCreditItem[]       = studio.credits;
+    const engineers: StudioEngineerItem[]   = studio.engineers.map((e) => ({
+      ...e,
+      specialties: e.specialties as string[],
+    }));
+    const equipment: EquipmentItem[]        = studio.equipment.map((e) => ({
+      id: e.id,
+      category: e.category as string,
+      name: e.name,
+    }));
+
+    const templateProps = {
+      studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages,
+      portfolioTracks, credits, engineers, equipment,
+    };
 
     const template = studio.template ?? "CLASSIC";
 
