@@ -8,8 +8,9 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Features",    href: "#features" },
+  { label: "Pricing",     href: "#pricing" },
+  { label: "For Artists", href: "#artists" },
   { label: "For Studios", href: "#studios" },
 ];
 
