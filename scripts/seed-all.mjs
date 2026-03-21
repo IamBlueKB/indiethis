@@ -472,6 +472,25 @@ async function main() {
     console.log(`\n✓  Found studio: ${studio.name} (${studio.id})`);
     const studioOwner = await db.user.findUnique({ where: { id: studio.ownerId } });
 
+    // Ensure studio profile has hero + gallery images
+    await db.studio.update({
+      where: { id: studio.id },
+      data: {
+        heroImage: studio.heroImage ?? "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1600&q=80",
+        galleryImages: Array.isArray(studio.galleryImages) && studio.galleryImages.length > 0
+          ? studio.galleryImages
+          : [
+              "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&q=80",
+              "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=800&q=80",
+              "https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=800&q=80",
+              "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&q=80",
+              "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800&q=80",
+              "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800&q=80",
+            ],
+      },
+    });
+    console.log("✓  Studio hero + gallery images set");
+
     // ── 21. Studio portfolio tracks ────────────────────────────────────────
     const sptCount = await db.studioPortfolioTrack.count({ where: { studioId: studio.id } });
     if (sptCount === 0) {

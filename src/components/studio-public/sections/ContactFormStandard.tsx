@@ -44,7 +44,7 @@ export function ContactFormStandard({ content, studio, socials }: SectionSharedP
   };
 
   return (
-    <section className="py-24 px-6" style={{ backgroundColor: "#0d0d0d" }}>
+    <section id="contact" className="py-24 px-6" style={{ backgroundColor: "#0d0d0d" }}>
       <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-16 items-start">
         <div>
           {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.3em] mb-3" style={{ color: A }}>{eyebrow}</p>}

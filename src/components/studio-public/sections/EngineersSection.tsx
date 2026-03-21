@@ -37,7 +37,7 @@ export function EngineersSection({ engineers, accent = "#D4A843", dark = true }:
         fontSize: "clamp(1.6rem, 4vw, 2.5rem)", fontWeight: 700,
         letterSpacing: "-0.02em", color: textColor, marginBottom: "2.5rem", lineHeight: 1.1,
       }}>
-        Our Engineers
+        Our Team
       </h2>
 
       <div style={{

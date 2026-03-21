@@ -133,21 +133,21 @@ export default function EngineersSettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground">Engineer Profiles</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Your team — shown in the "Our Engineers" section. Max 6.</p>
+          <h1 className="text-lg font-bold text-foreground">Team Members</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Engineers, producers, managers — shown in the "Our Team" section. Max 6.</p>
         </div>
         {engineers.length < 6 && (
           <button onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
             style={{ backgroundColor: "var(--accent)", color: "#0A0A0A" }}>
-            <Plus size={14} /> Add Engineer
+            <Plus size={14} /> Add Member
           </button>
         )}
       </div>
 
       {adding && (
         <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
-          <h3 className="text-sm font-semibold text-foreground">New Engineer</h3>
+          <h3 className="text-sm font-semibold text-foreground">New Team Member</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <ArtistSearchInput
               className={INPUT}
@@ -173,7 +173,7 @@ export default function EngineersSettingsPage() {
             <button onClick={handleAdd} disabled={saving || !form.name || !form.role}
               className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)", color: "#0A0A0A" }}>
-              {saving ? "Saving…" : "Save Engineer"}
+              {saving ? "Saving…" : "Save Member"}
             </button>
             <button onClick={() => setAdding(false)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           </div>
@@ -183,8 +183,8 @@ export default function EngineersSettingsPage() {
       {engineers.length === 0 && !adding ? (
         <div className="rounded-xl border border-dashed p-12 text-center" style={{ borderColor: "var(--border)" }}>
           <UserCheck size={24} className="mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No engineer profiles yet.</p>
-          <p className="text-xs text-muted-foreground mt-1">Add your team to show who your clients will be working with.</p>
+          <p className="text-sm text-muted-foreground">No team members yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">Add engineers, producers, or managers to show who clients will be working with.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">

@@ -406,7 +406,7 @@ export default async function SlugPage({
     }));
 
     const templateProps = {
-      studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages,
+      studio, slug, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages,
       portfolioTracks, credits, engineers, equipment,
     };
 

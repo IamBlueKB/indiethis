@@ -3,11 +3,19 @@ import type { PageConfig, SectionConfig, SectionType, SectionVariant } from "@/t
 import { STYLE_DEFAULTS } from "@/types/page-config";
 import { ConfigRenderer } from "../ConfigRenderer";
 import type { SectionSharedProps } from "../ConfigRenderer";
+import { PortfolioSection, type PortfolioTrack } from "../sections/PortfolioSection";
+import { CreditsSection, type StudioCreditItem } from "../sections/CreditsSection";
+import { EngineersSection, type StudioEngineerItem } from "../sections/EngineersSection";
+import { StudioNav } from "../sections/StudioNav";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 type TemplateStyle = "CLASSIC" | "BOLD" | "EDITORIAL";
 
-type DefaultTemplateProps = Omit<SectionSharedProps, "content" | "slug" | "accent"> & {
+type DefaultTemplateProps = Omit<SectionSharedProps, "content" | "accent"> & {
   templateStyle: TemplateStyle;
+  portfolioTracks?: PortfolioTrack[];
+  credits?: StudioCreditItem[];
+  engineers?: StudioEngineerItem[];
 };
 
 // Font pairing per style
@@ -17,7 +25,7 @@ const FONT_PAIRINGS: Record<TemplateStyle, PageConfig["fontPairing"]> = {
   EDITORIAL: "dm-sans-only",
 };
 
-// Section order — controls render order in the default layout
+// Section order — footer excluded so it can be rendered after portfolio/credits/engineers
 const SECTION_ORDER: SectionType[] = [
   "hero",
   "services",
@@ -28,7 +36,6 @@ const SECTION_ORDER: SectionType[] = [
   "booking_cta",
   "contact_form",
   "contact_location",
-  "footer",
 ];
 
 function makeSection(type: SectionType, variant: SectionVariant): SectionConfig {
@@ -74,6 +81,7 @@ function buildConfig(
 
 export function DefaultTemplate({
   studio,
+  slug,
   services,
   testimonials,
   featuredArtists,
@@ -81,19 +89,59 @@ export function DefaultTemplate({
   mapQuery,
   socials,
   templateStyle,
+  portfolioTracks = [],
+  credits = [],
+  engineers = [],
 }: DefaultTemplateProps) {
   const config = buildConfig(templateStyle, studio, services, testimonials, featuredArtists, fullAddress);
+  const accent = studio.accentColor ?? "#D4A843";
 
   return (
-    <ConfigRenderer
-      studio={studio}
-      config={config}
-      services={services}
-      testimonials={testimonials}
-      featuredArtists={featuredArtists}
-      fullAddress={fullAddress}
-      mapQuery={mapQuery}
-      socials={socials}
-    />
+    <>
+      <StudioNav studio={studio} slug={slug} />
+      <ConfigRenderer
+        studio={studio}
+        config={config}
+        services={services}
+        testimonials={testimonials}
+        featuredArtists={featuredArtists}
+        fullAddress={fullAddress}
+        mapQuery={mapQuery}
+        socials={socials}
+      />
+
+      {portfolioTracks.length > 0 && (
+        <section style={{ padding: "6rem 2rem", backgroundColor: "#111" }}>
+          <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+            <PortfolioSection tracks={portfolioTracks} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
+      {credits.length > 0 && (
+        <section style={{ padding: "6rem 2rem", backgroundColor: "#0A0A0A" }}>
+          <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+            <CreditsSection credits={credits} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
+      {engineers.length > 0 && (
+        <section style={{ padding: "6rem 2rem", backgroundColor: "#111" }}>
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <EngineersSection engineers={engineers} accent={accent} dark />
+          </div>
+        </section>
+      )}
+
+      <FooterMinimal
+        studio={studio}
+        slug={slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
+    </>
   );
 }

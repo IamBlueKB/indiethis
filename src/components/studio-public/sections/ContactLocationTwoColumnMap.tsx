@@ -53,7 +53,7 @@ export function ContactLocationTwoColumnMap({ content, studio, fullAddress, mapQ
   const A = "var(--studio-accent)";
 
   return (
-    <section className="py-24 px-6" style={{ backgroundColor: "#0d0d0d" }}>
+    <section id="contact" className="py-24 px-6" style={{ backgroundColor: "#0d0d0d" }}>
       <div className="max-w-6xl mx-auto">
         <div className="mb-14">
           {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.3em] mb-3" style={{ color: A }}>{eyebrow}</p>}

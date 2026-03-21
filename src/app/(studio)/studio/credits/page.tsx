@@ -180,7 +180,7 @@ export default function StudioCreditsPage() {
   const [howOpen, setHowOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/studio/credits")
+    fetch("/api/studio/referral-credits")
       .then(r => r.json())
       .then(setData)
       .catch(() => {})

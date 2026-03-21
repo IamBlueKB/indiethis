@@ -55,7 +55,7 @@ export function HeroSplit({ content, studio, accent }: SectionSharedProps) {
           </a>
           {ctaSecondary && (
             <a
-              href="#services"
+              href="#portfolio"
               className="px-8 py-4 rounded-xl font-bold text-sm no-underline border transition-colors"
               style={{ borderColor: "rgba(255,255,255,0.15)", color: "#FAFAFA" }}
             >
