@@ -91,27 +91,27 @@ export default function ArtistFooter({
     instagramHandle && {
       label: "Instagram",
       href:  `https://instagram.com/${instagramHandle.replace(/^@/, "")}`,
-      icon:  <InstagramIcon size={18} />,
+      icon:  <InstagramIcon size={11} />,
     },
     tiktokHandle && {
       label: "TikTok",
       href:  `https://tiktok.com/@${tiktokHandle.replace(/^@/, "")}`,
-      icon:  <TikTokIcon size={18} />,
+      icon:  <TikTokIcon size={11} />,
     },
     spotifyUrl && {
       label: "Spotify",
       href:  spotifyUrl,
-      icon:  <SpotifyIcon size={18} />,
+      icon:  <SpotifyIcon size={11} />,
     },
     appleMusicUrl && {
       label: "Apple Music",
       href:  appleMusicUrl,
-      icon:  <AppleMusicIcon size={18} />,
+      icon:  <AppleMusicIcon size={11} />,
     },
     youtubeChannel && {
       label: "YouTube",
       href:  youtubeChannel,
-      icon:  <YoutubeIcon size={18} />,
+      icon:  <YoutubeIcon size={11} />,
     },
   ].filter(Boolean) as { label: string; href: string; icon: React.ReactNode }[];
 
@@ -119,13 +119,15 @@ export default function ArtistFooter({
     `https://indiethis.com?ref=${encodeURIComponent(artistSlug)}&source=artist_page`;
 
   return (
-    <footer className="pt-6 pb-8 space-y-5">
+    <footer className="pt-5 pb-8">
       {/* Divider */}
-      <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)" }} />
+      <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)", marginBottom: 16 }} />
 
-      {/* Social icons — only linked platforms */}
-      {socials.length > 0 && (
-        <div className="flex items-center justify-center gap-5">
+      {/* Single row: social circles | powered by + QR */}
+      <div className="flex items-center justify-between">
+
+        {/* Left: social icon circles */}
+        <div className="flex items-center gap-2">
           {socials.map(({ label, href, icon }) => (
             <a
               key={label}
@@ -133,40 +135,40 @@ export default function ArtistFooter({
               target="_blank"
               rel="noopener noreferrer"
               aria-label={label}
-              className="text-white/30 hover:text-white/80 transition-colors no-underline"
+              className="flex items-center justify-center rounded-full no-underline transition-all hover:brightness-125"
+              style={{
+                width:           22,
+                height:          22,
+                backgroundColor: "rgba(255,255,255,0.08)",
+                color:           "#666",
+              }}
             >
               {icon}
             </a>
           ))}
         </div>
-      )}
 
-      {/* Bottom row: Powered by (left) + QR (right) */}
-      <div className="flex items-end justify-between">
-        {/* Powered by IndieThis */}
-        <a
-          href={poweredByUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 no-underline group"
-        >
-          <IndieThisLogo size={22} />
-          <span
-            className="text-xs"
-            style={{ color: "rgba(255,255,255,0.28)" }}
+        {/* Right: Powered by + QR */}
+        <div className="flex items-center gap-3">
+          <a
+            href={poweredByUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 no-underline group"
           >
-            Powered by{" "}
-            <span
-              className="font-semibold transition-colors group-hover:text-yellow-400"
-              style={{ color: "#D4A843" }}
-            >
-              IndieThis
+            <IndieThisLogo size={16} />
+            <span style={{ fontSize: 10, color: "#666" }}>
+              Powered by{" "}
+              <span
+                className="font-semibold transition-colors group-hover:brightness-125"
+                style={{ color: "#D4A843" }}
+              >
+                IndieThis
+              </span>
             </span>
-          </span>
-        </a>
-
-        {/* QR code — "Scan to save" */}
-        <QrCodeFooter artistSlug={artistSlug} />
+          </a>
+          <QrCodeFooter artistSlug={artistSlug} />
+        </div>
       </div>
     </footer>
   );
