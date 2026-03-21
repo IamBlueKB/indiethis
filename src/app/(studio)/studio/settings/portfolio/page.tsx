@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, GripVertical, Music, ExternalLink } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { ArtistSearchInput } from "@/components/studio/ArtistSearchInput";
 
 type PortfolioTrack = {
   id: string;
@@ -131,7 +132,15 @@ export default function PortfolioSettingsPage() {
           <h3 className="text-sm font-semibold text-foreground">New Track</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <input className={INPUT} placeholder="Track title *" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} style={{ borderColor: "var(--border)" }} />
-            <input className={INPUT} placeholder="Artist name *" value={form.artistName} onChange={(e) => setForm((f) => ({ ...f, artistName: e.target.value }))} style={{ borderColor: "var(--border)" }} />
+            <ArtistSearchInput
+              className={INPUT}
+              style={{ borderColor: "var(--border)" }}
+              placeholder="Artist name *"
+              required
+              name={form.artistName}
+              slug={form.artistSlug}
+              onChange={(name, slug) => setForm((f) => ({ ...f, artistName: name, artistSlug: slug ?? "" }))}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audio File *</label>
@@ -141,7 +150,6 @@ export default function PortfolioSettingsPage() {
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cover Art</label>
             <ImageUploadBtn value={form.coverUrl} onUpload={(url) => setForm((f) => ({ ...f, coverUrl: url }))} />
           </div>
-          <input className={INPUT} placeholder="Artist's IndieThis slug (optional — links name to their profile)" value={form.artistSlug} onChange={(e) => setForm((f) => ({ ...f, artistSlug: e.target.value }))} style={{ borderColor: "var(--border)" }} />
           <textarea className={INPUT + " resize-none"} rows={2} placeholder="Short description (optional)" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} style={{ borderColor: "var(--border)" }} />
           <div className="flex items-center gap-3">
             <button onClick={handleAdd} disabled={saving || !form.title || !form.artistName || !form.audioUrl}

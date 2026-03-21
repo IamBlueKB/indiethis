@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, GripVertical, Users, ExternalLink } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { ArtistSearchInput } from "@/components/studio/ArtistSearchInput";
 
 type StudioCredit = {
   id: string;
@@ -105,13 +106,20 @@ export default function CreditsSettingsPage() {
       {adding && (
         <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
           <h3 className="text-sm font-semibold text-foreground">New Credit</h3>
-          <input className={INPUT} placeholder="Artist name *" value={form.artistName} onChange={(e) => setForm((f) => ({ ...f, artistName: e.target.value }))} style={{ borderColor: "var(--border)" }} />
+          <ArtistSearchInput
+            className={INPUT}
+            style={{ borderColor: "var(--border)" }}
+            placeholder="Artist name *"
+            required
+            name={form.artistName}
+            slug={form.artistSlug}
+            onChange={(name, slug) => setForm((f) => ({ ...f, artistName: name, artistSlug: slug ?? "" }))}
+          />
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Photo</label>
             <PhotoUploadBtn value={form.artistPhotoUrl} onUpload={(url) => setForm((f) => ({ ...f, artistPhotoUrl: url }))} />
           </div>
           <input className={INPUT} placeholder="Project / album name (optional)" value={form.projectName} onChange={(e) => setForm((f) => ({ ...f, projectName: e.target.value }))} style={{ borderColor: "var(--border)" }} />
-          <input className={INPUT} placeholder="IndieThis slug (optional — links to their profile)" value={form.artistSlug} onChange={(e) => setForm((f) => ({ ...f, artistSlug: e.target.value }))} style={{ borderColor: "var(--border)" }} />
           <div className="flex items-center gap-3">
             <button onClick={handleAdd} disabled={saving || !form.artistName}
               className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"

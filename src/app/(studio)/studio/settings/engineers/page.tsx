@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, X, UserCheck, ExternalLink } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { ArtistSearchInput } from "@/components/studio/ArtistSearchInput";
 
 type StudioEngineer = {
   id: string;
@@ -148,7 +149,15 @@ export default function EngineersSettingsPage() {
         <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
           <h3 className="text-sm font-semibold text-foreground">New Engineer</h3>
           <div className="grid sm:grid-cols-2 gap-3">
-            <input className={INPUT} placeholder="Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} style={{ borderColor: "var(--border)" }} />
+            <ArtistSearchInput
+              className={INPUT}
+              style={{ borderColor: "var(--border)" }}
+              placeholder="Name *"
+              required
+              name={form.name}
+              slug={form.artistSlug}
+              onChange={(name, slug) => setForm((f) => ({ ...f, name, artistSlug: slug ?? "" }))}
+            />
             <input className={INPUT} placeholder="Role * (e.g. Mix Engineer, Producer)" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} style={{ borderColor: "var(--border)" }} />
           </div>
           <div className="space-y-1.5">
@@ -160,7 +169,6 @@ export default function EngineersSettingsPage() {
             <SpecialtiesInput specialties={form.specialties} onChange={(v) => setForm((f) => ({ ...f, specialties: v }))} />
           </div>
           <textarea className={INPUT + " resize-none"} rows={2} placeholder="Short bio (optional)" value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} style={{ borderColor: "var(--border)" }} />
-          <input className={INPUT} placeholder="IndieThis artist slug (optional — links to their profile)" value={form.artistSlug} onChange={(e) => setForm((f) => ({ ...f, artistSlug: e.target.value }))} style={{ borderColor: "var(--border)" }} />
           <div className="flex items-center gap-3">
             <button onClick={handleAdd} disabled={saving || !form.name || !form.role}
               className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
