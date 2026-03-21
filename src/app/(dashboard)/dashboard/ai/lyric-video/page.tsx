@@ -8,6 +8,7 @@ import {
   Zap, PlayCircle, ChevronRight, Edit3,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -472,7 +473,7 @@ function LyricVideoContent() {
             )}
 
             <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-muted-foreground">Lyric video · $24.99 or 1 credit · ~10 min</p>
+              <p className="text-xs text-muted-foreground">Lyric video · {PRICING_DEFAULTS.AI_LYRIC_VIDEO.display} or 1 credit · ~10 min</p>
               <button
                 type="submit"
                 disabled={submitting || trackUploading || !trackUrl.trim()}

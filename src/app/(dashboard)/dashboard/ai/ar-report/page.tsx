@@ -3,6 +3,7 @@
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState } from "react";
 import { BarChart3, Loader2, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -342,7 +343,7 @@ export default function ARReportPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">Full analysis · $14.99 or 1 credit · ~5 min</p>
+            <p className="text-xs text-muted-foreground">Full analysis · {PRICING_DEFAULTS.AI_AAR_REPORT.display} or 1 credit · ~5 min</p>
             <button
               type="submit"
               disabled={submitting || trackUploading || !!isActive || !trackUrl.trim()}

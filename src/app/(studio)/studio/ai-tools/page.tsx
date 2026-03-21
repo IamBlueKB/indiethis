@@ -7,6 +7,7 @@ import {
   Sparkles, Clock,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,32 +81,32 @@ const TOOLS: Array<{
   {
     type: "VIDEO",      label: "AI Music Video",
     desc: "Generate a full AI music video from a photo + track",
-    icon: Film,  price: "from $19", color: "#6366F1",
+    icon: Film,     price: `from ${PRICING_DEFAULTS.AI_VIDEO_SHORT.display}`, color: "#6366F1",
   },
   {
     type: "COVER_ART",  label: "Cover Art",
     desc: "4 AI-generated album/single cover options",
-    icon: Image, price: "$2",       color: "#EC4899",
+    icon: Image,    price: PRICING_DEFAULTS.AI_COVER_ART.display,            color: "#EC4899",
   },
   {
     type: "MASTERING",  label: "AI Mastering",
     desc: "3 master profiles: Warm, Punchy, Broadcast Ready",
-    icon: Music, price: "$5",       color: "#F59E0B",
+    icon: Music,    price: PRICING_DEFAULTS.AI_MASTERING.display,            color: "#F59E0B",
   },
   {
     type: "LYRIC_VIDEO", label: "Lyric Video",
     desc: "Auto-transcribe lyrics, review, then render animated video",
-    icon: Mic,   price: "from $12", color: "#10B981",
+    icon: Mic,      price: PRICING_DEFAULTS.AI_LYRIC_VIDEO.display,          color: "#10B981",
   },
   {
     type: "AR_REPORT",  label: "A&R Report",
     desc: "Full artist analysis with audio metrics & industry insights",
-    icon: FileText, price: "$8",   color: "#3B82F6",
+    icon: FileText, price: PRICING_DEFAULTS.AI_AAR_REPORT.display,           color: "#3B82F6",
   },
   {
     type: "PRESS_KIT",  label: "EPK / Press Kit",
     desc: "Professional bio, press quotes, tech rider & socials",
-    icon: Sparkles, price: "$6",   color: "#8B5CF6",
+    icon: Sparkles, price: PRICING_DEFAULTS.AI_PRESS_KIT.display,            color: "#8B5CF6",
   },
 ];
 
@@ -137,9 +138,9 @@ function VideoForm({ onSubmit, submitting }: {
     { value: "artistic",    label: "Artistic" },
   ];
   const TIERS = [
-    { value: "SHORT",  label: "Short (30s) — $19" },
-    { value: "MEDIUM", label: "Medium (1min) — $29" },
-    { value: "FULL",   label: "Full (3min) — $49" },
+    { value: "SHORT",  label: `Short (30s) — ${PRICING_DEFAULTS.AI_VIDEO_SHORT.display}` },
+    { value: "MEDIUM", label: `Medium (1min) — ${PRICING_DEFAULTS.AI_VIDEO_MEDIUM.display}` },
+    { value: "FULL",   label: `Full (3min) — ${PRICING_DEFAULTS.AI_VIDEO_LONG.display}` },
   ];
 
   return (

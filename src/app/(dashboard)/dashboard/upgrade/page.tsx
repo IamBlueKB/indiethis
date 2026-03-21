@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, Loader2, ArrowRight, ExternalLink, Zap, Users, Mic2, Star, Gift, ChevronDown } from "lucide-react";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 type Plan = {
   name: string;
@@ -15,7 +16,7 @@ type Plan = {
 
 const PLANS: Plan[] = [
   {
-    name: "Launch", key: "launch", price: 19, tagline: "Start making moves",
+    name: "Launch", key: "launch", price: PRICING_DEFAULTS.PLAN_LAUNCH.value, tagline: "Start making moves",
     color: "#9A9A9E", popular: false,
     features: [
       "5 AI Cover Arts / month",
@@ -27,7 +28,7 @@ const PLANS: Plan[] = [
     ],
   },
   {
-    name: "Push", key: "push", price: 49, tagline: "Scale your sound",
+    name: "Push", key: "push", price: PRICING_DEFAULTS.PLAN_PUSH.value, tagline: "Scale your sound",
     color: "#D4A843", popular: true,
     features: [
       "10 AI Cover Arts / month",
@@ -41,7 +42,7 @@ const PLANS: Plan[] = [
     ],
   },
   {
-    name: "Reign", key: "reign", price: 149, tagline: "Own your lane",
+    name: "Reign", key: "reign", price: PRICING_DEFAULTS.PLAN_REIGN.value, tagline: "Own your lane",
     color: "#E85D4A", popular: false,
     features: [
       "15 AI Cover Arts / month",
@@ -59,7 +60,7 @@ const PLANS: Plan[] = [
 
 const STUDIO_PLANS: Plan[] = [
   {
-    name: "Pro", key: "studio_pro", price: 49, tagline: "Everything you need to run your studio",
+    name: "Pro", key: "studio_pro", price: PRICING_DEFAULTS.STUDIO_PRO.value, tagline: "Everything you need to run your studio",
     color: "#5AC8FA", popular: false,
     features: [
       "Public studio website (Classic or Bold template)",
@@ -73,7 +74,7 @@ const STUDIO_PLANS: Plan[] = [
     ],
   },
   {
-    name: "Elite", key: "studio_elite", price: 99, tagline: "The full flagship studio experience",
+    name: "Elite", key: "studio_elite", price: PRICING_DEFAULTS.STUDIO_ELITE.value, tagline: "The full flagship studio experience",
     color: "#D4A843", popular: true,
     features: [
       "Everything in Pro",

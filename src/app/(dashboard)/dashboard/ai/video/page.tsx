@@ -7,6 +7,7 @@ import {
   PlayCircle, ChevronRight, Zap,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,9 +62,9 @@ const ASPECT_RATIOS = [
 ];
 
 const DURATION_TIERS = [
-  { value: "SHORT",  label: "Short",  desc: "Up to 30 sec", price: 19 },
-  { value: "MEDIUM", label: "Medium", desc: "Up to 1 min",  price: 29 },
-  { value: "FULL",   label: "Full",   desc: "Up to 3 min",  price: 49 },
+  { value: "SHORT",  label: "Short",  desc: "Up to 30 sec", price: PRICING_DEFAULTS.AI_VIDEO_SHORT.value },
+  { value: "MEDIUM", label: "Medium", desc: "Up to 1 min",  price: PRICING_DEFAULTS.AI_VIDEO_MEDIUM.value },
+  { value: "FULL",   label: "Full",   desc: "Up to 3 min",  price: PRICING_DEFAULTS.AI_VIDEO_LONG.value },
 ];
 
 // ─── Component ─────────────────────────────────────────────────────────────────

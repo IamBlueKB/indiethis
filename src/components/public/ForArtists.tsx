@@ -76,13 +76,15 @@ const artistFeatures: ArtistFeature[] = [
   },
 ];
 
-const tiers = [
-  { name: "Launch", price: 19, tagline: "Start making moves", color: "#9A9A9E" },
-  { name: "Push",   price: 49, tagline: "Scale your sound",   color: "#D4A843", popular: true },
-  { name: "Reign",  price: 149, tagline: "Own your lane",     color: "#E85D4A" },
-];
+import { PRICING_DEFAULTS } from "@/lib/pricing";
+import type { PricingProps } from "@/components/public/Pricing";
 
-export default function ForArtists() {
+export default function ForArtists({ pricing = {} }: { pricing?: PricingProps }) {
+  const tiers = [
+    { name: "Launch", price: pricing.planLaunch  ?? PRICING_DEFAULTS.PLAN_LAUNCH.value,  tagline: "Start making moves", color: "#9A9A9E" },
+    { name: "Push",   price: pricing.planPush    ?? PRICING_DEFAULTS.PLAN_PUSH.value,    tagline: "Scale your sound",   color: "#D4A843", popular: true },
+    { name: "Reign",  price: pricing.planReign   ?? PRICING_DEFAULTS.PLAN_REIGN.value,   tagline: "Own your lane",      color: "#E85D4A" },
+  ];
   return (
     <section id="artists" className="relative py-24 px-6 overflow-hidden" style={{ backgroundColor: "#0A0A0B" }}>
       <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />

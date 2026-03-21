@@ -2,15 +2,16 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
+import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
 
-const PPU_ITEMS = {
-  LYRIC_VIDEO: { name: "Lyric Video – IndieThis",  amount: 2499, successPath: "/dashboard/ai/lyric-video" },
-  COVER_ART:   { name: "AI Cover Art – IndieThis", amount:  499, successPath: "/dashboard/ai/cover-art" },
-  AI_VIDEO:    { name: "AI Video – IndieThis",     amount: 1999, successPath: "/dashboard/ai/video" },
-  MASTERING:   { name: "AI Mastering – IndieThis", amount:  999, successPath: "/dashboard/ai/mastering" },
-  AAR_REPORT:  { name: "A&R Report – IndieThis",   amount: 1499, successPath: "/dashboard/ai/ar-report" },
-  PRESS_KIT:   { name: "Press Kit – IndieThis",    amount: 1999, successPath: "/dashboard/ai/press-kit" },
-} as const;
+const PPU_META: Record<string, { name: string; pricingKey: string; successPath: string }> = {
+  LYRIC_VIDEO: { name: "Lyric Video – IndieThis",  pricingKey: "AI_LYRIC_VIDEO",  successPath: "/dashboard/ai/lyric-video" },
+  COVER_ART:   { name: "AI Cover Art – IndieThis", pricingKey: "AI_COVER_ART",    successPath: "/dashboard/ai/cover-art" },
+  AI_VIDEO:    { name: "AI Video – IndieThis",     pricingKey: "AI_VIDEO_SHORT",  successPath: "/dashboard/ai/video" },
+  MASTERING:   { name: "AI Mastering – IndieThis", pricingKey: "AI_MASTERING",    successPath: "/dashboard/ai/mastering" },
+  AAR_REPORT:  { name: "A&R Report – IndieThis",   pricingKey: "AI_AAR_REPORT",   successPath: "/dashboard/ai/ar-report" },
+  PRESS_KIT:   { name: "Press Kit – IndieThis",    pricingKey: "AI_PRESS_KIT",    successPath: "/dashboard/ai/press-kit" },
+};
 
 export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
@@ -18,13 +19,19 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as { tool?: string };
-  const tool = body.tool?.toUpperCase() as keyof typeof PPU_ITEMS | undefined;
+  const tool = body.tool?.toUpperCase();
 
-  if (!tool || !(tool in PPU_ITEMS)) {
+  if (!tool || !(tool in PPU_META)) {
     return NextResponse.json({ error: "Invalid tool." }, { status: 400 });
   }
 
-  const item = PPU_ITEMS[tool];
+  const meta = PPU_META[tool];
+
+  // Fetch live price from DB (cached 5 min)
+  const pricing = await getPricing();
+  const priceRow = pricing[meta.pricingKey];
+  const defaultVal = PRICING_DEFAULTS[meta.pricingKey as keyof typeof PRICING_DEFAULTS];
+  const amount = Math.round((priceRow?.value ?? defaultVal?.value ?? 0) * 100);
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },
@@ -54,13 +61,13 @@ export async function POST(req: NextRequest) {
     line_items: [{
       price_data: {
         currency: "usd",
-        product_data: { name: item.name },
-        unit_amount: item.amount,
+        product_data: { name: meta.name },
+        unit_amount: amount,
       },
       quantity: 1,
     }],
-    success_url: `${appUrl}${item.successPath}?paid=1`,
-    cancel_url:  `${appUrl}${item.successPath}`,
+    success_url: `${appUrl}${meta.successPath}?paid=1`,
+    cancel_url:  `${appUrl}${meta.successPath}`,
     metadata: { userId: session.user.id, tool },
   });
 

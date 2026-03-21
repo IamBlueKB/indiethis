@@ -3,6 +3,7 @@
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useState, useEffect } from "react";
 import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw } from "lucide-react";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ export default function CoverArtPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">4 variations · $4.99 or 1 credit</p>
+            <p className="text-xs text-muted-foreground">4 variations · {PRICING_DEFAULTS.AI_COVER_ART.display} or 1 credit</p>
             <button
               type="submit"
               disabled={submitting || !!isActive || !artistPrompt.trim()}

@@ -1,0 +1,82 @@
+/**
+ * src/lib/pricing.ts
+ * DB-backed platform pricing utility.
+ * Prices are stored in PlatformPricing table and cached for 5 minutes.
+ * To update a price: change it in /admin/settings/pricing — no redeploy needed.
+ *
+ * Usage (server components / route handlers):
+ *   const p = await getPricing();
+ *   p.AI_COVER_ART.display   // "$4.99"
+ *   p.AI_COVER_ART.value     // 4.99
+ *   p.PLAN_LAUNCH.value      // 19
+ */
+
+import { unstable_cache } from "next/cache";
+import { db } from "@/lib/db";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface PriceItem {
+  key:      string;
+  label:    string;
+  value:    number;  // numeric (dollars or percent)
+  display:  string;  // formatted e.g. "$4.99" or "15%"
+  category: string;
+}
+
+export type PricingMap = Record<string, PriceItem>;
+
+// ─── Cached fetch ─────────────────────────────────────────────────────────────
+
+export const getPricing = unstable_cache(
+  async (): Promise<PricingMap> => {
+    const rows = await db.platformPricing.findMany({ orderBy: { sortOrder: "asc" } });
+    return Object.fromEntries(rows.map((r) => [r.key, r]));
+  },
+  ["platform-pricing"],
+  { revalidate: 300 } // 5 minutes
+);
+
+// ─── Convenience helpers ──────────────────────────────────────────────────────
+
+/** Returns the display string for a key, with fallback */
+export async function priceDisplay(key: string, fallback = ""): Promise<string> {
+  const p = await getPricing();
+  return p[key]?.display ?? fallback;
+}
+
+/** Returns the numeric value for a key, with fallback */
+export async function priceValue(key: string, fallback = 0): Promise<number> {
+  const p = await getPricing();
+  return p[key]?.value ?? fallback;
+}
+
+/** Returns cents (for Stripe) for a key */
+export async function priceCents(key: string, fallback = 0): Promise<number> {
+  const p = await getPricing();
+  return Math.round((p[key]?.value ?? fallback) * 100);
+}
+
+// ─── Static fallback defaults ─────────────────────────────────────────────────
+// Used for type-safety and IDE autocomplete; actual values always come from DB.
+
+export const PRICING_DEFAULTS = {
+  PLAN_LAUNCH:      { value: 19,    display: "$19/mo"  },
+  PLAN_PUSH:        { value: 49,    display: "$49/mo"  },
+  PLAN_REIGN:       { value: 149,   display: "$149/mo" },
+  STUDIO_PRO:       { value: 49,    display: "$49/mo"  },
+  STUDIO_ELITE:     { value: 99,    display: "$99/mo"  },
+  AI_COVER_ART:     { value: 4.99,  display: "$4.99"   },
+  AI_MASTERING:     { value: 9.99,  display: "$9.99"   },
+  AI_LYRIC_VIDEO:   { value: 24.99, display: "$24.99"  },
+  AI_AAR_REPORT:    { value: 14.99, display: "$14.99"  },
+  AI_PRESS_KIT:     { value: 19.99, display: "$19.99"  },
+  AI_VIDEO_SHORT:   { value: 19,    display: "$19"     },
+  AI_VIDEO_MEDIUM:  { value: 29,    display: "$29"     },
+  AI_VIDEO_LONG:    { value: 49,    display: "$49"     },
+  CUT_MUSIC_SALES:  { value: 10,    display: "10%"     },
+  CUT_MERCH_PUSH:   { value: 15,    display: "15%"     },
+  CUT_MERCH_REIGN:  { value: 10,    display: "10%"     },
+} as const;
+
+export type PricingKey = keyof typeof PRICING_DEFAULTS;

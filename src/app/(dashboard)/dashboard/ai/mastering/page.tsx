@@ -3,6 +3,7 @@
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useEffect, useState } from "react";
 import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Download, Upload, X, ChevronDown, ChevronUp } from "lucide-react";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import MasteringComparisonPlayer, { type MasteringVersion } from "@/components/audio/MasteringComparisonPlayer";
 
@@ -271,7 +272,7 @@ export default function MasteringPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">3 masters · $9.99 or 1 credit · ~10 min</p>
+            <p className="text-xs text-muted-foreground">3 masters · {PRICING_DEFAULTS.AI_MASTERING.display} or 1 credit · ~10 min</p>
             <button
               type="submit"
               disabled={submitting || trackUploading || !!isActive || !trackUrl.trim()}

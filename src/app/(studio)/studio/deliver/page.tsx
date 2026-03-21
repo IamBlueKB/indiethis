@@ -8,6 +8,7 @@ import {
   FileImage, FileVideo, File as FileIcon, Loader2,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,12 +52,12 @@ type StudioSettings = {
 // ─── Services ─────────────────────────────────────────────────────────────────
 
 const SERVICES = [
-  { key: "mastering",   label: "Mastering",   price: "$14.99" },
-  { key: "coverArt",    label: "Cover Art",    price: "$9.99"  },
-  { key: "arReport",    label: "A&R Report",   price: "$19.99" },
-  { key: "pressKit",    label: "Press Kit",    price: "$24.99" },
-  { key: "lyricVideo",  label: "Lyric Video",  price: "$34.99" },
-  { key: "aiVideo",     label: "AI Video",     price: "$14.99" },
+  { key: "mastering",   label: "Mastering",   price: PRICING_DEFAULTS.AI_MASTERING.display },
+  { key: "coverArt",    label: "Cover Art",    price: PRICING_DEFAULTS.AI_COVER_ART.display },
+  { key: "arReport",    label: "A&R Report",   price: PRICING_DEFAULTS.AI_AAR_REPORT.display },
+  { key: "pressKit",    label: "Press Kit",    price: PRICING_DEFAULTS.AI_PRESS_KIT.display },
+  { key: "lyricVideo",  label: "Lyric Video",  price: PRICING_DEFAULTS.AI_LYRIC_VIDEO.display },
+  { key: "aiVideo",     label: "AI Video",     price: `from ${PRICING_DEFAULTS.AI_VIDEO_SHORT.display}` },
 ] as const;
 
 type ServiceKey = (typeof SERVICES)[number]["key"];

@@ -15,16 +15,19 @@
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { AIJobType, AIJobTrigger, AIJobStatus } from "@prisma/client";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
-// ─── Pay-per-use prices (cents) ───────────────────────────────────────────────
+// ─── Pay-per-use prices (cents) — sourced from DB via src/lib/pricing.ts ──────
+// These are static fallbacks used at job-creation time.
+// Actual checkout amounts always re-fetch from getPricing() in route handlers.
 
 export const PPU_PRICES: Record<AIJobType, number> = {
-  VIDEO:      1999,  // $19.99
-  COVER_ART:   499,  // $4.99
-  MASTERING:   999,  // $9.99
-  LYRIC_VIDEO: 2499, // $24.99
-  AR_REPORT:  1499,  // $14.99
-  PRESS_KIT:  1999,  // $19.99
+  VIDEO:       Math.round(PRICING_DEFAULTS.AI_VIDEO_SHORT.value  * 100), // $19 (30s default)
+  COVER_ART:   Math.round(PRICING_DEFAULTS.AI_COVER_ART.value    * 100), // $4.99
+  MASTERING:   Math.round(PRICING_DEFAULTS.AI_MASTERING.value    * 100), // $9.99
+  LYRIC_VIDEO: Math.round(PRICING_DEFAULTS.AI_LYRIC_VIDEO.value  * 100), // $24.99
+  AR_REPORT:   Math.round(PRICING_DEFAULTS.AI_AAR_REPORT.value   * 100), // $14.99
+  PRESS_KIT:   Math.round(PRICING_DEFAULTS.AI_PRESS_KIT.value    * 100), // $19.99
 };
 
 export const PPU_LABELS: Record<AIJobType, string> = {

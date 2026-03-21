@@ -1637,3 +1637,15 @@ model AmbassadorPayout {
 
   @@index([ambassadorId])
 }
+
+model PlatformPricing {
+  id        String   @id @default(cuid())
+  key       String   @unique  // e.g. "PLAN_LAUNCH", "AI_COVER_ART"
+  label     String            // Human-readable label
+  value     Float             // Numeric value (dollars or percent)
+  display   String            // Formatted display e.g. "$4.99" or "15%"
+  category  String            // "subscriptions" | "ai_tools" | "platform_cuts"
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+  updatedBy String?           // admin email who last changed it
+}

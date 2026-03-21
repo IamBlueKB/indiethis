@@ -7,129 +7,124 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 type FeatureValue = string | boolean | null;
 type TierFeature = { label: string; value: FeatureValue };
 
-type ArtistTier = {
-  name: string;
-  price: number;
-  tagline: string;
-  color: string;
-  popular: boolean;
-  features: TierFeature[];
-};
+export interface PricingProps {
+  planLaunch?:    number;
+  planPush?:      number;
+  planReign?:     number;
+  studioPro?:     number;
+  studioElite?:   number;
+  coverArt?:      string;
+  mastering?:     string;
+  lyricVideo?:    string;
+  aarReport?:     string;
+  pressKit?:      string;
+  videoShort?:    string;
+  videoMedium?:   string;
+  videoLong?:     string;
+  cutMerchPush?:  string;
+  cutMerchReign?: string;
+}
 
-type StudioTier = {
-  name: string;
-  price: number;
-  tagline: string;
-  color: string;
-  popular: boolean;
-  cta: string;
-  features: TierFeature[];
-};
+function buildArtistTiers(p: Required<PricingProps>) {
+  return [
+    {
+      name: "Launch", price: p.planLaunch, tagline: "Start making moves", color: "#9A9A9E", popular: false,
+      features: [
+        { label: "AI Cover Art",        value: "5 / month" },
+        { label: "AI Music Videos",     value: null },
+        { label: "AI Mastering",        value: "1 / month" },
+        { label: "Lyric Video",         value: false },
+        { label: "AI A&R Report",       value: false },
+        { label: "Press Kit Generator", value: true },
+        { label: "Artist Mini-Site",    value: "Profile only" },
+        { label: "Merch Storefront",    value: false },
+        { label: "Beat Marketplace",    value: false },
+        { label: "Studio Time",         value: false },
+        { label: "10% Off À La Carte",  value: false },
+      ] as TierFeature[],
+    },
+    {
+      name: "Push", price: p.planPush, tagline: "Scale your sound", color: "#D4A843", popular: true,
+      features: [
+        { label: "AI Cover Art",        value: "10 / month" },
+        { label: "AI Music Videos",     value: "2 / month" },
+        { label: "AI Mastering",        value: "3 / month" },
+        { label: "Lyric Video",         value: true },
+        { label: "AI A&R Report",       value: "1 / month" },
+        { label: "Press Kit Generator", value: true },
+        { label: "Artist Mini-Site",    value: "Full site" },
+        { label: "Merch Storefront",    value: `Yes (${p.cutMerchPush} cut)` },
+        { label: "Beat Marketplace",    value: false },
+        { label: "Studio Time",         value: false },
+        { label: "10% Off À La Carte",  value: true },
+      ] as TierFeature[],
+    },
+    {
+      name: "Reign", price: p.planReign, tagline: "Own your lane", color: "#E85D4A", popular: false,
+      features: [
+        { label: "AI Cover Art",        value: "15 / month" },
+        { label: "AI Music Videos",     value: "5 / month" },
+        { label: "AI Mastering",        value: "10 / month" },
+        { label: "Lyric Video",         value: true },
+        { label: "AI A&R Report",       value: "3 / month" },
+        { label: "Press Kit Generator", value: true },
+        { label: "Artist Mini-Site",    value: "Full + custom domain" },
+        { label: "Merch Storefront",    value: `Yes (${p.cutMerchReign} cut)` },
+        { label: "Beat Marketplace",    value: true },
+        { label: "Studio Time",         value: "2 hrs / month" },
+        { label: "10% Off À La Carte",  value: true },
+      ] as TierFeature[],
+    },
+  ];
+}
 
-const artistTiers: ArtistTier[] = [
-  {
-    name: "Launch", price: 19, tagline: "Start making moves", color: "#9A9A9E", popular: false,
-    features: [
-      { label: "AI Cover Art",        value: "5 / month" },
-      { label: "AI Music Videos",     value: null },
-      { label: "AI Mastering",        value: "1 / month" },
-      { label: "Lyric Video",         value: false },
-      { label: "AI A&R Report",       value: false },
-      { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site",    value: "Profile only" },
-      { label: "Merch Storefront",    value: false },
-      { label: "Beat Marketplace",    value: false },
-      { label: "Studio Time",         value: false },
-      { label: "10% Off À La Carte",  value: false },
-    ],
-  },
-  {
-    name: "Push", price: 49, tagline: "Scale your sound", color: "#D4A843", popular: true,
-    features: [
-      { label: "AI Cover Art",        value: "10 / month" },
-      { label: "AI Music Videos",     value: "2 / month" },
-      { label: "AI Mastering",        value: "3 / month" },
-      { label: "Lyric Video",         value: true },
-      { label: "AI A&R Report",       value: "1 / month" },
-      { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site",    value: "Full site" },
-      { label: "Merch Storefront",    value: "Yes (15% cut)" },
-      { label: "Beat Marketplace",    value: false },
-      { label: "Studio Time",         value: false },
-      { label: "10% Off À La Carte",  value: true },
-    ],
-  },
-  {
-    name: "Reign", price: 149, tagline: "Own your lane", color: "#E85D4A", popular: false,
-    features: [
-      { label: "AI Cover Art",        value: "15 / month" },
-      { label: "AI Music Videos",     value: "5 / month" },
-      { label: "AI Mastering",        value: "10 / month" },
-      { label: "Lyric Video",         value: true },
-      { label: "AI A&R Report",       value: "3 / month" },
-      { label: "Press Kit Generator", value: true },
-      { label: "Artist Mini-Site",    value: "Full + custom domain" },
-      { label: "Merch Storefront",    value: "Yes (10% cut)" },
-      { label: "Beat Marketplace",    value: true },
-      { label: "Studio Time",         value: "2 hrs / month" },
-      { label: "10% Off À La Carte",  value: true },
-    ],
-  },
-];
-
-const studioTiers: StudioTier[] = [
-  {
-    name: "Pro", price: 49, tagline: "Run your studio smarter", color: "#9A9A9E", popular: false, cta: "Get Started",
-    features: [
-      { label: "Studio admin dashboard",          value: true },
-      { label: "Bookings + CRM",                  value: true },
-      { label: "Intake, invoicing, file delivery", value: true },
-      { label: "Email blasts",                    value: "500/mo" },
-      { label: "Public page (AI styles)",          value: "3 styles" },
-      { label: "AI page generations",             value: "3/mo" },
-      { label: "Contact form on page",            value: true },
-      { label: "AI video upsell at intake",       value: true },
-      { label: "Featured artists section",        value: false },
-      { label: "Gallery",                         value: "6 photos" },
-      { label: "Custom accent color",             value: false },
-      { label: "Custom domain",                   value: false },
-      { label: "Analytics dashboard",             value: false },
-      { label: "Priority support",                value: false },
-    ],
-  },
-  {
-    name: "Elite", price: 99, tagline: "The full studio experience", color: "#E85D4A", popular: true, cta: "Go Elite",
-    features: [
-      { label: "Studio admin dashboard",          value: true },
-      { label: "Bookings + CRM",                  value: true },
-      { label: "Intake, invoicing, file delivery", value: true },
-      { label: "Email blasts",                    value: "2,000/mo" },
-      { label: "Public page (AI styles)",          value: "All styles" },
-      { label: "AI page generations",             value: "10/mo" },
-      { label: "Contact form on page",            value: true },
-      { label: "AI video upsell at intake",       value: true },
-      { label: "Featured artists section",        value: true },
-      { label: "Gallery",                         value: "12 photos" },
-      { label: "Custom accent color",             value: true },
-      { label: "Custom domain",                   value: true },
-      { label: "Analytics dashboard",             value: true },
-      { label: "Priority support",                value: true },
-    ],
-  },
-];
-
-const alaCarteItems = [
-  { name: "AI Music Video",  options: ["$49 Standard", "$99 Premium", "$149 Cinematic"] },
-  { name: "AI Cover Art",    options: ["$9.99 Single", "$29.99 Promo Pack"] },
-  { name: "AI Mastering",    options: ["$4.99 Quick", "$14.99 Studio Grade"] },
-  { name: "Lyric Video",     options: ["$24.99"] },
-  { name: "AI A&R Report",   options: ["$9.99"] },
-  { name: "Press Kit",       options: ["$19.99"] },
-];
+function buildStudioTiers(p: Required<PricingProps>) {
+  return [
+    {
+      name: "Pro", price: p.studioPro, tagline: "Run your studio smarter", color: "#9A9A9E", popular: false, cta: "Get Started",
+      features: [
+        { label: "Studio admin dashboard",           value: true },
+        { label: "Bookings + CRM",                   value: true },
+        { label: "Intake, invoicing, file delivery",  value: true },
+        { label: "Email blasts",                     value: "500/mo" },
+        { label: "Public page (AI styles)",           value: "3 styles" },
+        { label: "AI page generations",              value: "3/mo" },
+        { label: "Contact form on page",             value: true },
+        { label: "AI video upsell at intake",        value: true },
+        { label: "Featured artists section",         value: false },
+        { label: "Gallery",                          value: "6 photos" },
+        { label: "Custom accent color",              value: false },
+        { label: "Custom domain",                    value: false },
+        { label: "Analytics dashboard",              value: false },
+        { label: "Priority support",                 value: false },
+      ] as TierFeature[],
+    },
+    {
+      name: "Elite", price: p.studioElite, tagline: "The full studio experience", color: "#E85D4A", popular: true, cta: "Go Elite",
+      features: [
+        { label: "Studio admin dashboard",           value: true },
+        { label: "Bookings + CRM",                   value: true },
+        { label: "Intake, invoicing, file delivery",  value: true },
+        { label: "Email blasts",                     value: "2,000/mo" },
+        { label: "Public page (AI styles)",           value: "All styles" },
+        { label: "AI page generations",              value: "10/mo" },
+        { label: "Contact form on page",             value: true },
+        { label: "AI video upsell at intake",        value: true },
+        { label: "Featured artists section",         value: true },
+        { label: "Gallery",                          value: "12 photos" },
+        { label: "Custom accent color",              value: true },
+        { label: "Custom domain",                    value: true },
+        { label: "Analytics dashboard",              value: true },
+        { label: "Priority support",                 value: true },
+      ] as TierFeature[],
+    },
+  ];
+}
 
 function FeatureRow({ value }: { value: FeatureValue }) {
   if (value === null || value === false)
@@ -139,10 +134,11 @@ function FeatureRow({ value }: { value: FeatureValue }) {
   return <span className="text-xs font-medium text-foreground">{value}</span>;
 }
 
-function ArtistCards() {
+function ArtistCards({ p }: { p: Required<PricingProps> }) {
+  const tiers = buildArtistTiers(p);
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start mb-14">
-      {artistTiers.map((tier) => (
+      {tiers.map((tier) => (
         <Card
           key={tier.name}
           className={cn("relative transition-all", tier.popular && "scale-[1.02]")}
@@ -209,10 +205,11 @@ function ArtistCards() {
   );
 }
 
-function StudioCards() {
+function StudioCards({ p }: { p: Required<PricingProps> }) {
+  const tiers = buildStudioTiers(p);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start mb-14 max-w-3xl mx-auto w-full">
-      {studioTiers.map((tier) => (
+      {tiers.map((tier) => (
         <Card
           key={tier.name}
           className={cn("relative transition-all", tier.popular && "scale-[1.02]")}
@@ -278,8 +275,36 @@ function StudioCards() {
   );
 }
 
-export default function Pricing() {
+export default function Pricing({ pricing = {} }: { pricing?: PricingProps }) {
   const [tab, setTab] = useState<"artists" | "studios">("artists");
+
+  // Merge with defaults
+  const p: Required<PricingProps> = {
+    planLaunch:    pricing.planLaunch    ?? PRICING_DEFAULTS.PLAN_LAUNCH.value,
+    planPush:      pricing.planPush      ?? PRICING_DEFAULTS.PLAN_PUSH.value,
+    planReign:     pricing.planReign     ?? PRICING_DEFAULTS.PLAN_REIGN.value,
+    studioPro:     pricing.studioPro     ?? PRICING_DEFAULTS.STUDIO_PRO.value,
+    studioElite:   pricing.studioElite   ?? PRICING_DEFAULTS.STUDIO_ELITE.value,
+    coverArt:      pricing.coverArt      ?? PRICING_DEFAULTS.AI_COVER_ART.display,
+    mastering:     pricing.mastering     ?? PRICING_DEFAULTS.AI_MASTERING.display,
+    lyricVideo:    pricing.lyricVideo    ?? PRICING_DEFAULTS.AI_LYRIC_VIDEO.display,
+    aarReport:     pricing.aarReport     ?? PRICING_DEFAULTS.AI_AAR_REPORT.display,
+    pressKit:      pricing.pressKit      ?? PRICING_DEFAULTS.AI_PRESS_KIT.display,
+    videoShort:    pricing.videoShort    ?? PRICING_DEFAULTS.AI_VIDEO_SHORT.display,
+    videoMedium:   pricing.videoMedium   ?? PRICING_DEFAULTS.AI_VIDEO_MEDIUM.display,
+    videoLong:     pricing.videoLong     ?? PRICING_DEFAULTS.AI_VIDEO_LONG.display,
+    cutMerchPush:  pricing.cutMerchPush  ?? PRICING_DEFAULTS.CUT_MERCH_PUSH.display,
+    cutMerchReign: pricing.cutMerchReign ?? PRICING_DEFAULTS.CUT_MERCH_REIGN.display,
+  };
+
+  const alaCarteItems = [
+    { name: "AI Music Video",  options: [`${p.videoShort} (30s)`, `${p.videoMedium} (1min)`, `${p.videoLong} (3min)`] },
+    { name: "AI Cover Art",    options: [p.coverArt] },
+    { name: "AI Mastering",    options: [p.mastering] },
+    { name: "Lyric Video",     options: [p.lyricVideo] },
+    { name: "AI A&R Report",   options: [p.aarReport] },
+    { name: "Press Kit",       options: [p.pressKit] },
+  ];
 
   return (
     <section id="pricing" className="relative py-24 px-6 bg-background">
@@ -330,7 +355,7 @@ export default function Pricing() {
         </div>
 
         {/* Tier cards */}
-        {tab === "artists" ? <ArtistCards /> : <StudioCards />}
+        {tab === "artists" ? <ArtistCards p={p} /> : <StudioCards p={p} />}
 
         {/* À La Carte — artists only */}
         {tab === "artists" && (

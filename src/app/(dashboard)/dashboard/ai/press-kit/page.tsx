@@ -6,6 +6,7 @@ import {
   FileText, Loader2, CheckCircle2, Clock, AlertCircle,
   ChevronDown, ChevronUp, Copy, Check, ExternalLink, Plus, X,
 } from "lucide-react";
+import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -452,7 +453,7 @@ export default function PressKitPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">Full EPK + PDF · $19.99 or 1 credit</p>
+            <p className="text-xs text-muted-foreground">Full EPK + PDF · {PRICING_DEFAULTS.AI_PRESS_KIT.display} or 1 credit</p>
             <button
               type="submit"
               disabled={submitting || !!isActive || !artistName.trim()}
