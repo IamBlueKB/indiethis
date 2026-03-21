@@ -1,10 +1,12 @@
 // Server component — no "use client" needed
+import Link from "next/link";
 
 type AboutSectionProps = {
-  bio:          string;
-  photo:        string | null;
-  displayName:  string;
-  credentials:  string[];
+  bio:         string;
+  photo:       string | null;
+  displayName: string;
+  credentials: string[];
+  studioSlug:  string | null;
 };
 
 export default function AboutSection({
@@ -12,49 +14,72 @@ export default function AboutSection({
   photo,
   displayName,
   credentials,
+  studioSlug,
 }: AboutSectionProps) {
-  // Truncate to ~5 sentences for the public page
-  const sentences  = bio.match(/[^.!?]+[.!?]+/g) ?? [bio];
-  const shortBio   = sentences.slice(0, 5).join(" ").trim();
+  const sentences = bio.match(/[^.!?]+[.!?]+/g) ?? [bio];
+  const shortBio  = sentences.slice(0, 5).join(" ").trim();
 
   return (
-    <section className="space-y-4">
+    <section>
       {/* Section label */}
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">About</h2>
+      <p
+        className="text-[10px] font-bold uppercase mb-[5px]"
+        style={{ color: "#D4A843", letterSpacing: "1.5px" }}
+      >
+        ABOUT
+      </p>
 
-      {/* Photo + bio layout */}
-      <div className="flex gap-5 items-start">
-
-        {/* Artist photo — only if available */}
+      {/* Photo + bio */}
+      <div className="flex gap-4 items-start">
         {photo && (
           <div className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photo}
               alt={displayName}
-              className="w-20 h-20 rounded-2xl object-cover"
-              style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+              className="object-cover"
+              style={{
+                width:        90,
+                height:       90,
+                borderRadius: 10,
+                border:       "1px solid rgba(255,255,255,0.08)",
+              }}
             />
           </div>
         )}
 
-        {/* Bio text */}
-        <p className="text-sm text-white/60 leading-relaxed flex-1 min-w-0">
-          {shortBio}
-        </p>
+        <div className="flex-1 min-w-0">
+          <p
+            className="leading-[1.6]"
+            style={{ fontSize: 11, color: "#999", marginBottom: 8 }}
+          >
+            {shortBio}
+          </p>
+
+          {studioSlug && (
+            <Link
+              href={`/${studioSlug}`}
+              className="text-[10px] no-underline hover:brightness-125 transition-colors"
+              style={{ color: "rgba(212,168,67,0.6)" }}
+            >
+              View Studio →
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Credential badges */}
       {credentials.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="flex flex-wrap gap-2 mt-3">
           {credentials.map((badge, i) => (
             <span
               key={i}
-              className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+              className="inline-flex items-center rounded-[8px] text-[9px] font-semibold"
               style={{
                 backgroundColor: "rgba(212,168,67,0.10)",
                 border:          "1px solid rgba(212,168,67,0.20)",
                 color:           "#D4A843",
+                padding:         "2px 8px",
               }}
             >
               {badge}
