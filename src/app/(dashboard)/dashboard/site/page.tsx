@@ -27,6 +27,13 @@ export default function ArtistSitePage() {
   const [savingRate,       setSavingRate]       = useState(false);
   const [qrPreviewLoaded,  setQrPreviewLoaded]  = useState(false);
 
+  // ── Artist Identity ──────────────────────────────────────────────────────────
+  const [genreInput,       setGenreInput]       = useState("");
+  const [roleInput,        setRoleInput]        = useState("");
+  const [cityInput,        setCityInput]        = useState("");
+  const [soundcloudInput,  setSoundcloudInput]  = useState("");
+  const [savingIdentity,   setSavingIdentity]   = useState(false);
+
   // ── Pinned Announcement ──────────────────────────────────────────────────────
   const [pinnedOpen,       setPinnedOpen]       = useState(false);
   const [pinnedMsg,        setPinnedMsg]        = useState("");
@@ -172,6 +179,16 @@ export default function ArtistSitePage() {
     );
   }
 
+  // Sync identity fields from loaded site data
+  useEffect(() => {
+    if (!site) return;
+    const s = site as { genre?: string | null; role?: string | null; city?: string | null; soundcloudUrl?: string | null };
+    setGenreInput(s.genre ?? "");
+    setRoleInput(s.role ?? "");
+    setCityInput(s.city ?? "");
+    setSoundcloudInput(s.soundcloudUrl ?? "");
+  }, [site]);
+
   // Sync pinned state from loaded site data
   useEffect(() => {
     if (!site) return;
@@ -180,6 +197,14 @@ export default function ArtistSitePage() {
     setPinnedActionText(s.pinnedActionText ?? "");
     setPinnedActionUrl(s.pinnedActionUrl ?? "");
   }, [site]);
+
+  async function saveIdentity() {
+    setSavingIdentity(true);
+    updateSite(
+      { genre: genreInput || null, role: roleInput || null, city: cityInput || null, soundcloudUrl: soundcloudInput || null } as never,
+      { onSettled: () => setSavingIdentity(false) }
+    );
+  }
 
   async function savePinned() {
     setSavingPinned(true);
@@ -468,6 +493,74 @@ export default function ArtistSitePage() {
                 {bioValue || "No bio yet. Click the pencil to add one."}
               </p>
             )}
+          </div>
+
+          {/* Artist Identity */}
+          <div
+            className="rounded-2xl border p-5 space-y-4"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <h2 className="text-sm font-semibold text-foreground">Artist Identity</h2>
+            <p className="text-xs text-muted-foreground -mt-2">
+              Shown as <span className="text-foreground font-medium">genre · role · city</span> under your name in the hero.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Genre</label>
+                <input
+                  type="text"
+                  value={genreInput}
+                  onChange={(e) => setGenreInput(e.target.value)}
+                  placeholder="e.g. Hip-Hop"
+                  maxLength={40}
+                  className="w-full px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Role</label>
+                <input
+                  type="text"
+                  value={roleInput}
+                  onChange={(e) => setRoleInput(e.target.value)}
+                  placeholder="e.g. Producer"
+                  maxLength={40}
+                  className="w-full px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">City</label>
+                <input
+                  type="text"
+                  value={cityInput}
+                  onChange={(e) => setCityInput(e.target.value)}
+                  placeholder="e.g. Atlanta"
+                  maxLength={40}
+                  className="w-full px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">SoundCloud URL</label>
+              <input
+                type="url"
+                value={soundcloudInput}
+                onChange={(e) => setSoundcloudInput(e.target.value)}
+                placeholder="https://soundcloud.com/yourname"
+                className="w-full px-3 py-2 rounded-lg border text-sm bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </div>
+            <button
+              onClick={saveIdentity}
+              disabled={savingIdentity}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {savingIdentity ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : <><Check size={13} /> Save Identity</>}
+            </button>
           </div>
 
           {/* Credential Badges */}

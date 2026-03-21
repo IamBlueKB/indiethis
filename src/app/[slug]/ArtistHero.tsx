@@ -65,9 +65,13 @@ export interface ArtistHeroProps {
   youtubeChannel:    string | null;
   spotifyUrl:        string | null;
   appleMusicUrl:     string | null;
+  soundcloudUrl:     string | null;
   followGateEnabled: boolean;
   firstTrack:        AudioTrack | null;
   allTracks:         AudioTrack[];
+  genre:             string | null;
+  role:              string | null;
+  city:              string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -81,9 +85,13 @@ export default function ArtistHero({
   youtubeChannel,
   spotifyUrl,
   appleMusicUrl,
+  soundcloudUrl,
   followGateEnabled,
   firstTrack,
   allTracks,
+  genre,
+  role,
+  city,
 }: ArtistHeroProps) {
   const loadTrack     = useAudioStore((s) => s.load);
   const playInContext = useAudioStore((s) => s.playInContext);
@@ -110,12 +118,17 @@ export default function ArtistHero({
   const bgSrc = photo || heroImage;
 
   const socials = [
-    { key: "spotify",   href: spotifyUrl,    label: "Spotify",     Icon: SpotifyIcon   },
-    { key: "apple",     href: appleMusicUrl, label: "Apple Music", Icon: AppleMusicIcon },
-    { key: "youtube",   href: youtubeChannel, label: "YouTube",    Icon: YoutubeIcon   },
-    { key: "instagram", href: instagramHandle ? `https://instagram.com/${instagramHandle.replace(/^@/, "")}` : null, label: "Instagram", Icon: InstagramIcon },
-    { key: "tiktok",    href: tiktokHandle   ? `https://tiktok.com/@${tiktokHandle.replace(/^@/, "")}` : null,    label: "TikTok",    Icon: TikTokIcon    },
+    { key: "spotify",    href: spotifyUrl,     label: "Spotify",     Icon: SpotifyIcon    },
+    { key: "apple",      href: appleMusicUrl,  label: "Apple Music", Icon: AppleMusicIcon },
+    { key: "youtube",    href: youtubeChannel, label: "YouTube",     Icon: YoutubeIcon    },
+    { key: "soundcloud", href: soundcloudUrl,  label: "SoundCloud",  Icon: SoundCloudIcon },
+    { key: "instagram",  href: instagramHandle ? `https://instagram.com/${instagramHandle.replace(/^@/, "")}` : null, label: "Instagram", Icon: InstagramIcon },
+    { key: "tiktok",     href: tiktokHandle   ? `https://tiktok.com/@${tiktokHandle.replace(/^@/, "")}` : null,    label: "TikTok",    Icon: TikTokIcon    },
   ].filter((s): s is typeof s & { href: string } => !!s.href);
+
+  // Identity line: join non-empty parts with ·
+  const identityParts = [genre, role, city].filter(Boolean);
+  const identityLine  = identityParts.length > 0 ? identityParts.join(" · ") : null;
 
   const followHref = followGateEnabled && instagramHandle
     ? `https://instagram.com/${instagramHandle.replace(/^@/, "")}`
@@ -162,6 +175,13 @@ export default function ArtistHero({
         >
           {displayName}
         </h1>
+
+        {/* Identity line: genre · role · city */}
+        {identityLine && (
+          <p style={{ fontSize: 12, color: "#999", marginTop: 2, marginBottom: 0 }}>
+            {identityLine}
+          </p>
+        )}
 
         {/* Social icons row */}
         {socials.length > 0 && (

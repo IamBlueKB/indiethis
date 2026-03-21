@@ -633,6 +633,11 @@ model ArtistSite {
   pinnedActionUrl       String?
   activityTickerEnabled Boolean            @default(false)
 
+  genre                 String?
+  role                  String?
+  city                  String?
+  soundcloudUrl         String?
+
   artist            User               @relation(fields: [artistId], references: [id])
 }
 

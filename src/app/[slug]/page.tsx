@@ -49,6 +49,7 @@ async function ArtistSite({ slug }: { slug: string }) {
           credentials: true, bookingRate: true,
           pinnedMessage: true, pinnedActionText: true, pinnedActionUrl: true,
           activityTickerEnabled: true,
+          genre: true, role: true, city: true, soundcloudUrl: true,
         },
       },
       // Releases with published tracks
@@ -164,9 +165,13 @@ async function ArtistSite({ slug }: { slug: string }) {
         youtubeChannel={artist.youtubeChannel ?? null}
         spotifyUrl={artist.spotifyUrl ?? null}
         appleMusicUrl={artist.appleMusicUrl ?? null}
+        soundcloudUrl={site.soundcloudUrl ?? null}
         followGateEnabled={site.followGateEnabled ?? false}
         firstTrack={firstTrack}
         allTracks={audioTracks}
+        genre={site.genre ?? null}
+        role={site.role ?? null}
+        city={site.city ?? null}
       />
 
       {/* Body */}

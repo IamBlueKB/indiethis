@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest) {
   const {
     bioContent, draftMode, isPublished, heroImage, followGateEnabled, pwywEnabled, credentials, bookingRate,
     pinnedMessage, pinnedActionText, pinnedActionUrl, activityTickerEnabled,
+    genre, role, city, soundcloudUrl,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -41,6 +42,10 @@ export async function PATCH(req: NextRequest) {
   if (pinnedActionText !== undefined) data.pinnedActionText = pinnedActionText || null;
   if (pinnedActionUrl !== undefined) data.pinnedActionUrl = pinnedActionUrl || null;
   if (activityTickerEnabled !== undefined) data.activityTickerEnabled = activityTickerEnabled;
+  if (genre !== undefined) data.genre = genre || null;
+  if (role !== undefined) data.role = role || null;
+  if (city !== undefined) data.city = city || null;
+  if (soundcloudUrl !== undefined) data.soundcloudUrl = soundcloudUrl || null;
 
   const site = await db.artistSite.upsert({
     where: { artistId: session.user.id },
