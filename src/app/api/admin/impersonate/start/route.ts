@@ -5,6 +5,8 @@ import { jwtVerify } from "jose";
 import { encode } from "@auth/core/jwt";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+
 const IMPERSONATE_COOKIE = "impersonation_meta";
 const SESSION_COOKIE =
   process.env.NODE_ENV === "production"
