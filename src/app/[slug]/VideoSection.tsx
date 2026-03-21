@@ -151,11 +151,17 @@ export default function VideoSection({ videos }: { videos: VideoItem[] }) {
   if (!valid.length) return null;
 
   return (
-    <section className="space-y-5">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">Videos</h2>
+    <section className="space-y-3">
+      <p
+        className="text-[10px] font-bold uppercase"
+        style={{ color: "#D4A843", letterSpacing: "1.5px" }}
+      >
+        WATCH
+      </p>
+      <h2 className="text-[18px] font-semibold text-white leading-tight -mt-1">Videos</h2>
 
       {/* 1-col on mobile, 2-col on desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
         {valid.map((video) => (
           <VideoTile key={video.id} video={video} />
         ))}
