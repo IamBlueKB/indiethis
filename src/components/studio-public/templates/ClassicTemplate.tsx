@@ -2,6 +2,7 @@
 import { MapPin, Phone, Mail, Clock, Quote } from "lucide-react";
 import Link from "next/link";
 import { ContactForm } from "../shared/ContactForm";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -351,13 +352,14 @@ export function ClassicTemplate({ studio, services, testimonials, featuredArtist
       </section>
 
       {/* FOOTER */}
-      <footer className="py-12 px-6 border-t text-center" style={{ borderColor: "rgba(10,10,10,0.1)", backgroundColor: "#F5F0E8" }}>
-        <p className="font-bold text-lg mb-1" style={{ fontFamily: "var(--font-playfair, serif)" }}>{studio.name}</p>
-        {fullAddress && <p className="text-sm mb-4" style={{ color: "rgba(10,10,10,0.4)" }}>{fullAddress}</p>}
-        <p className="text-xs" style={{ color: "rgba(10,10,10,0.3)" }}>
-          Powered by <span style={{ color: accent, fontWeight: 600 }}>IndieThis</span>
-        </p>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
     </div>
   );
 }

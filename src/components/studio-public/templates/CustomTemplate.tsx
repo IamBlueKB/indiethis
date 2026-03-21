@@ -6,6 +6,7 @@ import { PortfolioSection, type PortfolioTrack } from "@/components/studio-publi
 import { CreditsSection, type StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
 import { EngineersSection, type StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
 import { EquipmentSection, type EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
+import { FooterMinimal } from "@/components/studio-public/sections/FooterMinimal";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -799,21 +800,14 @@ export function CustomTemplate({
       </section>
 
       {/* ── FOOTER ────────────────────────────────────────────────────────── */}
-      <footer
-        className="py-10 px-6 border-t"
-        style={{ borderColor: "rgba(255,255,255,0.06)", backgroundColor: BG }}
-      >
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          <p className="font-bold" style={{ fontFamily: SERIF }}>{studio.name}</p>
-          <p
-            className="text-sm"
-            style={{ color: "rgba(255,255,255,0.3)", fontFamily: SANS }}
-          >
-            Powered by{" "}
-            <span style={{ color: GOLD, fontWeight: 600 }}>IndieThis</span>
-          </p>
-        </div>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={GOLD}
+      />
     </div>
   );
 }

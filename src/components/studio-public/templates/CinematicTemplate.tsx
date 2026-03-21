@@ -6,6 +6,7 @@ import { PortfolioSection, type PortfolioTrack } from "@/components/studio-publi
 import { CreditsSection, type StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
 import { EngineersSection, type StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
 import { EquipmentSection, type EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BG      = "#0A0A0A";
@@ -463,12 +464,14 @@ export function CinematicTemplate({ studio, services, testimonials, fullAddress,
       </section>
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "2.5rem", textAlign: "center" }}>
-        <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.2)" }}>
-          © {new Date().getFullYear()} {studio.name} · Powered by{" "}
-          <a href="https://indiethis.com" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>IndieThis</a>
-        </p>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={studio.slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
     </div>
   );
 }

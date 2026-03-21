@@ -2,6 +2,7 @@
 import { MapPin, Phone, Mail, Clock, Quote, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ContactForm } from "../shared/ContactForm";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -421,16 +422,14 @@ export function EditorialTemplate({ studio, services, testimonials, featuredArti
       </section>
 
       {/* FOOTER */}
-      <footer className="py-10 px-8 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <span className="text-xs font-bold uppercase tracking-[0.3em]" style={{ color: "rgba(255,255,255,0.3)" }}>
-            {studio.name}
-          </span>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
-            Powered by <span style={{ color: accent, fontWeight: 600 }}>IndieThis</span>
-          </span>
-        </div>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { PortfolioSection, type PortfolioTrack } from "@/components/studio-publi
 import { CreditsSection, type StudioCreditItem } from "@/components/studio-public/sections/CreditsSection";
 import { EngineersSection, type StudioEngineerItem } from "@/components/studio-public/sections/EngineersSection";
 import { EquipmentSection, type EquipmentItem } from "@/components/studio-public/sections/EquipmentSection";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BG    = "#0A0A0A";
@@ -451,13 +452,14 @@ export function GridTemplate({ studio, services, testimonials, fullAddress, mapQ
       </section>
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: "1.5rem 2rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontFamily: SERIF, fontSize: "0.9rem", fontWeight: 700, opacity: 0.4 }}>{studio.name}</span>
-        <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.2)" }}>
-          © {new Date().getFullYear()} · Powered by{" "}
-          <a href="https://indiethis.com" style={{ color: accent, textDecoration: "none" }}>IndieThis</a>
-        </p>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={studio.slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
     </div>
   );
 }

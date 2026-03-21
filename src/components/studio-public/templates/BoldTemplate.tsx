@@ -4,6 +4,7 @@ import { MapPin, Phone, Mail, Clock, Instagram, Twitter, Facebook, Youtube, Musi
 import Link from "next/link";
 import { ContactForm } from "../shared/ContactForm";
 import { GalleryGrid } from "../shared/GalleryGrid";
+import { FooterMinimal } from "../sections/FooterMinimal";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -398,19 +399,14 @@ export function BoldTemplate({ studio, services, featuredArtists, fullAddress, m
       </section>
 
       {/* FOOTER */}
-      <footer className="py-12 px-6 border-t" style={{ borderColor: "rgba(255,255,255,0.06)", backgroundColor: "#080808" }}>
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <p className="font-bold text-lg" style={{ fontFamily: "var(--font-playfair, serif)" }}>{studio.name}</p>
-            {fullAddress && <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{fullAddress}</p>}
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm justify-center" style={{ color: "rgba(255,255,255,0.3)" }}>
-            {studio.phone && <a href={`tel:${studio.phone}`} className="no-underline hover:opacity-70" style={{ color: "rgba(255,255,255,0.3)" }}>{studio.phone}</a>}
-            {studio.email && <a href={`mailto:${studio.email}`} className="no-underline hover:opacity-70" style={{ color: "rgba(255,255,255,0.3)" }}>{studio.email}</a>}
-            <span>Powered by <span style={{ color: accent, fontWeight: 600 }}>IndieThis</span></span>
-          </div>
-        </div>
-      </footer>
+      <FooterMinimal
+        studio={studio}
+        slug={slug}
+        fullAddress={fullAddress}
+        socials={socials}
+        content={{}}
+        accent={accent}
+      />
     </div>
   );
 }
