@@ -1,0 +1,259 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.pg{width:100%;background:#0A0A0A;color:#F5F5F5;font-family:'DM Sans',system-ui,sans-serif;overflow:hidden;border-radius:12px;font-size:13px}
+.s{padding:24px 28px}
+.lb{font-size:10px;color:#D4A843;letter-spacing:1.5px;margin-bottom:5px}
+.tt{font-size:18px;font-weight:600;margin-bottom:14px;letter-spacing:-0.5px}
+.hero{width:100%;height:300px;background:linear-gradient(to bottom,rgba(10,10,10,0.15),rgba(10,10,10,0.85) 75%,#0A0A0A 100%),linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);display:flex;flex-direction:column;justify-content:flex-end;padding:24px 28px}
+.hn{font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:3px}
+.hi{font-size:12px;color:#999;margin-bottom:10px}
+.hs{display:flex;gap:8px;margin-bottom:12px}
+.sd{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;color:#999}
+.hc{display:flex;gap:8px}
+.bc{background:#E85D4A;color:#fff;border:none;padding:7px 18px;border-radius:18px;font-size:11px;font-weight:600;cursor:pointer}
+.bg{background:transparent;color:#F5F5F5;border:1px solid rgba(255,255,255,0.2);padding:7px 18px;border-radius:18px;font-size:11px;cursor:pointer}
+.bs{font-size:11px;color:#D4A843;background:transparent;border:1px solid rgba(212,168,67,0.3);padding:5px 12px;border-radius:14px;cursor:pointer}
+.pin{background:linear-gradient(135deg,rgba(232,93,74,0.15),rgba(212,168,67,0.1));border:1px solid rgba(232,93,74,0.2);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.pin-dot{width:8px;height:8px;background:#E85D4A;border-radius:50%;flex-shrink:0}
+.pin-text{font-size:12px;flex:1}
+.pin-btn{font-size:10px;color:#E85D4A;border:1px solid rgba(232,93,74,0.3);background:transparent;padding:4px 12px;border-radius:12px;cursor:pointer;flex-shrink:0}
+.ticker{background:#111;border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;font-size:11px;color:#999;overflow:hidden}
+.ticker-dot{width:6px;height:6px;background:#4CAF50;border-radius:50%;flex-shrink:0}
+.presave{background:linear-gradient(135deg,#111,#1a1520);border-radius:12px;padding:16px;display:flex;gap:14px;align-items:center}
+.ps-art{width:80px;height:80px;background:linear-gradient(135deg,#2a1a3a,#3a1a2a);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#666}
+.ps-info{flex:1}
+.ps-title{font-size:14px;font-weight:600;margin-bottom:2px}
+.ps-date{font-size:11px;color:#999;margin-bottom:8px}
+.ps-timer{display:flex;gap:8px;margin-bottom:10px}
+.ps-unit{text-align:center}
+.ps-num{font-size:18px;font-weight:700;color:#D4A843}
+.ps-lbl{font-size:8px;color:#666;letter-spacing:0.5px}
+.ps-btns{display:flex;gap:6px}
+.fr{display:flex;gap:14px;background:#111;border-radius:10px;padding:14px;margin-bottom:12px}
+.ca{width:100px;height:100px;background:linear-gradient(135deg,#2a1a3a,#1a2a4a);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#666}
+.ri{flex:1;display:flex;flex-direction:column;justify-content:center}
+.rn{font-size:15px;font-weight:600;margin-bottom:2px}
+.rd{font-size:10px;color:#666;margin-bottom:8px}
+.wf{height:28px;background:linear-gradient(90deg,#E85D4A 35%,#D4A843 35%,rgba(212,168,67,0.3) 100%);border-radius:3px;margin-bottom:8px}
+.sl{display:flex;gap:6px;align-items:center}
+.sp{font-size:9px;color:#999;background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:10px}
+.tip{font-size:9px;color:#D4A843;cursor:pointer;margin-left:auto}
+.tr{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.tn{font-size:11px;color:#666;width:18px;text-align:center}
+.tc{width:36px;height:36px;background:linear-gradient(135deg,#1a2a3a,#2a1a2a);border-radius:4px;flex-shrink:0}
+.ti{flex:1}
+.tm{font-size:12px;font-weight:500}
+.tp{font-size:10px;color:#666}
+.tw{width:70px;height:18px;background:rgba(212,168,67,0.2);border-radius:3px}
+.ttip{font-size:9px;color:#D4A843;cursor:pointer}
+.vg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vt{height:90px;background:linear-gradient(135deg,#1a1a2e,#0f3460);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.pi{width:28px;height:28px;background:rgba(255,255,255,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px}
+.pg2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.ph{height:80px;background:linear-gradient(135deg,#1a2a2a,#2a1a2a);border-radius:6px}
+.sc{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.sdt{text-align:center;min-width:42px}
+.sm{font-size:9px;color:#D4A843;letter-spacing:1px}
+.sdy{font-size:20px;font-weight:700}
+.si{flex:1}
+.sv{font-size:12px;font-weight:500}
+.scity{font-size:10px;color:#666}
+.sbdg{font-size:8px;background:#E85D4A;color:#fff;padding:2px 6px;border-radius:8px;margin-left:6px}
+.cap{background:#111;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.cap-row{display:flex;gap:8px}
+.cap-in{flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:9px 12px;font-size:11px;color:#999}
+.ms{display:flex;gap:10px;overflow-x:auto}
+.mc{min-width:120px;background:#111;border-radius:8px;overflow:hidden;flex-shrink:0}
+.mi{height:120px;background:linear-gradient(135deg,#2a2a1a,#1a2a2a);display:flex;align-items:center;justify-content:center;font-size:9px;color:#666}
+.md{padding:8px}
+.mn{font-size:11px;font-weight:500;margin-bottom:1px}
+.mp{font-size:11px;color:#D4A843}
+.sup{background:#111;border-radius:10px;padding:16px;text-align:center}
+.sup-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.sup-sub{font-size:11px;color:#999;margin-bottom:12px}
+.sup-amounts{display:flex;justify-content:center;gap:8px;margin-bottom:12px}
+.sup-amt{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;font-size:13px;color:#D4A843;cursor:pointer}
+.sup-amt.active{border-color:#D4A843;background:rgba(212,168,67,0.1)}
+.abt-row{display:flex;gap:16px}
+.abt-photo{width:90px;height:90px;background:linear-gradient(135deg,#1a1a2e,#2a1a3a);border-radius:10px;flex-shrink:0}
+.abt-txt{flex:1}
+.abt-bio{font-size:11px;color:#999;line-height:1.6;margin-bottom:8px}
+.bdg-row{display:flex;gap:6px;flex-wrap:wrap}
+.bdg{font-size:9px;color:#D4A843;background:rgba(212,168,67,0.1);padding:3px 8px;border-radius:8px}
+.cosign{background:#111;border-radius:8px;padding:12px;margin-top:12px}
+.cosign-q{font-size:12px;font-style:italic;color:#ccc;margin-bottom:6px}
+.cosign-a{font-size:10px;color:#D4A843}
+.collab{display:flex;gap:10px;margin-top:12px}
+.collab-av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#2a1a3a,#1a3a2a);flex-shrink:0}
+.collab-n{font-size:10px;text-align:center;margin-top:3px;color:#999}
+.press-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.press-src{font-size:10px;color:#D4A843;min-width:60px}
+.press-title{font-size:11px;flex:1}
+.press-link{font-size:10px;color:#999}
+.bk{display:flex;flex-direction:column;gap:8px}
+.bk-row{display:flex;gap:8px}
+.bk-in{flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:9px;font-size:11px;color:#999}
+.bk-ta{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:9px;font-size:11px;color:#999;height:50px}
+.ft{padding:16px 28px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center}
+.ft-s{display:flex;gap:6px}
+.ft-qr{width:36px;height:36px;background:rgba(255,255,255,0.06);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:7px;color:#666}
+.ft-b{font-size:10px;color:#666}
+.ft-b span{color:#D4A843}
+.pb{background:#111;border-top:1px solid rgba(255,255,255,0.08);padding:10px 20px;display:flex;align-items:center;gap:10px}
+.pb-c{width:34px;height:34px;background:linear-gradient(135deg,#2a1a3a,#1a2a4a);border-radius:4px;flex-shrink:0}
+.pb-i{flex:0 0 auto;min-width:70px}
+.pb-t{font-size:11px;font-weight:500}
+.pb-a{font-size:9px;color:#666}
+.pb-ct{display:flex;align-items:center;gap:10px;font-size:10px;color:#999}
+.pb-pl{width:28px;height:28px;background:#D4A843;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px}
+.pb-w{flex:1;height:20px;background:linear-gradient(90deg,#E85D4A 25%,rgba(212,168,67,0.3) 25%);border-radius:3px}
+.pb-tm{font-size:9px;color:#666;min-width:55px;text-align:right}
+.dl-btn{display:flex;align-items:center;gap:6px;font-size:10px;color:#999;background:rgba(255,255,255,0.06);padding:6px 12px;border-radius:8px;cursor:pointer;margin-top:8px;width:fit-content}
+</style>
+<div class="pg">
+<div class="hero">
+<div style="font-size:10px;color:#999;letter-spacing:1.5px;margin-bottom:4px">ARTIST</div>
+<div class="hn">Jordan Waves</div>
+<div class="hi">Hip-Hop · Producer · Songwriter · Chicago</div>
+<div class="hs"><div class="sd">SP</div><div class="sd">AM</div><div class="sd">YT</div><div class="sd">IG</div><div class="sd">SC</div></div>
+<div class="hc"><button class="bc">Listen Now</button><button class="bg">Follow</button></div>
+</div>
+
+<div class="s">
+<div class="pin"><div class="pin-dot"></div><div class="pin-text">New single "City Lights" drops Friday! Pre-save now</div><button class="pin-btn">Pre-save</button></div>
+</div>
+
+<div class="s" style="padding-top:0">
+<div class="ticker"><div class="ticker-dot"></div>14 people listening now · Sarah just bought Midnight Hoodie · Jake pre-saved City Lights</div>
+</div>
+
+<div class="s" style="padding-top:0">
+<div class="lb">UPCOMING RELEASE</div>
+<div class="presave">
+<div class="ps-art">ART</div>
+<div class="ps-info">
+<div class="ps-title">City Lights — Single</div>
+<div class="ps-date">Drops March 28, 2026</div>
+<div class="ps-timer"><div class="ps-unit"><div class="ps-num">4</div><div class="ps-lbl">DAYS</div></div><div class="ps-unit"><div class="ps-num">12</div><div class="ps-lbl">HRS</div></div><div class="ps-unit"><div class="ps-num">34</div><div class="ps-lbl">MIN</div></div><div class="ps-unit"><div class="ps-num">08</div><div class="ps-lbl">SEC</div></div></div>
+<div class="ps-btns"><button class="bs">Pre-save Spotify</button><button class="bs">Pre-save Apple</button></div>
+</div>
+</div>
+</div>
+
+<div class="s">
+<div class="lb">LATEST RELEASE</div>
+<div class="tt">Music</div>
+<div class="fr">
+<div class="ca">COVER</div>
+<div class="ri">
+<div class="rn">Midnight Drive</div>
+<div class="rd">Released Mar 15, 2026</div>
+<div class="wf"></div>
+<div class="sl"><div class="sp">Spotify</div><div class="sp">Apple</div><div class="sp">YouTube</div><div class="tip">$ Tip</div></div>
+</div>
+</div>
+<div class="tr"><div class="tn">1</div><div class="tc"></div><div class="ti"><div class="tm">Midnight Drive</div><div class="tp">2,341 plays</div></div><div class="tw"></div><div class="ttip">$ Tip</div></div>
+<div class="tr"><div class="tn">2</div><div class="tc"></div><div class="ti"><div class="tm">Golden Hour</div><div class="tp">1,892 plays</div></div><div class="tw"></div><div class="ttip">$ Tip</div></div>
+<div class="tr"><div class="tn">3</div><div class="tc"></div><div class="ti"><div class="tm">Neon Nights</div><div class="tp">1,104 plays</div></div><div class="tw"></div><div class="ttip">$ Tip</div></div>
+</div>
+
+<div class="s">
+<div class="lb">WATCH</div>
+<div class="tt">Videos</div>
+<div class="vg"><div class="vt"><div class="pi">&#9654;</div></div><div class="vt"><div class="pi">&#9654;</div></div></div>
+</div>
+
+<div class="s">
+<div class="lb">GALLERY</div>
+<div class="tt">Photos</div>
+<div class="pg2"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+</div>
+
+<div class="s">
+<div class="lb">LIVE</div>
+<div class="tt">Shows</div>
+<div class="sc"><div class="sdt"><div class="sm">MAR</div><div class="sdy">28</div></div><div class="si"><div class="sv">The Metro<span class="sbdg">This Week</span></div><div class="scity">Chicago, IL</div></div><button class="bs">Tickets</button></div>
+<div class="sc"><div class="sdt"><div class="sm">APR</div><div class="sdy">12</div></div><div class="si"><div class="sv">Subterranean</div><div class="scity">Chicago, IL</div></div><button class="bs">Tickets</button></div>
+</div>
+
+<div class="s">
+<div class="cap">
+<div style="font-size:12px;font-weight:500;margin-bottom:4px">Get Jordan's next release before anyone else</div>
+<div class="cap-row"><div class="cap-in">Email address</div><div class="cap-in" style="max-width:120px">Phone (optional)</div><button class="bc" style="flex-shrink:0">Notify Me</button></div>
+</div>
+</div>
+
+<div class="s">
+<div class="lb">SHOP</div>
+<div class="tt">Merch</div>
+<div class="ms">
+<div class="mc"><div class="mi">IMG</div><div class="md"><div class="mn">Midnight Hoodie</div><div class="mp">$45.00</div></div></div>
+<div class="mc"><div class="mi">IMG</div><div class="md"><div class="mn">Waves Tee</div><div class="mp">$28.00</div></div></div>
+<div class="mc"><div class="mi">IMG</div><div class="md"><div class="mn">Signed Poster</div><div class="mp">$15.00</div></div></div>
+<div class="mc"><div class="mi">IMG</div><div class="md"><div class="mn">Vinyl LP</div><div class="mp">$32.00</div></div></div>
+</div>
+</div>
+
+<div class="s">
+<div class="lb">SUPPORT</div>
+<div class="sup">
+<div class="sup-title">Support Jordan Waves</div>
+<div class="sup-sub">Show love directly — pick an amount or enter your own</div>
+<div class="sup-amounts"><div class="sup-amt">$1</div><div class="sup-amt active">$5</div><div class="sup-amt">$10</div><div class="sup-amt">$25</div></div>
+<button class="bc">Send Support</button>
+</div>
+</div>
+
+<div class="s">
+<div class="lb">ABOUT</div>
+<div class="abt-row">
+<div class="abt-photo"></div>
+<div class="abt-txt">
+<div class="abt-bio">Jordan Waves is a Chicago-born hip-hop artist and producer blending melodic rap with cinematic production. With over 500K streams and features on major editorial playlists, Jordan is building a movement one track at a time.</div>
+<div class="bdg-row"><div class="bdg">500K+ Streams</div><div class="bdg">Rap Caviar Feature</div><div class="bdg">The Metro Headliner</div></div>
+</div>
+</div>
+<div class="cosign"><div class="cosign-q">"Jordan is the future of Chicago hip-hop. Every track hits different."</div><div class="cosign-a">— Metro Boomin, Producer</div></div>
+<div style="margin-top:14px"><div class="lb">COLLABORATORS</div></div>
+<div class="collab">
+<div style="text-align:center"><div class="collab-av"></div><div class="collab-n">Ace Beats</div></div>
+<div style="text-align:center"><div class="collab-av"></div><div class="collab-n">Mia Soul</div></div>
+<div style="text-align:center"><div class="collab-av"></div><div class="collab-n">DJ Phantom</div></div>
+</div>
+</div>
+
+<div class="s">
+<div class="lb">PRESS</div>
+<div class="tt">In the Media</div>
+<div class="press-item"><div class="press-src">Complex</div><div class="press-title">"10 Chicago Artists to Watch in 2026"</div><div class="press-link">Read ></div></div>
+<div class="press-item"><div class="press-src">Pitchfork</div><div class="press-title">"Midnight Drive Review: A Cinematic Debut"</div><div class="press-link">Read ></div></div>
+</div>
+
+<div class="s">
+<div class="lb">BOOKING</div>
+<div class="tt">Get in Touch</div>
+<div class="bk">
+<div class="bk-row"><div class="bk-in">Name</div><div class="bk-in">Email</div></div>
+<div class="bk-in">Inquiry — Booking / Feature / Press / Management / Other</div>
+<div class="bk-ta">Your message...</div>
+<button class="bc" style="align-self:flex-start">Send Message</button>
+</div>
+<div class="dl-btn">&#9660; Save Contact Card</div>
+</div>
+
+<div class="ft">
+<div style="display:flex;align-items:center;gap:12px">
+<div class="ft-s"><div class="sd" style="width:22px;height:22px;font-size:8px">IG</div><div class="sd" style="width:22px;height:22px;font-size:8px">TK</div><div class="sd" style="width:22px;height:22px;font-size:8px">YT</div></div>
+<div class="ft-qr">QR</div>
+</div>
+<div class="ft-b">Powered by Indie<span>This</span></div>
+</div>
+
+<div class="pb">
+<div class="pb-c"></div>
+<div class="pb-i"><div class="pb-t">Midnight Drive</div><div class="pb-a">Jordan Waves</div></div>
+<div class="pb-ct">&#9198; <div class="pb-pl">&#9654;</div> &#9197;</div>
+<div class="pb-w"></div>
+<div class="pb-tm">1:24 / 3:45</div>
+</div>
+</div>

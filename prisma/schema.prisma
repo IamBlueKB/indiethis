@@ -259,6 +259,13 @@ enum AdminRole {
   SUPPORT_ADMIN
 }
 
+enum ReleaseType {
+  SINGLE
+  EP
+  ALBUM
+  MIXTAPE
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -360,6 +367,11 @@ model User {
   affiliate          Affiliate?
   affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
   attribution        UserAttribution?
+  artistReleases     ArtistRelease[]
+  artistPhotos       ArtistPhoto[]
+  artistTestimonials ArtistTestimonial[]
+  artistCollaborators ArtistCollaborator[]
+  artistPressItems   ArtistPressItem[]
 }
 
 model Studio {
@@ -515,10 +527,12 @@ model Track {
   downloads   Int         @default(0)
   earnings    Float       @default(0)
   projectName String?
+  releaseId   String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  artist       User          @relation(fields: [artistId], references: [id])
+  artist       User           @relation(fields: [artistId], references: [id])
+  release      ArtistRelease? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
   beatPreviews BeatPreview[]
   beatLicenses BeatLicense[]
   trackPlays   TrackPlay[]
@@ -613,6 +627,11 @@ model ArtistSite {
   draftMode         Boolean            @default(true)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+
+  pinnedMessage         String?
+  pinnedActionText      String?
+  pinnedActionUrl       String?
+  activityTickerEnabled Boolean            @default(false)
 
   artist            User               @relation(fields: [artistId], references: [id])
 }
@@ -1341,4 +1360,76 @@ model AdminAccount {
 
   @@index([email])
   @@index([role])
+}
+
+// ─── Artist Website Extensions ────────────────────────────────────────────────
+
+model ArtistRelease {
+  id          String      @id @default(cuid())
+  artistId    String
+  title       String
+  coverUrl    String?
+  releaseDate DateTime?
+  type        ReleaseType @default(SINGLE)
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  artist      User        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  tracks      Track[]
+
+  @@index([artistId])
+}
+
+model ArtistPhoto {
+  id        String   @id @default(cuid())
+  artistId  String
+  imageUrl  String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistTestimonial {
+  id          String   @id @default(cuid())
+  artistId    String
+  quote       String
+  attribution String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistCollaborator {
+  id         String   @id @default(cuid())
+  artistId   String
+  name       String
+  photoUrl   String?
+  artistSlug String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  artist     User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistPressItem {
+  id        String   @id @default(cuid())
+  artistId  String
+  source    String
+  title     String
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
 }

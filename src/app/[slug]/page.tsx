@@ -1,18 +1,24 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import TrackList from "./TrackList";
 import MerchGrid from "./MerchGrid";
 import ArtistHero from "./ArtistHero";
+import PinnedAnnouncement from "./PinnedAnnouncement";
+import ActivityTicker from "./ActivityTicker";
 import PreSaveCampaignCard from "./PreSaveCampaignCard";
 import VideoSection from "./VideoSection";
+import PhotoGallery from "./PhotoGallery";
 import ShowsSection from "./ShowsSection";
 import SupportSection from "./SupportSection";
 import ReleaseCapture from "./ReleaseCapture";
 import AboutSection from "./AboutSection";
+import TestimonialsSection from "./TestimonialsSection";
+import CollaboratorsSection from "./CollaboratorsSection";
+import PressSection from "./PressSection";
 import BookingSection from "./BookingSection";
 import ArtistFooter from "./ArtistFooter";
 import ArtistPageViewTracker from "./ArtistPageViewTracker";
+import ArtistNav from "./ArtistNav";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -26,7 +32,7 @@ type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ARTIST SITE  (unchanged)
+// ARTIST SITE
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function ArtistSite({ slug }: { slug: string }) {
@@ -36,12 +42,50 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true,
-      artistSite: { select: { isPublished: true, draftMode: true, bioContent: true, heroImage: true, followGateEnabled: true, showVideos: true, pwywEnabled: true, credentials: true, bookingRate: true } },
-      tracks: { where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, take: 10,
-        select: { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true } },
-      merchProducts: { where: { isActive: true }, orderBy: { createdAt: "desc" }, take: 6,
-        select: { id: true, title: true, imageUrl: true, basePrice: true, artistMarkup: true, productType: true } },
+      artistSite: {
+        select: {
+          isPublished: true, draftMode: true, bioContent: true, heroImage: true,
+          followGateEnabled: true, showVideos: true, pwywEnabled: true,
+          credentials: true, bookingRate: true,
+          pinnedMessage: true, pinnedActionText: true, pinnedActionUrl: true,
+          activityTickerEnabled: true,
+        },
+      },
+      // Releases with published tracks
+      artistReleases: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          tracks: {
+            where:   { status: "PUBLISHED" },
+            orderBy: { createdAt: "asc" },
+            take:    10,
+            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true },
+          },
+        },
+      },
+      // Loose published tracks (no release assigned)
+      tracks: {
+        where:   { status: "PUBLISHED", releaseId: null },
+        orderBy: { createdAt: "desc" },
+        take:    10,
+        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true },
+      },
+      merchProducts: {
+        where:   { isActive: true },
+        orderBy: { createdAt: "desc" },
+        take:    6,
+        select:  { id: true, title: true, imageUrl: true, basePrice: true, artistMarkup: true, productType: true },
+      },
       studios: { take: 1, include: { studio: { select: { slug: true, name: true } } } },
+      // New content
+      artistPhotos:        { orderBy: { sortOrder: "asc" }, take: 9,
+                             select: { id: true, imageUrl: true, caption: true } },
+      artistTestimonials:  { orderBy: { sortOrder: "asc" },
+                             select: { id: true, quote: true, attribution: true } },
+      artistCollaborators: { orderBy: { sortOrder: "asc" },
+                             select: { id: true, name: true, photoUrl: true, artistSlug: true } },
+      artistPressItems:    { orderBy: { sortOrder: "asc" },
+                             select: { id: true, source: true, title: true, url: true } },
     },
   });
 
@@ -52,7 +96,10 @@ async function ArtistSite({ slug }: { slug: string }) {
   const bio         = site.bioContent || artist.bio;
   const studioSlug  = artist.studios[0]?.studio?.slug;
 
-  // Artist videos (for public page)
+  // Filter releases that actually have tracks
+  const releases = artist.artistReleases.filter((r) => r.tracks.length > 0);
+
+  // Artist videos
   const videos = site.showVideos !== false
     ? await db.artistVideo.findMany({
         where:   { artistId: artist.id },
@@ -62,22 +109,26 @@ async function ArtistSite({ slug }: { slug: string }) {
       })
     : [];
 
-  // Upcoming shows — sorted ascending, only future dates
+  // Upcoming shows
   const shows = await db.artistShow.findMany({
     where:   { artistId: artist.id, date: { gte: new Date() } },
     orderBy: { date: "asc" },
     select:  { id: true, venueName: true, city: true, date: true, ticketUrl: true, isSoldOut: true },
   });
 
-  // Active pre-save campaign (most recently created one)
+  // Active pre-save campaign
   const campaign = await db.preSaveCampaign.findFirst({
     where:   { artistId: artist.id, isActive: true },
     orderBy: { createdAt: "desc" },
     select:  { id: true, title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
   });
 
-  // Build AudioTrack objects for the store queue
-  const audioTracks = artist.tracks.map((t) => ({
+  // Build audio tracks for the store queue (all published tracks across releases + loose)
+  const allPublishedTracks = [
+    ...releases.flatMap((r) => r.tracks),
+    ...artist.tracks,
+  ];
+  const audioTracks = allPublishedTracks.map((t) => ({
     id:       t.id,
     title:    t.title,
     artist:   displayName,
@@ -86,18 +137,28 @@ async function ArtistSite({ slug }: { slug: string }) {
   }));
   const firstTrack = audioTracks[0] ?? null;
 
+  const hasMusic = releases.length > 0 || artist.tracks.length > 0;
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
 
-      {/* ── Page view tracker — fires once on mount, skips owner + dedup ── */}
+      {/* Page view tracker */}
       <ArtistPageViewTracker artistSlug={slug} />
 
-      {/* ── Full-bleed hero ────────────────────────────────────────────── */}
+      {/* Sticky nav */}
+      <ArtistNav
+        displayName={displayName}
+        hasMusic={hasMusic}
+        hasShows={shows.length > 0}
+        hasMerch={artist.merchProducts.length > 0}
+        hasAbout={!!bio}
+      />
+
+      {/* 1. Hero — full-bleed */}
       <ArtistHero
         displayName={displayName}
         photo={artist.photo ?? null}
         heroImage={site.heroImage ?? null}
-        identityLine={null}
         instagramHandle={artist.instagramHandle ?? null}
         tiktokHandle={artist.tiktokHandle ?? null}
         youtubeChannel={artist.youtubeChannel ?? null}
@@ -108,10 +169,24 @@ async function ArtistSite({ slug }: { slug: string }) {
         allTracks={audioTracks}
       />
 
-      {/* ── Body content ─────────────────────────────────────────────────── */}
+      {/* Body */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
 
-        {/* 1. Pre-save / release card — only when active campaign exists */}
+        {/* 2. Pinned Announcement */}
+        {site.pinnedMessage && (
+          <PinnedAnnouncement
+            message={site.pinnedMessage}
+            actionText={site.pinnedActionText ?? undefined}
+            actionUrl={site.pinnedActionUrl ?? undefined}
+          />
+        )}
+
+        {/* 3. Activity Ticker */}
+        {site.activityTickerEnabled && (
+          <ActivityTicker artistSlug={slug} />
+        )}
+
+        {/* 4. Pre-save Campaign */}
         {campaign && (
           <PreSaveCampaignCard
             campaignId={campaign.id}
@@ -123,85 +198,104 @@ async function ArtistSite({ slug }: { slug: string }) {
           />
         )}
 
-        {/* 2. Music — only when published tracks exist */}
-        {artist.tracks.length > 0 && (
-          <TrackList
-            tracks={artist.tracks}
-            artistName={displayName}
-            artistSlug={slug}
-            followGateEnabled={site.followGateEnabled ?? false}
-            instagramHandle={artist.instagramHandle ?? null}
-            spotifyUrl={artist.spotifyUrl ?? null}
-            appleMusicUrl={artist.appleMusicUrl ?? null}
-            youtubeChannel={artist.youtubeChannel ?? null}
-          />
+        {/* 5. Music */}
+        {hasMusic && (
+          <div id="music">
+            <TrackList
+              releases={releases.map((r) => ({
+                id:          r.id,
+                title:       r.title,
+                coverUrl:    r.coverUrl ?? null,
+                releaseDate: r.releaseDate ? r.releaseDate.toISOString() : null,
+                type:        r.type,
+                tracks:      r.tracks,
+              }))}
+              looseTracks={artist.tracks}
+              artistName={displayName}
+              artistSlug={slug}
+              followGateEnabled={site.followGateEnabled ?? false}
+              instagramHandle={artist.instagramHandle ?? null}
+              spotifyUrl={artist.spotifyUrl ?? null}
+              appleMusicUrl={artist.appleMusicUrl ?? null}
+              youtubeChannel={artist.youtubeChannel ?? null}
+            />
+          </div>
         )}
 
-        {/* 3. Videos — only when videos exist */}
+        {/* 6. Videos */}
         {videos.length > 0 && <VideoSection videos={videos} />}
 
-        {/* 4. Shows — only when upcoming shows exist */}
-        {shows.length > 0 && (
-          <ShowsSection
-            shows={shows.map((s) => ({ ...s, date: s.date.toISOString() }))}
-            artistName={displayName}
-            artistId={artist.id}
-          />
+        {/* 7. Photos */}
+        {artist.artistPhotos.length > 0 && (
+          <PhotoGallery photos={artist.artistPhotos} />
         )}
 
-        {/* 5. Email capture — release notifications (always visible) */}
+        {/* 8. Shows */}
+        {shows.length > 0 && (
+          <div id="shows">
+            <ShowsSection
+              shows={shows.map((s) => ({ ...s, date: s.date.toISOString() }))}
+              artistName={displayName}
+              artistId={artist.id}
+            />
+          </div>
+        )}
+
+        {/* 9. Email/SMS Capture */}
         <ReleaseCapture artistSlug={slug} artistName={displayName} />
 
-        {/* 6. Merch — only when active products exist */}
+        {/* 10. Merch */}
         {artist.merchProducts.length > 0 && (
-          <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
+          <div id="merch">
+            <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
+          </div>
         )}
 
-        {/* 7. Support / Tip Jar — only when artist has enabled PWYW */}
+        {/* 11. Support */}
         {site.pwywEnabled && (
-          <SupportSection artistSlug={slug} artistName={displayName} />
+          <div id="support">
+            <SupportSection artistSlug={slug} artistName={displayName} />
+          </div>
         )}
 
-        {/* 8. About — only when bio exists */}
+        {/* 12. About */}
         {bio && (
-          <div className="space-y-4">
+          <div id="about">
             <AboutSection
               bio={bio}
               photo={artist.photo ?? null}
               displayName={displayName}
               credentials={site.credentials ?? []}
+              studioSlug={studioSlug ?? null}
             />
-            {studioSlug && (
-              <Link
-                href={`/${studioSlug}/intake`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold no-underline"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-              >
-                Book a Session
-              </Link>
-            )}
           </div>
         )}
 
-        {/* Studio session link — if no bio but studio linked */}
-        {!bio && studioSlug && (
-          <Link
-            href={`/${studioSlug}/intake`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold no-underline"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            Book a Session
-          </Link>
+        {/* 13. Testimonials */}
+        {artist.artistTestimonials.length > 0 && (
+          <TestimonialsSection testimonials={artist.artistTestimonials} />
         )}
 
-        {/* 9. Booking / Contact — always visible */}
-        <BookingSection
-          artistSlug={slug}
-          artistName={displayName}
-          bookingRate={site.bookingRate ?? null}
-        />
+        {/* 14. Collaborators */}
+        {artist.artistCollaborators.length > 0 && (
+          <CollaboratorsSection collaborators={artist.artistCollaborators} />
+        )}
 
-        {/* 10. Footer: social icons + Powered by + QR */}
+        {/* 15. Press */}
+        {artist.artistPressItems.length > 0 && (
+          <PressSection items={artist.artistPressItems} />
+        )}
+
+        {/* 16. Booking */}
+        <div id="booking">
+          <BookingSection
+            artistSlug={slug}
+            artistName={displayName}
+            bookingRate={site.bookingRate ?? null}
+          />
+        </div>
+
+        {/* 17. Footer */}
         <ArtistFooter
           artistSlug={slug}
           instagramHandle={artist.instagramHandle ?? null}
@@ -250,7 +344,6 @@ export default async function SlugPage({
   });
 
   if (studio) {
-    // Not published → 404 (public page not live)
     if (!studio.isPublished) notFound();
 
     const services: ServiceItem[] = studio.servicesJson
@@ -258,12 +351,12 @@ export default async function SlugPage({
       : studio.services.length > 0
         ? studio.services.map((s) => ({ name: s, price: "", description: "" }))
         : [
-            { name: "Recording",        price: "",  description: "" },
-            { name: "Mixing",           price: "",  description: "" },
-            { name: "Mastering",        price: "",  description: "" },
-            { name: "Vocal Production", price: "",  description: "" },
-            { name: "Beat Making",      price: "",  description: "" },
-            { name: "Podcast",          price: "",  description: "" },
+            { name: "Recording",        price: "", description: "" },
+            { name: "Mixing",           price: "", description: "" },
+            { name: "Mastering",        price: "", description: "" },
+            { name: "Vocal Production", price: "", description: "" },
+            { name: "Beat Making",      price: "", description: "" },
+            { name: "Podcast",          price: "", description: "" },
           ];
 
     const testimonials: Testimonial[] = studio.testimonials ? JSON.parse(studio.testimonials) : [];
@@ -288,10 +381,8 @@ export default async function SlugPage({
     const galleryImages: string[] = Array.isArray(studio.galleryImages) ? studio.galleryImages as string[] : [];
     const templateProps = { studio, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages };
 
-    // Template dispatch
     const template = studio.template ?? "CLASSIC";
 
-    // ?preview=TEMPLATE — bypass stored template/config, show any template live
     if (preview === "CLEAN")      return <CleanTemplate     {...templateProps} />;
     if (preview === "CINEMATIC")  return <CinematicTemplate {...templateProps} />;
     if (preview === "GRID")       return <GridTemplate      {...templateProps} />;
@@ -299,15 +390,11 @@ export default async function SlugPage({
       return <DefaultTemplate {...templateProps} templateStyle={preview} />;
     }
 
-    // CLEAN / CINEMATIC / GRID — always use their own renderer, never pageConfig
-    if (template === "CLEAN")      return <><PageViewTracker studioId={studio.id} /><CleanTemplate     {...templateProps} /></>;
-    if (template === "CINEMATIC")  return <><PageViewTracker studioId={studio.id} /><CinematicTemplate {...templateProps} /></>;
-    if (template === "GRID")       return <><PageViewTracker studioId={studio.id} /><GridTemplate      {...templateProps} /></>;
+    if (template === "CLEAN")     return <><PageViewTracker studioId={studio.id} /><CleanTemplate     {...templateProps} /></>;
+    if (template === "CINEMATIC") return <><PageViewTracker studioId={studio.id} /><CinematicTemplate {...templateProps} /></>;
+    if (template === "GRID")      return <><PageViewTracker studioId={studio.id} /><GridTemplate      {...templateProps} /></>;
+    if (template === "CUSTOM")    return <><PageViewTracker studioId={studio.id} /><CustomTemplate    {...templateProps} /></>;
 
-    // CUSTOM — always use CustomTemplate
-    if (template === "CUSTOM")     return <><PageViewTracker studioId={studio.id} /><CustomTemplate    {...templateProps} /></>;
-
-    // CLASSIC / BOLD / EDITORIAL — use generated pageConfig if available, else DefaultTemplate fallback
     const pageConfig = studio.pageConfig as PageConfig | null;
     if (pageConfig?.sections?.length) {
       return (
