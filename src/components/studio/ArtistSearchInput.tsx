@@ -28,7 +28,7 @@ export function ArtistSearchInput({
   const [results, setResults] = useState<ArtistResult[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isFocused = useRef(false);
 
   // Sync query when parent resets the form (name changes to "" or a new value externally)

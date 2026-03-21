@@ -9,7 +9,7 @@ export function BookingCtaDramatic({ content, studio, accent }: SectionSharedPro
   } = content;
   const A = "var(--studio-accent)";
   const slug = studio.slug;
-  const headlineParts = headline.split("\n");
+  const headlineParts: string[] = String(headline).split("\n");
 
   return (
     <section

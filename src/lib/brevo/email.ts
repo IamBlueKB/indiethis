@@ -688,3 +688,57 @@ export async function sendDiscountEndedEmail(user: {
     tags: ["discount", "ended"],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Ambassador emails
+// ---------------------------------------------------------------------------
+
+export async function sendAmbassadorRewardEmail(
+  ambassador: { name: string; email: string },
+  amount: number,
+  event: string
+): Promise<void> {
+  const eventLabel: Record<string, string> = {
+    SIGNUP: "a new signup",
+    CONVERSION: "a conversion",
+    UPGRADE: "a tier upgrade",
+  };
+  await sendEmail({
+    to: { email: ambassador.email, name: ambassador.name },
+    subject: `You earned $${amount.toFixed(2)} — IndieThis Ambassador`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;color:#D4A843;">You earned $${amount.toFixed(2)}! 🎉</h1>
+        <p>Hi ${ambassador.name}, you just earned <strong>$${amount.toFixed(2)}</strong> for ${eventLabel[event] ?? event} through your ambassador code.</p>
+        <p>Your balance is updated and will be paid out automatically once it reaches $25.</p>
+        <a href="${APP_URL()}/ambassador" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">View Dashboard →</a>
+      </div>
+    `,
+    tags: ["ambassador", "reward"],
+  });
+}
+
+export async function sendAmbassadorPayoutEmail(
+  ambassador: { name: string; email: string },
+  amount: number,
+  method: string
+): Promise<void> {
+  const methodLabel: Record<string, string> = {
+    STRIPE_CONNECT: "Stripe",
+    CREDIT: "account credit",
+    MANUAL: "manual transfer",
+  };
+  await sendEmail({
+    to: { email: ambassador.email, name: ambassador.name },
+    subject: `Payout sent: $${amount.toFixed(2)} — IndieThis`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Payout Sent ✓</h1>
+        <p>Hi ${ambassador.name}, a payout of <strong>$${amount.toFixed(2)}</strong> has been sent via ${methodLabel[method] ?? method}.</p>
+        <p>Please allow 1–3 business days for funds to appear depending on your payout method.</p>
+        <a href="${APP_URL()}/ambassador" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">View Dashboard →</a>
+      </div>
+    `,
+    tags: ["ambassador", "payout"],
+  });
+}

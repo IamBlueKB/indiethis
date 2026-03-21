@@ -14,13 +14,14 @@ async function own(id: string, userId: string) {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const existing = await own(params.id, session.user.id);
+    const existing = await own(id, session.user.id);
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const body = await req.json() as Partial<{
@@ -33,7 +34,7 @@ export async function PATCH(
     }>;
 
     const updated = await db.preSaveCampaign.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(body.title        !== undefined && { title:        body.title }),
         ...(body.artUrl       !== undefined && { artUrl:       body.artUrl }),
@@ -53,16 +54,17 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const existing = await own(params.id, session.user.id);
+    const existing = await own(id, session.user.id);
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    await db.preSaveCampaign.delete({ where: { id: params.id } });
+    await db.preSaveCampaign.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[presave DELETE]", err);

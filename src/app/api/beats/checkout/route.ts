@@ -7,6 +7,8 @@ import type { LicenseType } from "@prisma/client";
 const VALID_LICENSE_TYPES: LicenseType[] = ["NON_EXCLUSIVE", "EXCLUSIVE", "LEASE", "CUSTOM"];
 
 export async function POST(req: NextRequest) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

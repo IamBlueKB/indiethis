@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
   const page         = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
   const limit        = Math.min(100, Math.max(10, parseInt(searchParams.get("limit") ?? "50")));
 
-  const where: Parameters<typeof db.promoCode.findMany>[0]["where"] = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {};
 
   if (search) {
     where.code = { contains: search, mode: "insensitive" };

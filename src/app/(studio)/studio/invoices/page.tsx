@@ -82,7 +82,7 @@ function CreateModal({
       if (field === "description") {
         item.description = raw;
       } else {
-        (item as Record<string, number>)[field] = parseFloat(raw) || 0;
+        (item as unknown as Record<string, number>)[field] = parseFloat(raw) || 0;
       }
       item.total = item.quantity * item.rate;
       next[i] = item;

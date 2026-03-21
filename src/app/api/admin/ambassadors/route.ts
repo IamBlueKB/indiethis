@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   const page         = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
   const limit        = Math.min(100, Math.max(10, parseInt(searchParams.get("limit") ?? "50")));
 
-  const where: Parameters<typeof db.ambassador.findMany>[0]["where"] = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {};
 
   if (search) {
     where.OR = [
@@ -38,11 +39,36 @@ export async function GET(req: NextRequest) {
       include: {
         user: { select: { id: true, name: true, email: true } },
         _count: { select: { promoCodes: true } },
+        promoCodes: {
+          select: {
+            _count: { select: { redemptions: true } },
+            redemptions: {
+              select: { status: true },
+            },
+          },
+        },
       },
     }),
   ]);
 
-  return NextResponse.json({ ambassadors, total, pages: Math.ceil(total / limit), page });
+  // Compute per-ambassador redemption + conversion counts
+  const ambassadorsWithStats = ambassadors.map((amb) => {
+    let totalRedemptions = 0;
+    let totalConversions = 0;
+    for (const code of amb.promoCodes) {
+      totalRedemptions += code._count.redemptions;
+      totalConversions += code.redemptions.filter((r) => r.status === "CONVERTED").length;
+    }
+    const { promoCodes: _pc, ...rest } = amb;
+    return { ...rest, totalRedemptions, totalConversions };
+  });
+
+  return NextResponse.json({
+    ambassadors: ambassadorsWithStats,
+    total,
+    pages: Math.ceil(total / limit),
+    page,
+  });
 }
 
 // ── POST — create ambassador ──────────────────────────────────────────────────
@@ -89,5 +115,41 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(ambassador, { status: 201 });
+  // ── Auto-create a linked promo code ─────────────────────────────────────────
+  const promoCode = await autoCreatePromoCode(ambassador.id, name.trim());
+
+  return NextResponse.json({ ...ambassador, promoCode }, { status: 201 });
+}
+
+// ── Helper: auto-create a promo code for a new ambassador ────────────────────
+
+async function autoCreatePromoCode(ambassadorId: string, name: string) {
+  const year = new Date().getFullYear().toString().slice(-2); // "25"
+  const base = name.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4).padEnd(4, "X");
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = attempt === 0
+      ? year
+      : year + Math.random().toString(36).slice(2, 4).toUpperCase();
+    const code = `${base}${suffix}`;
+
+    const exists = await db.promoCode.findUnique({ where: { code } });
+    if (exists) continue;
+
+    try {
+      return await db.promoCode.create({
+        data: {
+          code,
+          type: "FREE_TRIAL",
+          tier: "LAUNCH",
+          durationDays: 14,
+          maxRedemptions: 1000,
+          ambassadorId,
+        },
+      });
+    } catch {
+      // Concurrent insert — retry
+    }
+  }
+  return null; // Give up gracefully
 }

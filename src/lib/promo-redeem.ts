@@ -9,6 +9,7 @@
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { sendPromoWelcomeEmail } from "@/lib/brevo/email";
+import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import type { SubscriptionTier } from "@prisma/client";
 
 // AI_BUNDLE metadata keys → Subscription field names
@@ -204,7 +205,8 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
           } catch {
             // Coupon may already exist — that's fine
           }
-          await stripe.customers.update(user.stripeCustomerId, { coupon: couponId });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await stripe.customers.update(user.stripeCustomerId, { coupon: couponId } as any);
         }
         break;
       }
@@ -273,11 +275,9 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
       data: { currentRedemptions: { increment: 1 } },
     });
 
-    // ── Ambassador reward stub (Phase 6) ──────────────────────────────────────
+    // ── Ambassador reward (SIGNUP event) ─────────────────────────────────────
     if (promoCode.ambassadorId) {
-      // Phase 6: process ambassador reward based on rewardType
-      // For now, log the association for future processing
-      console.log(`[Ambassador] Code ${promoCode.code} redeemed by user ${userId}. Ambassador: ${promoCode.ambassadorId}`);
+      processAmbassadorReward(promoCode.ambassadorId, "SIGNUP").catch(console.error);
     }
 
     // ── Send welcome email ────────────────────────────────────────────────────

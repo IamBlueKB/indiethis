@@ -471,6 +471,11 @@ export function CinematicTemplate({ studio, services, testimonials, fullAddress,
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

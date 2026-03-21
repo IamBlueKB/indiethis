@@ -359,6 +359,11 @@ export function ClassicTemplate({ studio, services, testimonials, featuredArtist
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

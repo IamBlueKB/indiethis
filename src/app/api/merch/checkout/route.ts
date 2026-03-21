@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   try {
     const body = await req.json() as {
       productId: string;

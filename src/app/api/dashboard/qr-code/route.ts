@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     }
 
     const pngBuffer = await generateQrPng(pageUrl, 1024);
-    return new NextResponse(pngBuffer, {
+    return new NextResponse(pngBuffer as unknown as BodyInit, {
       headers: {
         "Content-Type":        "image/png",
         "Cache-Control":       "private, no-cache",

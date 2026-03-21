@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, RefreshCw, X, Star } from "lucide-react";
+import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -133,9 +134,11 @@ export default function AmbassadorsContent() {
             ) : ambassadors.length === 0 ? (
               <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No ambassadors yet.</td></tr>
             ) : ambassadors.map((amb) => (
-              <tr key={amb.id} className="border-t transition-colors hover:bg-card/50" style={{ borderColor: "var(--border)" }}>
+              <tr key={amb.id} className="border-t transition-colors hover:bg-card/50 cursor-pointer" style={{ borderColor: "var(--border)" }}>
                 <td className="px-4 py-3">
-                  <p className="font-semibold">{amb.name}</p>
+                  <Link href={`/admin/ambassadors/${amb.id}`} className="no-underline hover:underline">
+                    <p className="font-semibold">{amb.name}</p>
+                  </Link>
                   <p className="text-xs text-muted-foreground">{amb.email}</p>
                   {amb.user && <p className="text-xs" style={{ color: "#5AC8FA" }}>IndieThis user</p>}
                 </td>

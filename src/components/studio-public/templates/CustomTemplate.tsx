@@ -807,6 +807,11 @@ export function CustomTemplate({
         socials={socials}
         content={{}}
         accent={GOLD}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

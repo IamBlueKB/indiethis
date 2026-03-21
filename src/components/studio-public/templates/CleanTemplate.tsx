@@ -378,6 +378,11 @@ export function CleanTemplate({ studio, services, testimonials, fullAddress, map
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

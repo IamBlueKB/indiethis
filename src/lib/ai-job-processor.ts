@@ -16,6 +16,7 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 import { db } from "@/lib/db";
 import { AIJobStatus, type AIJob, type Prisma } from "@prisma/client";
 import OpenAI, { toFile } from "openai";

@@ -6,6 +6,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ artistSlug: string }> }
 ) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   try {
     const { artistSlug } = await params;
     const body = await req.json() as {

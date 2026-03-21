@@ -11,6 +11,9 @@ import {
   ArrowDownRight,
   Loader2,
   ShieldOff,
+  Tag,
+  BarChart2,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -52,6 +55,10 @@ export default async function AdminDashboardPage({
     allUsersLast12m,
     allStudiosLast12m,
     allPaymentsLast12m,
+    activePromoCount,
+    totalRedemptions,
+    conversionsThisMonth,
+    ambassadorBalanceOwed,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -80,6 +87,10 @@ export default async function AdminDashboardPage({
       select: { createdAt: true, type: true, amount: true },
       orderBy: { createdAt: "asc" },
     }),
+    db.promoCode.count({ where: { isActive: true } }),
+    db.promoRedemption.count(),
+    db.promoRedemption.count({ where: { status: "CONVERTED", convertedAt: { gte: startOfMonth } } }),
+    db.ambassador.aggregate({ _sum: { creditBalance: true } }).then((r) => r._sum.creditBalance ?? 0),
   ]);
 
   const mrr = activeSubscriptions.reduce((sum, s) => sum + (TIER_PRICE[s.tier] ?? 0), 0);
@@ -229,6 +240,35 @@ export default async function AdminDashboardPage({
                   </span>
                 )}
               </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Promo & Ambassador Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Active Promo Codes", value: activePromoCount, sub: "codes live", icon: Tag, color: "#FB923C", href: "/admin/promo-codes" },
+          { label: "Total Redemptions", value: totalRedemptions, sub: "all time", icon: BarChart2, color: "#A78BFA", href: "/admin/promo-analytics" },
+          { label: "Conversions / Month", value: conversionsThisMonth, sub: "this month", icon: TrendingUp, color: "#34D399", href: "/admin/promo-analytics" },
+          { label: "Ambassador Balance", value: `$${(ambassadorBalanceOwed as number).toFixed(2)}`, sub: "owed to ambassadors", icon: Star, color: "#D4A843", href: "/admin/ambassadors" },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="rounded-2xl border p-5 no-underline block hover:border-accent/40 transition-colors"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${stat.color}18` }}>
+                  <Icon size={15} style={{ color: stat.color }} strokeWidth={1.75} />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-foreground font-display">{stat.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
             </Link>
           );
         })}

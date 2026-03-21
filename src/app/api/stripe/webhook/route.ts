@@ -16,6 +16,7 @@ import {
   deactivateAffiliateReferral,
 } from "@/lib/affiliate-commissions";
 import { upsertFanScore } from "@/lib/fan-scores";
+import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
 
   if (!sig || !webhookSecret) {
     return NextResponse.json({ error: "Missing signature or secret" }, { status: 400 });
+  }
+
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   }
 
   let event: Stripe.Event;
@@ -284,7 +289,8 @@ export async function POST(req: NextRequest) {
     }
 
     case "customer.subscription.updated": {
-      const sub    = event.data.object as Stripe.Subscription;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sub    = event.data.object as any;
       const userId = sub.metadata?.userId;
       const tier   = sub.metadata?.tier;
       if (!userId || !tier) break;
@@ -325,7 +331,8 @@ export async function POST(req: NextRequest) {
     }
 
     case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoice = event.data.object as any;
       const subId = typeof invoice.subscription === "string"
         ? invoice.subscription
         : (invoice.subscription as { id: string } | null)?.id;
@@ -362,8 +369,31 @@ export async function POST(req: NextRequest) {
 
       if (!sub?.userId) break;
 
+      const amountPaid = (paidInvoice.amount_paid as number) ?? 0;
+
       // amount_paid is in cents
-      void processAffiliateCommission(sub.userId, (paidInvoice.amount_paid as number) ?? 0);
+      void processAffiliateCommission(sub.userId, amountPaid);
+
+      // Ambassador PERCENTAGE_RECURRING reward
+      // Find if this user has a promo redemption from an ambassador code
+      const ambassadorRedemption = await db.promoRedemption.findFirst({
+        where: {
+          userId: sub.userId,
+          status: "CONVERTED",
+          promoCode: { ambassadorId: { not: null } },
+        },
+        include: { promoCode: { select: { ambassadorId: true, ambassador: { select: { rewardType: true } } } } },
+      });
+      if (
+        ambassadorRedemption?.promoCode?.ambassadorId &&
+        ambassadorRedemption.promoCode.ambassador?.rewardType === "PERCENTAGE_RECURRING"
+      ) {
+        void processAmbassadorReward(
+          ambassadorRedemption.promoCode.ambassadorId,
+          "CONVERSION",
+          { subscriptionAmount: amountPaid / 100 }
+        );
+      }
       break;
     }
 

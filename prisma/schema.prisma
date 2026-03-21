@@ -1617,6 +1617,7 @@ model Ambassador {
   totalPaidOut         Float            @default(0)
   isActive             Boolean          @default(true)
   notes                String?
+  stripeConnectId      String?
   promoCodes           PromoCode[]
   payouts              AmbassadorPayout[]
   createdAt            DateTime         @default(now())

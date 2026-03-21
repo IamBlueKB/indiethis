@@ -459,6 +459,11 @@ export function GridTemplate({ studio, services, testimonials, fullAddress, mapQ
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

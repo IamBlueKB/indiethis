@@ -277,7 +277,7 @@ function QuickAddOverlay({
             onKeyDown={(e) => e.key === "Enter" && handleCheckout()}
             placeholder="you@example.com"
             className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-white outline-none focus:ring-1 placeholder:text-white/25"
-            style={{ borderColor: "rgba(255,255,255,0.12)", focusRingColor: "#D4A843" }}
+            style={{ borderColor: "rgba(255,255,255,0.12)" }}
             autoComplete="email"
           />
         </div>

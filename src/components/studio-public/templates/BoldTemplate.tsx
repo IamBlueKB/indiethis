@@ -406,6 +406,11 @@ export function BoldTemplate({ studio, services, featuredArtists, fullAddress, m
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

@@ -13,6 +13,7 @@ const PPU_ITEMS = {
 } as const;
 
 export async function POST(req: NextRequest) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

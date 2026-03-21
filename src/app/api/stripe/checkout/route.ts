@@ -4,6 +4,7 @@ import { stripe, PLAN_PRICES } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     try {
       // Ensure the coupon exists in Stripe (idempotent — no-op if already present)
       await stripe.coupons.retrieve(AFFILIATE_COUPON_ID).catch(async () => {
-        await stripe.coupons.create({
+        await stripe!.coupons.create({
           id:                   AFFILIATE_COUPON_ID,
           percent_off:          10,
           duration:             "repeating",

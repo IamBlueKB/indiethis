@@ -101,9 +101,9 @@ export const ourFileRouter = {
 
   // Email blast attachments (studio admin — PDF, image, audio, up to 10MB each)
   emailAttachments: f({
-    "application/pdf": { maxFileSize: "10MB", maxFileCount: 5 },
-    image:             { maxFileSize: "10MB", maxFileCount: 5 },
-    audio:             { maxFileSize: "10MB", maxFileCount: 5 },
+    "application/pdf": { maxFileSize: "8MB", maxFileCount: 5 },
+    image:             { maxFileSize: "8MB", maxFileCount: 5 },
+    audio:             { maxFileSize: "8MB", maxFileCount: 5 },
   })
     .middleware(async () => {
       const session = await auth();

@@ -429,6 +429,11 @@ export function EditorialTemplate({ studio, services, testimonials, featuredArti
         socials={socials}
         content={{}}
         accent={accent}
+        services={[]}
+        testimonials={[]}
+        featuredArtists={[]}
+        mapQuery=""
+        galleryImages={[]}
       />
     </div>
   );

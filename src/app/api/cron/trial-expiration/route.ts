@@ -126,9 +126,9 @@ export async function GET(req: NextRequest) {
     try {
       // Fetch content counts for this user
       const [tracks, merch, contacts] = await Promise.all([
-        db.track.count({ where: { userId: redemption.userId } }),
-        db.merchProduct.count({ where: { userId: redemption.userId } }),
-        db.fanContact.count({ where: { userId: redemption.userId } }),
+        db.track.count({ where: { artistId: redemption.userId } }),
+        db.merchProduct.count({ where: { artistId: redemption.userId } }),
+        db.fanContact.count({ where: { artistId: redemption.userId } }),
       ]);
 
       await sendGracePeriodEmail({
