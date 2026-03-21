@@ -61,12 +61,13 @@ function ProductCard({
   const price = product.basePrice + product.artistMarkup;
 
   return (
-    <div
-      className="shrink-0 rounded-2xl overflow-hidden flex flex-col"
-      style={{ width: 180, ...GLASS_STYLE }}
+    <button
+      onClick={() => onQuickAdd(product)}
+      className="shrink-0 rounded-[8px] overflow-hidden flex flex-col text-left focus:outline-none"
+      style={{ minWidth: 120, backgroundColor: "#111" }}
     >
       {/* Image */}
-      <div className="relative overflow-hidden" style={{ height: 180 }}>
+      <div className="relative overflow-hidden" style={{ height: 120 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={product.imageUrl}
@@ -74,37 +75,24 @@ function ProductCard({
           className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
           onError={(e) => {
             (e.target as HTMLImageElement).src =
-              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' fill='%23222'/%3E%3C/svg%3E";
+              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23222'/%3E%3C/svg%3E";
           }}
-        />
-        {/* Subtle gradient at bottom */}
-        <div
-          className="absolute inset-x-0 bottom-0 h-12 pointer-events-none"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)" }}
         />
       </div>
 
       {/* Info */}
-      <div className="flex flex-col flex-1 px-3 pt-2.5 pb-3 gap-2">
-        <div className="flex-1 min-h-0">
-          <p className="text-xs font-semibold text-white/90 line-clamp-2 leading-tight">
-            {product.title}
-          </p>
-          <p className="text-sm font-bold mt-1" style={{ color: "#D4A843" }}>
-            ${price.toFixed(2)}
-          </p>
-        </div>
-
-        {/* Quick Add */}
-        <button
-          onClick={() => onQuickAdd(product)}
-          className="w-full py-1.5 rounded-xl text-xs font-bold transition-all hover:brightness-110 hover:scale-[1.02] active:scale-100"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+      <div style={{ padding: 8 }}>
+        <p
+          className="leading-tight line-clamp-2"
+          style={{ fontSize: 11, fontWeight: 500, color: "#F5F5F5" }}
         >
-          Quick Add
-        </button>
+          {product.title}
+        </p>
+        <p style={{ fontSize: 11, color: "#D4A843", marginTop: 2 }}>
+          ${price.toFixed(2)}
+        </p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -114,18 +102,18 @@ function ViewAllCard({ artistSlug }: { artistSlug: string }) {
   return (
     <Link
       href={`/${artistSlug}/merch`}
-      className="shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 no-underline
+      className="shrink-0 rounded-[8px] flex flex-col items-center justify-center gap-2 no-underline
                  transition-all hover:brightness-125"
-      style={{ width: 120, minHeight: 200, ...GLASS_STYLE }}
+      style={{ minWidth: 80, height: 152, backgroundColor: "#111" }}
     >
       <div
-        className="w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: "rgba(212,168,67,0.15)" }}
+        className="w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
       >
-        <ChevronRight size={18} style={{ color: "#D4A843" }} />
+        <ChevronRight size={14} style={{ color: "#D4A843" }} />
       </div>
-      <p className="text-xs font-semibold text-center px-3 leading-tight" style={{ color: "#D4A843" }}>
-        View All Merch
+      <p className="text-[10px] font-semibold text-center px-2 leading-tight" style={{ color: "#D4A843" }}>
+        View All
       </p>
     </Link>
   );
@@ -363,14 +351,22 @@ export default function MerchGrid({
         </div>
       )}
 
-      <section className="space-y-5">
+      <section>
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">Merch</h2>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p
+              className="text-[10px] font-bold uppercase mb-[2px]"
+              style={{ color: "#D4A843", letterSpacing: "1.5px" }}
+            >
+              SHOP
+            </p>
+            <h2 className="text-[18px] font-semibold text-white leading-tight">Merch</h2>
+          </div>
           <Link
             href={`/${artistSlug}/merch`}
-            className="text-xs font-semibold no-underline transition-colors hover:brightness-125"
-            style={{ color: "rgba(212,168,67,0.6)" }}
+            className="text-[11px] font-semibold no-underline transition-colors hover:brightness-125"
+            style={{ color: "rgba(212,168,67,0.7)" }}
           >
             View All →
           </Link>
@@ -378,7 +374,7 @@ export default function MerchGrid({
 
         {/* Horizontal scroll row */}
         <div
-          className="flex gap-3 overflow-x-auto pb-2"
+          className="flex gap-[10px] overflow-x-auto pb-2"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {products.map((p) => (
