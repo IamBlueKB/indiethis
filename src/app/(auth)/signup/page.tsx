@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2, Mic2, Building2, Gift } from "lucide-react";
+import { Loader2, Mic2, Building2, Gift, ChevronDown, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ function SignupForm() {
   const refCode      = searchParams.get("ref")          ?? undefined;
   const affiliateId  = searchParams.get("affiliate")    ?? undefined;
   const discountCode = searchParams.get("discount")     ?? undefined;
+  const initialPromo = searchParams.get("promo")        ?? "";
   const source       = searchParams.get("source")       ?? undefined;
   const utmSource    = searchParams.get("utm_source")   ?? undefined;
   const utmMedium    = searchParams.get("utm_medium")   ?? undefined;
@@ -36,6 +37,37 @@ function SignupForm() {
   const [role, setRole] = useState<RoleOption>(initialRole);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Promo code state
+  const [promoExpanded, setPromoExpanded] = useState(!!initialPromo);
+  const [promoCode, setPromoCode] = useState(initialPromo);
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  const [promoValid, setPromoValid] = useState<{ benefitDescription: string } | null>(
+    null
+  );
+
+  async function validatePromo(c: string) {
+    if (!c.trim()) return;
+    setPromoValidating(true);
+    setPromoError("");
+    setPromoValid(null);
+    try {
+      const res = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: c.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPromoError(data.error ?? "Invalid code.");
+      } else {
+        setPromoValid(data.promoCode);
+      }
+    } finally {
+      setPromoValidating(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +95,7 @@ function SignupForm() {
           role,
           referralCode: refCode,
           affiliateId,
+          promoCode: promoCode.trim() || undefined,
           source,
           utmSource,
           utmMedium,
@@ -243,6 +276,64 @@ function SignupForm() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
+          </div>
+
+          {/* Promo code collapsible */}
+          <div>
+            <button
+              type="button"
+              onClick={() => { setPromoExpanded(!promoExpanded); setPromoError(""); setPromoValid(null); }}
+              className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+              style={{ color: "var(--accent)" }}
+            >
+              <Gift size={14} />
+              Have a promo code?
+              <ChevronDown
+                size={14}
+                className="transition-transform"
+                style={{ transform: promoExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+              />
+            </button>
+
+            {promoExpanded && (
+              <div className="mt-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter code"
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value.toUpperCase());
+                      setPromoValid(null);
+                      setPromoError("");
+                    }}
+                    onBlur={() => promoCode.trim() && validatePromo(promoCode)}
+                    className="flex-1 font-mono tracking-widest text-sm uppercase"
+                    maxLength={20}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => validatePromo(promoCode)}
+                    disabled={promoValidating || !promoCode.trim()}
+                    className="px-4 py-2 rounded-lg text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+                    style={{ backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }}
+                  >
+                    {promoValidating ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+                  </button>
+                </div>
+
+                {promoError && (
+                  <p className="text-xs mt-1.5" style={{ color: "#f87171" }}>{promoError}</p>
+                )}
+                {promoValid && (
+                  <div className="flex items-center gap-2 mt-2 text-xs font-medium rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}>
+                    <CheckCircle2 size={13} className="shrink-0" />
+                    {promoValid.benefitDescription}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {error && (

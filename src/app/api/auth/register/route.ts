@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { sendWelcomeEmail } from "@/lib/brevo";
 import { markContactsAsReferred } from "@/lib/studio-referral";
+import { redeemPromoCode } from "@/lib/promo-redeem";
 import type { Role } from "@prisma/client";
 
 function generateReferralCode(): string {
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
       role,
       referralCode: usedReferralCode,
       affiliateId,
+      promoCode,
       // Attribution params
       source,
       utmSource,
@@ -33,6 +35,7 @@ export async function POST(req: NextRequest) {
       role?: string;
       referralCode?: string;
       affiliateId?: string;
+      promoCode?: string;
       source?: string;
       utmSource?: string;
       utmMedium?: string;
@@ -176,6 +179,13 @@ export async function POST(req: NextRequest) {
     // for the studio referral credit when the artist makes a purchase.
     if (userRole === "ARTIST") {
       markContactsAsReferred(user.email, user.id).catch(() => {});
+    }
+
+    // Auto-redeem promo code if provided — fire-and-forget (user is already created)
+    if (promoCode?.trim()) {
+      redeemPromoCode(user.id, promoCode.trim()).catch((err) => {
+        console.warn("[register] promo code redemption failed:", err);
+      });
     }
 
     return NextResponse.json(

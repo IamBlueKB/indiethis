@@ -558,3 +558,133 @@ export async function sendSubscriptionRenewalReminder(user: {
     tags: ["billing", "renewal"],
   });
 }
+
+// ── Promo & Trial Emails ───────────────────────────────────────────────────────
+
+export async function sendPromoWelcomeEmail(user: {
+  email: string;
+  name: string;
+  benefitDescription: string;
+  code: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: "Your promo code has been activated 🎉",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:24px;margin-bottom:8px;">You're in.</h1>
+        <p style="color:#555;">Your promo code <strong style="color:#0A0A0A;">${user.code}</strong> has been applied to your account.</p>
+        <div style="background:#F5F0E8;border-radius:12px;padding:20px 24px;margin:24px 0;">
+          <p style="margin:0;font-size:16px;font-weight:600;">${user.benefitDescription}</p>
+        </div>
+        <p>Head to your dashboard to start creating.</p>
+        <a href="${APP_URL()}/dashboard" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Go to Dashboard →</a>
+      </div>
+    `,
+    tags: ["promo", "welcome"],
+  });
+}
+
+export async function sendTrialExpiringEmail(user: {
+  email: string;
+  name: string;
+  daysLeft: number;
+  tier: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: `Your ${user.tier} trial ends in ${user.daysLeft} day${user.daysLeft !== 1 ? "s" : ""}`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Your trial is almost up.</h1>
+        <p>Hi ${user.name}, your <strong>${user.tier}</strong> trial ends in <strong>${user.daysLeft} day${user.daysLeft !== 1 ? "s" : ""}</strong>.</p>
+        <p>Subscribe now to keep your tracks, merch products, fan contacts, and everything you've built.</p>
+        <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Subscribe to Keep Access →</a>
+      </div>
+    `,
+    tags: ["trial", "expiring"],
+  });
+}
+
+export async function sendTrialExpiredEmail(user: {
+  email: string;
+  name: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: "Your trial has ended — you have 3 days to subscribe",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Your trial ended.</h1>
+        <p>Hi ${user.name}, your free trial has ended. You have <strong>3 days</strong> to subscribe before your account is locked.</p>
+        <p>Nothing has been deleted. Subscribe now and pick up right where you left off.</p>
+        <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Subscribe Now →</a>
+      </div>
+    `,
+    tags: ["trial", "expired"],
+  });
+}
+
+export async function sendGracePeriodEmail(user: {
+  email: string;
+  name: string;
+  stats: { tracks: number; merch: number; contacts: number };
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: "Tomorrow is your last day — don't lose your content",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Last chance.</h1>
+        <p>Hi ${user.name}, tomorrow is the last day before your account is locked.</p>
+        <p>Here's what's waiting for you:</p>
+        <ul style="list-style:none;padding:0;">
+          ${user.stats.tracks > 0 ? `<li style="padding:6px 0;border-bottom:1px solid #eee;">🎵 <strong>${user.stats.tracks}</strong> track${user.stats.tracks !== 1 ? "s" : ""}</li>` : ""}
+          ${user.stats.merch > 0 ? `<li style="padding:6px 0;border-bottom:1px solid #eee;">👕 <strong>${user.stats.merch}</strong> merch product${user.stats.merch !== 1 ? "s" : ""}</li>` : ""}
+          ${user.stats.contacts > 0 ? `<li style="padding:6px 0;">👥 <strong>${user.stats.contacts}</strong> fan contact${user.stats.contacts !== 1 ? "s" : ""}</li>` : ""}
+        </ul>
+        <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#E85D4A;color:#fff;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px;">Subscribe Before It's Too Late →</a>
+      </div>
+    `,
+    tags: ["trial", "grace-period"],
+  });
+}
+
+export async function sendAccountLockedEmail(user: {
+  email: string;
+  name: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: "Your account has been locked",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Your account is locked.</h1>
+        <p>Hi ${user.name}, your trial grace period has ended and your account is now locked.</p>
+        <p><strong>Nothing has been deleted.</strong> Subscribe anytime to restore full access — your tracks, merch, and contacts are all still there.</p>
+        <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Restore Access →</a>
+      </div>
+    `,
+    tags: ["trial", "locked"],
+  });
+}
+
+export async function sendDiscountEndedEmail(user: {
+  email: string;
+  name: string;
+  tier: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: user.email, name: user.name },
+    subject: "Your discount period has ended",
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Your promotional discount has ended.</h1>
+        <p>Hi ${user.name}, your promotional discount period on the <strong>${user.tier}</strong> plan has ended.</p>
+        <p>Your next charge will be at the standard rate. You can manage your subscription anytime from your dashboard.</p>
+        <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Manage Subscription →</a>
+      </div>
+    `,
+    tags: ["discount", "ended"],
+  });
+}

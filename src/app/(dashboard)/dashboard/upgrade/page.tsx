@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, ArrowRight, ExternalLink, Zap, Users, Mic2, Star } from "lucide-react";
+import { CheckCircle2, Loader2, ArrowRight, ExternalLink, Zap, Users, Mic2, Star, Gift, ChevronDown } from "lucide-react";
 
 type Plan = {
   name: string;
@@ -93,6 +93,38 @@ export default function UpgradePage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  // Promo code
+  const [promoExpanded, setPromoExpanded] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  const [promoSuccess, setPromoSuccess] = useState("");
+
+  async function handlePromoRedeem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoError("");
+    setPromoSuccess("");
+    try {
+      const res = await fetch("/api/promo/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode.trim() }),
+      });
+      const data = await res.json() as { benefitDescription?: string; error?: string };
+      if (!res.ok) {
+        setPromoError(data.error ?? "Invalid promo code.");
+      } else {
+        setPromoSuccess(data.benefitDescription ?? "Promo code applied!");
+        setPromoCode("");
+        setTimeout(() => window.location.reload(), 2000);
+      }
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
   async function handleUpgrade(planKey: string) {
     setLoading(planKey);
     try {
@@ -136,6 +168,56 @@ export default function UpgradePage() {
         <p className="text-sm text-muted-foreground mt-1">
           Month-to-month. Cancel anytime. All plans include the full IndieThis platform.
         </p>
+
+        {/* Promo code */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => { setPromoExpanded(!promoExpanded); setPromoError(""); setPromoSuccess(""); }}
+            className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+            style={{ color: "var(--accent)" }}
+          >
+            <Gift size={14} />
+            Have a promo code?
+            <ChevronDown
+              size={13}
+              className="transition-transform"
+              style={{ transform: promoExpanded ? "rotate(180deg)" : "rotate(0)" }}
+            />
+          </button>
+
+          {promoExpanded && (
+            <form onSubmit={handlePromoRedeem} className="flex gap-2 mt-2 max-w-sm">
+              <input
+                value={promoCode}
+                onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoError(""); setPromoSuccess(""); }}
+                placeholder="YOURCODE"
+                className="flex-1 rounded-lg px-3 py-2 text-sm font-mono tracking-widest uppercase border outline-none"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                maxLength={20}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                disabled={promoLoading || !promoCode.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }}
+              >
+                {promoLoading ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+              </button>
+            </form>
+          )}
+
+          {promoError && <p className="text-xs mt-1.5" style={{ color: "#f87171" }}>{promoError}</p>}
+          {promoSuccess && (
+            <div className="flex items-center gap-2 mt-2 text-xs font-medium rounded-lg px-3 py-2 max-w-sm"
+              style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}>
+              <CheckCircle2 size={13} className="shrink-0" />
+              {promoSuccess}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Artist / Studio toggle */}

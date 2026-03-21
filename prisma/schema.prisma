@@ -275,6 +275,35 @@ enum ReleaseType {
   MIXTAPE
 }
 
+enum PromoCodeType {
+  FREE_TRIAL
+  DISCOUNT
+  COMP
+  CREDIT
+  AI_BUNDLE
+}
+
+enum RedemptionStatus {
+  ACTIVE
+  CONVERTED
+  EXPIRED
+  REVOKED
+}
+
+enum AmbassadorTier {
+  STANDARD
+  PREFERRED
+  ELITE
+}
+
+enum RewardType {
+  FLAT_PER_SIGNUP
+  FLAT_PER_CONVERSION
+  PERCENTAGE_FIRST
+  PERCENTAGE_RECURRING
+  UPGRADE_BONUS
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -381,6 +410,8 @@ model User {
   artistTestimonials ArtistTestimonial[]
   artistCollaborators ArtistCollaborator[]
   artistPressItems   ArtistPressItem[]
+  promoRedemptions   PromoRedemption[]
+  ambassador         Ambassador?
 }
 
 model Studio {
@@ -1522,4 +1553,86 @@ model StudioEquipment {
   studio    Studio            @relation(fields: [studioId], references: [id], onDelete: Cascade)
 
   @@index([studioId])
+}
+
+// ─── Promo Codes & Ambassadors ────────────────────────────────────────────────
+
+model PromoCode {
+  id                  String          @id @default(cuid())
+  code                String          @unique
+  type                PromoCodeType
+  tier                SubscriptionTier?
+  value               Float?
+  durationDays        Int?
+  durationMonths      Int?
+  maxRedemptions      Int             @default(1)
+  currentRedemptions  Int             @default(0)
+  expiresAt           DateTime?
+  isActive            Boolean         @default(true)
+  notes               String?
+  metadata            Json?           // AI_BUNDLE per-tool breakdown: {"art":10,"master":5,...}
+  ambassadorId        String?
+  ambassador          Ambassador?     @relation(fields: [ambassadorId], references: [id])
+  redemptions         PromoRedemption[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([ambassadorId])
+  @@index([code])
+}
+
+model PromoRedemption {
+  id              String           @id @default(cuid())
+  promoCodeId     String
+  promoCode       PromoCode        @relation(fields: [promoCodeId], references: [id])
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  redeemedAt      DateTime         @default(now())
+  convertedAt     DateTime?
+  convertedTier   SubscriptionTier?
+  upgradedAt      DateTime?
+  upgradedToTier  SubscriptionTier?
+  status          RedemptionStatus @default(ACTIVE)
+  expiresAt       DateTime?
+  graceUntil      DateTime?
+  warningSentAt   DateTime?
+
+  @@index([userId])
+  @@index([promoCodeId])
+  @@index([status, expiresAt])
+}
+
+model Ambassador {
+  id                   String           @id @default(cuid())
+  userId               String?          @unique
+  user                 User?            @relation(fields: [userId], references: [id])
+  name                 String
+  email                String
+  tier                 AmbassadorTier   @default(STANDARD)
+  rewardType           RewardType       @default(FLAT_PER_CONVERSION)
+  rewardValue          Float            @default(5.0)
+  rewardDurationMonths Int?
+  creditBalance        Float            @default(0)
+  totalEarned          Float            @default(0)
+  totalPaidOut         Float            @default(0)
+  isActive             Boolean          @default(true)
+  notes                String?
+  promoCodes           PromoCode[]
+  payouts              AmbassadorPayout[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([email])
+}
+
+model AmbassadorPayout {
+  id             String     @id @default(cuid())
+  ambassadorId   String
+  ambassador     Ambassador @relation(fields: [ambassadorId], references: [id])
+  amount         Float
+  method         String
+  stripePayoutId String?
+  createdAt      DateTime   @default(now())
+
+  @@index([ambassadorId])
 }

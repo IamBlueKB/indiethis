@@ -16,6 +16,8 @@ import {
   Target,
   MessageSquare,
   UsersRound,
+  Tag,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -38,6 +40,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "AI Learning", href: "/admin/ai-learning",  icon: Brain,           page: "ai-usage"     },
   { label: "Support",     href: "/admin/support-chat", icon: MessageSquare,   page: "support-chat" },
   { label: "Affiliates",  href: "/admin/affiliates",   icon: Link2,           page: "affiliates"   },
+  { label: "Promo Codes", href: "/admin/promo-codes",  icon: Tag,             page: "promo-codes"  },
+  { label: "Ambassadors", href: "/admin/ambassadors",  icon: Star,            page: "ambassadors"  },
   { label: "Attribution", href: "/admin/attribution",  icon: Target,          page: "attribution"  },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",     icon: Settings,        page: "settings"     },

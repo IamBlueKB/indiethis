@@ -5,7 +5,8 @@
  *
  * Pages / sections recognised by this module:
  *   dashboard | users | studios | moderation | affiliates | attribution |
- *   support-chat | ai-usage | revenue | settings | team
+ *   support-chat | ai-usage | revenue | settings | team |
+ *   promo-codes | ambassadors
  *
  * Access matrix:
  * ┌──────────────┬─────────────┬───────────┬───────────────┐
@@ -22,6 +23,8 @@
  * │ revenue      │ full        │ none      │ none          │
  * │ settings     │ full        │ none      │ none          │
  * │ team         │ full        │ none      │ none          │
+ * │ promo-codes  │ full        │ full      │ none          │
+ * │ ambassadors  │ full        │ full      │ none          │
  * └──────────────┴─────────────┴───────────┴───────────────┘
  */
 
@@ -88,6 +91,16 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
   team: {
     SUPER_ADMIN:   "full",
     OPS_ADMIN:     "none",
+    SUPPORT_ADMIN: "none",
+  },
+  "promo-codes": {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
+  ambassadors: {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
     SUPPORT_ADMIN: "none",
   },
 };
