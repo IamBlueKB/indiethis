@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ticket, Bell, Check, Loader2, MapPin } from "lucide-react";
+import { Ticket, Bell, Check, Loader2 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,96 +122,98 @@ function ShowCard({ show }: { show: Show }) {
 
   return (
     <div
-      className="rounded-2xl border overflow-hidden"
-      style={{
-        borderColor:     show.isSoldOut ? "rgba(255,255,255,0.1)" : "rgba(212,168,67,0.2)",
-        backgroundColor: show.isSoldOut ? "rgba(255,255,255,0.02)" : "rgba(212,168,67,0.03)",
-      }}
+      className="flex items-center gap-[14px] rounded-[10px] p-[12px]"
+      style={{ backgroundColor: "#111" }}
     >
-      <div className="flex items-stretch">
-
-        {/* ── Date block ──────────────────────────────────────────────────── */}
-        <div
-          className="flex flex-col items-center justify-center px-5 py-4 shrink-0 min-w-[72px]"
-          style={{
-            backgroundColor: show.isSoldOut ? "rgba(255,255,255,0.04)" : "rgba(212,168,67,0.08)",
-            borderRight:     `1px solid ${show.isSoldOut ? "rgba(255,255,255,0.08)" : "rgba(212,168,67,0.15)"}`,
-          }}
+      {/* ── Date block ──────────────────────────────────────────────────── */}
+      <div
+        className="flex flex-col items-center justify-center shrink-0"
+        style={{ minWidth: 42 }}
+      >
+        <span
+          className="font-bold uppercase leading-none"
+          style={{ fontSize: 9, color: "#D4A843", letterSpacing: "1px" }}
         >
-          <span
-            className="text-[10px] font-bold uppercase tracking-widest leading-none"
-            style={{ color: show.isSoldOut ? "rgba(255,255,255,0.3)" : "rgba(212,168,67,0.7)" }}
-          >
-            {fmtMonth(show.date)}
-          </span>
-          <span
-            className="text-3xl font-black leading-tight tabular-nums mt-0.5"
-            style={{ color: show.isSoldOut ? "rgba(255,255,255,0.4)" : "#D4A843" }}
-          >
-            {fmtDay(show.date)}
-          </span>
+          {fmtMonth(show.date)}
+        </span>
+        <span
+          className="font-bold tabular-nums leading-tight mt-0.5"
+          style={{ fontSize: 20, color: show.isSoldOut ? "rgba(255,255,255,0.35)" : "#fff" }}
+        >
+          {fmtDay(show.date)}
+        </span>
+      </div>
+
+      {/* ── Main content ────────────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          {thisWeek && !show.isSoldOut && (
+            <span
+              className="font-bold uppercase"
+              style={{
+                fontSize:        8,
+                color:           "#fff",
+                backgroundColor: "#E85D4A",
+                padding:         "2px 6px",
+                borderRadius:    8,
+              }}
+            >
+              This Week
+            </span>
+          )}
+          {show.isSoldOut && (
+            <span
+              className="font-bold uppercase"
+              style={{
+                fontSize:        8,
+                color:           "rgba(255,255,255,0.4)",
+                backgroundColor: "rgba(255,255,255,0.06)",
+                padding:         "2px 6px",
+                borderRadius:    8,
+              }}
+            >
+              Sold Out
+            </span>
+          )}
         </div>
 
-        {/* ── Main content ────────────────────────────────────────────────── */}
-        <div className="flex-1 px-4 py-4 flex flex-col justify-between gap-3">
+        <p
+          className="font-medium truncate"
+          style={{ fontSize: 12, color: show.isSoldOut ? "rgba(255,255,255,0.4)" : "#fff" }}
+        >
+          {show.venueName}
+        </p>
+        <p className="truncate" style={{ fontSize: 10, color: "#666", marginTop: 1 }}>
+          {show.city}
+        </p>
+      </div>
 
-          {/* Top: badges + venue */}
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              {thisWeek && !show.isSoldOut && (
-                <span
-                  className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "rgba(232,93,74,0.15)", color: "#E85D4A" }}
-                >
-                  This Week
-                </span>
-              )}
-              {show.isSoldOut && (
-                <span
-                  className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)" }}
-                >
-                  Sold Out
-                </span>
-              )}
-            </div>
-
-            <p
-              className="text-sm font-bold leading-tight"
-              style={{ color: show.isSoldOut ? "rgba(255,255,255,0.5)" : "#fff" }}
-            >
-              {show.venueName}
-            </p>
-            <p className="flex items-center gap-1 text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-              <MapPin size={10} />
-              {show.city}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>
-              {fmtFull(show.date)} · {fmtTime(show.date)}
-            </p>
-          </div>
-
-          {/* CTA area */}
-          {show.isSoldOut ? (
-            <EmailCapture
-              placeholder="your@email.com"
-              buttonLabel="Notify Me"
-              onSubmit={joinWaitlist}
-            />
-          ) : show.ticketUrl ? (
-            <a
-              href={show.ticketUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 self-start px-4 py-2 rounded-full text-xs font-bold no-underline
-                         transition-all hover:brightness-110 hover:scale-[1.02]"
-              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
-            >
-              <Ticket size={11} />
-              Get Tickets
-            </a>
-          ) : null}
-        </div>
+      {/* ── CTA ─────────────────────────────────────────────────────────── */}
+      <div className="shrink-0">
+        {show.isSoldOut ? (
+          <EmailCapture
+            placeholder="your@email.com"
+            buttonLabel="Notify Me"
+            onSubmit={joinWaitlist}
+          />
+        ) : show.ticketUrl ? (
+          <a
+            href={show.ticketUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 no-underline transition-all hover:brightness-110"
+            style={{
+              border:       "1px solid rgba(212,168,67,0.30)",
+              color:        "#D4A843",
+              fontSize:     11,
+              padding:      "5px 12px",
+              borderRadius: 99,
+            }}
+          >
+            <Ticket size={10} />
+            Tickets
+          </a>
+        ) : null}
       </div>
     </div>
   );
@@ -270,10 +272,16 @@ export default function ShowsSection({
   if (!upcoming.length) return null;
 
   return (
-    <section className="space-y-5">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-white/40">Shows</h2>
+    <section className="space-y-3">
+      <p
+        className="text-[10px] font-bold uppercase"
+        style={{ color: "#D4A843", letterSpacing: "1.5px" }}
+      >
+        LIVE
+      </p>
+      <h2 className="text-[18px] font-semibold text-white leading-tight -mt-1">Shows</h2>
 
-      <div className="space-y-3">
+      <div className="space-y-3 mt-3">
         {upcoming.map((show) => (
           <ShowCard key={show.id} show={show} />
         ))}
