@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         where: { id: leaseId },
         select: {
           trackTitle: true,
-          beat:     { select: { title: true } },
+          beat:     { select: { id: true, title: true } },
           artist:   { select: { email: true, name: true, artistName: true, artistSlug: true } },
           producer: { select: { email: true, name: true, artistName: true } },
         },
@@ -84,7 +84,9 @@ export async function POST(req: NextRequest) {
         ? `${appUrl}/${leaseFull.artist.artistSlug}`
         : appUrl;
 
-      const milestoneHtml = (recipientName: string, headline: string, body: string, ctaUrl: string, ctaLabel: string) =>
+      const upgradeUrl = `${appUrl}/dashboard/marketplace?upgrade=${leaseFull.beat.id}&tab=browse`;
+
+      const milestoneHtml = (recipientName: string, body: string, ctaUrl: string, ctaLabel: string, ctaColor = "#E85D4A", secondaryCta?: { url: string; label: string }) =>
         `<!DOCTYPE html>
 <html>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#111;background:#fff">
@@ -94,24 +96,27 @@ export async function POST(req: NextRequest) {
   </div>
   <p style="font-size:15px;line-height:1.6;margin-bottom:12px">Hi ${recipientName},</p>
   <p style="font-size:15px;line-height:1.6;margin-bottom:24px">${body}</p>
-  <a href="${ctaUrl}" style="display:inline-block;background:#E85D4A;color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px">${ctaLabel}</a>
+  <a href="${ctaUrl}" style="display:inline-block;background:${ctaColor};color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px">${ctaLabel}</a>
+  ${secondaryCta ? `<a href="${secondaryCta.url}" style="display:inline-block;margin-left:12px;color:#D4A843;text-decoration:none;font-size:13px;font-weight:600;padding:12px 0">${secondaryCta.label} →</a>` : ""}
   <p style="font-size:12px;color:#888;margin-top:32px">IndieThis · <a href="${appUrl}" style="color:#D4A843">indiethis.com</a></p>
 </body>
 </html>`;
 
-      // Email artist
+      // Email artist — includes upgrade CTA to convert from $1/mo → full license
       if (leaseFull.artist.email) {
         void sendEmail({
           to:      { email: leaseFull.artist.email, name: artistName },
-          subject: `🎉 "${leaseFull.trackTitle}" just hit ${playsStr} plays on IndieThis!`,
+          subject: `🎉 "${leaseFull.trackTitle}" just hit ${playsStr} plays — ready for Spotify?`,
           htmlContent: milestoneHtml(
             artistName,
-            `${playsStr} Plays`,
-            `Your track <strong>"${leaseFull.trackTitle}"</strong> just hit <strong>${playsStr} plays</strong> on IndieThis. Keep it going!`,
-            artistPage,
-            "View Your Page"
+            `Your track <strong>"${leaseFull.trackTitle}"</strong> just hit <strong>${playsStr} plays</strong> on IndieThis. `
+            + `Your audience is growing — this track has real momentum. Ready to take it to Spotify, Apple Music, and everywhere else?`,
+            upgradeUrl,
+            "Upgrade to Full License",
+            "#D4A843",
+            { url: artistPage, label: "View Your Page" }
           ),
-          tags: ["stream-lease-milestone", "artist"],
+          tags: ["stream-lease-milestone", "artist", "upgrade-cta"],
         }).catch(console.error);
       }
 
@@ -122,10 +127,10 @@ export async function POST(req: NextRequest) {
           subject: `${artistName}'s track on your beat "${leaseFull.beat.title}" just hit ${playsStr} plays`,
           htmlContent: milestoneHtml(
             producerName,
-            `${playsStr} Plays`,
             `<strong>${artistName}</strong>'s track recorded on your beat <strong>"${leaseFull.beat.title}"</strong> just hit <strong>${playsStr} plays</strong> on IndieThis.`,
             artistPage,
-            `Listen to ${artistName}'s Track`
+            `Listen to ${artistName}'s Track`,
+            "#E85D4A"
           ),
           tags: ["stream-lease-milestone", "producer"],
         }).catch(console.error);

@@ -742,7 +742,7 @@ function TopBeatsLeaderboard({ onStreamLease }: { onStreamLease: (target: Stream
 
 // ─── Browse Beats tab ─────────────────────────────────────────────────────────
 
-function BrowseBeats() {
+function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
   const [tracks, setTracks]     = useState<BrowseTrack[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -786,8 +786,17 @@ function BrowseBeats() {
   useEffect(() => {
     fetch("/api/dashboard/marketplace/browse")
       .then((r) => r.json())
-      .then((d) => { setTracks(d.tracks ?? []); setLoading(false); });
-  }, []);
+      .then((d) => {
+        const loaded: BrowseTrack[] = d.tracks ?? [];
+        setTracks(loaded);
+        setLoading(false);
+        // Deep-link: ?upgrade=<beatId> → auto-open license modal for that beat
+        if (upgradeBeatId) {
+          const target = loaded.find((t) => t.id === upgradeBeatId);
+          if (target) openLicenseModal(target);
+        }
+      });
+  }, [upgradeBeatId, openLicenseModal]);
 
   const filtered = search.trim()
     ? tracks.filter((t) =>
@@ -1008,13 +1017,18 @@ function BrowseBeats() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MarketplacePage() {
-  const [tab, setTab]                   = useState<"previews" | "browse">("previews");
   const searchParams                    = useSearchParams();
   const justLicensed                    = searchParams.get("licensed") === "1";
-  const [dismissedBanner, setDismissedBanner] = useState(false);
+  const upgradeBeatId                   = searchParams.get("upgrade") ?? null;
+
+  // Default to browse tab when coming from an upgrade deep-link
+  const [tab, setTab]                   = useState<"previews" | "browse">(upgradeBeatId ? "browse" : "previews");
+  const [dismissedBanner, setDismissedBanner]   = useState(false);
+  const [dismissedUpgrade, setDismissedUpgrade] = useState(false);
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
+      {/* License purchased banner */}
       {justLicensed && !dismissedBanner && (
         <div className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4 border"
           style={{ backgroundColor: "rgba(52,199,89,0.08)", borderColor: "rgba(52,199,89,0.25)" }}>
@@ -1026,6 +1040,26 @@ export default function MarketplacePage() {
             </div>
           </div>
           <button onClick={() => setDismissedBanner(true)} className="text-muted-foreground hover:text-foreground shrink-0">
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Upgrade context banner — shown when arriving from stream lease upgrade CTA */}
+      {upgradeBeatId && !dismissedUpgrade && (
+        <div className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4 border"
+          style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}>
+          <div className="flex items-center gap-3">
+            <CheckCircle2 size={18} style={{ color: "#D4A843" }} />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Upgrade your stream lease</p>
+              <p className="text-xs text-muted-foreground">
+                Purchase a full license to distribute your track on Spotify, Apple Music, and anywhere else.
+                Your $1/mo stream lease will be cancelled automatically.
+              </p>
+            </div>
+          </div>
+          <button onClick={() => setDismissedUpgrade(true)} className="text-muted-foreground hover:text-foreground shrink-0">
             <X size={15} />
           </button>
         </div>
@@ -1046,7 +1080,7 @@ export default function MarketplacePage() {
         ))}
       </div>
 
-      {tab === "previews" ? <MyPreviews /> : <BrowseBeats />}
+      {tab === "previews" ? <MyPreviews /> : <BrowseBeats upgradeBeatId={upgradeBeatId} />}
     </div>
   );
 }

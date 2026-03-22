@@ -21,6 +21,7 @@ import {
   BarChart2,
   TrendingUp,
   Image as ImageIcon,
+  ArrowUpRight,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
@@ -229,94 +230,127 @@ function LeaseCard({
   monthlyPrice: number;
   onCancel?: () => void;
   onReactivate?: () => void;
+  // upgrade: navigate to marketplace with this beat pre-selected
 }) {
-  const coverArt  = lease.coverUrl ?? lease.beat.coverArtUrl;
-  const producer  = lease.producer.artistName ?? lease.producer.name;
+  const coverArt    = lease.coverUrl ?? lease.beat.coverArtUrl;
+  const producer    = lease.producer.artistName ?? lease.producer.name;
   const isCancelled = !lease.isActive;
-  const daysLeft  = lease.cancelledAt ? daysUntilExpiry(lease.cancelledAt) : null;
+  const daysLeft    = lease.cancelledAt ? daysUntilExpiry(lease.cancelledAt) : null;
+  const showUpgrade = !isCancelled && lease.playCount > 0;
+
+  // Upgrade URL: marketplace browse tab with this beat pre-selected
+  const upgradeUrl = `/dashboard/marketplace?upgrade=${lease.beat.id}&tab=browse`;
 
   return (
     <div
-      className="rounded-2xl border p-4 flex items-center gap-4 transition-opacity"
+      className="rounded-2xl border overflow-hidden transition-opacity"
       style={{
         backgroundColor: "var(--card)",
         borderColor: "var(--border)",
         opacity: isCancelled ? 0.75 : 1,
       }}
     >
-      {/* Cover art */}
-      <div
-        className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center"
-        style={{
-          backgroundImage:    coverArt ? `url(${coverArt})` : undefined,
-          backgroundSize:     "cover",
-          backgroundPosition: "center",
-          backgroundColor:    coverArt ? undefined : "var(--border)",
-        }}
-      >
-        {!coverArt && <Music2 size={20} className="text-muted-foreground" />}
-      </div>
+      {/* Main row */}
+      <div className="p-4 flex items-center gap-4">
+        {/* Cover art */}
+        <div
+          className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center"
+          style={{
+            backgroundImage:    coverArt ? `url(${coverArt})` : undefined,
+            backgroundSize:     "cover",
+            backgroundPosition: "center",
+            backgroundColor:    coverArt ? undefined : "var(--border)",
+          }}
+        >
+          {!coverArt && <Music2 size={20} className="text-muted-foreground" />}
+        </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-bold text-foreground truncate">{lease.trackTitle}</p>
-          {isCancelled && (
-            <span
-              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md"
-              style={{ backgroundColor: "rgba(255,59,48,0.12)", color: "#FF3B30" }}
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-foreground truncate">{lease.trackTitle}</p>
+            {isCancelled && (
+              <span
+                className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md"
+                style={{ backgroundColor: "rgba(255,59,48,0.12)", color: "#FF3B30" }}
+              >
+                Cancelled
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            on <span className="text-foreground font-medium">{lease.beat.title}</span>
+            {" · "}prod. {producer}
+          </p>
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Calendar size={10} />
+              {isCancelled ? `Cancelled ${formatDate(lease.cancelledAt!)}` : `Since ${formatDate(lease.activatedAt)}`}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Play size={10} />
+              {lease.playCount.toLocaleString()} {lease.playCount === 1 ? "play" : "plays"}
+            </span>
+            {!isCancelled && (
+              <span className="text-[11px] font-semibold" style={{ color: "#E85D4A" }}>
+                ${monthlyPrice.toFixed(2)}/mo
+              </span>
+            )}
+            {isCancelled && daysLeft !== null && daysLeft > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                {daysLeft}d left to reactivate
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="shrink-0 flex items-center gap-2">
+          {!isCancelled && onCancel && (
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-red-400/10"
+              style={{ borderColor: "rgba(255,59,48,0.3)", color: "#FF3B30" }}
             >
-              Cancelled
-            </span>
+              Cancel
+            </button>
           )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          on <span className="text-foreground font-medium">{lease.beat.title}</span>
-          {" · "}prod. {producer}
-        </p>
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Calendar size={10} />
-            {isCancelled ? `Cancelled ${formatDate(lease.cancelledAt!)}` : `Since ${formatDate(lease.activatedAt)}`}
-          </span>
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Play size={10} />
-            {lease.playCount.toLocaleString()} {lease.playCount === 1 ? "play" : "plays"}
-          </span>
-          {!isCancelled && (
-            <span className="text-[11px] font-semibold" style={{ color: "#E85D4A" }}>
-              ${monthlyPrice.toFixed(2)}/mo
-            </span>
-          )}
-          {isCancelled && daysLeft !== null && daysLeft > 0 && (
-            <span className="text-[11px] text-muted-foreground">
-              {daysLeft}d left to reactivate
-            </span>
+          {isCancelled && onReactivate && (
+            <button
+              onClick={onReactivate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+              style={{ borderColor: "rgba(232,93,74,0.4)", color: "#E85D4A", backgroundColor: "rgba(232,93,74,0.07)" }}
+            >
+              <RefreshCw size={11} /> Reactivate
+            </button>
           )}
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="shrink-0 flex items-center gap-2">
-        {!isCancelled && onCancel && (
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-red-400/10"
-            style={{ borderColor: "rgba(255,59,48,0.3)", color: "#FF3B30" }}
+      {/* Upgrade prompt — active leases with plays */}
+      {showUpgrade && (
+        <a
+          href={upgradeUrl}
+          className="flex items-center justify-between gap-3 px-4 py-2.5 border-t no-underline group transition-colors hover:bg-white/3"
+          style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.04)" }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <TrendingUp size={12} style={{ color: "#D4A843" }} className="shrink-0" />
+            <p className="text-xs text-muted-foreground truncate">
+              <span className="font-semibold" style={{ color: "#D4A843" }}>
+                {lease.playCount.toLocaleString()} plays
+              </span>
+              {" on IndieThis. Ready to take it everywhere?"}
+            </p>
+          </div>
+          <span
+            className="flex items-center gap-1 text-xs font-semibold shrink-0 group-hover:underline"
+            style={{ color: "#D4A843" }}
           >
-            Cancel
-          </button>
-        )}
-        {isCancelled && onReactivate && (
-          <button
-            onClick={onReactivate}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
-            style={{ borderColor: "rgba(232,93,74,0.4)", color: "#E85D4A", backgroundColor: "rgba(232,93,74,0.07)" }}
-          >
-            <RefreshCw size={11} /> Reactivate
-          </button>
-        )}
-      </div>
+            Upgrade to Full License <ArrowUpRight size={11} />
+          </span>
+        </a>
+      )}
     </div>
   );
 }

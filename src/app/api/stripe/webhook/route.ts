@@ -99,6 +99,14 @@ export async function POST(req: NextRequest) {
               price: paidAmount,
             },
           });
+
+          // Auto-cancel any active stream lease this artist has on this beat.
+          // A full license grants distribution rights outside IndieThis, so the
+          // $1/mo restriction no longer applies — the lease is superseded.
+          await db.streamLease.updateMany({
+            where: { artistId: buyerId, beatId: trackId, isActive: true },
+            data:  { isActive: false, cancelledAt: new Date() },
+          });
         }
         break;
       }
