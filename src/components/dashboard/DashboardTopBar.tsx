@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { Menu, ChevronDown, User, LogOut } from "lucide-react";
+import { Menu, ChevronDown, User, LogOut, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,8 +57,20 @@ export default function DashboardTopBar({ title }: DashboardTopBarProps) {
           )}
         </div>
 
-        {/* Right: bell + user dropdown */}
+        {/* Right: visit site + bell + user dropdown */}
         <div className="flex items-center gap-1">
+        {user?.artistPageSlug && (
+          <a
+            href={`/${user.artistPageSlug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
+            style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.25)" }}
+          >
+            <ExternalLink size={12} />
+            Visit Site
+          </a>
+        )}
         <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/5 outline-none">
