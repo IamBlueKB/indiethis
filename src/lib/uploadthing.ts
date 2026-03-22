@@ -1,5 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { auth } from "@/lib/auth";
+import { getToken } from "next-auth/jwt";
 
 const f = createUploadthing();
 
@@ -138,10 +139,13 @@ export const ourFileRouter = {
 
   // Stream lease: artist's recorded song using a beat (mp3/wav, up to 256MB)
   streamLeaseAudio: f({ audio: { maxFileSize: "256MB", maxFileCount: 1 } })
-    .middleware(async () => {
-      const session = await auth();
-      if (!session?.user?.id) throw new Error("Unauthorized");
-      return { userId: session.user.id };
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
       return { url: file.ufsUrl ?? file.url };
@@ -149,10 +153,13 @@ export const ourFileRouter = {
 
   // Stream lease: cover art (optional, up to 8MB)
   streamLeaseCover: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
-    .middleware(async () => {
-      const session = await auth();
-      if (!session?.user?.id) throw new Error("Unauthorized");
-      return { userId: session.user.id };
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
       return { url: file.ufsUrl ?? file.url };

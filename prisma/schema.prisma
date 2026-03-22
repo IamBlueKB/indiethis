@@ -427,9 +427,10 @@ model User {
   artistPressItems   ArtistPressItem[]
   promoRedemptions     PromoRedemption[]
   ambassador           Ambassador?
-  artistStreamLeases   StreamLease[]          @relation("ArtistStreamLeases")
-  producerStreamLeases StreamLease[]          @relation("ProducerStreamLeases")
+  artistStreamLeases    StreamLease[]          @relation("ArtistStreamLeases")
+  producerStreamLeases  StreamLease[]          @relation("ProducerStreamLeases")
   producerLeaseSettings ProducerLeaseSettings?
+  streamLeaseBookmarks  StreamLeaseBookmark[]
 }
 
 model Studio {
@@ -593,6 +594,7 @@ model Track {
   releaseId   String?
   bpm         Int?
   musicalKey  String?
+  audioHash   String?     // SHA-256 of the beat file — for duplicate detection
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -601,8 +603,9 @@ model Track {
   beatPreviews     BeatPreview[]
   beatLicenses     BeatLicense[]
   trackPlays       TrackPlay[]
-  streamLeases     StreamLease[]
-  beatLeaseSettings BeatLeaseSettings?
+  streamLeases          StreamLease[]
+  beatLeaseSettings     BeatLeaseSettings?
+  streamLeaseBookmarks  StreamLeaseBookmark[]
 }
 
 model DeliveredFile {
@@ -1678,18 +1681,21 @@ model PlatformPricing {
 // ─── Stream Leases ─────────────────────────────────────────────────────────────
 
 model StreamLease {
-  id           String    @id @default(cuid())
-  artistId     String
-  beatId       String
-  producerId   String
-  trackTitle   String
-  audioUrl     String
-  coverUrl     String?
-  isActive     Boolean   @default(true)
-  activatedAt  DateTime  @default(now())
-  cancelledAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  artistId        String
+  beatId          String
+  producerId      String
+  trackTitle      String
+  audioUrl        String
+  coverUrl        String?
+  isActive        Boolean   @default(true)
+  activatedAt     DateTime  @default(now())
+  cancelledAt     DateTime?
+  trackHash       String?   // SHA-256 of the artist's uploaded finished song
+  duplicateFlag   Boolean   @default(false) // true if trackHash matches another lease or beat
+  duplicateFlagNote String? // details about the duplicate
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   artist    User          @relation("ArtistStreamLeases",   fields: [artistId],   references: [id])
   beat      Track         @relation(fields: [beatId],        references: [id])
@@ -1768,4 +1774,16 @@ model StreamLeaseAgreement {
   createdAt        DateTime    @default(now())
 
   streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+model StreamLeaseBookmark {
+  id        String   @id @default(cuid())
+  artistId  String
+  beatId    String
+  createdAt DateTime @default(now())
+
+  artist User  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  beat   Track @relation(fields: [beatId],   references: [id], onDelete: Cascade)
+
+  @@unique([artistId, beatId])
 }

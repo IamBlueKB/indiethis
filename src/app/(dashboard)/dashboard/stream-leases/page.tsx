@@ -22,6 +22,10 @@ import {
   TrendingUp,
   Image as ImageIcon,
   ArrowUpRight,
+  Bookmark,
+  Mic2,
+  Trash2,
+  Download,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
@@ -371,10 +375,12 @@ function CreateStreamLeaseModal({
   onClose,
   onSuccess,
   monthlyPrice,
+  preselectedBeatId,
 }: {
   onClose: () => void;
   onSuccess: () => void;
   monthlyPrice: number;
+  preselectedBeatId?: string;
 }) {
   const [step, setStep] = useState<CreateStep>("select-beat");
 
@@ -389,6 +395,7 @@ function CreateStreamLeaseModal({
   const [audioUrl,        setAudioUrl]        = useState<string | null>(null);
   const [audioUploading,  setAudioUploading]  = useState(false);
   const [audioProgress,   setAudioProgress]   = useState(0);
+  const [trackHash,       setTrackHash]       = useState<string | null>(null);
 
   // Details
   const [trackTitle,     setTrackTitle]     = useState("");
@@ -412,8 +419,14 @@ function CreateStreamLeaseModal({
       .then((d) => {
         const available = (d.tracks ?? []).filter((t: BrowseBeat) => t.streamLeaseEnabled);
         setBeats(available);
+        // If a beat was pre-selected from a bookmark, auto-select it and advance
+        if (preselectedBeatId) {
+          const match = available.find((t: BrowseBeat) => t.id === preselectedBeatId);
+          if (match) { setSelectedBeat(match); setStep("upload"); }
+        }
       })
       .finally(() => setBeatsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredBeats = beats.filter((b) => {
@@ -430,8 +443,18 @@ function CreateStreamLeaseModal({
     setAudioUploading(true);
     setAudioProgress(0);
     setError(null);
+    setTrackHash(null);
     try {
-      const res = await startAudioUpload([file]);
+      // Compute SHA-256 hash and upload simultaneously
+      const [res, hashBuf] = await Promise.all([
+        startAudioUpload([file]),
+        file.arrayBuffer().then((buf) => crypto.subtle.digest("SHA-256", buf)),
+      ]);
+      // Store hex hash
+      const hexHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      setTrackHash(hexHash);
       const url = res?.[0]?.url;
       if (url) { setAudioUrl(url); setStep("details"); }
       else setError("Upload failed — please try again.");
@@ -468,6 +491,7 @@ function CreateStreamLeaseModal({
           trackTitle: trackTitle.trim(),
           audioUrl,
           coverUrl:   coverUrl ?? undefined,
+          trackHash:  trackHash ?? undefined,
         }),
       });
       const data = await res.json();
@@ -874,13 +898,33 @@ function CreateStreamLeaseModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type SavedBeat = {
+  id: string;
+  createdAt: string;
+  beat: {
+    id: string;
+    title: string;
+    coverArtUrl: string | null;
+    bpm: number | null;
+    musicalKey: string | null;
+    fileUrl: string;
+    beatLeaseSettings: { streamLeaseEnabled: boolean } | null;
+    artist: { name: string; artistName: string | null };
+  };
+};
+
 export default function StreamLeasesPage() {
   const [leases,       setLeases]       = useState<StreamLease[]>([]);
   const [monthlyPrice, setMonthlyPrice] = useState(1.00);
   const [loading,      setLoading]      = useState(true);
 
-  // Create modal
-  const [showCreate, setShowCreate] = useState(false);
+  // Saved beats (bookmarks)
+  const [savedBeats,      setSavedBeats]      = useState<SavedBeat[]>([]);
+  const [removingBookmark, setRemovingBookmark] = useState<string | null>(null);
+
+  // Create modal — optionally with a pre-selected beat from a bookmark
+  const [showCreate,       setShowCreate]       = useState(false);
+  const [preselectedBeatId, setPreselectedBeatId] = useState<string | undefined>(undefined);
 
   // Cancel modal
   const [cancelTarget, setCancelTarget] = useState<StreamLease | null>(null);
@@ -897,13 +941,28 @@ export default function StreamLeasesPage() {
 
   function loadLeases() {
     setLoading(true);
-    fetch("/api/dashboard/stream-leases")
-      .then((r) => r.json())
-      .then((d) => {
-        setLeases(d.leases ?? []);
-        setMonthlyPrice(d.monthlyPrice ?? 1.00);
-      })
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/dashboard/stream-leases").then((r) => r.json()),
+      fetch("/api/dashboard/stream-lease-bookmarks").then((r) => r.json()),
+    ]).then(([leasesData, bookmarksData]) => {
+      setLeases(leasesData.leases ?? []);
+      setMonthlyPrice(leasesData.monthlyPrice ?? 1.00);
+      setSavedBeats(bookmarksData.bookmarks ?? []);
+    }).finally(() => setLoading(false));
+  }
+
+  async function removeBookmark(beatId: string) {
+    setRemovingBookmark(beatId);
+    try {
+      await fetch("/api/dashboard/stream-lease-bookmarks", {
+        method:  "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ beatId }),
+      });
+      setSavedBeats((prev) => prev.filter((b) => b.beat.id !== beatId));
+    } finally {
+      setRemovingBookmark(null);
+    }
   }
 
   useEffect(() => { loadLeases(); }, []);
@@ -1116,6 +1175,90 @@ export default function StreamLeasesPage() {
               )}
             </section>
           )}
+
+          {/* ── Saved Beats ───────────────────────────────────────────────── */}
+          {savedBeats.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Bookmark size={14} style={{ color: "#D4A843" }} />
+                <p className="text-sm font-semibold text-foreground">Saved Beats</p>
+                <span className="text-xs text-muted-foreground">— record your song, then come back to upload</span>
+              </div>
+
+              <div className="space-y-2">
+                {savedBeats.map((b) => {
+                  const producer = b.beat.artist.artistName ?? b.beat.artist.name;
+                  const isRemoving = removingBookmark === b.beat.id;
+                  return (
+                    <div
+                      key={b.id}
+                      className="rounded-2xl border p-4 flex items-center gap-4"
+                      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+                    >
+                      {/* Cover */}
+                      <div
+                        className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center"
+                        style={{
+                          backgroundImage:    b.beat.coverArtUrl ? `url(${b.beat.coverArtUrl})` : undefined,
+                          backgroundSize:     "cover",
+                          backgroundPosition: "center",
+                          backgroundColor:    b.beat.coverArtUrl ? undefined : "var(--border)",
+                        }}
+                      >
+                        {!b.beat.coverArtUrl && <Music2 size={16} className="text-muted-foreground" />}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{b.beat.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">prod. {producer}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {b.beat.bpm && <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{b.beat.bpm} BPM</span>}
+                          {b.beat.bpm && b.beat.musicalKey && <span className="text-[11px] text-muted-foreground/40">·</span>}
+                          {b.beat.musicalKey && <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{b.beat.musicalKey}</span>}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => {
+                            setPreselectedBeatId(b.beat.id);
+                            setShowCreate(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                          style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+                        >
+                          <Mic2 size={11} /> I&apos;m ready to record
+                        </button>
+                        <a
+                          href={`/api/dashboard/stream-lease-beat-download/${b.beat.id}`}
+                          download
+                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 text-muted-foreground"
+                          title="Download beat"
+                        >
+                          <Download size={13} />
+                        </a>
+                        <button
+                          onClick={() => removeBookmark(b.beat.id)}
+                          disabled={isRemoving}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 text-muted-foreground disabled:opacity-40"
+                          title="Remove bookmark"
+                        >
+                          {isRemoving ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-muted-foreground pl-1">
+                <a href="/dashboard/marketplace" className="underline" style={{ color: "#E85D4A" }}>Browse more beats</a>
+                {" "}to add to your saved list.
+              </p>
+            </section>
+          )}
         </>
       )}
 
@@ -1123,9 +1266,11 @@ export default function StreamLeasesPage() {
       {showCreate && (
         <CreateStreamLeaseModal
           monthlyPrice={monthlyPrice}
-          onClose={() => setShowCreate(false)}
+          preselectedBeatId={preselectedBeatId}
+          onClose={() => { setShowCreate(false); setPreselectedBeatId(undefined); }}
           onSuccess={() => {
             setShowCreate(false);
+            setPreselectedBeatId(undefined);
             loadLeases();
           }}
         />

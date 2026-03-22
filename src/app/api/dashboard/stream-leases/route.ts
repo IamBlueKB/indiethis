@@ -135,14 +135,14 @@ export async function POST(req: NextRequest) {
   }
 
   const artistId = session.user.id;
-  let body: { beatId?: string; trackTitle?: string; audioUrl?: string; coverUrl?: string };
+  let body: { beatId?: string; trackTitle?: string; audioUrl?: string; coverUrl?: string; trackHash?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { beatId, trackTitle, audioUrl, coverUrl } = body;
+  const { beatId, trackTitle, audioUrl, coverUrl, trackHash } = body;
   if (!beatId || !trackTitle?.trim() || !audioUrl) {
     return NextResponse.json(
       { error: "beatId, trackTitle, and audioUrl are required" },
@@ -233,11 +233,8 @@ export async function POST(req: NextRequest) {
     }),
     getStreamLeasePricing(),
   ]);
-  if (!artist?.stripeCustomerId || !stripe) {
-    return NextResponse.json(
-      { error: "No billing account found. Please complete your subscription setup." },
-      { status: 400 }
-    );
+  if (!artist) {
+    return NextResponse.json({ error: "Artist account not found." }, { status: 400 });
   }
 
   const producerName = beat.artist.artistName ?? beat.artist.name;
@@ -263,18 +260,47 @@ export async function POST(req: NextRequest) {
     platformShare:       pricing.platformShare,
   });
 
-  // 7. Create lease + agreement snapshot + Stripe invoice item
+  // 7. Duplicate track detection (same audio uploaded to multiple leases or matching a known beat file)
+  let duplicateFlag     = false;
+  let duplicateFlagNote: string | null = null;
+  if (trackHash) {
+    const [existingLease, matchingBeat] = await Promise.all([
+      // Same finished song hash already used in another stream lease
+      db.streamLease.findFirst({
+        where:  { trackHash, NOT: { artistId } },
+        select: { id: true, artistId: true },
+      }),
+      // Track hash matches a known beat file (artist uploaded the raw beat instead of their song)
+      db.track.findFirst({
+        where:  { audioHash: trackHash },
+        select: { id: true, title: true },
+      }),
+    ]);
+
+    if (matchingBeat) {
+      duplicateFlag     = true;
+      duplicateFlagNote = `Uploaded audio matches beat file "${matchingBeat.title}" (beat ID: ${matchingBeat.id})`;
+    } else if (existingLease) {
+      duplicateFlag     = true;
+      duplicateFlagNote = `Same audio hash found in lease ${existingLease.id} (different artist)`;
+    }
+  }
+
+  // 8. Create lease + agreement snapshot
   let lease;
   try {
     lease = await db.streamLease.create({
       data: {
         artistId,
         beatId,
-        producerId: beat.artistId,
-        trackTitle: trackTitle.trim(),
+        producerId:       beat.artistId,
+        trackTitle:       trackTitle.trim(),
         audioUrl,
-        coverUrl:   coverUrl ?? beat.coverArtUrl ?? null,
-        isActive:   true,
+        coverUrl:         coverUrl ?? beat.coverArtUrl ?? null,
+        isActive:         true,
+        trackHash:        trackHash ?? null,
+        duplicateFlag,
+        duplicateFlagNote,
         agreement: {
           create: {
             agreementHtml,
@@ -289,26 +315,30 @@ export async function POST(req: NextRequest) {
         agreement: { select: { id: true } },
       },
     });
-
-    await stripe.invoiceItems.create({
-      customer:    artist.stripeCustomerId,
-      amount:      pricing.monthlyPriceCents,
-      currency:    "usd",
-      description: `Stream Lease: ${trackTitle.trim()} (beat: ${beat.title})`,
-      metadata:    { streamLeaseId: lease.id, artistId, producerId: beat.artistId, beatId },
-    });
   } catch (err) {
-    if (lease?.id) {
-      await db.streamLease.update({
-        where: { id: lease.id },
-        data:  { isActive: false, cancelledAt: new Date() },
-      });
-    }
     console.error("[stream-lease] creation failed:", err);
     return NextResponse.json(
       { error: "Failed to create stream lease. Please try again." },
       { status: 500 }
     );
+  }
+
+  // 8b. Add Stripe invoice item for next billing cycle (non-blocking — lease is created regardless)
+  if (stripe && artist.stripeCustomerId) {
+    try {
+      await stripe.invoiceItems.create({
+        customer:    artist.stripeCustomerId,
+        amount:      pricing.monthlyPriceCents,
+        currency:    "usd",
+        description: `Stream Lease: ${trackTitle.trim()} (beat: ${beat.title})`,
+        metadata:    { streamLeaseId: lease.id, artistId, producerId: beat.artistId, beatId },
+      });
+    } catch (err) {
+      // Log but don't fail — lease is already created; billing can be reconciled manually
+      console.error("[stream-lease] Stripe invoice item failed:", err);
+    }
+  } else {
+    console.warn("[stream-lease] Stripe not configured or no stripeCustomerId — skipping invoice item for lease", lease.id);
   }
 
   // Notify producer async — fire-and-forget, never block the response

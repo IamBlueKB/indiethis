@@ -17,6 +17,7 @@ import {
   Radio,
   Play,
   Disc3,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -65,6 +66,7 @@ export default async function AdminDashboardPage({
     activeLeaseCount,
     totalLeasePlays,
     uniqueBeatLeaseCount,
+    duplicateFlagCount,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -100,6 +102,7 @@ export default async function AdminDashboardPage({
     db.streamLease.count({ where: { isActive: true } }),
     db.streamLeasePlay.count(),
     db.streamLease.groupBy({ by: ["beatId"], where: { isActive: true } }).then((r) => r.length),
+    db.streamLease.count({ where: { duplicateFlag: true } }),
   ]);
 
   const mrr = activeSubscriptions.reduce((sum, s) => sum + (TIER_PRICE[s.tier] ?? 0), 0);
@@ -282,6 +285,20 @@ export default async function AdminDashboardPage({
           );
         })}
       </div>
+
+      {/* Duplicate stream lease alert */}
+      {duplicateFlagCount > 0 && (
+        <div
+          className="flex items-start gap-3 px-4 py-3 rounded-xl border text-sm"
+          style={{ backgroundColor: "rgba(251,146,60,0.08)", borderColor: "rgba(251,146,60,0.35)", color: "#FB923C" }}
+        >
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">{duplicateFlagCount} stream lease{duplicateFlagCount !== 1 ? "s" : ""} flagged for duplicate audio.</span>
+            {" "}Review these in the stream leases section — an artist may have uploaded a raw beat file or reused an existing song.
+          </div>
+        </div>
+      )}
 
       {/* Stream Lease Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Music2, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User, Loader2, X, Radio, ChevronRight, ChevronLeft, Upload, Image as ImageIcon, FileText } from "lucide-react";
+import { Music2, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User, Loader2, X, Radio, ChevronRight, ChevronLeft, Upload, Image as ImageIcon, FileText, Bookmark, BookmarkCheck, Mic2, ArrowRight } from "lucide-react";
 import { useAudioStore } from "@/store";
 import BeatPreviewPlayer from "@/components/audio/BeatPreviewPlayer";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -76,6 +76,152 @@ type StreamLeaseTarget = {
 
 type StreamLeaseStep = "upload" | "details" | "agreement" | "confirm";
 
+// ─── Stream Lease Explain Modal ───────────────────────────────────────────────
+
+function StreamLeaseExplainModal({
+  target,
+  onClose,
+  onUploadNow,
+}: {
+  target: StreamLeaseTarget;
+  onClose: () => void;
+  onUploadNow: () => void;
+}) {
+  const [saving, setSaving]   = useState(false);
+  const [saved,  setSaved]    = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
+  async function handleSaveLater() {
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      const res = await fetch("/api/dashboard/stream-lease-bookmarks", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ beatId: target.trackId }),
+      });
+      if (res.ok) { setSaved(true); }
+      else        { const d = await res.json(); setSaveErr(d.error ?? "Failed to save."); }
+    } catch {
+      setSaveErr("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const STEPS = [
+    { icon: Download,  text: "Download or reference this beat from the marketplace" },
+    { icon: Mic2,      text: "Record your song over it in your DAW (GarageBand, FL Studio, etc.)" },
+    { icon: Upload,    text: "Come back and upload your finished track here" },
+    { icon: Radio,     text: "It streams exclusively on IndieThis for $1/mo — cancel anytime" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div
+        className="rounded-2xl border w-full max-w-md overflow-hidden"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Header */}
+        <div
+          className="px-6 pt-5 pb-4 border-b flex items-start justify-between gap-4"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {target.coverArtUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={target.coverArtUrl} alt={target.beatTitle} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+            ) : (
+              <div className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center" style={{ backgroundColor: "var(--border)" }}>
+                <Music2 size={18} className="text-muted-foreground" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <Radio size={12} style={{ color: "#E85D4A" }} />
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#E85D4A" }}>Stream Lease · $1/mo</p>
+              </div>
+              <p className="text-sm font-bold text-foreground truncate">{target.beatTitle}</p>
+              <p className="text-xs text-muted-foreground">prod. {target.producerName}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors text-muted-foreground">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* How it works */}
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm font-bold text-foreground">How Stream Lease works</p>
+          <div className="space-y-3">
+            {STEPS.map(({ icon: Icon, text }, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                  style={{ backgroundColor: "rgba(232,93,74,0.1)" }}
+                >
+                  <Icon size={13} style={{ color: "#E85D4A" }} />
+                </div>
+                <div className="flex items-start gap-2 pt-1">
+                  <span className="text-xs font-bold text-muted-foreground/60 w-3 shrink-0">{i + 1}.</span>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {saveErr && <p className="text-xs text-red-400">{saveErr}</p>}
+
+          {/* Actions */}
+          <div className="flex flex-col gap-2 pt-1">
+            <button
+              onClick={onUploadNow}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-colors"
+              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+            >
+              <Upload size={14} />
+              I&apos;ve already recorded — upload now
+            </button>
+
+            {saved ? (
+              <div className="flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold" style={{ borderColor: "rgba(52,199,89,0.3)", color: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
+                <BookmarkCheck size={14} />
+                Saved to your Stream Leases dashboard
+              </div>
+            ) : (
+              <button
+                onClick={handleSaveLater}
+                disabled={saving}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold transition-colors hover:bg-white/5 disabled:opacity-50"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Bookmark size={14} />}
+                {saving ? "Saving…" : "Save this beat for later"}
+              </button>
+            )}
+
+            <a
+              href={`/api/dashboard/stream-lease-beat-download/${target.trackId}`}
+              download
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-colors hover:bg-white/5"
+              style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+            >
+              <Download size={13} />
+              Download beat (with ID3 tags)
+            </a>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground text-center">
+            Saved beats appear in your{" "}
+            <a href="/dashboard/stream-leases" className="underline" style={{ color: "#E85D4A" }}>Stream Leases dashboard</a>{" "}
+            so you can come back after recording.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StreamLeaseModal({
   target,
   onClose,
@@ -92,6 +238,7 @@ function StreamLeaseModal({
   const [audioUrl, setAudioUrl]   = useState<string | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
   const [audioProgress, setAudioProgress]   = useState(0);
+  const [trackHash, setTrackHash] = useState<string | null>(null);
 
   // Step 2 — details
   const [trackTitle, setTrackTitle] = useState("");
@@ -117,8 +264,16 @@ function StreamLeaseModal({
     setAudioFile(file);
     setAudioUploading(true);
     setAudioProgress(0);
+    setTrackHash(null);
     try {
-      const res = await startAudioUpload([file]);
+      const [res, hashBuf] = await Promise.all([
+        startAudioUpload([file]),
+        file.arrayBuffer().then((buf) => crypto.subtle.digest("SHA-256", buf)),
+      ]);
+      const hexHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      setTrackHash(hexHash);
       const url = res?.[0]?.url;
       if (url) { setAudioUrl(url); setStep("details"); }
       else setError("Upload failed — please try again.");
@@ -155,6 +310,7 @@ function StreamLeaseModal({
           trackTitle: trackTitle.trim(),
           audioUrl,
           coverUrl:   coverUrl ?? undefined,
+          trackHash:  trackHash ?? undefined,
         }),
       });
       const data = await res.json();
@@ -451,9 +607,10 @@ function MyPreviews() {
   const [licensing, setLicensing]           = useState(false);
   const [licenseError, setLicenseError]     = useState<string | null>(null);
 
-  // Stream lease modal state
-  const [streamTarget, setStreamTarget] = useState<StreamLeaseTarget | null>(null);
-  const [leaseSuccess, setLeaseSuccess] = useState(false);
+  // Stream lease state
+  const [explainTarget, setExplainTarget] = useState<StreamLeaseTarget | null>(null);
+  const [streamTarget,  setStreamTarget]  = useState<StreamLeaseTarget | null>(null);
+  const [leaseSuccess,  setLeaseSuccess]  = useState(false);
 
   async function handlePreviewLicense() {
     if (!licensePreview?.track.price) return;
@@ -548,8 +705,9 @@ function MyPreviews() {
               {/* Stream Lease option */}
               <button
                 onClick={() => {
+                  const t = { trackId: licensePreview.track.id, beatTitle: licensePreview.track.title, producerName: licensePreview.producer.artistName ?? licensePreview.producer.name, coverArtUrl: licensePreview.track.coverArtUrl };
                   setLicensePreview(null);
-                  setStreamTarget({ trackId: licensePreview.track.id, beatTitle: licensePreview.track.title, producerName: licensePreview.producer.artistName ?? licensePreview.producer.name, coverArtUrl: licensePreview.track.coverArtUrl });
+                  setExplainTarget(t);
                 }}
                 className="w-full text-left rounded-xl border p-3 transition-all"
                 style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
@@ -588,7 +746,16 @@ function MyPreviews() {
         </div>
       )}
 
-      {/* Stream lease modal */}
+      {/* Stream lease explain modal */}
+      {explainTarget && (
+        <StreamLeaseExplainModal
+          target={explainTarget}
+          onClose={() => setExplainTarget(null)}
+          onUploadNow={() => { setStreamTarget(explainTarget); setExplainTarget(null); }}
+        />
+      )}
+
+      {/* Stream lease upload modal */}
       {streamTarget && (
         <StreamLeaseModal
           target={streamTarget}
@@ -754,9 +921,10 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
   const [licensing, setLicensing]       = useState(false);
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
-  // Stream lease modal
-  const [streamTarget, setStreamTarget] = useState<StreamLeaseTarget | null>(null);
-  const [leaseSuccess, setLeaseSuccess] = useState(false);
+  // Stream lease state
+  const [explainTarget, setExplainTarget] = useState<StreamLeaseTarget | null>(null);
+  const [streamTarget,  setStreamTarget]  = useState<StreamLeaseTarget | null>(null);
+  const [leaseSuccess,  setLeaseSuccess]  = useState(false);
 
   async function handleLicense() {
     if (!licenseTrack?.price) return;
@@ -872,7 +1040,7 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                 onClick={() => {
                   const producerName = licenseTrack.artist.artistName ?? licenseTrack.artist.name;
                   setLicenseTrack(null);
-                  setStreamTarget({ trackId: licenseTrack.id, beatTitle: licenseTrack.title, producerName, coverArtUrl: licenseTrack.coverArtUrl });
+                  setExplainTarget({ trackId: licenseTrack.id, beatTitle: licenseTrack.title, producerName, coverArtUrl: licenseTrack.coverArtUrl });
                 }}
                 className="w-full text-left rounded-xl border p-3 transition-all"
                 style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
@@ -911,7 +1079,16 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
         </div>
       )}
 
-      {/* Stream lease modal */}
+      {/* Stream lease explain modal */}
+      {explainTarget && (
+        <StreamLeaseExplainModal
+          target={explainTarget}
+          onClose={() => setExplainTarget(null)}
+          onUploadNow={() => { setStreamTarget(explainTarget); setExplainTarget(null); }}
+        />
+      )}
+
+      {/* Stream lease upload modal */}
       {streamTarget && (
         <StreamLeaseModal
           target={streamTarget}
@@ -957,7 +1134,7 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setStreamTarget({ trackId: t.id, beatTitle: t.title, producerName, coverArtUrl: t.coverArtUrl });
+                          setExplainTarget({ trackId: t.id, beatTitle: t.title, producerName, coverArtUrl: t.coverArtUrl });
                         }}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors w-fit"
                         style={{ borderColor: "rgba(232,93,74,0.5)", color: "#E85D4A", backgroundColor: "rgba(232,93,74,0.07)" }}
