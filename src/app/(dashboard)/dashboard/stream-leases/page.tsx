@@ -1219,29 +1219,31 @@ export default function StreamLeasesPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex flex-col gap-1.5 shrink-0 items-end">
-                        <button
-                          onClick={() => {
-                            setPreselectedBeatId(b.beat.id);
-                            setShowCreate(true);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                          style={{ backgroundColor: "#E85D4A", color: "#fff" }}
-                        >
-                          <Upload size={11} /> I&apos;ve already recorded — upload now
-                        </button>
-                        <a
-                          href={`/api/dashboard/stream-lease-beat-download/${b.beat.id}`}
-                          download
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors hover:bg-white/5"
-                          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-                        >
-                          <Download size={11} /> Download beat to record over
-                        </a>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-col gap-1.5 items-end">
+                          <button
+                            onClick={() => {
+                              setPreselectedBeatId(b.beat.id);
+                              setShowCreate(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                            style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+                          >
+                            <Upload size={11} /> I&apos;ve already recorded — upload now
+                          </button>
+                          <a
+                            href={`/api/dashboard/stream-lease-beat-download/${b.beat.id}`}
+                            download
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors hover:bg-white/5"
+                            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                          >
+                            <Download size={11} /> Download beat to record over
+                          </a>
+                        </div>
                         <button
                           onClick={() => removeBookmark(b.beat.id)}
                           disabled={isRemoving}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 text-muted-foreground disabled:opacity-40"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 text-muted-foreground disabled:opacity-40 self-center"
                           title="Remove bookmark"
                         >
                           {isRemoving ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
