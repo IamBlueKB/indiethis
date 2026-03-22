@@ -516,7 +516,7 @@ function MyPreviews() {
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">License Beat</p>
                 <p className="text-base font-bold text-foreground truncate">{licensePreview.track.title}</p>
-                <p className="text-sm text-muted-foreground">by {licensePreview.producer.artistName ?? producer.name}</p>
+                <p className="text-sm text-muted-foreground">by {licensePreview.producer.artistName ?? licensePreview.producer.name}</p>
               </div>
               <div className="flex items-start gap-2 shrink-0">
                 {licensePreview.track.coverArtUrl && (
@@ -546,7 +546,7 @@ function MyPreviews() {
               <button
                 onClick={() => {
                   setLicensePreview(null);
-                  setStreamTarget({ trackId: licensePreview.track.id, beatTitle: licensePreview.track.title, producerName: licensePreview.producer.artistName ?? producer.name, coverArtUrl: licensePreview.track.coverArtUrl });
+                  setStreamTarget({ trackId: licensePreview.track.id, beatTitle: licensePreview.track.title, producerName: licensePreview.producer.artistName ?? licensePreview.producer.name, coverArtUrl: licensePreview.track.coverArtUrl });
                 }}
                 className="w-full text-left rounded-xl border p-3 transition-all"
                 style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
@@ -609,7 +609,7 @@ function MyPreviews() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{p.track.title}</p>
-              <p className="text-xs text-muted-foreground">by {p.producer.artistName ?? producer.name}</p>
+              <p className="text-xs text-muted-foreground">by {p.producer.artistName ?? p.producer.name}</p>
               {p.track.projectName && <p className="text-xs text-muted-foreground">{p.track.projectName}</p>}
               {(p.track.bpm != null || p.track.musicalKey) && (
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -620,7 +620,7 @@ function MyPreviews() {
               )}
               {effectiveStatus !== "EXPIRED" && (
                 <BeatPreviewPlayer
-                  trackId={p.track.id} title={p.track.title} producerName={p.producer.artistName ?? producer.name}
+                  trackId={p.track.id} title={p.track.title} producerName={p.producer.artistName ?? p.producer.name}
                   fileUrl={p.track.fileUrl} coverArtUrl={p.track.coverArtUrl ?? undefined}
                   isOwned={effectiveStatus === "PURCHASED"} onPlay={() => markListened(p)} className="mt-2 w-full"
                 />
