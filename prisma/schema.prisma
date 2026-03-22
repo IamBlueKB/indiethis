@@ -425,8 +425,10 @@ model User {
   artistTestimonials ArtistTestimonial[]
   artistCollaborators ArtistCollaborator[]
   artistPressItems   ArtistPressItem[]
-  promoRedemptions   PromoRedemption[]
-  ambassador         Ambassador?
+  promoRedemptions     PromoRedemption[]
+  ambassador           Ambassador?
+  artistStreamLeases   StreamLease[] @relation("ArtistStreamLeases")
+  producerStreamLeases StreamLease[] @relation("ProducerStreamLeases")
 }
 
 model Studio {
@@ -885,10 +887,11 @@ model BeatPreview {
   status         BeatPreviewStatus @default(PENDING)
   createdAt      DateTime          @default(now())
 
-  producer  User          @relation("ProducerPreviews", fields: [producerId], references: [id])
-  artist    User?         @relation("ArtistPreviews", fields: [artistId], references: [id])
-  track     Track         @relation(fields: [trackId], references: [id])
-  licenses  BeatLicense[]
+  producer      User          @relation("ProducerPreviews", fields: [producerId], references: [id])
+  artist        User?         @relation("ArtistPreviews", fields: [artistId], references: [id])
+  track         Track         @relation(fields: [trackId], references: [id])
+  licenses      BeatLicense[]
+  streamLeases  StreamLease[]
 }
 
 model BeatLicense {
@@ -1667,4 +1670,50 @@ model PlatformPricing {
   sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
   updatedBy String?           // admin email who last changed it
+}
+
+// ─── Stream Leases ─────────────────────────────────────────────────────────────
+
+model StreamLease {
+  id           String    @id @default(cuid())
+  artistId     String
+  beatId       String
+  producerId   String
+  trackTitle   String
+  audioUrl     String
+  coverUrl     String?
+  isActive     Boolean   @default(true)
+  activatedAt  DateTime  @default(now())
+  cancelledAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  artist    User          @relation("ArtistStreamLeases",   fields: [artistId],   references: [id])
+  beat      BeatPreview   @relation(fields: [beatId],       references: [id])
+  producer  User          @relation("ProducerStreamLeases", fields: [producerId], references: [id])
+  payments  StreamLeasePayment[]
+  plays     StreamLeasePlay[]
+}
+
+model StreamLeasePlay {
+  id            String      @id @default(cuid())
+  streamLeaseId String
+  viewerIpHash  String
+  playedAt      DateTime    @default(now())
+
+  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+model StreamLeasePayment {
+  id              String      @id @default(cuid())
+  streamLeaseId   String
+  artistId        String
+  producerId      String
+  totalAmount     Float       @default(1.00)
+  producerAmount  Float       @default(0.70)
+  platformAmount  Float       @default(0.30)
+  stripeInvoiceId String
+  paidAt          DateTime    @default(now())
+
+  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
 }
