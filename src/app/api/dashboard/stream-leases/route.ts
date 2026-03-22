@@ -348,16 +348,28 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const leases = await db.streamLease.findMany({
-    where:   { artistId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    include: {
-      beat:      { select: { id: true, title: true, coverArtUrl: true } },
-      producer:  { select: { name: true, artistName: true } },
-      plays:     { select: { id: true } },
-      agreement: { select: { id: true, artistAcceptedAt: true } },
-    },
-  });
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [leases, pricing] = await Promise.all([
+    db.streamLease.findMany({
+      where: {
+        artistId: session.user.id,
+        // Show active + recently cancelled (within 30 days); hide older cancelled
+        OR: [
+          { isActive: true },
+          { isActive: false, cancelledAt: { gte: thirtyDaysAgo } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        beat:      { select: { id: true, title: true, coverArtUrl: true } },
+        producer:  { select: { name: true, artistName: true } },
+        plays:     { select: { id: true } },
+        agreement: { select: { id: true, artistAcceptedAt: true } },
+      },
+    }),
+    getStreamLeasePricing(),
+  ]);
 
   return NextResponse.json({
     leases: leases.map((l) => ({
@@ -365,5 +377,6 @@ export async function GET() {
       playCount: l.plays.length,
       plays:     undefined,
     })),
+    monthlyPrice: pricing.monthlyPriceDollars,
   });
 }

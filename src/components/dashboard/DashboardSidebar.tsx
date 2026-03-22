@@ -23,6 +23,7 @@ import {
   BarChart2,
   MessageSquare,
   QrCode,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
+  { label: "Stream Leases", href: "/dashboard/stream-leases", icon: Radio },
   { label: "Artist Site", href: "/dashboard/site", icon: Globe },
   { label: "Sessions", href: "/dashboard/sessions", icon: Calendar },
   { label: "Earnings", href: "/dashboard/earnings", icon: TrendingUp },

@@ -1,8 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Receipt, TrendingUp, Heart, ChevronDown, ChevronUp } from "lucide-react";
+import { Download, Receipt, TrendingUp, Heart, ChevronDown, ChevronUp, Radio, Music2 } from "lucide-react";
 import { useEarnings } from "@/hooks/queries";
+
+type StreamLeaseGroup = {
+  beatId:       string;
+  beatTitle:    string;
+  coverArtUrl:  string | null;
+  artistCount:  number;
+  monthlyIncome: number;
+  totalEarned:  number;
+};
+
+type StreamLeaseEarnings = {
+  totalEarned:   number;
+  monthlyIncome: number;
+  beatGroups:    StreamLeaseGroup[];
+};
 
 const TYPE_LABELS: Record<string, string> = {
   SUBSCRIPTION:    "Subscription",
@@ -39,6 +54,9 @@ export default function EarningsPage() {
   const [loadingSup,     setLoadingSup]     = useState(true);
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
 
+  const [leaseEarnings, setLeaseEarnings]       = useState<StreamLeaseEarnings | null>(null);
+  const [loadingLeases, setLoadingLeases]       = useState(true);
+
   useEffect(() => {
     fetch("/api/dashboard/supporters")
       .then((r) => r.json())
@@ -48,6 +66,11 @@ export default function EarningsPage() {
         setTotalTipCount(tc);
       })
       .finally(() => setLoadingSup(false));
+
+    fetch("/api/dashboard/stream-lease-earnings")
+      .then((r) => r.json())
+      .then((d) => setLeaseEarnings(d))
+      .finally(() => setLoadingLeases(false));
   }, []);
 
   function toggleExpand(email: string) {
@@ -184,6 +207,73 @@ export default function EarningsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Stream Lease Income — only show if user has producer activity */}
+      {!loadingLeases && leaseEarnings && (leaseEarnings.beatGroups.length > 0 || leaseEarnings.totalEarned > 0) && (
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        >
+          <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <Radio size={14} style={{ color: "#E85D4A" }} />
+              <p className="text-sm font-semibold text-foreground">Stream Lease Income</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                ${leaseEarnings.monthlyIncome.toFixed(2)}/mo
+              </span>
+              <span className="text-sm font-bold" style={{ color: "#E85D4A" }}>
+                ${leaseEarnings.totalEarned.toFixed(2)} earned
+              </span>
+            </div>
+          </div>
+
+          {leaseEarnings.beatGroups.length === 0 ? (
+            <div className="py-10 text-center">
+              <Radio size={28} className="mx-auto text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No active stream leases on your beats yet.</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Artists can lease your published beats for $1/mo from the Marketplace.
+              </p>
+            </div>
+          ) : (
+            leaseEarnings.beatGroups.map((group) => (
+              <div
+                key={group.beatId}
+                className="flex items-center gap-4 px-5 py-3.5 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div
+                  className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center"
+                  style={{
+                    backgroundImage:    group.coverArtUrl ? `url(${group.coverArtUrl})` : undefined,
+                    backgroundSize:     "cover",
+                    backgroundPosition: "center",
+                    backgroundColor:    group.coverArtUrl ? undefined : "var(--border)",
+                  }}
+                >
+                  {!group.coverArtUrl && <Music2 size={14} className="text-muted-foreground" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{group.beatTitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {group.artistCount} artist{group.artistCount !== 1 ? "s" : ""} recording
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-bold" style={{ color: "#E85D4A" }}>
+                    ${group.monthlyIncome.toFixed(2)}/mo
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    ${group.totalEarned.toFixed(2)} total
+                  </p>
+                </div>
               </div>
             ))
           )}

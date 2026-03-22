@@ -14,6 +14,9 @@ import {
   Tag,
   BarChart2,
   Star,
+  Radio,
+  Play,
+  Disc3,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -59,6 +62,9 @@ export default async function AdminDashboardPage({
     totalRedemptions,
     conversionsThisMonth,
     ambassadorBalanceOwed,
+    activeLeaseCount,
+    totalLeasePlays,
+    uniqueBeatLeaseCount,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -91,6 +97,9 @@ export default async function AdminDashboardPage({
     db.promoRedemption.count(),
     db.promoRedemption.count({ where: { status: "CONVERTED", convertedAt: { gte: startOfMonth } } }),
     db.ambassador.aggregate({ _sum: { creditBalance: true } }).then((r) => r._sum.creditBalance ?? 0),
+    db.streamLease.count({ where: { isActive: true } }),
+    db.streamLeasePlay.count(),
+    db.streamLease.groupBy({ by: ["beatId"], where: { isActive: true } }).then((r) => r.length),
   ]);
 
   const mrr = activeSubscriptions.reduce((sum, s) => sum + (TIER_PRICE[s.tier] ?? 0), 0);
@@ -252,6 +261,63 @@ export default async function AdminDashboardPage({
           { label: "Total Redemptions", value: totalRedemptions, sub: "all time", icon: BarChart2, color: "#A78BFA", href: "/admin/promo-analytics" },
           { label: "Conversions / Month", value: conversionsThisMonth, sub: "this month", icon: TrendingUp, color: "#34D399", href: "/admin/promo-analytics" },
           { label: "Ambassador Balance", value: `$${(ambassadorBalanceOwed as number).toFixed(2)}`, sub: "owed to ambassadors", icon: Star, color: "#D4A843", href: "/admin/ambassadors" },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="rounded-2xl border p-5 no-underline block hover:border-accent/40 transition-colors"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${stat.color}18` }}>
+                  <Icon size={15} style={{ color: stat.color }} strokeWidth={1.75} />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-foreground font-display">{stat.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Stream Lease Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            label: "Active Stream Leases",
+            value: activeLeaseCount,
+            sub: "artist–beat pairs",
+            icon: Radio,
+            color: "#E85D4A",
+            href: "/admin/revenue",
+          },
+          {
+            label: "Lease Revenue / Mo",
+            value: `$${(activeLeaseCount * 0.30).toFixed(2)}`,
+            sub: "platform share ($0.30 × leases)",
+            icon: DollarSign,
+            color: "#34C759",
+            href: "/admin/revenue",
+          },
+          {
+            label: "Total Lease Plays",
+            value: totalLeasePlays.toLocaleString(),
+            sub: "all time streams",
+            icon: Play,
+            color: "#5AC8FA",
+            href: "/admin/revenue",
+          },
+          {
+            label: "Beats Being Leased",
+            value: uniqueBeatLeaseCount,
+            sub: "unique beats with active leases",
+            icon: Disc3,
+            color: "#A78BFA",
+            href: "/admin/revenue",
+          },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
