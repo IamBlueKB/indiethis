@@ -104,17 +104,7 @@ async function ArtistSite({ slug }: { slug: string }) {
   // Filter releases that actually have tracks
   const releases = artist.artistReleases.filter((r) => r.tracks.length > 0);
 
-  // Artist videos — embed (YouTube/Vimeo) from old url-based model
-  const videos = site.showVideos !== false
-    ? await db.artistVideo.findMany({
-        where:   { artistId: artist.id, url: { not: null } },
-        orderBy: { sortOrder: "asc" },
-        take:    6,
-        select:  { id: true, url: true, title: true },
-      })
-    : [];
-
-  // Artist videos — uploads and new embed model (type field present)
+  // Artist videos — uploads and embeds
   const artistVideos = site.showVideos !== false
     ? await db.artistVideo.findMany({
         where:   { artistId: artist.id, isPublished: true },
@@ -242,8 +232,8 @@ async function ArtistSite({ slug }: { slug: string }) {
         )}
 
         {/* 6. Videos */}
-        {(videos.length > 0 || artistVideos.length > 0) && (
-          <VideoSection videos={videos} artistVideos={artistVideos} />
+        {artistVideos.length > 0 && (
+          <VideoSection artistVideos={artistVideos} />
         )}
 
         {/* 7. Photos */}
