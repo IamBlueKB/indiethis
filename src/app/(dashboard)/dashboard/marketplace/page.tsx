@@ -40,6 +40,7 @@ type BrowseTrack = {
   musicalKey: string | null;
   createdAt: string;
   isOwned: boolean;
+  activeLeaseCount: number;
   artist: {
     id: string;
     name: string;
@@ -852,6 +853,12 @@ function BrowseBeats() {
                     {t.projectName && <><span className="text-xs text-muted-foreground/40">·</span><p className="text-xs text-muted-foreground truncate">{t.projectName}</p></>}
                   </div>
                   {t.plays > 0 && <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>}
+                  {t.activeLeaseCount > 0 && (
+                    <p className="text-[11px] font-semibold mt-0.5 flex items-center gap-1" style={{ color: "#E85D4A" }}>
+                      <Radio size={9} />
+                      {t.activeLeaseCount} {t.activeLeaseCount === 1 ? "artist" : "artists"} recording to this beat
+                    </p>
+                  )}
                   {(t.bpm != null || t.musicalKey) && (
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {t.bpm != null && <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>{t.bpm} BPM</span>}

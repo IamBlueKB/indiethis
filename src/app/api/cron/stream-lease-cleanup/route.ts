@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     where: {
       isActive:    false,
       cancelledAt: { lt: thirtyDaysAgo },
-      audioUrl:    { not: null },
+      audioUrl:    { not: "" },
     },
     select: { id: true, audioUrl: true, trackTitle: true },
   });

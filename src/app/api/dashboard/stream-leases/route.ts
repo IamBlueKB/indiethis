@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
     where: { id: artistId },
     select: { stripeCustomerId: true, name: true, artistName: true },
   });
-  if (!artist?.stripeCustomerId) {
+  if (!artist?.stripeCustomerId || !stripe) {
     return NextResponse.json(
       { error: "No billing account found. Please complete your subscription setup." },
       { status: 400 }

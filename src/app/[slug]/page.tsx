@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import TrackList from "./TrackList";
+import type { StreamLeaseTrackData } from "./TrackList";
 import MerchGrid from "./MerchGrid";
 import ArtistHero from "./ArtistHero";
 import PinnedAnnouncement from "./PinnedAnnouncement";
@@ -128,21 +129,65 @@ async function ArtistSite({ slug }: { slug: string }) {
     select:  { id: true, title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
   });
 
-  // Build audio tracks for the store queue (all published tracks across releases + loose)
+  // Stream-leased tracks (active, with audio uploaded)
+  const rawStreamLeases = await db.streamLease.findMany({
+    where: { artistId: artist.id, isActive: true, audioUrl: { not: "" } },
+    orderBy: { activatedAt: "desc" },
+    select: {
+      id:         true,
+      trackTitle: true,
+      coverUrl:   true,
+      audioUrl:   true,
+      producer:   { select: { name: true, artistName: true, artistSlug: true } },
+      agreement:  { select: { producerTerms: true } },
+      _count:     { select: { plays: true } },
+    },
+  });
+
+  const streamLeaseTracks: StreamLeaseTrackData[] = rawStreamLeases.map((lease) => {
+    const producerName = lease.producer.artistName ?? lease.producer.name;
+    let producerCredit = `prod. ${producerName}`;
+    if (lease.agreement?.producerTerms) {
+      const terms = lease.agreement.producerTerms as { creditFormat?: string };
+      if (terms.creditFormat) {
+        producerCredit = terms.creditFormat.replace("{producerName}", producerName);
+      }
+    }
+    return {
+      leaseId:        lease.id,
+      title:          lease.trackTitle,
+      coverUrl:       lease.coverUrl ?? null,
+      audioUrl:       lease.audioUrl,
+      playCount:      lease._count.plays,
+      producerCredit,
+      producerSlug:   lease.producer.artistSlug ?? null,
+    };
+  });
+
+  // Build audio tracks for the store queue (all published tracks across releases + loose + stream leases)
   const allPublishedTracks = [
     ...releases.flatMap((r) => r.tracks),
     ...artist.tracks,
   ];
-  const audioTracks = allPublishedTracks.map((t) => ({
-    id:       t.id,
-    title:    t.title,
-    artist:   displayName,
-    src:      t.fileUrl,
-    coverArt: t.coverArtUrl ?? undefined,
-  }));
+  const audioTracks = [
+    ...allPublishedTracks.map((t) => ({
+      id:       t.id,
+      title:    t.title,
+      artist:   displayName,
+      src:      t.fileUrl,
+      coverArt: t.coverArtUrl ?? undefined,
+    })),
+    ...streamLeaseTracks.map((sl) => ({
+      id:       sl.leaseId,
+      title:    sl.title,
+      artist:   displayName,
+      src:      sl.audioUrl,
+      coverArt: sl.coverUrl ?? undefined,
+    })),
+  ];
   const firstTrack = audioTracks[0] ?? null;
 
-  const hasMusic = releases.length > 0 || artist.tracks.length > 0;
+  const hasMusic = releases.length > 0 || artist.tracks.length > 0 || streamLeaseTracks.length > 0;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
@@ -220,6 +265,7 @@ async function ArtistSite({ slug }: { slug: string }) {
                 tracks:      r.tracks,
               }))}
               looseTracks={artist.tracks}
+              streamLeaseTracks={streamLeaseTracks}
               artistName={displayName}
               artistSlug={slug}
               followGateEnabled={site.followGateEnabled ?? false}

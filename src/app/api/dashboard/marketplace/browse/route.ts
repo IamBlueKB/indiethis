@@ -42,6 +42,9 @@ export async function GET() {
             photo: true,
           },
         },
+        _count: {
+          select: { streamLeases: { where: { isActive: true } } },
+        },
       },
     }),
     db.beatLicense.findMany({
@@ -52,9 +55,10 @@ export async function GET() {
 
   const ownedTrackIds = new Set(ownedLicenses.map((l) => l.trackId));
 
-  const tracksWithOwnership = tracks.map((t) => ({
+  const tracksWithOwnership = tracks.map(({ _count, ...t }) => ({
     ...t,
-    isOwned: ownedTrackIds.has(t.id),
+    isOwned:          ownedTrackIds.has(t.id),
+    activeLeaseCount: _count.streamLeases,
   }));
 
   return NextResponse.json({ tracks: tracksWithOwnership });

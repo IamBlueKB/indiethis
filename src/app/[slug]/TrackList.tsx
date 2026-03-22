@@ -20,6 +20,24 @@ type TrackData = {
   releaseId?:  string | null;
 };
 
+// Extended internal type — stream lease tracks carry extra credit info
+type InternalTrack = TrackData & {
+  isStreamLease?: boolean;
+  leaseId?:       string;
+  producerCredit?: string;
+  producerSlug?:  string | null;
+};
+
+export type StreamLeaseTrackData = {
+  leaseId:       string;
+  title:         string;
+  coverUrl:      string | null;
+  audioUrl:      string;
+  playCount:     number;
+  producerCredit: string;
+  producerSlug:  string | null;
+};
+
 type ReleaseData = {
   id:          string;
   title:       string;
@@ -145,7 +163,7 @@ function FollowGateModal({ track, instagramHandle, onClose }: { track: TrackData
 function TrackRow({
   track, index, isActive, isPlaying: trackIsPlaying, onPlay, onTip, onDownload, followGateEnabled, instagramHandle,
 }: {
-  track: TrackData; index: number; isActive: boolean; isPlaying: boolean;
+  track: InternalTrack; index: number; isActive: boolean; isPlaying: boolean;
   onPlay: () => void; onTip: () => void; onDownload: () => void;
   followGateEnabled: boolean; instagramHandle: string | null;
 }) {
@@ -170,7 +188,16 @@ function TrackRow({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-[12px] font-medium text-[#F5F5F5] truncate" style={isActive ? { color: "#D4A843" } : {}}>{track.title}</p>
-        <p className="text-[10px]" style={{ color: "#666" }}>{track.plays.toLocaleString()} plays</p>
+        {track.producerCredit ? (
+          track.producerSlug
+            ? <a href={`/${track.producerSlug}`} target="_blank" rel="noopener noreferrer"
+                className="text-[10px] hover:underline block truncate" style={{ color: "#888" }}>
+                {track.producerCredit}
+              </a>
+            : <p className="text-[10px] truncate" style={{ color: "#888" }}>{track.producerCredit}</p>
+        ) : (
+          <p className="text-[10px]" style={{ color: "#666" }}>{track.plays.toLocaleString()} plays</p>
+        )}
       </div>
 
       {/* Mini waveform (visual placeholder) */}
@@ -181,8 +208,8 @@ function TrackRow({
         $ Tip
       </button>
 
-      {/* Download (if free + gate) */}
-      {followGateEnabled && instagramHandle && track.price === null && (
+      {/* Download (if free + gate, regular tracks only) */}
+      {!track.isStreamLease && followGateEnabled && instagramHandle && track.price === null && (
         <button onClick={onDownload} className="shrink-0 text-[9px] transition-opacity hover:opacity-70" style={{ color: "rgba(255,255,255,0.4)" }}>
           <Download size={10} />
         </button>
@@ -196,6 +223,7 @@ function TrackRow({
 export default function TrackList({
   releases = [],
   looseTracks = [],
+  streamLeaseTracks = [],
   artistName,
   artistSlug,
   followGateEnabled = false,
@@ -204,15 +232,16 @@ export default function TrackList({
   appleMusicUrl = null,
   youtubeChannel = null,
 }: {
-  releases:         ReleaseData[];
-  looseTracks:      TrackData[];
-  artistName?:      string;
-  artistSlug?:      string;
-  followGateEnabled?: boolean;
-  instagramHandle?:   string | null;
-  spotifyUrl?:        string | null;
-  appleMusicUrl?:     string | null;
-  youtubeChannel?:    string | null;
+  releases:              ReleaseData[];
+  looseTracks:           TrackData[];
+  streamLeaseTracks?:    StreamLeaseTrackData[];
+  artistName?:           string;
+  artistSlug?:           string;
+  followGateEnabled?:    boolean;
+  instagramHandle?:      string | null;
+  spotifyUrl?:           string | null;
+  appleMusicUrl?:        string | null;
+  youtubeChannel?:       string | null;
 }) {
   const currentId    = useAudioStore((s) => s.currentTrack?.id);
   const isPlaying    = useAudioStore((s) => s.isPlaying);
@@ -223,33 +252,58 @@ export default function TrackList({
   const [device,         setDevice]         = useState<DeviceType>("desktop");
   useEffect(() => { setDevice(detectDevice()); }, []);
 
+  // Convert stream lease tracks to internal format
+  const slTracks: InternalTrack[] = streamLeaseTracks.map((sl) => ({
+    id:             sl.leaseId,
+    title:          sl.title,
+    coverArtUrl:    sl.coverUrl,
+    price:          null,
+    plays:          sl.playCount,
+    fileUrl:        sl.audioUrl,
+    isStreamLease:  true,
+    leaseId:        sl.leaseId,
+    producerCredit: sl.producerCredit,
+    producerSlug:   sl.producerSlug,
+  }));
+
   const hasReleases = releases.length > 0;
 
   // Build global audio context from all tracks
-  const allTracks: TrackData[] = hasReleases
+  const regularTracks: InternalTrack[] = hasReleases
     ? [...releases.flatMap((r) => r.tracks), ...looseTracks]
     : looseTracks;
+
+  const allTracks: InternalTrack[] = [...regularTracks, ...slTracks];
 
   const audioContext: AudioTrack[] = allTracks.map((t) => ({
     id: t.id, title: t.title, artist: artistName ?? "", src: t.fileUrl, coverArt: t.coverArtUrl ?? undefined,
   }));
 
-  function firePlay(trackId: string) {
-    if (!artistSlug) return;
-    fetch("/api/public/artist-trackplay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trackId, artistSlug }) }).catch(() => {});
+  function firePlay(track: InternalTrack) {
+    if (track.isStreamLease && track.leaseId) {
+      fetch("/api/public/stream-lease-play", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leaseId: track.leaseId, artistSlug }),
+      }).catch(() => {});
+    } else if (artistSlug) {
+      fetch("/api/public/artist-trackplay", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id, artistSlug }),
+      }).catch(() => {});
+    }
   }
 
-  function playTrack(track: TrackData) {
+  function playTrack(track: InternalTrack) {
     playInContext({ id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }, audioContext);
-    firePlay(track.id);
+    firePlay(track);
   }
 
   function handleTip() {
-    // Scroll to support section
     document.getElementById("support")?.scrollIntoView({ behavior: "smooth" });
   }
 
-  function handleDownload(track: TrackData) {
+  function handleDownload(track: InternalTrack) {
+    if (track.isStreamLease) return; // stream lease tracks are not downloadable
     if (followGateEnabled && instagramHandle && track.price === null) {
       setGateTrack(track);
     } else {
@@ -300,7 +354,7 @@ export default function TrackList({
             {/* Waveform player */}
             {featuredAudio && (
               <div className="my-2">
-                <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => featured.tracks[0] && firePlay(featured.tracks[0].id)} />
+                <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => featured.tracks[0] && firePlay(featured.tracks[0] as InternalTrack)} />
               </div>
             )}
 
@@ -316,13 +370,27 @@ export default function TrackList({
         <div>
           {featured.tracks.slice(0, 10).map((track, i) => (
             <TrackRow
-              key={track.id} track={track} index={i}
+              key={track.id} track={track as InternalTrack} index={i}
               isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
-              onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => handleDownload(track)}
+              onPlay={() => playTrack(track as InternalTrack)} onTip={handleTip} onDownload={() => handleDownload(track as InternalTrack)}
               followGateEnabled={followGateEnabled} instagramHandle={instagramHandle}
             />
           ))}
         </div>
+
+        {/* Stream-leased tracks — appended after release tracks */}
+        {slTracks.length > 0 && (
+          <div className="mt-1">
+            {slTracks.map((track, i) => (
+              <TrackRow
+                key={track.id} track={track} index={featured.tracks.length + i}
+                isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
+                onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => {}}
+                followGateEnabled={false} instagramHandle={null}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Other releases — horizontal scroll */}
         {otherReleases.length > 0 && (
@@ -363,9 +431,9 @@ export default function TrackList({
                     <button onClick={() => setExpandedRelId(null)} className="p-1 rounded hover:bg-white/5"><X size={12} style={{ color: "#666" }} /></button>
                   </div>
                   {rel.tracks.slice(0, 10).map((track, i) => (
-                    <TrackRow key={track.id} track={track} index={i}
+                    <TrackRow key={track.id} track={track as InternalTrack} index={i}
                       isActive={currentId === track.id} isPlaying={currentId === track.id && isPlaying}
-                      onPlay={() => playTrack(track)} onTip={handleTip} onDownload={() => handleDownload(track)}
+                      onPlay={() => playTrack(track as InternalTrack)} onTip={handleTip} onDownload={() => handleDownload(track as InternalTrack)}
                       followGateEnabled={followGateEnabled} instagramHandle={instagramHandle}
                     />
                   ))}
@@ -384,8 +452,10 @@ export default function TrackList({
   }
 
   // ── MODE B: Flat list (no releases) ───────────────────────────────────────
-  const featured = looseTracks[0];
-  const rest     = looseTracks.slice(1);
+  // Blend regular loose tracks + stream lease tracks, first item is featured
+  const combinedTracks: InternalTrack[] = [...looseTracks as InternalTrack[], ...slTracks];
+  const featured = combinedTracks[0];
+  const rest     = combinedTracks.slice(1);
   if (!featured) return null;
 
   const featuredAudio: AudioTrack = { id: featured.id, title: featured.title, artist: artistName ?? "", src: featured.fileUrl, coverArt: featured.coverArtUrl ?? undefined };
@@ -406,13 +476,22 @@ export default function TrackList({
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div>
             <p className="font-semibold text-[15px] text-[#F5F5F5] leading-tight">{featured.title}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: "#666" }}>{featured.plays.toLocaleString()} plays</p>
+            {featured.producerCredit ? (
+              featured.producerSlug
+                ? <a href={`/${featured.producerSlug}`} target="_blank" rel="noopener noreferrer"
+                    className="text-[10px] mt-0.5 hover:underline block" style={{ color: "#888" }}>
+                    {featured.producerCredit}
+                  </a>
+                : <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>{featured.producerCredit}</p>
+            ) : (
+              <p className="text-[10px] mt-0.5" style={{ color: "#666" }}>{featured.plays.toLocaleString()} plays</p>
+            )}
           </div>
           <div className="my-2">
-            <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => firePlay(featured.id)} />
+            <InlinePlayer track={featuredAudio} context={audioContext} onPlay={() => firePlay(featured)} />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <StreamingPills {...streamingProps} trackId={featured.id} />
+            {!featured.isStreamLease && <StreamingPills {...streamingProps} trackId={featured.id} />}
             <button onClick={handleTip} className="ml-auto text-[9px] transition-opacity hover:opacity-70" style={{ color: "#D4A843" }}>$ Tip</button>
           </div>
         </div>
