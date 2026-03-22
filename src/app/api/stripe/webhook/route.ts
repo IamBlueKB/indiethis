@@ -374,6 +374,88 @@ export async function POST(req: NextRequest) {
       // amount_paid is in cents
       void processAffiliateCommission(sub.userId, amountPaid);
 
+      // ── Stream Lease revenue splits ────────────────────────────────────────
+      // Fetch full invoice with expanded line items to find stream lease entries.
+      // Uses the invoice ID as an idempotency key — skips any lease already recorded.
+      if (stripe) {
+        try {
+          const fullInvoice = await stripe.invoices.retrieve(paidInvoice.id as string, {
+            expand: ["lines"],
+          });
+
+          const leaseLines = (fullInvoice.lines?.data ?? []).filter(
+            (line) => !!(line.metadata as Record<string, string>)?.streamLeaseId
+          );
+
+          await Promise.all(
+            leaseLines.map(async (line) => {
+              const meta = line.metadata as Record<string, string>;
+              const { streamLeaseId, producerId: lineProducerId, artistId: lineArtistId } = meta;
+              if (!streamLeaseId || !lineProducerId || !lineArtistId) return;
+
+              const totalAmount    = line.amount / 100;
+              const producerAmount = Math.round(totalAmount * 0.70 * 100) / 100;
+              const platformAmount = Math.round(totalAmount * 0.30 * 100) / 100;
+
+              // Idempotency check — don't double-record if webhook fires twice
+              const alreadyLogged = await db.streamLeasePayment.findFirst({
+                where: { streamLeaseId, stripeInvoiceId: paidInvoice.id as string },
+                select: { id: true },
+              });
+              if (alreadyLogged) return;
+
+              // Log the payment split
+              await db.streamLeasePayment.create({
+                data: {
+                  streamLeaseId,
+                  artistId:       lineArtistId,
+                  producerId:     lineProducerId,
+                  totalAmount,
+                  producerAmount,
+                  platformAmount,
+                  stripeInvoiceId: paidInvoice.id as string,
+                  paidAt:          new Date(),
+                },
+              });
+
+              // Record producer earning as a Payment entry
+              await db.payment.create({
+                data: {
+                  userId:         lineProducerId,
+                  type:           "STREAM_LEASE_EARNING",
+                  amount:         producerAmount,
+                  status:         "COMPLETED",
+                  stripePaymentId: paidInvoice.id as string,
+                  metadata:       { streamLeaseId },
+                },
+              });
+
+              // Transfer to Stripe Connect if producer has connected their account
+              const leaseProducer = await db.user.findUnique({
+                where: { id: lineProducerId },
+                select: { stripeConnectId: true },
+              });
+              if (leaseProducer?.stripeConnectId) {
+                try {
+                  await stripe!.transfers.create({
+                    amount:      Math.round(producerAmount * 100),
+                    currency:    "usd",
+                    destination: leaseProducer.stripeConnectId,
+                    description: `Stream Lease earning — lease ${streamLeaseId}`,
+                    metadata:    { streamLeaseId, producerId: lineProducerId },
+                  });
+                } catch (transferErr) {
+                  // Log but don't throw — payment is recorded; payout can be retried
+                  console.error("[stream-lease] Stripe Connect transfer failed:", transferErr);
+                }
+              }
+            })
+          );
+        } catch (leaseErr) {
+          console.error("[stream-lease] invoice.paid processing failed:", leaseErr);
+        }
+      }
+
       // Ambassador PERCENTAGE_RECURRING reward
       // Find if this user has a promo redemption from an ambassador code
       const ambassadorRedemption = await db.promoRedemption.findFirst({
@@ -394,6 +476,75 @@ export async function POST(req: NextRequest) {
           { subscriptionAmount: amountPaid / 100 }
         );
       }
+      break;
+    }
+
+    // ── Stream Lease: add $1 per active lease to each new subscription invoice ──
+    // Fires when Stripe drafts a new invoice. We add line items here so they
+    // appear alongside the subscription charge on a single invoice.
+    // Deduplication: check existing line item metadata to avoid double-charging
+    // when a Phase-2 pending item is already present on this invoice.
+    case "invoice.created": {
+      if (!stripe) break;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const draftInvoice = event.data.object as any;
+
+      // Only process subscription invoices
+      const draftSubId: string | undefined =
+        typeof draftInvoice.subscription === "string"
+          ? draftInvoice.subscription
+          : (draftInvoice.subscription as { id: string } | null)?.id;
+      if (!draftSubId) break;
+
+      const draftCustomerId: string | undefined =
+        typeof draftInvoice.customer === "string"
+          ? draftInvoice.customer
+          : (draftInvoice.customer as { id: string } | null)?.id;
+      if (!draftCustomerId) break;
+
+      // Find artist by Stripe customer ID
+      const leaseArtist = await db.user.findFirst({
+        where: { stripeCustomerId: draftCustomerId },
+        select: { id: true },
+      });
+      if (!leaseArtist) break;
+
+      // Load all active stream leases for this artist
+      const activeLeases = await db.streamLease.findMany({
+        where: { artistId: leaseArtist.id, isActive: true },
+        include: {
+          producer: { select: { name: true, artistName: true } },
+        },
+      });
+      if (activeLeases.length === 0) break;
+
+      // Build set of lease IDs already on this draft invoice
+      // (Phase 2 may have added a pending item that Stripe auto-attached)
+      const existingLeaseIds = new Set<string>(
+        ((draftInvoice.lines?.data ?? []) as Array<{ metadata?: Record<string, string> }>)
+          .map((l) => l.metadata?.streamLeaseId)
+          .filter((id): id is string => !!id)
+      );
+
+      // Add $1 line item for each lease not already present
+      const leasesToAdd = activeLeases.filter((l) => !existingLeaseIds.has(l.id));
+      await Promise.all(
+        leasesToAdd.map((lease) =>
+          stripe!.invoiceItems.create({
+            customer:    draftCustomerId,
+            invoice:     draftInvoice.id as string,
+            amount:      100,
+            currency:    "usd",
+            description: `Stream Lease: ${lease.trackTitle} — ${lease.producer.artistName ?? lease.producer.name}`,
+            metadata: {
+              streamLeaseId: lease.id,
+              artistId:      leaseArtist.id,
+              producerId:    lease.producerId,
+              beatId:        lease.beatId,
+            },
+          })
+        )
+      );
       break;
     }
 
