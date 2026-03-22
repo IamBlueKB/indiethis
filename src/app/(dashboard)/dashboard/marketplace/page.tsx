@@ -654,6 +654,90 @@ function MyPreviews() {
   );
 }
 
+// ─── Top 10 Leaderboard ───────────────────────────────────────────────────────
+
+type TopBeat = {
+  id: string;
+  title: string;
+  coverArtUrl: string | null;
+  activeLeaseCount: number;
+  artist: { id: string; name: string; artistName: string | null; artistSlug: string | null };
+};
+
+function TopBeatsLeaderboard({ onStreamLease }: { onStreamLease: (target: StreamLeaseTarget) => void }) {
+  const [beats, setBeats]   = useState<TopBeat[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard/marketplace/top-beats")
+      .then((r) => r.json())
+      .then((d) => { setBeats(d.beats ?? []); setLoading(false); });
+  }, []);
+
+  if (loading || beats.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border overflow-hidden" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: "var(--border)" }}>
+        <Radio size={14} style={{ color: "#E85D4A" }} />
+        <p className="text-sm font-bold text-foreground">Top 10 Most Used Beats</p>
+        <span className="text-xs text-muted-foreground ml-auto">by active stream leases</span>
+      </div>
+      <div>
+        {beats.map((beat, idx) => {
+          const producerName = beat.artist.artistName ?? beat.artist.name;
+          return (
+            <div key={beat.id}
+              className="flex items-center gap-4 px-5 py-3.5 border-b last:border-b-0"
+              style={{ borderColor: "var(--border)" }}>
+              {/* Rank */}
+              <span className="text-xs font-bold w-5 text-center shrink-0"
+                style={{ color: idx === 0 ? "#D4A843" : idx === 1 ? "#9CA3AF" : idx === 2 ? "#B45309" : "var(--muted-foreground)" }}>
+                {idx + 1}
+              </span>
+              {/* Cover art */}
+              <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center"
+                style={{
+                  backgroundImage: beat.coverArtUrl ? `url(${beat.coverArtUrl})` : undefined,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundColor: beat.coverArtUrl ? undefined : "var(--border)",
+                }}>
+                {!beat.coverArtUrl && <Music2 size={14} className="text-muted-foreground" />}
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{beat.title}</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <p className="text-xs text-muted-foreground truncate">{producerName}</p>
+                  <span className="text-muted-foreground/40 text-xs">·</span>
+                  <span className="text-[11px] font-semibold flex items-center gap-1" style={{ color: "#E85D4A" }}>
+                    <Radio size={9} />
+                    {beat.activeLeaseCount} {beat.activeLeaseCount === 1 ? "artist" : "artists"} recording
+                  </span>
+                </div>
+              </div>
+              {/* CTA */}
+              <button
+                onClick={() => onStreamLease({
+                  trackId: beat.id,
+                  beatTitle: beat.title,
+                  producerName,
+                  coverArtUrl: beat.coverArtUrl,
+                })}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-[rgba(232,93,74,0.10)]"
+                style={{ borderColor: "rgba(232,93,74,0.4)", color: "#E85D4A", backgroundColor: "rgba(232,93,74,0.05)" }}
+              >
+                <Radio size={10} /> Stream Lease
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Browse Beats tab ─────────────────────────────────────────────────────────
 
 function BrowseBeats() {
@@ -714,6 +798,9 @@ function BrowseBeats() {
 
   return (
     <div className="space-y-4">
+      {/* Top 10 leaderboard — shown before the search bar */}
+      <TopBeatsLeaderboard onStreamLease={(target) => { setStreamTarget(target); }} />
+
       <div className="relative">
         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input type="text" placeholder="Search beats or producers…" value={search}
