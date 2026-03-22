@@ -23,7 +23,6 @@ import {
   Image as ImageIcon,
   ArrowUpRight,
   Bookmark,
-  Mic2,
   Trash2,
   Download,
 } from "lucide-react";
@@ -1220,7 +1219,7 @@ export default function StreamLeasesPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-col gap-1.5 shrink-0 items-end">
                         <button
                           onClick={() => {
                             setPreselectedBeatId(b.beat.id);
@@ -1229,15 +1228,15 @@ export default function StreamLeasesPage() {
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                           style={{ backgroundColor: "#E85D4A", color: "#fff" }}
                         >
-                          <Mic2 size={11} /> I&apos;m ready to record
+                          <Upload size={11} /> I&apos;ve already recorded — upload now
                         </button>
                         <a
                           href={`/api/dashboard/stream-lease-beat-download/${b.beat.id}`}
                           download
-                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 text-muted-foreground"
-                          title="Download beat"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors hover:bg-white/5"
+                          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
                         >
-                          <Download size={13} />
+                          <Download size={11} /> Download beat to record over
                         </a>
                         <button
                           onClick={() => removeBookmark(b.beat.id)}
