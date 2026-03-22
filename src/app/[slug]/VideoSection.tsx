@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Play, Video, X } from "lucide-react";
 import { parseVideoUrl } from "@/lib/video-utils";
+import type { VideoType, VideoCategory } from "@prisma/client";
 
 type EmbedVideo = {
   id: string;
@@ -13,10 +14,10 @@ type EmbedVideo = {
 type UploadVideo = {
   id: string;
   title: string;
-  videoUrl: string;
+  videoUrl: string | null;
   thumbnailUrl: string | null;
-  category: string | null;
-  type: string;
+  category: VideoCategory | null;
+  type: VideoType;
   embedUrl: string | null;
 };
 
