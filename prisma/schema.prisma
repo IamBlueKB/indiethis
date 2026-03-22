@@ -427,8 +427,9 @@ model User {
   artistPressItems   ArtistPressItem[]
   promoRedemptions     PromoRedemption[]
   ambassador           Ambassador?
-  artistStreamLeases   StreamLease[] @relation("ArtistStreamLeases")
-  producerStreamLeases StreamLease[] @relation("ProducerStreamLeases")
+  artistStreamLeases   StreamLease[]          @relation("ArtistStreamLeases")
+  producerStreamLeases StreamLease[]          @relation("ProducerStreamLeases")
+  producerLeaseSettings ProducerLeaseSettings?
 }
 
 model Studio {
@@ -594,11 +595,13 @@ model Track {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  artist       User           @relation(fields: [artistId], references: [id])
-  release      ArtistRelease? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
-  beatPreviews BeatPreview[]
-  beatLicenses BeatLicense[]
-  trackPlays   TrackPlay[]
+  artist           User               @relation(fields: [artistId], references: [id])
+  release          ArtistRelease?     @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  beatPreviews     BeatPreview[]
+  beatLicenses     BeatLicense[]
+  trackPlays       TrackPlay[]
+  streamLeases     StreamLease[]
+  beatLeaseSettings BeatLeaseSettings?
 }
 
 model DeliveredFile {
@@ -891,7 +894,6 @@ model BeatPreview {
   artist        User?         @relation("ArtistPreviews", fields: [artistId], references: [id])
   track         Track         @relation(fields: [trackId], references: [id])
   licenses      BeatLicense[]
-  streamLeases  StreamLease[]
 }
 
 model BeatLicense {
@@ -1689,10 +1691,11 @@ model StreamLease {
   updatedAt    DateTime  @updatedAt
 
   artist    User          @relation("ArtistStreamLeases",   fields: [artistId],   references: [id])
-  beat      BeatPreview   @relation(fields: [beatId],       references: [id])
+  beat      Track         @relation(fields: [beatId],        references: [id])
   producer  User          @relation("ProducerStreamLeases", fields: [producerId], references: [id])
   payments  StreamLeasePayment[]
   plays     StreamLeasePlay[]
+  agreement StreamLeaseAgreement?
 }
 
 model StreamLeasePlay {
@@ -1714,6 +1717,50 @@ model StreamLeasePayment {
   platformAmount  Float       @default(0.30)
   stripeInvoiceId String
   paidAt          DateTime    @default(now())
+
+  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+// ─── Stream Lease Agreement System ─────────────────────────────────────────────
+
+// Per-beat lease settings (overrides producer global settings)
+model BeatLeaseSettings {
+  id                  String   @id @default(cuid())
+  beatId              String   @unique
+  streamLeaseEnabled  Boolean  @default(true)
+  creditFormat        String   @default("Prod. {producerName}")
+  revocationPolicy    String   @default("A")   // A = 30-day notice, B = violation only, C = cannot revoke
+  contentRestrictions String[] @default([])
+  customRestriction   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  beat Track @relation(fields: [beatId], references: [id])
+}
+
+// Producer global defaults (applies to all beats unless per-beat override exists)
+model ProducerLeaseSettings {
+  id                  String   @id @default(cuid())
+  producerId          String   @unique
+  streamLeaseEnabled  Boolean  @default(true)
+  creditFormat        String   @default("Prod. {producerName}")
+  revocationPolicy    String   @default("A")
+  contentRestrictions String[] @default([])
+  customRestriction   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  producer User @relation(fields: [producerId], references: [id])
+}
+
+// Snapshot of the agreement at time of signing — immutable record of terms in effect
+model StreamLeaseAgreement {
+  id               String      @id @default(cuid())
+  streamLeaseId    String      @unique
+  agreementHtml    String      // full rendered agreement at time of signing
+  producerTerms    Json        // snapshot of producer settings at time of signing
+  artistAcceptedAt DateTime
+  createdAt        DateTime    @default(now())
 
   streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
 }

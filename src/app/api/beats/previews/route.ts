@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ preview }, { status: 201 });
 }
 
-// GET /api/beats/previews — producer sees all their sent previews
+// GET /api/beats/previews — artist sees previews shared with them
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -63,8 +63,16 @@ export async function GET() {
   }
 
   const previews = await db.beatPreview.findMany({
-    where: { producerId: session.user.id },
-    include: { track: { select: { title: true, coverArtUrl: true, bpm: true, musicalKey: true } } },
+    where: { artistId: session.user.id },
+    include: {
+      track: {
+        select: {
+          id: true, title: true, fileUrl: true, coverArtUrl: true,
+          price: true, projectName: true, bpm: true, musicalKey: true,
+        },
+      },
+      producer: { select: { id: true, name: true, artistName: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
