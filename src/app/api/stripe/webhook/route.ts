@@ -17,6 +17,8 @@ import {
 } from "@/lib/affiliate-commissions";
 import { upsertFanScore } from "@/lib/fan-scores";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
+import { sendEmail } from "@/lib/brevo/email";
+import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -348,15 +350,98 @@ export async function POST(req: NextRequest) {
 
     case "invoice.payment_failed": {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const invoice = event.data.object as any;
-      const subId = typeof invoice.subscription === "string"
-        ? invoice.subscription
-        : (invoice.subscription as { id: string } | null)?.id;
-      if (subId) {
+      const failedInvoice = event.data.object as any;
+      const failedSubId = typeof failedInvoice.subscription === "string"
+        ? failedInvoice.subscription
+        : (failedInvoice.subscription as { id: string } | null)?.id;
+      const failedCustomerId: string | undefined =
+        typeof failedInvoice.customer === "string"
+          ? failedInvoice.customer
+          : (failedInvoice.customer as { id: string } | null)?.id;
+
+      // Always mark subscription PAST_DUE
+      if (failedSubId) {
         await db.subscription.updateMany({
-          where: { stripeSubscriptionId: subId },
+          where: { stripeSubscriptionId: failedSubId },
           data: { status: "PAST_DUE" },
         });
+      }
+
+      // ── Stream Lease: grace period + email ───────────────────────────────
+      if (failedCustomerId) {
+        const failedUser = await db.user.findFirst({
+          where: { stripeCustomerId: failedCustomerId },
+          select: { id: true, email: true, name: true, artistName: true, artistSlug: true },
+        });
+
+        if (failedUser) {
+          const activeLeases = await db.streamLease.findMany({
+            where: { artistId: failedUser.id, isActive: true },
+            select: { id: true, trackTitle: true, producerId: true },
+          });
+
+          if (activeLeases.length > 0) {
+            const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+            const graceUntil = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
+            // Set 3-day grace period on subscription
+            await db.subscription.updateMany({
+              where: { userId: failedUser.id },
+              data: { streamLeaseGraceUntil: graceUntil },
+            });
+
+            // Log FAILED payment record for each active lease (idempotent)
+            const failedInvoiceId = failedInvoice.id as string;
+            await Promise.all(
+              activeLeases.map(async (lease) => {
+                const already = await db.streamLeasePayment.findFirst({
+                  where: { streamLeaseId: lease.id, stripeInvoiceId: failedInvoiceId, status: "FAILED" },
+                  select: { id: true },
+                });
+                if (already) return;
+                await db.streamLeasePayment.create({
+                  data: {
+                    streamLeaseId:   lease.id,
+                    artistId:        failedUser.id,
+                    producerId:      lease.producerId,
+                    totalAmount:     1.00,
+                    producerAmount:  0.70,
+                    platformAmount:  0.30,
+                    stripeInvoiceId: failedInvoiceId,
+                    status:          "FAILED",
+                    failedAt:        new Date(),
+                    failureReason:   "Invoice payment failed",
+                  },
+                });
+              })
+            );
+
+            // Email artist: update payment method within 3 days
+            const artistName = failedUser.artistName ?? failedUser.name;
+            const billingUrl = `${appUrl}/dashboard/settings`;
+            if (failedUser.email) {
+              void sendEmail({
+                to:      { email: failedUser.email, name: artistName },
+                subject: "Action required: Update your payment method to keep your songs live",
+                htmlContent: `<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#111;background:#fff">
+  <div style="background:#FF3B30;border-radius:12px;padding:24px;margin-bottom:28px;text-align:center">
+    <p style="color:#fff;font-size:13px;font-weight:600;margin:0;letter-spacing:.08em;text-transform:uppercase">Payment Failed</p>
+    <p style="color:#fff;font-size:22px;font-weight:700;margin:8px 0 0">Your payment didn't go through</p>
+  </div>
+  <p style="font-size:15px;line-height:1.6;margin-bottom:12px">Hi ${artistName},</p>
+  <p style="font-size:15px;line-height:1.6;margin-bottom:12px">Your last payment failed. You have <strong>3 days</strong> to update your payment method before your ${activeLeases.length} stream-leased ${activeLeases.length === 1 ? "song" : "songs"} come down.</p>
+  <p style="font-size:15px;line-height:1.6;margin-bottom:24px">If payment isn't updated by ${graceUntil.toLocaleDateString("en-US", { month: "long", day: "numeric" })}, your stream leases will be cancelled. You can reactivate them later from your dashboard.</p>
+  <a href="${billingUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px">Update Payment Method</a>
+  <p style="font-size:12px;color:#888;margin-top:32px">IndieThis · <a href="${appUrl}" style="color:#D4A843">indiethis.com</a></p>
+</body>
+</html>`,
+                tags: ["stream-lease-payment-failed"],
+              }).catch((err) => console.error("[stream-lease] payment failed email error:", err));
+            }
+          }
+        }
       }
       break;
     }
@@ -387,6 +472,12 @@ export async function POST(req: NextRequest) {
 
       const amountPaid = (paidInvoice.amount_paid as number) ?? 0;
 
+      // Clear any stream lease grace period — payment succeeded
+      await db.subscription.updateMany({
+        where: { userId: sub.userId, streamLeaseGraceUntil: { not: null } },
+        data:  { streamLeaseGraceUntil: null },
+      });
+
       // amount_paid is in cents
       void processAffiliateCommission(sub.userId, amountPaid);
 
@@ -395,9 +486,10 @@ export async function POST(req: NextRequest) {
       // Uses the invoice ID as an idempotency key — skips any lease already recorded.
       if (stripe) {
         try {
-          const fullInvoice = await stripe.invoices.retrieve(paidInvoice.id as string, {
-            expand: ["lines"],
-          });
+          const [fullInvoice, leasePricing] = await Promise.all([
+            stripe.invoices.retrieve(paidInvoice.id as string, { expand: ["lines"] }),
+            getStreamLeasePricing(),
+          ]);
 
           const leaseLines = (fullInvoice.lines?.data ?? []).filter(
             (line) => !!(line.metadata as Record<string, string>)?.streamLeaseId
@@ -410,8 +502,8 @@ export async function POST(req: NextRequest) {
               if (!streamLeaseId || !lineProducerId || !lineArtistId) return;
 
               const totalAmount    = line.amount / 100;
-              const producerAmount = Math.round(totalAmount * 0.70 * 100) / 100;
-              const platformAmount = Math.round(totalAmount * 0.30 * 100) / 100;
+              const producerAmount = Math.round(totalAmount * leasePricing.producerShare * 100) / 100;
+              const platformAmount = Math.round(totalAmount * leasePricing.platformShare * 100) / 100;
 
               // Idempotency check — don't double-record if webhook fires twice
               const alreadyLogged = await db.streamLeasePayment.findFirst({
@@ -542,14 +634,15 @@ export async function POST(req: NextRequest) {
           .filter((id): id is string => !!id)
       );
 
-      // Add $1 line item for each lease not already present
+      // Add monthly line item per lease not already present — price from PlatformPricing
       const leasesToAdd = activeLeases.filter((l) => !existingLeaseIds.has(l.id));
+      const createdPricing = await getStreamLeasePricing();
       await Promise.all(
         leasesToAdd.map((lease) =>
           stripe!.invoiceItems.create({
             customer:    draftCustomerId,
             invoice:     draftInvoice.id as string,
-            amount:      100,
+            amount:      createdPricing.monthlyPriceCents,
             currency:    "usd",
             description: `Stream Lease: ${lease.trackTitle} — ${lease.producer.artistName ?? lease.producer.name}`,
             metadata: {

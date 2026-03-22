@@ -42,6 +42,9 @@ export async function GET() {
             photo: true,
           },
         },
+        beatLeaseSettings: {
+          select: { streamLeaseEnabled: true, maxStreamLeases: true },
+        },
         _count: {
           select: { streamLeases: { where: { isActive: true } } },
         },
@@ -55,10 +58,12 @@ export async function GET() {
 
   const ownedTrackIds = new Set(ownedLicenses.map((l) => l.trackId));
 
-  const tracksWithOwnership = tracks.map(({ _count, ...t }) => ({
+  const tracksWithOwnership = tracks.map(({ _count, beatLeaseSettings, ...t }) => ({
     ...t,
-    isOwned:          ownedTrackIds.has(t.id),
-    activeLeaseCount: _count.streamLeases,
+    isOwned:            ownedTrackIds.has(t.id),
+    activeLeaseCount:   _count.streamLeases,
+    streamLeaseEnabled: beatLeaseSettings?.streamLeaseEnabled ?? true,
+    maxStreamLeases:    beatLeaseSettings?.maxStreamLeases    ?? null,
   }));
 
   return NextResponse.json({ tracks: tracksWithOwnership });

@@ -32,6 +32,11 @@ const PRICING_SEED = [
   { key: "CUT_MUSIC_SALES",   label: "Music Sales Cut",       value: 10,    display: "10%",      category: "platform_cuts",   sortOrder: 20 },
   { key: "CUT_MERCH_PUSH",    label: "Merch Cut (Push)",      value: 15,    display: "15%",      category: "platform_cuts",   sortOrder: 21 },
   { key: "CUT_MERCH_REIGN",   label: "Merch Cut (Reign)",     value: 10,    display: "10%",      category: "platform_cuts",   sortOrder: 22 },
+
+  // ─── Stream Lease Pricing ─────────────────────────────────────────────────
+  { key: "STREAM_LEASE_MONTHLY",        label: "Stream Lease Monthly Fee",    value: 1.00, display: "$1/mo", category: "stream_leases", sortOrder: 30 },
+  { key: "STREAM_LEASE_PRODUCER_SHARE", label: "Stream Lease Producer Share", value: 0.70, display: "70%",   category: "stream_leases", sortOrder: 31 },
+  { key: "STREAM_LEASE_PLATFORM_SHARE", label: "Stream Lease Platform Share", value: 0.30, display: "30%",   category: "stream_leases", sortOrder: 32 },
 ];
 
 async function main() {

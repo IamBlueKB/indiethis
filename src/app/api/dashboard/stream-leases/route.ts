@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { sendEmail } from "@/lib/brevo/email";
+import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 
 // ─── Agreement HTML Generator ─────────────────────────────────────────────────
 
@@ -15,11 +17,17 @@ function generateAgreementHtml(params: {
   revocationPolicy: string;
   contentRestrictions: string[];
   customRestriction: string | null;
+  monthlyPrice: number;
+  producerShare: number;
+  platformShare: number;
 }): string {
   const {
     producerName, artistName, beatTitle, trackTitle, date,
     creditFormat, revocationPolicy, contentRestrictions, customRestriction,
+    monthlyPrice, producerShare, platformShare,
   } = params;
+  const producerCut = (monthlyPrice * producerShare).toFixed(2);
+  const platformCut = (monthlyPrice * platformShare).toFixed(2);
 
   const revocationMap: Record<string, string> = {
     A: "Producer may revoke this Stream Lease at any time with 30 days notice. The Artist receives a notification and the Track is removed after 30 days. Any remaining paid time is not refunded.",
@@ -74,10 +82,10 @@ function generateAgreementHtml(params: {
 <p>Producer grants Artist a non-exclusive, limited license to use the Beat identified above solely for the purpose of recording one (1) song ("the Track") and streaming it exclusively on the IndieThis platform (indiethis.com). This license does NOT grant the Artist the right to distribute, sell, or stream the Track on any other platform, service, or medium, including but not limited to Spotify, Apple Music, YouTube, SoundCloud, TikTok, radio, television, film, or physical media.</p>
 
 <h2>2. Term and Renewal</h2>
-<p>This agreement is active on a month-to-month basis beginning on the date above. The license automatically renews each month as long as the Artist's $1.00 monthly Stream Lease fee is paid through their IndieThis subscription. Either party may terminate this agreement at any time. The Artist may cancel the Stream Lease from their IndieThis dashboard; the Track remains live until the end of the current paid billing period, then is removed.</p>
+<p>This agreement is active on a month-to-month basis beginning on the date above. The license automatically renews each month as long as the Artist's $${monthlyPrice.toFixed(2)} monthly Stream Lease fee is paid through their IndieThis subscription. Either party may terminate this agreement at any time. The Artist may cancel the Stream Lease from their IndieThis dashboard; the Track remains live until the end of the current paid billing period, then is removed.</p>
 
 <h2>3. Fee and Payment</h2>
-<p>The Artist pays $1.00 per month for this Stream Lease, billed as part of their IndieThis subscription invoice. Payment is split: $0.70 to the Producer, $0.30 to IndieThis as a platform fee.</p>
+<p>The Artist pays $${monthlyPrice.toFixed(2)} per month for this Stream Lease, billed as part of their IndieThis subscription invoice. Payment is split: $${producerCut} to the Producer, $${platformCut} to IndieThis as a platform fee.</p>
 
 <h2>4. Ownership and Masters</h2>
 <p>The Producer retains full ownership of the Beat, including all copyrights, publishing rights, and master rights to the Beat itself. The Artist owns the vocal performance and lyrics recorded over the Beat. The combined Track (Beat + vocals) is subject to this Stream Lease agreement and may only be used as permitted herein.</p>
@@ -150,7 +158,7 @@ export async function POST(req: NextRequest) {
       beatLeaseSettings: true,
       artist: {
         select: {
-          id: true, name: true, artistName: true,
+          id: true, name: true, artistName: true, email: true,
           producerLeaseSettings: true,
         },
       },
@@ -166,6 +174,7 @@ export async function POST(req: NextRequest) {
   const global  = beat.artist.producerLeaseSettings;
   const effective = {
     streamLeaseEnabled:  perBeat?.streamLeaseEnabled  ?? global?.streamLeaseEnabled  ?? true,
+    maxStreamLeases:     perBeat?.maxStreamLeases     ?? null,  // only per-beat; no global equivalent
     creditFormat:        perBeat?.creditFormat        ?? global?.creditFormat        ?? "Prod. {producerName}",
     revocationPolicy:    perBeat?.revocationPolicy    ?? global?.revocationPolicy    ?? "A",
     contentRestrictions: perBeat?.contentRestrictions ?? global?.contentRestrictions ?? [],
@@ -203,11 +212,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5. Artist billing info
-  const artist = await db.user.findUnique({
-    where: { id: artistId },
-    select: { stripeCustomerId: true, name: true, artistName: true },
-  });
+  // 4b. Max stream leases cap (per-beat limit)
+  if (effective.maxStreamLeases !== null) {
+    const currentCount = await db.streamLease.count({
+      where: { beatId, isActive: true },
+    });
+    if (currentCount >= effective.maxStreamLeases) {
+      return NextResponse.json(
+        { error: "This beat has reached its stream lease limit." },
+        { status: 409 }
+      );
+    }
+  }
+
+  // 5. Artist billing info + pricing
+  const [artist, pricing] = await Promise.all([
+    db.user.findUnique({
+      where: { id: artistId },
+      select: { stripeCustomerId: true, name: true, artistName: true, artistSlug: true },
+    }),
+    getStreamLeasePricing(),
+  ]);
   if (!artist?.stripeCustomerId || !stripe) {
     return NextResponse.json(
       { error: "No billing account found. Please complete your subscription setup." },
@@ -233,6 +258,9 @@ export async function POST(req: NextRequest) {
     revocationPolicy:    effective.revocationPolicy,
     contentRestrictions: effective.contentRestrictions,
     customRestriction:   effective.customRestriction,
+    monthlyPrice:        pricing.monthlyPriceDollars,
+    producerShare:       pricing.producerShare,
+    platformShare:       pricing.platformShare,
   });
 
   // 7. Create lease + agreement snapshot + Stripe invoice item
@@ -264,7 +292,7 @@ export async function POST(req: NextRequest) {
 
     await stripe.invoiceItems.create({
       customer:    artist.stripeCustomerId,
-      amount:      100,
+      amount:      pricing.monthlyPriceCents,
       currency:    "usd",
       description: `Stream Lease: ${trackTitle.trim()} (beat: ${beat.title})`,
       metadata:    { streamLeaseId: lease.id, artistId, producerId: beat.artistId, beatId },
@@ -281,6 +309,32 @@ export async function POST(req: NextRequest) {
       { error: "Failed to create stream lease. Please try again." },
       { status: 500 }
     );
+  }
+
+  // Notify producer async — fire-and-forget, never block the response
+  const producerEmail = beat.artist.email;
+  const artistSlug    = artist.artistSlug;
+  if (producerEmail) {
+    const appUrl     = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+    const artistPage = artistSlug ? `${appUrl}/${artistSlug}` : appUrl;
+    void sendEmail({
+      to:      { email: producerEmail, name: producerName },
+      subject: `${artistName} just recorded a song on your beat "${beat.title}"`,
+      htmlContent: `<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#111;background:#fff">
+  <div style="background:#E85D4A;border-radius:12px;padding:24px;margin-bottom:28px;text-align:center">
+    <p style="color:#fff;font-size:13px;font-weight:600;margin:0;letter-spacing:.08em;text-transform:uppercase">Stream Lease</p>
+    <p style="color:#fff;font-size:22px;font-weight:700;margin:8px 0 0">New song on your beat!</p>
+  </div>
+  <p style="font-size:15px;line-height:1.6;margin-bottom:12px"><strong>${artistName}</strong> just created a Stream Lease on your beat <strong>${beat.title}</strong> and recorded a song: <em>${trackTitle.trim()}</em>.</p>
+  <p style="font-size:15px;line-height:1.6;margin-bottom:24px">You'll earn $${(pricing.monthlyPriceDollars * pricing.producerShare).toFixed(2)} every month this lease is active. Listen to it on their page:</p>
+  <a href="${artistPage}" style="display:inline-block;background:#E85D4A;color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px">Visit ${artistName}'s Page</a>
+  <p style="font-size:12px;color:#888;margin-top:32px">You received this because you're a producer on IndieThis. <a href="${appUrl}/studio/settings" style="color:#D4A843">Manage your notifications</a>.</p>
+</body>
+</html>`,
+      tags: ["stream-lease-new", "producer-notification"],
+    }).catch((err) => console.error("[stream-lease] producer notification failed:", err));
   }
 
   return NextResponse.json({ lease }, { status: 201 });

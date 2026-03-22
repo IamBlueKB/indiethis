@@ -546,6 +546,7 @@ model Subscription {
   pressKitCreditsLimit   Int                @default(0)
   cancelReason           String?
   canceledAt             DateTime?
+  streamLeaseGraceUntil  DateTime?          // set when invoice.payment_failed; cleared on invoice.paid
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -1717,6 +1718,9 @@ model StreamLeasePayment {
   platformAmount  Float       @default(0.30)
   stripeInvoiceId String
   paidAt          DateTime    @default(now())
+  status          String      @default("PAID")  // "PAID" | "FAILED"
+  failedAt        DateTime?
+  failureReason   String?
 
   streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
 }
@@ -1728,6 +1732,7 @@ model BeatLeaseSettings {
   id                  String   @id @default(cuid())
   beatId              String   @unique
   streamLeaseEnabled  Boolean  @default(true)
+  maxStreamLeases     Int?                       // null = unlimited; enforced on lease creation
   creditFormat        String   @default("Prod. {producerName}")
   revocationPolicy    String   @default("A")   // A = 30-day notice, B = violation only, C = cannot revoke
   contentRestrictions String[] @default([])

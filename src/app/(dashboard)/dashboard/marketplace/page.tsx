@@ -41,6 +41,8 @@ type BrowseTrack = {
   createdAt: string;
   isOwned: boolean;
   activeLeaseCount: number;
+  streamLeaseEnabled: boolean;
+  maxStreamLeases: number | null;
   artist: {
     id: string;
     name: string;
@@ -856,8 +858,8 @@ function BrowseBeats() {
                   <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                 </button>
               ))}
-              {/* Stream Lease option */}
-              <button
+              {/* Stream Lease option — only show if enabled for this beat */}
+              {licenseTrack.streamLeaseEnabled && <button
                 onClick={() => {
                   const producerName = licenseTrack.artist.artistName ?? licenseTrack.artist.name;
                   setLicenseTrack(null);
@@ -876,7 +878,7 @@ function BrowseBeats() {
                 <p className="text-xs text-muted-foreground mt-0.5 pl-5">
                   Record your song over this beat and stream it exclusively on IndieThis. Cancel anytime.
                 </p>
-              </button>
+              </button>}
             </div>
             {licenseError && <p className="text-xs text-red-400 text-center">{licenseError}</p>}
             {!licenseTrack.price && (
@@ -940,11 +942,29 @@ function BrowseBeats() {
                     {t.projectName && <><span className="text-xs text-muted-foreground/40">·</span><p className="text-xs text-muted-foreground truncate">{t.projectName}</p></>}
                   </div>
                   {t.plays > 0 && <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>}
-                  {t.activeLeaseCount > 0 && (
-                    <p className="text-[11px] font-semibold mt-0.5 flex items-center gap-1" style={{ color: "#E85D4A" }}>
-                      <Radio size={9} />
-                      {t.activeLeaseCount} {t.activeLeaseCount === 1 ? "artist" : "artists"} recording to this beat
-                    </p>
+                  {/* Stream Lease badge — prominent CTA directly on the card */}
+                  {t.streamLeaseEnabled && (
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStreamTarget({ trackId: t.id, beatTitle: t.title, producerName, coverArtUrl: t.coverArtUrl });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors w-fit"
+                        style={{ borderColor: "rgba(232,93,74,0.5)", color: "#E85D4A", backgroundColor: "rgba(232,93,74,0.07)" }}
+                      >
+                        <Radio size={10} /> Stream Lease — $1/mo
+                      </button>
+                      {t.maxStreamLeases !== null ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          {t.activeLeaseCount} of {t.maxStreamLeases} stream lease slots taken
+                        </p>
+                      ) : t.activeLeaseCount > 0 ? (
+                        <p className="text-[11px] font-semibold flex items-center gap-1" style={{ color: "#E85D4A" }}>
+                          <Radio size={9} />{t.activeLeaseCount} {t.activeLeaseCount === 1 ? "artist" : "artists"} recording
+                        </p>
+                      ) : null}
+                    </div>
                   )}
                   {(t.bpm != null || t.musicalKey) && (
                     <div className="flex items-center gap-1.5 mt-0.5">
