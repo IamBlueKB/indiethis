@@ -12,7 +12,7 @@ async function getActivityCounts() {
       db.aIJob.count({
         where: {
           type: "MASTERING",
-          status: "COMPLETED",
+          status: "COMPLETE",
           createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
         },
       }),
