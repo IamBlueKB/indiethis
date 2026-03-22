@@ -208,10 +208,17 @@ function UploadForm({ onSuccess }: { onSuccess: (v: Video) => void }) {
         </select>
         <div>
           <input ref={fileRef} type="file" accept="video/mp4,video/mov,video/webm,video/quicktime" onChange={handleFile} disabled={uploading || !title.trim()} style={{ display: "none" }} id="video-file-input" />
-          <label htmlFor="video-file-input">
-            <Button asChild disabled={uploading || !title.trim()} style={{ backgroundColor: uploading ? "#333" : "#D4A843", color: "#0A0A0A", borderRadius: 8, width: "100%", cursor: "pointer" }}>
-              <span>{uploading ? `Uploading... ${progress}%` : "Choose File (mp4, mov, webm · max 500MB)"}</span>
-            </Button>
+          <label
+            htmlFor="video-file-input"
+            style={{
+              display: "block", width: "100%", padding: "10px 16px", borderRadius: 8, textAlign: "center",
+              backgroundColor: (uploading || !title.trim()) ? "#333" : "#D4A843",
+              color: (uploading || !title.trim()) ? "#888" : "#0A0A0A",
+              cursor: (uploading || !title.trim()) ? "not-allowed" : "pointer",
+              fontWeight: 600, fontSize: 14, userSelect: "none",
+            }}
+          >
+            {uploading ? `Uploading... ${progress}%` : "Choose File (mp4, mov, webm · max 500MB)"}
           </label>
         </div>
         {uploading && (
