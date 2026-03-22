@@ -304,6 +304,21 @@ enum RewardType {
   UPGRADE_BONUS
 }
 
+enum VideoType {
+  UPLOAD
+  YOUTUBE
+  VIMEO
+}
+
+enum VideoCategory {
+  LIVE
+  SESSION
+  FREESTYLE
+  BTS
+  ACOUSTIC
+  REHEARSAL
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -1248,16 +1263,20 @@ enum PreSavePlatform {
 // ─── Artist Videos ────────────────────────────────────────────────────────────
 
 model ArtistVideo {
-  id        String   @id @default(cuid())
-  artistId  String
-  url       String
-  title     String?
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
+  id           String         @id @default(cuid())
+  artistId     String
+  title        String
+  description  String?
+  videoUrl     String?
+  thumbnailUrl String?
+  embedUrl     String?
+  type         VideoType      @default(UPLOAD)
+  category     VideoCategory?
+  duration     Int?
+  sortOrder    Int            @default(0)
+  isPublished  Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  artist       User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
 }
 
 // ─── Shows & Events ───────────────────────────────────────────────────────────

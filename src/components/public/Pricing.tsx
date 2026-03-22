@@ -149,15 +149,15 @@ function ArtistCards({ p }: { p: Required<PricingProps> }) {
               : { border: "1px solid var(--border)" }),
           }}
         >
-          {tier.popular && (
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+          <div style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {tier.popular && (
               <Badge className="rounded-full text-xs font-bold gap-1 px-3 py-1 bg-accent text-accent-foreground border-0 shadow-lg whitespace-nowrap">
                 <Zap size={10} strokeWidth={3} />
                 Most Popular
               </Badge>
-            </div>
-          )}
-          <CardHeader className="pb-2">
+            )}
+          </div>
+          <CardHeader className="pb-2 pt-1">
             <h3 className="font-display font-extrabold text-xl tracking-tight mb-1" style={{ color: tier.color }}>
               {tier.name}
             </h3>
@@ -220,15 +220,15 @@ function StudioCards({ p }: { p: Required<PricingProps> }) {
               : { border: "1px solid var(--border)" }),
           }}
         >
-          {tier.popular && (
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+          <div style={{ height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {tier.popular && (
               <Badge className="rounded-full text-xs font-bold gap-1 px-3 py-1 border-0 shadow-lg whitespace-nowrap" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
                 <Zap size={10} strokeWidth={3} />
                 Most Popular
               </Badge>
-            </div>
-          )}
-          <CardHeader className="pb-2">
+            )}
+          </div>
+          <CardHeader className="pb-2 pt-1">
             <h3 className="font-display font-extrabold text-xl tracking-tight mb-1" style={{ color: tier.color }}>
               {tier.name}
             </h3>

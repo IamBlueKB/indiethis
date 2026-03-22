@@ -163,6 +163,7 @@ export async function sendBookingConfirmation(booking: {
       </table>
       <p><a href="${APP_URL()}/dashboard/bookings/${booking.bookingRef}">View Booking →</a></p>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["booking", "confirmation"],
   });
 }
@@ -184,6 +185,7 @@ export async function sendBookingCancellation(booking: {
       ${booking.refundAmount ? `<p>A refund of <strong>${booking.refundAmount}</strong> will be processed within 5–7 business days.</p>` : ""}
       <p><a href="${APP_URL()}/dashboard/bookings">View your bookings →</a></p>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["booking", "cancellation"],
   });
 }
@@ -212,6 +214,7 @@ export async function sendStudioNewBookingAlert(booking: {
       </table>
       <p><a href="${APP_URL()}/studio/bookings/${booking.bookingRef}">Manage Booking →</a></p>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["studio", "booking", "alert"],
   });
 }
@@ -237,6 +240,7 @@ export async function sendPayoutNotification(payout: {
       <strong>Date:</strong> ${payout.payoutDate}</p>
       <p><a href="${APP_URL()}/dashboard/earnings">View Earnings →</a></p>
     `,
+    replyTo: { email: "billing@indiethis.com", name: "IndieThis Billing" },
     tags: ["payout", "earnings"],
   });
 }
@@ -263,6 +267,7 @@ export async function sendSaleNotification(sale: {
       ${sale.buyerLocation ? `<br><strong>From:</strong> ${sale.buyerLocation}` : ""}</p>
       <p><a href="${APP_URL()}/dashboard/earnings">View Earnings →</a></p>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["sale", sale.itemType],
   });
 }
@@ -289,6 +294,7 @@ export async function sendIntakeLinkEmail(params: {
       <p>Or copy this link:<br><code>${params.intakeUrl}</code></p>
       <p style="color:#888;font-size:12px;">This link expires in 72 hours.</p>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["intake-link"],
   });
 }
@@ -316,6 +322,7 @@ export async function sendQuickSendEmail(params: {
       <p>Or copy this link:<br><code>${params.downloadUrl}</code></p>
       <p style="color:#888;font-size:12px;">This link expires in 7 days.</p>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["quick-send"],
   });
 }
@@ -347,6 +354,7 @@ export async function sendBeatPreviewEmail(params: {
       <p><a href="${params.previewUrl}" style="background:#7B61FF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Listen to Beat</a></p>
       <p style="color:#888;font-size:12px;">This preview expires on ${expiryStr}.</p>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["beat-preview"],
   });
 }
@@ -369,6 +377,7 @@ export async function sendLowCreditsWarning(user: {
       <p>Top up or upgrade your plan to keep creating without interruption.</p>
       <p><a href="${APP_URL()}/dashboard/billing">Upgrade Plan →</a></p>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["credits", "billing"],
   });
 }
@@ -421,6 +430,7 @@ export async function sendAffiliateApprovalEmail(affiliate: {
         Questions? Reply to this email and we'll help you out.
       </p>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     textContent: `
 Welcome to the IndieThis Affiliate Program, ${affiliate.name}!
 
@@ -476,6 +486,7 @@ export async function sendAdminWelcomeEmail(admin: {
         </p>
       </div>
     `,
+    replyTo: { email: "admin@indiethis.com", name: "IndieThis Admin" },
     textContent: `
 Welcome to IndieThis Admin, ${admin.name}!
 
@@ -524,6 +535,7 @@ export async function sendAdminPasswordResetEmail(admin: {
         </p>
       </div>
     `,
+    replyTo: { email: "admin@indiethis.com", name: "IndieThis Admin" },
     textContent: `
 Password Reset — IndieThis Admin
 
@@ -555,6 +567,7 @@ export async function sendSubscriptionRenewalReminder(user: {
       <p>Your <strong>${user.tier}</strong> plan will renew on <strong>${user.renewalDate}</strong> for <strong>${user.amount}</strong>.</p>
       <p><a href="${APP_URL()}/dashboard/billing">Manage Subscription →</a></p>
     `,
+    replyTo: { email: "billing@indiethis.com", name: "IndieThis Billing" },
     tags: ["billing", "renewal"],
   });
 }
@@ -581,6 +594,7 @@ export async function sendPromoWelcomeEmail(user: {
         <a href="${APP_URL()}/dashboard" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Go to Dashboard →</a>
       </div>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["promo", "welcome"],
   });
 }
@@ -602,6 +616,7 @@ export async function sendTrialExpiringEmail(user: {
         <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Subscribe to Keep Access →</a>
       </div>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["trial", "expiring"],
   });
 }
@@ -621,6 +636,7 @@ export async function sendTrialExpiredEmail(user: {
         <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Subscribe Now →</a>
       </div>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["trial", "expired"],
   });
 }
@@ -646,6 +662,7 @@ export async function sendGracePeriodEmail(user: {
         <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#E85D4A;color:#fff;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px;">Subscribe Before It's Too Late →</a>
       </div>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["trial", "grace-period"],
   });
 }
@@ -665,6 +682,7 @@ export async function sendAccountLockedEmail(user: {
         <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Restore Access →</a>
       </div>
     `,
+    replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["trial", "locked"],
   });
 }
@@ -685,6 +703,7 @@ export async function sendDiscountEndedEmail(user: {
         <a href="${APP_URL()}/dashboard/upgrade" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Manage Subscription →</a>
       </div>
     `,
+    replyTo: { email: "billing@indiethis.com", name: "IndieThis Billing" },
     tags: ["discount", "ended"],
   });
 }
@@ -714,6 +733,7 @@ export async function sendAmbassadorRewardEmail(
         <a href="${APP_URL()}/ambassador" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">View Dashboard →</a>
       </div>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["ambassador", "reward"],
   });
 }
@@ -739,6 +759,7 @@ export async function sendAmbassadorPayoutEmail(
         <a href="${APP_URL()}/ambassador" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">View Dashboard →</a>
       </div>
     `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["ambassador", "payout"],
   });
 }

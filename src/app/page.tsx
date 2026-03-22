@@ -1,18 +1,22 @@
-import Navbar from "@/components/layout/Navbar";
-import Hero from "@/components/public/Hero";
-import Features from "@/components/public/Features";
-import HowItWorks from "@/components/public/HowItWorks";
+import HomepageNav from "@/components/layout/HomepageNav";
+import HomepageHero from "@/components/public/HomepageHero";
+import LiveActivityBar from "@/components/public/LiveActivityBar";
+import ImmersivePlayerCard from "@/components/public/ImmersivePlayerCard";
+import AIDemoSection from "@/components/public/AIDemoSection";
+import TransformationSection from "@/components/public/TransformationSection";
+import TimelineSection from "@/components/public/TimelineSection";
+import TestimonialsSection from "@/components/public/TestimonialsSection";
+import StudioStrip from "@/components/public/StudioStrip";
+import FinalCTA from "@/components/public/FinalCTA";
+import HomepageFooter from "@/components/public/HomepageFooter";
 import Pricing from "@/components/public/Pricing";
+import Features from "@/components/public/Features";
 import ForArtists from "@/components/public/ForArtists";
-import ForStudios from "@/components/public/ForStudios";
-import SocialProof from "@/components/public/SocialProof";
-import Footer from "@/components/layout/Footer";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
 
 export default async function HomePage() {
   const pricing = await getPricing();
 
-  // Build a simple prices object for client components
   const p = {
     planLaunch:    pricing.PLAN_LAUNCH?.value     ?? PRICING_DEFAULTS.PLAN_LAUNCH.value,
     planPush:      pricing.PLAN_PUSH?.value        ?? PRICING_DEFAULTS.PLAN_PUSH.value,
@@ -33,16 +37,27 @@ export default async function HomePage() {
   };
 
   return (
-    <main style={{ backgroundColor: "#0A0A0B", minHeight: "100vh" }}>
-      <Navbar />
-      <Hero />
-      <Features />
-      <HowItWorks />
-      <Pricing pricing={p} />
-      <ForArtists pricing={p} />
-      <ForStudios />
-      <SocialProof />
-      <Footer />
+    <main style={{ backgroundColor: "#0A0A0A", minHeight: "100vh" }}>
+      <HomepageNav />
+      <HomepageHero />
+      <LiveActivityBar />
+      <ImmersivePlayerCard />
+      <AIDemoSection />
+      <TransformationSection />
+      <section id="features" style={{ scrollMarginTop: "72px" }}>
+        <Features />
+      </section>
+      <TimelineSection />
+      <TestimonialsSection />
+      <section id="artists" style={{ backgroundColor: "#0D0D0F", scrollMarginTop: "72px" }}>
+        <ForArtists pricing={p} />
+      </section>
+      <StudioStrip />
+      <section id="pricing" style={{ backgroundColor: "#0A0A0A", scrollMarginTop: "72px" }}>
+        <Pricing pricing={p} />
+      </section>
+      <FinalCTA />
+      <HomepageFooter />
     </main>
   );
 }
