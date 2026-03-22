@@ -312,7 +312,7 @@ export async function POST(req: NextRequest) {
     }
 
     case "customer.subscription.deleted": {
-      const sub            = event.data.object as Stripe.Subscription;
+      const sub             = event.data.object as Stripe.Subscription;
       const cancelledUserId = sub.metadata?.userId;
 
       await db.subscription.updateMany({
@@ -320,9 +320,25 @@ export async function POST(req: NextRequest) {
         data:  { status: "CANCELLED" },
       });
 
-      // Deactivate the referral record — referrer no longer earns credit
-      // for a subscriber who has churned.
+      // Auto-cancel all active stream leases when subscription is cancelled.
+      // Songs stay live until end of billing period (cancellAt is set, isActive = false).
+      // The invoice.created handler checks isActive, so no future charges will fire.
       if (cancelledUserId) {
+        const now = new Date();
+        const activeLeaseCount = await db.streamLease.count({
+          where: { artistId: cancelledUserId, isActive: true },
+        });
+
+        if (activeLeaseCount > 0) {
+          await db.streamLease.updateMany({
+            where: { artistId: cancelledUserId, isActive: true },
+            data:  { isActive: false, cancelledAt: now },
+          });
+          console.log(`[subscription.deleted] Auto-cancelled ${activeLeaseCount} stream lease(s) for user ${cancelledUserId}`);
+        }
+
+        // Deactivate the referral record — referrer no longer earns credit
+        // for a subscriber who has churned.
         void deactivateReferral(cancelledUserId);
         // Also deactivate affiliate commission tracking for this user
         void deactivateAffiliateReferral(cancelledUserId);
