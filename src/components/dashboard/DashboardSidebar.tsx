@@ -57,6 +57,7 @@ const navItems: NavItem[] = [
   { label: "License Vault", href: "/dashboard/vault",        icon: Archive },
   { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },
   { label: "Sessions",        href: "/dashboard/sessions",          icon: Calendar },
+  { label: "Book a Studio",   href: "/explore#studios",             icon: Building2 },
   { label: "Splits",          href: "/dashboard/splits",            icon: Users },
   { label: "Release Planner", href: "/dashboard/release-planner",  icon: CalendarDays },
   { label: "Earnings",        href: "/dashboard/earnings",          icon: TrendingUp },

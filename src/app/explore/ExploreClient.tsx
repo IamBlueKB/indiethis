@@ -850,7 +850,7 @@ export default function ExploreClient() {
 
         {/* Section 7: Studios */}
         {showSection("studios") && (
-          <section ref={sectionRefs.studios as React.RefObject<HTMLElement>}>
+          <section id="studios" ref={sectionRefs.studios as React.RefObject<HTMLElement>}>
             <SectionHeader label="STUDIOS" title="Studios near you" />
             {loadingStudios
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
