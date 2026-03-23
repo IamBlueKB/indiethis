@@ -71,7 +71,7 @@ export async function GET() {
           price: true, projectName: true, bpm: true, musicalKey: true,
         },
       },
-      producer: { select: { id: true, name: true, artistName: true } },
+      producer: { select: { id: true, name: true, artistName: true, artistSlug: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 50,

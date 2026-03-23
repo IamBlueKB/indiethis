@@ -24,7 +24,7 @@ type BeatPreview = {
     bpm: number | null;
     musicalKey: string | null;
   };
-  producer: { id: string; name: string; artistName: string | null };
+  producer: { id: string; name: string; artistName: string | null; artistSlug: string | null };
 };
 
 type BrowseTrack = {
@@ -676,7 +676,21 @@ function MyPreviews() {
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">License Beat</p>
                 <p className="text-base font-bold text-foreground truncate">{licensePreview.track.title}</p>
-                <p className="text-sm text-muted-foreground">by {licensePreview.producer.artistName ?? licensePreview.producer.name}</p>
+                {licensePreview.producer.artistSlug ? (
+                  <a href={`/${licensePreview.producer.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline hover:underline">
+                    by {licensePreview.producer.artistName ?? licensePreview.producer.name}
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted-foreground">by {licensePreview.producer.artistName ?? licensePreview.producer.name}</p>
+                )}
+                {licensePreview.producer.artistSlug && (
+                  <a href={`/${licensePreview.producer.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                    className="text-[11px] no-underline hover:underline"
+                    style={{ color: "var(--accent)" }}>
+                    View all beats →
+                  </a>
+                )}
               </div>
               <div className="flex items-start gap-2 shrink-0">
                 {licensePreview.track.coverArtUrl && (
@@ -779,7 +793,14 @@ function MyPreviews() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{p.track.title}</p>
-              <p className="text-xs text-muted-foreground">by {p.producer.artistName ?? p.producer.name}</p>
+              {p.producer.artistSlug ? (
+                <a href={`/${p.producer.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors no-underline hover:underline">
+                  by {p.producer.artistName ?? p.producer.name}
+                </a>
+              ) : (
+                <p className="text-xs text-muted-foreground">by {p.producer.artistName ?? p.producer.name}</p>
+              )}
               {p.track.projectName && <p className="text-xs text-muted-foreground">{p.track.projectName}</p>}
               {(p.track.bpm != null || p.track.musicalKey) && (
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -878,7 +899,14 @@ function TopBeatsLeaderboard({ onStreamLease }: { onStreamLease: (target: Stream
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{beat.title}</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <p className="text-xs text-muted-foreground truncate">{producerName}</p>
+                  {beat.artist.artistSlug ? (
+                    <a href={`/${beat.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate no-underline hover:underline">
+                      {producerName}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-muted-foreground truncate">{producerName}</p>
+                  )}
                   <span className="text-muted-foreground/40 text-xs">·</span>
                   <span className="text-[11px] font-semibold flex items-center gap-1" style={{ color: "#E85D4A" }}>
                     <Radio size={9} />
@@ -1009,7 +1037,23 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">License Beat</p>
                 <p className="text-base font-bold text-foreground truncate">{licenseTrack.title}</p>
-                <p className="text-sm text-muted-foreground">by {licenseTrack.artist.artistName ?? licenseTrack.artist.name}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {licenseTrack.artist.artistSlug ? (
+                    <a href={`/${licenseTrack.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline hover:underline">
+                      by {licenseTrack.artist.artistName ?? licenseTrack.artist.name}
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">by {licenseTrack.artist.artistName ?? licenseTrack.artist.name}</p>
+                  )}
+                  {licenseTrack.artist.artistSlug && (
+                    <a href={`/${licenseTrack.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] no-underline hover:underline"
+                      style={{ color: "var(--accent)" }}>
+                      View all beats →
+                    </a>
+                  )}
+                </div>
               </div>
               <div className="flex items-start gap-2 shrink-0">
                 {licenseTrack.coverArtUrl && (
@@ -1124,7 +1168,14 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                   <p className="text-sm font-bold text-foreground truncate">{t.title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <User size={10} className="text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground truncate">{producerName}</p>
+                    {t.artist.artistSlug ? (
+                      <a href={`/${t.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate no-underline hover:underline">
+                        {producerName}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-muted-foreground truncate">{producerName}</p>
+                    )}
                     {t.projectName && <><span className="text-xs text-muted-foreground/40">·</span><p className="text-xs text-muted-foreground truncate">{t.projectName}</p></>}
                   </div>
                   {t.plays > 0 && <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>}
