@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2, Mic2, Music4, Building2, Gift, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Loader2, Mic2, Music4, Building2, Gift, ChevronDown, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -61,8 +61,9 @@ function SignupForm() {
   const [password, setPassword] = useState("");
   const [name,     setName]     = useState("");
   const [path,     setPath]     = useState<PathType>("artist");
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [error,       setError]       = useState("");
+  const [loading,     setLoading]     = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Promo code
   const [promoExpanded,    setPromoExpanded]    = useState(!!initialPromo);
@@ -224,17 +225,27 @@ function SignupForm() {
             <label className="text-sm font-medium text-foreground" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              placeholder="Min. 8 characters"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border px-3.5 py-2.5 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
-              style={{ borderColor: "var(--border)" }}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Min. 8 characters"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border px-3.5 py-2.5 pr-10 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
+                style={{ borderColor: "var(--border)" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           {/* Display name */}
