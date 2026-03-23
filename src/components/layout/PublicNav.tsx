@@ -37,7 +37,7 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
           <img
             src="/images/brand/indiethis-logo-dark-bg.svg"
             alt="IndieThis"
-            style={{ height: 28, width: "auto" }}
+            style={{ height: 36, width: "auto" }}
           />
         </Link>
 

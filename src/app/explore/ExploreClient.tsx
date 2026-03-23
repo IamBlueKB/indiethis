@@ -337,8 +337,8 @@ function BeatCard({ beat, onPlay, onLicense }: { beat: BeatItem; onPlay: (b: Bea
           ? <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Headphones size={24} style={{ color: "#444" }} /></div>
         }
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: "#D4A843" }}>
+        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/40">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
             <Play size={14} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
           </div>
         </div>
@@ -451,7 +451,7 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
       </div>
       {artist.topTrack && (
         <button
-          onClick={() => onPlay(artist.topTrack!)}
+          onClick={() => onPlay({ ...artist.topTrack!, artist: { id: artist.id, name: artist.name, artistSlug: artist.slug } })}
           className="w-full flex items-center gap-2.5 rounded-lg p-2 transition-all group/track hover:bg-white/5"
         >
           <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: "#1e1e1e" }}>
