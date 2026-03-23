@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { useAudioStore } from "@/store";
+import { getSharedMedia } from "@/lib/audio-unlock";
 
 const formatTime = (s: number): string => {
   if (!s || isNaN(s) || !isFinite(s)) return "0:00";
@@ -20,6 +21,7 @@ const formatTime = (s: number): string => {
 export default function AudioPlayer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef        = useRef<WaveSurfer | null>(null);
+  const readyRef     = useRef(false);
 
   const currentTrack    = useAudioStore((s) => s.currentTrack);
   const isPlaying       = useAudioStore((s) => s.isPlaying);
@@ -42,7 +44,12 @@ export default function AudioPlayer() {
       wsRef.current.destroy();
       wsRef.current = null;
     }
+    readyRef.current = false;
 
+    // Pass the shared media element that was pre-activated synchronously in
+    // the user gesture handler (store.play()). WaveSurfer's setSrc() will see
+    // the src is already set and skip resetting the element, so audio that
+    // started playing on the user tap continues uninterrupted on mobile.
     const ws = WaveSurfer.create({
       container:     containerRef.current,
       waveColor:     "rgba(212,168,67,0.30)",
@@ -55,21 +62,29 @@ export default function AudioPlayer() {
       height:        44,
       normalize:     true,
       url:           currentTrack.src,
+      media:         getSharedMedia(),
     });
 
     wsRef.current = ws;
 
     ws.on("ready", () => {
+      readyRef.current = true;
       setDuration(ws.getDuration());
       // Auto-play if the store says we should be playing
       if (useAudioStore.getState().isPlaying) {
-        ws.play().catch(() => {});
+        ws.play().catch(() => {
+          // Autoplay was blocked by browser (common on mobile).
+          // Reset store to paused so the user can tap Play manually.
+          useAudioStore.getState().pause();
+        });
       }
     });
 
     ws.on("timeupdate", (t) => setCurrentTime(t));
 
     ws.on("finish", () => {
+      // Seek WaveSurfer back to start so replay works correctly.
+      ws.seekTo(0);
       setCurrentTime(0);
       pause();
     });
@@ -83,11 +98,17 @@ export default function AudioPlayer() {
   }, [currentTrack?.src]);
 
   // ── Sync play/pause state → WaveSurfer ─────────────────────────────────────
+  // Guard with readyRef: if WaveSurfer isn't ready yet, skip — the "ready"
+  // handler will call play() once decoding is complete. Without this guard,
+  // ws.play() rejects (audio not loaded), which triggers pause() and leaves
+  // isPlaying=false by the time "ready" fires.
   useEffect(() => {
     const ws = wsRef.current;
-    if (!ws) return;
+    if (!ws || !readyRef.current) return;
     if (isPlaying && !ws.isPlaying()) {
-      ws.play().catch(() => {});
+      ws.play().catch(() => {
+        useAudioStore.getState().pause();
+      });
     } else if (!isPlaying && ws.isPlaying()) {
       ws.pause();
     }

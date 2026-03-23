@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getSharedMedia, toAbsoluteUrl } from "@/lib/audio-unlock";
 
 export type AudioTrack = {
   id: string;
@@ -47,6 +48,26 @@ type AudioActions = {
   toggleMinimize: () => void;
 };
 
+/**
+ * Prepare the shared audio element synchronously within a user-gesture
+ * callstack. This is the key to mobile autoplay: the element is touched
+ * (src set + play called) before any async work happens, so the browser
+ * considers it user-activated. WaveSurfer later receives the same element
+ * via the `media` option and continues playing without re-triggering the
+ * policy check.
+ */
+function unlockMedia(src: string, volume: number): void {
+  if (typeof window === "undefined") return;
+  const absoluteSrc = toAbsoluteUrl(src);
+  const media = getSharedMedia();
+  media.volume = volume;
+  media.src = absoluteSrc;
+  media.play().catch(() => {
+    // Blocked even synchronously (e.g. data-saver mode) — AudioPlayer's
+    // resume() path (direct tap on MiniPlayer ▶) will still work.
+  });
+}
+
 export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   currentTrack: null,
   queue: [],
@@ -58,10 +79,28 @@ export const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   isMinimized: false,
   pendingSeek: null,
 
-  play: (track) => set({ currentTrack: track, isPlaying: true, currentTime: 0 }),
+  play: (track) => {
+    const { volume, isMuted } = get();
+    // Normalise src to absolute so WaveSurfer's setSrc() comparison matches
+    // and skips resetting the already-activated media element.
+    const src =
+      typeof window !== "undefined" ? toAbsoluteUrl(track.src) : track.src;
+    unlockMedia(src, isMuted ? 0 : volume);
+    set({ currentTrack: { ...track, src }, isPlaying: true, currentTime: 0 });
+  },
 
-  playInContext: (track, context) =>
-    set({ currentTrack: track, queue: context, isPlaying: true, currentTime: 0 }),
+  playInContext: (track, context) => {
+    const { volume, isMuted } = get();
+    const src =
+      typeof window !== "undefined" ? toAbsoluteUrl(track.src) : track.src;
+    unlockMedia(src, isMuted ? 0 : volume);
+    set({
+      currentTrack: { ...track, src },
+      queue: context,
+      isPlaying: true,
+      currentTime: 0,
+    });
+  },
 
   load: (track, queue) =>
     set({ currentTrack: track, queue: queue ?? [track], isPlaying: false, currentTime: 0 }),

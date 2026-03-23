@@ -174,8 +174,8 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
             NEW
           </span>
         )}
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "#D4A843" }}>
+        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/40">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
             <Play size={16} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
           </div>
         </div>
@@ -320,7 +320,7 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
 
 // ── Beat Card ──────────────────────────────────────────────────────────────
 
-function BeatCard({ beat, onPlay, onLicense }: { beat: BeatItem; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
+function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPlaying: boolean; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
   const artistSlug = beat.artist.artistSlug;
   return (
@@ -337,9 +337,19 @@ function BeatCard({ beat, onPlay, onLicense }: { beat: BeatItem; onPlay: (b: Bea
           ? <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Headphones size={24} style={{ color: "#444" }} /></div>
         }
-        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/40">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
-            <Play size={14} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
+        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/50">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity"
+            style={{ backgroundColor: isPlaying ? "#E85D4A" : "#D4A843" }}
+          >
+            {isPlaying ? (
+              <span className="flex gap-0.5">
+                <span className="w-0.5 h-3 rounded-sm animate-pulse" style={{ backgroundColor: "#0A0A0A" }} />
+                <span className="w-0.5 h-3 rounded-sm animate-pulse delay-75" style={{ backgroundColor: "#0A0A0A" }} />
+              </span>
+            ) : (
+              <Play size={14} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
+            )}
           </div>
         </div>
         {beat.beatLeaseSettings?.streamLeaseEnabled && (
@@ -662,7 +672,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
 
 export default function ExploreClient() {
   const { data: session } = useSession();
-  const { play } = useAudioStore();
+  const { play, currentTrack } = useAudioStore();
   const loggedIn = !!session?.user;
   const searchParams = useSearchParams();
 
@@ -755,6 +765,16 @@ export default function ExploreClient() {
         body: JSON.stringify({ trackId: track.id }),
       });
     }
+  }
+
+  function handleBeatPlay(beat: BeatItem) {
+    play({
+      id:       beat.id,
+      title:    beat.title,
+      artist:   beat.artist.name,
+      src:      beat.fileUrl,
+      coverArt: beat.coverArtUrl ?? undefined,
+    });
   }
 
   function handleFilterTab(tab: FilterTab) {
@@ -911,7 +931,8 @@ export default function ExploreClient() {
                       <BeatCard
                         key={b.id}
                         beat={b}
-                        onPlay={(beat) => handlePlay({ ...beat, plays: 0, artist: beat.artist })}
+                        isPlaying={currentTrack?.id === b.id}
+                        onPlay={handleBeatPlay}
                         onLicense={(beat) => setLicenseBeat(beat)}
                       />
                     ))}

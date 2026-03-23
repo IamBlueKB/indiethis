@@ -111,10 +111,10 @@ function BeatCard({
             <Headphones size={32} style={{ color: "#2a2a2a" }} />
           </div>
         )}
-        {/* Play overlay */}
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Play overlay — always visible at 80%, full on hover */}
+        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/50">
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg opacity-80 group-hover:opacity-100 transition-opacity"
             style={{ backgroundColor: isPlaying ? "#E85D4A" : "#D4A843" }}
           >
             {isPlaying ? (
