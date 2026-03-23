@@ -20,6 +20,7 @@ import BookingSection from "./BookingSection";
 import ArtistFooter from "./ArtistFooter";
 import ArtistPageViewTracker from "./ArtistPageViewTracker";
 import ArtistNav from "./ArtistNav";
+import BeatsSection, { type PublicBeat } from "./BeatsSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -128,6 +129,40 @@ async function ArtistSite({ slug }: { slug: string }) {
     orderBy: { createdAt: "desc" },
     select:  { id: true, title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
   });
+
+  // Marketplace beats by this producer (published tracks with BeatLeaseSettings)
+  const [rawBeats, producerProfile] = await Promise.all([
+    db.track.findMany({
+      where:   { artistId: artist.id, status: "PUBLISHED", beatLeaseSettings: { isNot: null } },
+      select: {
+        id: true, title: true, fileUrl: true, coverArtUrl: true,
+        price: true, bpm: true, musicalKey: true,
+        beatLeaseSettings: { select: { streamLeaseEnabled: true } },
+        _count: { select: { streamLeases: { where: { isActive: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.producerProfile.findUnique({
+      where:  { userId: artist.id },
+      select: { displayName: true, bio: true },
+    }),
+  ]);
+
+  const publicBeats: PublicBeat[] = rawBeats.map((b) => ({
+    id:                 b.id,
+    title:              b.title,
+    fileUrl:            b.fileUrl,
+    coverArtUrl:        b.coverArtUrl,
+    price:              b.price,
+    bpm:                b.bpm,
+    musicalKey:         b.musicalKey,
+    activeLeases:       b._count.streamLeases,
+    streamLeaseEnabled: b.beatLeaseSettings?.streamLeaseEnabled ?? true,
+  }));
+
+  const producerDisplayName = producerProfile?.displayName || displayName;
+  const producerBio         = producerProfile?.bio ?? null;
 
   // Stream-leased tracks (active, with audio uploaded)
   const rawStreamLeases = await db.streamLease.findMany({
@@ -277,12 +312,22 @@ async function ArtistSite({ slug }: { slug: string }) {
           </div>
         )}
 
-        {/* 6. Videos */}
+        {/* 6. Beats (producer section) */}
+        {publicBeats.length > 0 && (
+          <BeatsSection
+            beats={publicBeats}
+            producerName={producerDisplayName}
+            producerBio={producerBio}
+            artistSlug={slug}
+          />
+        )}
+
+        {/* 7. Videos */}
         {artistVideos.length > 0 && (
           <VideoSection artistVideos={artistVideos} />
         )}
 
-        {/* 7. Photos */}
+        {/* 8. Photos */}
         {artist.artistPhotos.length > 0 && (
           <PhotoGallery photos={artist.artistPhotos} />
         )}
