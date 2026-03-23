@@ -18,6 +18,12 @@ export interface EmailRecipient {
   name?: string;
 }
 
+export interface EmailAttachment {
+  content: string; // base64-encoded file content
+  name:    string; // filename e.g. "split-sheet.pdf"
+  type?:   string; // MIME type e.g. "application/pdf"
+}
+
 export interface SendEmailOptions {
   to: EmailRecipient | EmailRecipient[];
   subject: string;
@@ -25,6 +31,7 @@ export interface SendEmailOptions {
   textContent?: string;
   replyTo?: EmailRecipient;
   tags?: string[];
+  attachment?: EmailAttachment[];
 }
 
 export interface TemplateEmailOptions {
@@ -52,7 +59,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     htmlContent: options.htmlContent,
     ...(options.textContent && { textContent: options.textContent }),
     ...(options.replyTo && { replyTo: options.replyTo }),
-    ...(options.tags && { tags: options.tags }),
+    ...(options.tags       && { tags: options.tags }),
+    ...(options.attachment && { attachment: options.attachment }),
   });
 }
 
@@ -1061,5 +1069,67 @@ export async function sendSplitPendingBalanceEmail(params: {
     textContent: `Hi ${params.recipientName},\n\nYou have $${params.pendingAmount.toFixed(2)} in pending earnings from "${params.trackTitle}".\n\nClaim here: ${params.reviewUrl}`,
     replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
     tags: ["split-sheet", "pending-balance"],
+  });
+}
+
+/**
+ * Send the finalised split sheet PDF to a contributor who does not have
+ * an IndieThis account (no userId). The PDF is attached directly to the email.
+ */
+export async function sendSplitSheetDocumentEmail(params: {
+  recipientEmail:  string;
+  recipientName:   string;
+  trackTitle:      string;
+  percentage:      number;
+  role:            string;
+  pdfBase64:       string; // base64-encoded PDF buffer
+  dashboardUrl:    string;
+}): Promise<void> {
+  await sendEmail({
+    to:      { email: params.recipientEmail, name: params.recipientName },
+    subject: `Your split sheet for "${params.trackTitle}" is ready`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <p style="margin:0 0 4px;font-size:12px;color:#0A0A0A;font-weight:600;letter-spacing:1px;text-transform:uppercase;">IndieThis</p>
+          <h1 style="margin:0;font-size:22px;color:#0A0A0A;font-weight:800;">Split Sheet Ready</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;">Hi ${params.recipientName},</p>
+          <p style="margin:0 0 16px;">
+            All contributors have agreed to the split sheet for
+            <strong style="color:#f5f5f5;">"${params.trackTitle}"</strong>.
+            Your copy is attached to this email as a PDF.
+          </p>
+
+          <div style="background:#141414;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
+            <p style="margin:0 0 6px;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Your Share</p>
+            <p style="margin:0;font-size:28px;font-weight:800;color:#D4A843;">${params.percentage.toFixed(1)}%</p>
+            <p style="margin:4px 0 0;font-size:12px;color:#888;">${params.role.replace(/_/g, " ")}</p>
+          </div>
+
+          <p style="margin:0 0 8px;font-size:13px;color:#aaa;">
+            Keep this document for your records. It confirms your ownership stake and the agreed royalty
+            split for all future earnings from this track.
+          </p>
+
+          <div style="margin-top:28px;padding-top:20px;border-top:1px solid #2a2a2a;">
+            <p style="margin:0;font-size:11px;color:#666;">
+              IndieThis · <a href="https://indiethis.com" style="color:#D4A843;text-decoration:none;">indiethis.com</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    `,
+    textContent: `Hi ${params.recipientName},\n\nAll contributors have agreed to the split sheet for "${params.trackTitle}". Your copy is attached.\n\nYour share: ${params.percentage.toFixed(1)}% (${params.role})\n\nKeep this document for your records.`,
+    attachment: [
+      {
+        content: params.pdfBase64,
+        name:    `split-sheet-${params.trackTitle.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`,
+        type:    "application/pdf",
+      },
+    ],
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "document-delivery"],
   });
 }

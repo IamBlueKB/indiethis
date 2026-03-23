@@ -1909,9 +1909,9 @@ enum LicenseSource {
   TRACKLIB
   LOOPCLOUD
   AI_GENERATION
+  CUSTOM
   SAMPLE_CLEARANCE
   WORK_FOR_HIRE
-  CUSTOM
   OTHER
 }
 
@@ -1989,6 +1989,7 @@ model SplitSheet {
   trackId     String           @unique
   createdById String
   status      SplitSheetStatus @default(PENDING)
+  documentUrl String?          // generated PDF URL once all parties agree
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -2011,6 +2012,7 @@ model Split {
   agreedAt        DateTime?
   rejectedAt      DateTime?
   rejectionReason String?   @db.Text
+  ipHash          String?   // hashed IP captured at agreement time
   stripeConnectId String?
   pendingBalance  Float     @default(0)
   totalPaid       Float     @default(0)

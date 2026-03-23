@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
-  Users, Music2, Check, X, Clock, AlertTriangle, Copy, CheckCircle2, Loader2, ChevronDown, ChevronUp,
+  Users, Music2, Check, X, Clock, AlertTriangle, Copy, CheckCircle2, Loader2, ChevronDown, ChevronUp, Plus, Download,
 } from "lucide-react";
+import SplitSheetModal from "../music/SplitSheetModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ type SplitEntry = {
 type SplitSheet = {
   id: string;
   status: "PENDING" | "ACTIVE" | "DISPUTED" | "EXPIRED";
+  documentUrl?: string | null;
   splits: SplitEntry[];
   track: { id: string; title: string; coverArtUrl: string | null };
   createdBy?: { name: string | null; email: string };
@@ -129,6 +131,20 @@ function SplitSheetCard({
         </div>
 
         <StatusBadge status={sheet.status} />
+
+        {/* Download PDF */}
+        {sheet.status === "ACTIVE" && sheet.documentUrl && (
+          <a
+            href={sheet.documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Download split sheet PDF"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
+            style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
+          >
+            <Download size={12} />
+          </a>
+        )}
 
         {/* Expand toggle */}
         <button
@@ -259,17 +275,29 @@ function SplitSheetCard({
   );
 }
 
+// ── Track picker types ──────────────────────────────────────────────────────
+
+type TrackOption = { id: string; title: string; coverArtUrl: string | null };
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function SplitsPage() {
   const { data: session } = useSession();
-  const currentUserId = session?.user?.id ?? "";
+  const currentUserId    = session?.user?.id    ?? "";
+  const currentUserName  = (session?.user as { name?: string })?.name  ?? "";
+  const currentUserEmail = (session?.user as { email?: string })?.email ?? "";
 
   const [loading, setLoading] = useState(true);
   const [created, setCreated] = useState<SplitSheet[]>([]);
   const [participating, setParticipating] = useState<SplitSheet[]>([]);
   const [tab, setTab] = useState<"mine" | "participating">("mine");
   const [copied, setCopied] = useState<string | null>(null);
+
+  // Track picker
+  const [showPicker, setShowPicker] = useState(false);
+  const [tracks, setTracks]         = useState<TrackOption[]>([]);
+  const [tracksLoading, setTracksLoading] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState<TrackOption | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard/splits")
@@ -281,6 +309,19 @@ export default function SplitsPage() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  async function openTrackPicker() {
+    setShowPicker(true);
+    if (tracks.length > 0) return; // already loaded
+    setTracksLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/tracks");
+      const data = await res.json();
+      setTracks(data.tracks ?? []);
+    } finally {
+      setTracksLoading(false);
+    }
+  }
 
   function copyLink(reviewToken: string) {
     const url = `${window.location.origin}/splits/review/${reviewToken}`;
@@ -320,9 +361,18 @@ export default function SplitsPage() {
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Split Sheets</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage royalty splits with collaborators</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Split Sheets</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage royalty splits with collaborators</p>
+        </div>
+        <button
+          onClick={openTrackPicker}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+        >
+          <Plus size={15} /> New Split Sheet
+        </button>
       </div>
 
       {/* Stat cards */}
@@ -341,18 +391,6 @@ export default function SplitsPage() {
             <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
           </div>
         ))}
-      </div>
-
-      {/* Tip: manage from music page */}
-      <div
-        className="rounded-xl border px-4 py-3 flex items-center gap-3"
-        style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
-      >
-        <Users size={16} style={{ color: "#D4A843" }} className="shrink-0" />
-        <p className="text-xs text-muted-foreground">
-          To create a split sheet for a track, open the <strong style={{ color: "var(--foreground)" }}>Music</strong> page and hover over a track, then click the{" "}
-          <strong style={{ color: "var(--foreground)" }}>split sheet icon</strong>.
-        </p>
       </div>
 
       {/* Tab toggle */}
@@ -397,7 +435,7 @@ export default function SplitsPage() {
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "mine"
-                ? "Go to your Music page and hover a track to create one."
+                ? "Click \"New Split Sheet\" above to get started."
                 : "When artists invite you to a split sheet, it will appear here."}
             </p>
           </div>
@@ -417,6 +455,84 @@ export default function SplitsPage() {
             />
           ))}
         </div>
+      )}
+
+      {/* Track picker modal */}
+      {showPicker && !selectedTrack && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <div
+            className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <div>
+                <p className="font-bold text-sm">New Split Sheet</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Choose a track to split earnings for</p>
+              </div>
+              <button
+                onClick={() => setShowPicker(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              {tracksLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                </div>
+              ) : tracks.length === 0 ? (
+                <div className="text-center py-12 space-y-2">
+                  <Music2 size={28} className="mx-auto text-muted-foreground opacity-40" />
+                  <p className="text-sm text-muted-foreground">No tracks uploaded yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {tracks.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setSelectedTrack(t); setShowPicker(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border hover:border-[#D4A843]/40 transition-colors text-left"
+                      style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
+                        style={{ backgroundColor: "var(--border)" }}
+                      >
+                        {t.coverArtUrl
+                          ? <img src={t.coverArtUrl} alt={t.title} className="w-full h-full object-cover" />
+                          : <Music2 size={14} className="text-muted-foreground" />
+                        }
+                      </div>
+                      <p className="text-sm font-semibold truncate">{t.title}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Split sheet modal for selected track */}
+      {selectedTrack && (
+        <SplitSheetModal
+          trackId={selectedTrack.id}
+          trackTitle={selectedTrack.title}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          currentUserEmail={currentUserEmail}
+          onClose={() => {
+            setSelectedTrack(null);
+            fetch("/api/dashboard/splits")
+              .then((r) => r.json())
+              .then((d) => {
+                setCreated(d.created ?? []);
+                setParticipating(d.participating ?? []);
+              });
+          }}
+        />
       )}
     </div>
   );

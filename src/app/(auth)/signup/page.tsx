@@ -4,19 +4,46 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2, Mic2, Building2, Gift, ChevronDown, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Loader2, Mic2, Music4, Building2, Gift, ChevronDown, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type RoleOption = "ARTIST" | "STUDIO_ADMIN";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type PathType = "artist" | "producer" | "studio";
+
+const PATH_OPTIONS: {
+  value: PathType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    value:       "artist",
+    label:       "Artist",
+    description: "Release music, sell beats, grow your fan base",
+    icon:        <Mic2 size={18} />,
+  },
+  {
+    value:       "producer",
+    label:       "Producer",
+    description: "Sell beats, manage licenses, collect royalties",
+    icon:        <Music4 size={18} />,
+  },
+  {
+    value:       "studio",
+    label:       "Studio",
+    description: "Manage bookings, artists, and file delivery",
+    icon:        <Building2 size={18} />,
+  },
+];
+
+// ─── Form ─────────────────────────────────────────────────────────────────────
 
 function SignupForm() {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const initialRole  = searchParams.get("role") === "STUDIO_ADMIN" ? "STUDIO_ADMIN" : "ARTIST";
+
+  // Pre-fill from URL params
   const refCode      = searchParams.get("ref")          ?? undefined;
   const affiliateId  = searchParams.get("affiliate")    ?? undefined;
   const discountCode = searchParams.get("discount")     ?? undefined;
@@ -25,27 +52,24 @@ function SignupForm() {
   const utmSource    = searchParams.get("utm_source")   ?? undefined;
   const utmMedium    = searchParams.get("utm_medium")   ?? undefined;
   const utmCampaign  = searchParams.get("utm_campaign") ?? undefined;
-  // Capture landing page once on mount (lazy useState initializer runs client-side only)
   const [landingPage] = useState<string | undefined>(() =>
     typeof window !== "undefined" ? (document.referrer || window.location.href) : undefined
   );
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  // Form state
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<RoleOption>(initialRole);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [name,     setName]     = useState("");
+  const [path,     setPath]     = useState<PathType>("artist");
+  const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
 
-  // Promo code state
-  const [promoExpanded, setPromoExpanded] = useState(!!initialPromo);
-  const [promoCode, setPromoCode] = useState(initialPromo);
-  const [promoValidating, setPromoValidating] = useState(false);
-  const [promoError, setPromoError] = useState("");
-  const [promoValid, setPromoValid] = useState<{ benefitDescription: string } | null>(
-    null
-  );
+  // Promo code
+  const [promoExpanded,    setPromoExpanded]    = useState(!!initialPromo);
+  const [promoCode,        setPromoCode]        = useState(initialPromo);
+  const [promoValidating,  setPromoValidating]  = useState(false);
+  const [promoError,       setPromoError]       = useState("");
+  const [promoValid,       setPromoValid]       = useState<{ benefitDescription: string } | null>(null);
 
   async function validatePromo(c: string) {
     if (!c.trim()) return;
@@ -53,17 +77,14 @@ function SignupForm() {
     setPromoError("");
     setPromoValid(null);
     try {
-      const res = await fetch("/api/promo/validate", {
-        method: "POST",
+      const res  = await fetch("/api/promo/validate", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: c.trim() }),
+        body:    JSON.stringify({ code: c.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setPromoError(data.error ?? "Invalid code.");
-      } else {
-        setPromoValid(data.promoCode);
-      }
+      if (!res.ok) setPromoError(data.error ?? "Invalid code.");
+      else         setPromoValid(data.promoCode);
     } finally {
       setPromoValidating(false);
     }
@@ -73,10 +94,6 @@ function SignupForm() {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -85,17 +102,20 @@ function SignupForm() {
     setLoading(true);
 
     try {
+      // Map path → DB role
+      const role = path === "studio" ? "STUDIO_ADMIN" : "ARTIST";
+
       const res = await fetch("/api/auth/register", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           name,
           email,
           password,
           role,
           referralCode: refCode,
           affiliateId,
-          promoCode: promoCode.trim() || undefined,
+          promoCode:    promoCode.trim() || undefined,
           source,
           utmSource,
           utmMedium,
@@ -111,7 +131,7 @@ function SignupForm() {
         return;
       }
 
-      // Auto-sign-in after successful registration
+      // Auto sign-in
       const result = await signIn("credentials", {
         email,
         password,
@@ -119,10 +139,10 @@ function SignupForm() {
       });
 
       if (result?.error) {
-        // Registration succeeded but sign-in failed — redirect to login
         router.push("/login?registered=1");
       } else {
-        router.push(role === "STUDIO_ADMIN" ? "/studio" : "/dashboard");
+        // Send to pricing so they can pick a plan
+        router.push(`/pricing?onboarding=1&path=${path}`);
         router.refresh();
       }
     } catch {
@@ -132,41 +152,34 @@ function SignupForm() {
     }
   }
 
-  const roleOptions: { value: RoleOption; label: string; description: string; icon: React.ReactNode }[] = [
-    {
-      value: "ARTIST",
-      label: "Independent Artist",
-      description: "Create, sell, and grow your music career",
-      icon: <Mic2 size={20} />,
-    },
-    {
-      value: "STUDIO_ADMIN",
-      label: "Studio Owner",
-      description: "Manage bookings, artists, and file delivery",
-      icon: <Building2 size={20} />,
-    },
-  ];
-
   return (
-    <Card className="w-full max-w-[460px]" style={{ backgroundColor: "var(--card)" }}>
-      <CardHeader className="text-center pb-2">
-        {/* Logo */}
-        <div className="flex justify-center mb-4">
-          <img src="/images/brand/indiethis-icon.svg" alt="IndieThis" style={{ width: "44px", height: "44px" }} />
-        </div>
-        <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">
-          Create your account
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Join IndieThis — your music, your platform
-        </p>
-      </CardHeader>
+    <div className="w-full max-w-[460px]">
+      {/* Logo */}
+      <div className="flex justify-center mb-7">
+        <img
+          src="/images/brand/indiethis-logo-dark-bg.svg"
+          alt="IndieThis"
+          style={{ height: "32px", width: "auto" }}
+        />
+      </div>
 
-      <CardContent className="pt-4">
-        {/* Affiliate discount banner — shown when arriving from an affiliate link */}
+      <div
+        className="rounded-2xl border p-8"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div className="text-center mb-6">
+          <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">
+            Create your account
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            No credit card required to get started
+          </p>
+        </div>
+
+        {/* Referral / affiliate banners */}
         {affiliateId && discountCode && (
           <div
-            className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-4 text-xs font-medium"
+            className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-5 text-xs font-medium"
             style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}
           >
             <Gift size={13} className="shrink-0 mt-0.5" />
@@ -176,68 +189,23 @@ function SignupForm() {
             </span>
           </div>
         )}
-
-        {/* Referral banner */}
         {!affiliateId && refCode && (
           <div
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-4 text-xs font-medium"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-5 text-xs font-medium"
             style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}
           >
             <Gift size={13} className="shrink-0" />
-            You were invited by a friend! You&apos;ll both get a bonus when you join.
+            You were invited! You&apos;ll both get a bonus when you upgrade.
           </div>
         )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Role selector */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-foreground">I am a…</Label>
-            <div className="grid grid-cols-2 gap-3">
-              {roleOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setRole(opt.value)}
-                  className={cn(
-                    "flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all",
-                    role === opt.value
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-border bg-background/50 text-muted-foreground hover:border-border/80"
-                  )}
-                >
-                  <span className={cn(role === opt.value ? "text-accent" : "text-muted-foreground")}>
-                    {opt.icon}
-                  </span>
-                  <span className="text-sm font-semibold text-foreground leading-tight">
-                    {opt.label}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground leading-tight">
-                    {opt.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
+          {/* Email */}
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-sm font-medium text-foreground">
-              Full Name
-            </Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Your name"
-              autoComplete="name"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-sm font-medium text-foreground">
+            <label className="text-sm font-medium text-foreground" htmlFor="email">
               Email
-            </Label>
-            <Input
+            </label>
+            <input
               id="email"
               type="email"
               placeholder="you@example.com"
@@ -245,14 +213,17 @@ function SignupForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border px-3.5 py-2.5 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
+              style={{ borderColor: "var(--border)" }}
             />
           </div>
 
+          {/* Password */}
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-sm font-medium text-foreground">
+            <label className="text-sm font-medium text-foreground" htmlFor="password">
               Password
-            </Label>
-            <Input
+            </label>
+            <input
               id="password"
               type="password"
               placeholder="Min. 8 characters"
@@ -260,25 +231,63 @@ function SignupForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border px-3.5 py-2.5 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
+              style={{ borderColor: "var(--border)" }}
             />
           </div>
 
+          {/* Display name */}
           <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
-              Confirm Password
-            </Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="Repeat your password"
-              autoComplete="new-password"
+            <label className="text-sm font-medium text-foreground" htmlFor="name">
+              Artist / Display Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              placeholder="How you&apos;ll appear on the platform"
+              autoComplete="name"
               required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl border px-3.5 py-2.5 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-accent/40 transition-shadow"
+              style={{ borderColor: "var(--border)" }}
             />
           </div>
 
-          {/* Promo code collapsible */}
+          {/* I am a... */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">I am a…</label>
+            <div className="grid grid-cols-3 gap-2">
+              {PATH_OPTIONS.map((opt) => {
+                const active = path === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPath(opt.value)}
+                    className={cn(
+                      "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                      active
+                        ? "border-accent bg-accent/10"
+                        : "border-border bg-background/50 hover:border-border/80"
+                    )}
+                  >
+                    <span style={{ color: active ? "#E85D4A" : "var(--muted-foreground)" }}>
+                      {opt.icon}
+                    </span>
+                    <span className="text-xs font-bold text-foreground leading-tight">
+                      {opt.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground leading-snug">
+                      {opt.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Promo code */}
           <div>
             <button
               type="button"
@@ -289,77 +298,71 @@ function SignupForm() {
               <Gift size={14} />
               Have a promo code?
               <ChevronDown
-                size={14}
+                size={13}
                 className="transition-transform"
                 style={{ transform: promoExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
               />
             </button>
 
             {promoExpanded && (
-              <div className="mt-2">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter code"
-                    value={promoCode}
-                    onChange={(e) => {
-                      setPromoCode(e.target.value.toUpperCase());
-                      setPromoValid(null);
-                      setPromoError("");
-                    }}
-                    onBlur={() => promoCode.trim() && validatePromo(promoCode)}
-                    className="flex-1 font-mono tracking-widest text-sm uppercase"
-                    maxLength={20}
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => validatePromo(promoCode)}
-                    disabled={promoValidating || !promoCode.trim()}
-                    className="px-4 py-2 rounded-lg text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-                    style={{ backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }}
-                  >
-                    {promoValidating ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
-                  </button>
-                </div>
-
-                {promoError && (
-                  <p className="text-xs mt-1.5" style={{ color: "#f87171" }}>{promoError}</p>
-                )}
-                {promoValid && (
-                  <div className="flex items-center gap-2 mt-2 text-xs font-medium rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}>
-                    <CheckCircle2 size={13} className="shrink-0" />
-                    {promoValid.benefitDescription}
-                  </div>
-                )}
+              <div className="mt-2 flex gap-2">
+                <input
+                  placeholder="Enter code"
+                  value={promoCode}
+                  onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoValid(null); setPromoError(""); }}
+                  onBlur={() => promoCode.trim() && validatePromo(promoCode)}
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm font-mono tracking-widest uppercase bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/40"
+                  style={{ borderColor: "var(--border)" }}
+                  maxLength={20}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => validatePromo(promoCode)}
+                  disabled={promoValidating || !promoCode.trim()}
+                  className="px-4 py-2 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: "var(--accent)", color: "var(--accent-foreground)" }}
+                >
+                  {promoValidating ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+                </button>
+              </div>
+            )}
+            {promoError && <p className="text-xs mt-1.5 text-red-400">{promoError}</p>}
+            {promoValid && (
+              <div
+                className="flex items-center gap-2 mt-2 text-xs font-medium rounded-xl px-3 py-2"
+                style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.25)", color: "#D4A843" }}
+              >
+                <CheckCircle2 size={13} className="shrink-0" />
+                {promoValid.benefitDescription}
               </div>
             )}
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            <p className="text-sm rounded-xl px-3 py-2.5 bg-red-400/10 border border-red-400/20 text-red-400">
               {error}
             </p>
           )}
 
-          <Button
+          {/* CTA */}
+          <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 font-semibold bg-accent text-accent-foreground hover:bg-accent/90"
+            className="w-full h-11 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ backgroundColor: "#E85D4A", color: "#fff" }}
           >
             {loading ? (
-              <>
-                <Loader2 size={16} className="mr-2 animate-spin" />
-                Creating account…
-              </>
+              <><Loader2 size={16} className="animate-spin" /> Creating account…</>
             ) : (
               "Create Account"
             )}
-          </Button>
+          </button>
 
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-[11px] text-muted-foreground text-center">
             By creating an account you agree to our{" "}
-            <Link href="/terms" className="text-accent hover:text-accent/80 transition-colors">
+            <Link href="/terms" className="underline hover:text-foreground transition-colors">
               Terms of Service
             </Link>
           </p>
@@ -367,15 +370,12 @@ function SignupForm() {
 
         <p className="text-center text-sm text-muted-foreground mt-5">
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="text-accent hover:text-accent/80 font-medium transition-colors"
-          >
+          <Link href="/login" className="font-medium underline hover:text-foreground transition-colors">
             Sign in
           </Link>
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
