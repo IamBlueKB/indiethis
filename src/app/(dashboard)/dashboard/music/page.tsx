@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2,
+  Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2, Check,
   Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play, Zap,
 } from "lucide-react";
 import PreSaveTab from "./PreSaveTab";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import InlinePlayer from "@/components/audio/InlinePlayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -371,6 +372,7 @@ function MyTracksTab() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showForm, setShowForm] = useState(false);
+  const [savedTrackId, setSavedTrackId] = useState<string | null>(null); // set after save to show license step
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [pendingCoverArt, setPendingCoverArt] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -434,7 +436,7 @@ function MyTracksTab() {
       if (res.ok) {
         const data = await res.json() as { track: Track };
         setTracks(prev => [data.track, ...prev]);
-        setPendingUrl(null); setPendingCoverArt(null); setTitle(""); setProjectName(""); setPrice(""); setStatus("DRAFT"); setShowForm(false);
+        setSavedTrackId(data.track.id); // show license attachment step before clearing form
       }
     } finally {
       setSaving(false);
@@ -562,18 +564,44 @@ function MyTracksTab() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={handleSave} disabled={saving || coverArtUploading || !title.trim()}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-              {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : coverArtUploading ? "Uploading art…" : <><Music2 size={14} /> Save Track</>}
-            </button>
-            <button onClick={() => { setShowForm(false); setPendingUrl(null); setPendingCoverArt(null); }}
-              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
-              style={{ backgroundColor: "var(--border)" }}>
-              Cancel
-            </button>
-          </div>
+          {/* License attachment — shown after track is saved */}
+          {savedTrackId ? (
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-2">
+                <Check size={14} className="text-emerald-400 shrink-0" />
+                <p className="text-sm font-semibold text-foreground">Track saved! Attach any license docs.</p>
+              </div>
+              <LicenseAttachment contentType="track" contentId={savedTrackId} />
+              <p className="text-[11px] text-muted-foreground">
+                Attach licenses for any samples, AI-generated elements, or third-party content in this track. Optional — you can also add these later.
+              </p>
+              <button
+                onClick={() => {
+                  setSavedTrackId(null);
+                  setPendingUrl(null); setPendingCoverArt(null);
+                  setTitle(""); setProjectName(""); setPrice(""); setStatus("DRAFT");
+                  setShowForm(false);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                <Check size={14} /> Done
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button onClick={handleSave} disabled={saving || coverArtUploading || !title.trim()}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : coverArtUploading ? "Uploading art…" : <><Music2 size={14} /> Save Track</>}
+              </button>
+              <button onClick={() => { setShowForm(false); setPendingUrl(null); setPendingCoverArt(null); }}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
+                style={{ backgroundColor: "var(--border)" }}>
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
 

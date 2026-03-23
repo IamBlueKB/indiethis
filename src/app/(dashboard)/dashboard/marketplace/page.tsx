@@ -6,6 +6,7 @@ import { Music2, ShoppingCart, Clock, CheckCircle2, Eye, Download, Search, User,
 import { useAudioStore } from "@/store";
 import BeatPreviewPlayer from "@/components/audio/BeatPreviewPlayer";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import LicenseAttachment from "@/components/shared/LicenseAttachment";
 
 type BeatPreview = {
   id: string;
@@ -74,7 +75,7 @@ type StreamLeaseTarget = {
   coverArtUrl: string | null;
 };
 
-type StreamLeaseStep = "upload" | "details" | "agreement" | "confirm";
+type StreamLeaseStep = "upload" | "details" | "agreement" | "confirm" | "licenses";
 
 // ─── Stream Lease Explain Modal ───────────────────────────────────────────────
 
@@ -252,6 +253,7 @@ function StreamLeaseModal({
   // Step 4 — submitting
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
+  const [createdLeaseId, setCreatedLeaseId] = useState<string | null>(null);
 
   const { startUpload: startAudioUpload } = useUploadThing("streamLeaseAudio", {
     onUploadProgress: (p) => setAudioProgress(p),
@@ -313,9 +315,11 @@ function StreamLeaseModal({
           trackHash:  trackHash ?? undefined,
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as { lease?: { id: string }; error?: string };
       if (!res.ok) { setError(data.error ?? "Something went wrong."); setSubmitting(false); return; }
-      onSuccess();
+      // Transition to optional license attachment step before closing
+      setCreatedLeaseId(data.lease?.id ?? null);
+      setStep("licenses");
     } catch {
       setError("Network error. Please try again.");
       setSubmitting(false);
@@ -327,6 +331,7 @@ function StreamLeaseModal({
     details:   "Track Details",
     agreement: "Stream Lease Agreement",
     confirm:   "Confirm",
+    licenses:  "Attach License Docs",
   };
 
   return (
@@ -357,20 +362,26 @@ function StreamLeaseModal({
 
         {/* Step indicators */}
         <div className="flex items-center gap-1.5 px-6 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-          {(["upload", "details", "agreement", "confirm"] as StreamLeaseStep[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-1.5">
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
-                style={{
-                  backgroundColor: step === s ? "#E85D4A" : (["upload","details","agreement","confirm"].indexOf(step) > i ? "rgba(232,93,74,0.3)" : "var(--border)"),
-                  color: step === s || ["upload","details","agreement","confirm"].indexOf(step) > i ? "#fff" : "var(--muted-foreground)",
-                }}
-              >
-                {["upload","details","agreement","confirm"].indexOf(step) > i ? "✓" : i + 1}
+          {(["upload", "details", "agreement", "confirm"] as const).map((s, i) => {
+            const steps = ["upload","details","agreement","confirm","licenses"];
+            const currentIdx = steps.indexOf(step);
+            const isDone = currentIdx > i;
+            const isActive = step === s;
+            return (
+              <div key={s} className="flex items-center gap-1.5">
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
+                  style={{
+                    backgroundColor: isActive ? "#E85D4A" : isDone ? "rgba(232,93,74,0.3)" : "var(--border)",
+                    color: isActive || isDone ? "#fff" : "var(--muted-foreground)",
+                  }}
+                >
+                  {isDone ? "✓" : i + 1}
+                </div>
+                {i < 3 && <div className="w-6 h-px" style={{ backgroundColor: "var(--border)" }} />}
               </div>
-              {i < 3 && <div className="w-6 h-px" style={{ backgroundColor: "var(--border)" }} />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Step content */}
@@ -503,6 +514,23 @@ function StreamLeaseModal({
             </div>
           )}
 
+          {/* ── Step 5: License documents (optional, post-creation) ── */}
+          {step === "licenses" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: "#34C759" }} />
+                <p className="text-sm font-semibold text-foreground">Stream Lease created! 🎉</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Attach any licenses for samples or AI content used in your recording.
+                This is optional but protects you if your ownership is ever questioned.
+              </p>
+              {createdLeaseId && (
+                <LicenseAttachment contentType="streamLease" contentId={createdLeaseId} />
+              )}
+            </div>
+          )}
+
           {/* ── Step 4: Confirm ── */}
           {step === "confirm" && (
             <div className="space-y-4">
@@ -534,7 +562,7 @@ function StreamLeaseModal({
 
         {/* Footer actions */}
         <div className="flex gap-3 px-6 pb-6">
-          {step !== "upload" && (
+          {step !== "upload" && step !== "licenses" && (
             <button
               onClick={() => {
                 if (step === "details") setStep("upload");
@@ -587,6 +615,15 @@ function StreamLeaseModal({
               {submitting
                 ? <><Loader2 size={14} className="animate-spin" /> Creating Lease…</>
                 : <><Radio size={14} /> Confirm Stream Lease — $1/mo</>}
+            </button>
+          )}
+          {step === "licenses" && (
+            <button
+              onClick={onSuccess}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold"
+              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+            >
+              Done
             </button>
           )}
         </div>

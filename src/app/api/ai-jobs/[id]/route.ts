@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth }                      from "@/lib/auth";
 import { db }                        from "@/lib/db";
+import { ensureAIReceipt }           from "@/lib/ai-receipt";
 
 // ─── Types matching ai-job-processor internals ─────────────────────────────────
 
@@ -84,6 +85,11 @@ export async function GET(
   }
 
   const output = (job.outputData ?? {}) as Record<string, unknown>;
+
+  // ── Auto-create ownership receipt on first COMPLETE poll ──────────────────
+  if (job.status === "COMPLETE" && job.triggeredById) {
+    ensureAIReceipt(job.id, job.triggeredById, job.type, job.completedAt).catch(() => {});
+  }
 
   // ── Build a clean client payload ──────────────────────────────────────────
   // Always included:

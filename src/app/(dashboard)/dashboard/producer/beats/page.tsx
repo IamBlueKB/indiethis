@@ -6,6 +6,7 @@ import {
   Upload, Edit2, Trash2, ExternalLink, Music, ChevronDown, X,
   ListMusic, Radio, FileText, DollarSign, Loader2, Check, AlertCircle,
 } from "lucide-react";
+import LicenseAttachment from "@/components/shared/LicenseAttachment";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,7 @@ function BeatModal({
   const [saving,      setSaving]      = useState(false);
   const [uploadStep,  setUploadStep]  = useState<string>("");
   const [error,       setError]       = useState<string | null>(null);
+  const [savedBeatId, setSavedBeatId] = useState<string | null>(null); // set after upload to show license attachment
 
   const audioInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -242,7 +244,13 @@ function BeatModal({
         }),
       });
 
-      onSaved();
+      // For edit mode, call onSaved immediately.
+      // For upload mode, capture the beat ID and show the license attachment step.
+      if (mode === "edit") {
+        onSaved();
+      } else {
+        setSavedBeatId(beatId!);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -529,6 +537,15 @@ function BeatModal({
             </div>
           </div>
 
+          {/* License attachment — edit mode only (beat ID known) */}
+          {mode === "edit" && beat && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Sample &amp; Rights Documentation</p>
+              <LicenseAttachment contentType="track" contentId={beat.id} />
+              <p className="text-[11px] text-muted-foreground">Attach sample clearances, loop licenses, or any rights documentation for this beat.</p>
+            </div>
+          )}
+
           {/* Error */}
           {error && (
             <div className="flex items-center gap-2 text-red-400 text-sm">
@@ -538,25 +555,49 @@ function BeatModal({
           )}
         </div>
 
+        {/* Upload mode: post-save license attachment step */}
+        {savedBeatId && (
+          <div className="border-t px-5 py-5 space-y-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <Check size={15} className="text-emerald-400 shrink-0" />
+              <p className="text-sm font-semibold text-foreground">Beat uploaded! Attach any rights documentation.</p>
+            </div>
+            <LicenseAttachment contentType="track" contentId={savedBeatId} />
+            <p className="text-[11px] text-muted-foreground">Attach sample clearances, loop licenses, or rights docs for this beat. You can also do this later from the edit screen.</p>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex items-center justify-between p-5 border-t" style={{ borderColor: "var(--border)" }}>
           <span className="text-xs text-muted-foreground">{uploadStep}</span>
           <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
-              style={{ backgroundColor: "#E87040", color: "#fff", opacity: saving ? 0.7 : 1 }}
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-              {saving ? uploadStep || "Saving…" : mode === "upload" ? "Upload Beat" : "Save Changes"}
-            </button>
+            {savedBeatId ? (
+              <button
+                onClick={onSaved}
+                className="px-5 py-2 rounded-lg text-sm font-semibold"
+                style={{ backgroundColor: "#E87040", color: "#fff" }}
+              >
+                Done
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                  style={{ backgroundColor: "#E87040", color: "#fff", opacity: saving ? 0.7 : 1 }}
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {saving ? uploadStep || "Saving…" : mode === "upload" ? "Upload Beat" : "Save Changes"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
