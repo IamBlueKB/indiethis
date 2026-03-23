@@ -20,6 +20,7 @@ import {
   Star,
   TrendingUp,
   DollarSign,
+  Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -39,6 +40,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Revenue",     href: "/admin/revenue",      icon: BarChart3,       page: "revenue"      },
   { label: "AI Usage",    href: "/admin/ai-usage",     icon: Cpu,             page: "ai-usage"     },
   { label: "Moderation",  href: "/admin/moderation",   icon: ShieldAlert,     page: "moderation"   },
+  { label: "Content",     href: "/admin/content",      icon: Archive,         page: "content"      },
   { label: "AI Learning", href: "/admin/ai-learning",  icon: Brain,           page: "ai-usage"     },
   { label: "Support",     href: "/admin/support-chat", icon: MessageSquare,   page: "support-chat" },
   { label: "Affiliates",  href: "/admin/affiliates",   icon: Link2,           page: "affiliates"   },

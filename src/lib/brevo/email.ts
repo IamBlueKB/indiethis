@@ -763,3 +763,34 @@ export async function sendAmbassadorPayoutEmail(
     tags: ["ambassador", "payout"],
   });
 }
+
+// ---------------------------------------------------------------------------
+// License Vault — documentation request
+// ---------------------------------------------------------------------------
+
+export async function sendDocumentationRequestEmail(params: {
+  userEmail:    string;
+  userName:     string;
+  contentTitle: string;
+  contentType:  "beat" | "track" | "stream lease";
+  vaultUrl:     string;
+}): Promise<void> {
+  const typeLabel = { beat: "Beat", track: "Track", "stream lease": "Stream Lease" }[params.contentType];
+  await sendEmail({
+    to: { email: params.userEmail, name: params.userName },
+    subject: `Action required: Please upload documentation for "${params.contentTitle}"`,
+    htmlContent: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#0A0A0A;">
+        <h1 style="font-size:22px;">Documentation Request</h1>
+        <p>Hi ${params.userName},</p>
+        <p>IndieThis has received an inquiry about your ${typeLabel}: <strong>${params.contentTitle}</strong>.</p>
+        <p>To help us resolve this quickly, please upload proof of ownership (license agreement, receipt, or clearance document) to your License Vault and attach it to this content.</p>
+        <a href="${params.vaultUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Open License Vault →</a>
+        <p style="margin-top:24px;font-size:13px;color:#555;">If you believe this inquiry was sent in error or have any questions, reply to this email and our team will follow up.</p>
+      </div>
+    `,
+    textContent: `Hi ${params.userName},\n\nIndieThis has received an inquiry about your ${typeLabel}: "${params.contentTitle}".\n\nPlease upload proof of ownership to your License Vault and attach it to this content:\n${params.vaultUrl}\n\nIf you have questions, reply to this email.`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis Support" },
+    tags: ["moderation", "documentation-request"],
+  });
+}

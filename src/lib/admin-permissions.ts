@@ -4,7 +4,7 @@
  * Role-based permission gating for the IndieThis admin panel.
  *
  * Pages / sections recognised by this module:
- *   dashboard | users | studios | moderation | affiliates | attribution |
+ *   dashboard | users | studios | moderation | content | affiliates | attribution |
  *   support-chat | ai-usage | revenue | settings | team |
  *   promo-codes | ambassadors | promo-analytics
  *
@@ -16,6 +16,7 @@
  * │ users        │ full        │ full      │ view-only     │
  * │ studios      │ full        │ full      │ view-only     │
  * │ moderation   │ full        │ full      │ full          │
+ * │ content      │ full        │ full      │ full          │
  * │ affiliates   │ full        │ full      │ none          │
  * │ attribution  │ full        │ full      │ none          │
  * │ support-chat │ full        │ full      │ full          │
@@ -54,6 +55,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     SUPPORT_ADMIN: "view-only",
   },
   moderation: {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "full",
+  },
+  content: {
     SUPER_ADMIN:   "full",
     OPS_ADMIN:     "full",
     SUPPORT_ADMIN: "full",

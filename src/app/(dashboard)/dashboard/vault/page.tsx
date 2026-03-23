@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Archive, Upload, Search, X, ExternalLink, Pencil, Trash2,
   Info, ChevronDown, Loader2, Check, FileText, Music2, Radio,
-  Wand2, Paperclip,
+  Wand2, Paperclip, Bell,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { cn } from "@/lib/utils";
@@ -569,16 +570,28 @@ function DocRow({
 
 const BANNER_KEY = "vault-banner-dismissed";
 
+// Valid filter values passable via URL ?filter= param
+const URL_FILTER_MAP: Record<string, FilterType> = {
+  beats: "beats", tracks: "tracks", leases: "leases", ai: "ai", unattached: "unattached",
+};
+
 export default function VaultPage() {
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams.get("filter");
+  const urlRef    = searchParams.get("ref"); // e.g. "beat:abc123" or "track:xyz"
+
   const [docs,         setDocs]         = useState<VaultDoc[]>([]);
   const [tracks,       setTracks]       = useState<TrackOption[]>([]);
   const [streamLeases, setStreamLeases] = useState<LeaseOption[]>([]);
   const [loading,      setLoading]      = useState(true);
-  const [filter,       setFilter]       = useState<FilterType>("all");
+  const [filter,       setFilter]       = useState<FilterType>(
+    urlFilter && URL_FILTER_MAP[urlFilter] ? URL_FILTER_MAP[urlFilter] : "all"
+  );
   const [search,       setSearch]       = useState("");
   const [showModal,    setShowModal]    = useState(false);
   const [editDoc,      setEditDoc]      = useState<VaultDoc | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(true); // start true to avoid flash
+  const [refNoticeDismissed, setRefNoticeDismissed] = useState(false);
 
   useEffect(() => {
     setBannerDismissed(localStorage.getItem(BANNER_KEY) === "1");
@@ -667,6 +680,29 @@ export default function VaultPage() {
           Upload Document
         </button>
       </div>
+
+      {/* Documentation request notice (shown when arriving via admin "Request Docs" email link) */}
+      {urlRef && !refNoticeDismissed && (
+        <div
+          className="flex items-start gap-3 px-4 py-3 rounded-lg border mb-5 relative"
+          style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}
+        >
+          <Bell size={16} className="shrink-0 mt-0.5" style={{ color: "#D4A843" }} />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground mb-0.5">Action required: documentation requested</p>
+            <p className="text-xs text-muted-foreground">
+              IndieThis has received an inquiry about one of your content items. Please upload the relevant proof of ownership
+              (license agreement, receipt, or clearance) and attach it to the content below using the Upload button.
+            </p>
+          </div>
+          <button
+            onClick={() => setRefNoticeDismissed(true)}
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
 
       {/* Info banner */}
       {!bannerDismissed && (
