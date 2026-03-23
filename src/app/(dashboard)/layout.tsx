@@ -16,9 +16,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const userId = session.user.id as string;
 
+  // Onboarding gate — new users must complete setup before accessing dashboard
+  const onboardingCheck = await db.user.findUnique({
+    where:  { id: userId },
+    select: { signupPath: true, setupCompletedAt: true },
+  });
+  if (onboardingCheck?.signupPath && !onboardingCheck.setupCompletedAt) {
+    redirect("/signup/setup");
+  }
+
   const [beatCount, producerLeaseCount, gracePeriod] = await Promise.all([
-    // Count only Tracks that have BeatLeaseSettings (i.e. actual beats, not music uploads)
-    db.track.count({ where: { artistId: userId, beatLeaseSettings: { isNot: null } } }),
+    // Count beats — tracks that have a BeatLeaseSettings record
+    db.beatLeaseSettings.count({ where: { beat: { artistId: userId } } }),
     db.streamLease.count({ where: { producerId: userId } }),
     db.promoRedemption.findFirst({
       where: {
@@ -31,7 +40,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }),
   ]);
 
-  const hasProducerActivity = beatCount > 0;
+const hasProducerActivity = beatCount > 0;
   const hasProducerStreamLeases = producerLeaseCount > 0;
 
   return (

@@ -454,6 +454,13 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   lastLoginAt      DateTime?
+  city             String?
+  genres           String[]
+  soundcloudUrl    String?
+  signupPath       String?
+  onboardingStep   Int       @default(0)
+  planSelectedAt   DateTime?
+  setupCompletedAt DateTime?
 
   accounts         Account[]
   subscription     Subscription?

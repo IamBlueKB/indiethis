@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       referralCode: usedReferralCode,
       affiliateId,
       promoCode,
+      signupPath,
       // Attribution params
       source,
       utmSource,
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
       referralCode?: string;
       affiliateId?: string;
       promoCode?: string;
+      signupPath?: string;
       source?: string;
       utmSource?: string;
       utmMedium?: string;
@@ -107,6 +109,8 @@ export async function POST(req: NextRequest) {
         referredById,
         // Store the literal referral code that was entered (for display/auditing)
         referredByCode: referredById ? usedReferralCode?.toUpperCase() : undefined,
+        // Onboarding funnel tracking
+        signupPath: signupPath ?? (userRole === "STUDIO_ADMIN" ? "studio" : "artist"),
       },
     });
 

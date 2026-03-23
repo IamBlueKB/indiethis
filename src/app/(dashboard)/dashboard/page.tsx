@@ -16,6 +16,7 @@ import {
   TrendingDown,
   Music2,
   Trophy,
+  Zap,
 } from "lucide-react";
 
 // ─── Tiny SVG sparkline (server-renderable, no Recharts needed) ────────────────
@@ -61,6 +62,25 @@ function SparkLine({ data, color = "#D4A843" }: { data: number[]; color?: string
   );
 }
 
+// ─── Welcome action card (used in first-login banner) ──────────────────────────
+
+function WelcomeAction({ href, label, sub, color }: { href: string; label: string; sub: string; color: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 p-3 rounded-xl border no-underline transition-colors hover:border-accent/40"
+      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+    >
+      <div className="shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-foreground truncate">{label}</p>
+        <p className="text-[11px] text-muted-foreground truncate">{sub}</p>
+      </div>
+      <ArrowRight size={12} className="shrink-0 text-muted-foreground ml-auto" />
+    </Link>
+  );
+}
+
 // ─── Percentage-change delta badge ─────────────────────────────────────────────
 
 function Delta({ value, prev }: { value: number; prev: number }) {
@@ -82,10 +102,15 @@ function Delta({ value, prev }: { value: number; prev: number }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function DashboardPage() {
+export default async function DashboardPage(
+  { searchParams }: { searchParams: Promise<Record<string, string>> }
+) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+
+  const sp         = await searchParams;
+  const showWelcome = sp.welcome === "1";
 
   const firstName = (session.user.name ?? "Artist").split(" ")[0];
 
@@ -113,7 +138,7 @@ export default async function DashboardPage() {
     }),
     db.user.findUnique({
       where:  { id: userId },
-      select: { artistName: true, artistSlug: true },
+      select: { artistName: true, artistSlug: true, signupPath: true, setupCompletedAt: true },
     }),
     db.bookingSession.findMany({
       where:   { artistId: userId, status: { in: ["PENDING", "CONFIRMED"] } },
@@ -190,6 +215,46 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Your command center.</p>
       </div>
+
+      {/* ── Welcome banner (shown after setup completes) ── */}
+      {showWelcome && (
+        <div
+          className="rounded-2xl border p-5"
+          style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.25)" }}
+        >
+          <div className="flex items-start gap-3 mb-4">
+            <div
+              className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: "rgba(212,168,67,0.15)" }}
+            >
+              <Zap size={16} style={{ color: "#D4A843" }} />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground text-sm">
+                Welcome to IndieThis, {firstName}! 🎉
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Here&apos;s what to do first:
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {userProfile?.signupPath === "producer" ? (
+              <>
+                <WelcomeAction href="/dashboard/producer/beats?upload=1" label="Upload your first beat" sub="Start selling on the marketplace" color="#E85D4A" />
+                <WelcomeAction href="/dashboard/settings" label="Set your license pricing" sub="Control how buyers use your beats" color="#D4A843" />
+                <WelcomeAction href="/dashboard/marketplace" label="Explore the marketplace" sub="See what other producers are selling" color="#5AC8FA" />
+              </>
+            ) : (
+              <>
+                <WelcomeAction href="/dashboard/music?upload=1" label="Upload your first track" sub="Build your catalog from day one" color="#E85D4A" />
+                <WelcomeAction href="/dashboard/ai/video" label="Create AI cover art" sub="Make your music stand out" color="#D4A843" />
+                <WelcomeAction href="/dashboard/settings" label="Set up your artist page" sub="Get a shareable link for fans" color="#5AC8FA" />
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Banners ── */}
       {!userProfile?.artistSlug && (

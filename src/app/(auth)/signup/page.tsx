@@ -113,6 +113,7 @@ function SignupForm() {
           email,
           password,
           role,
+          signupPath: path,
           referralCode: refCode,
           affiliateId,
           promoCode:    promoCode.trim() || undefined,

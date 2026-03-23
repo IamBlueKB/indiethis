@@ -8,8 +8,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { plan?: string };
-  const plan = body.plan?.toLowerCase();
+  const body = await req.json() as { plan?: string; onboarding?: boolean };
+  const plan       = body.plan?.toLowerCase();
+  const onboarding = !!body.onboarding;
 
   if (!plan || !PLAN_PRICES[plan]) {
     return NextResponse.json({ error: "Invalid plan." }, { status: 400 });
@@ -92,8 +93,12 @@ export async function POST(req: NextRequest) {
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: planConfig.priceId, quantity: 1 }],
-    success_url: `${appUrl}/dashboard?upgraded=1`,
-    cancel_url: `${appUrl}/dashboard/upgrade`,
+    success_url: onboarding
+      ? `${appUrl}/signup/setup?session_id={CHECKOUT_SESSION_ID}`
+      : `${appUrl}/dashboard?upgraded=1`,
+    cancel_url: onboarding
+      ? `${appUrl}/pricing?onboarding=1`
+      : `${appUrl}/dashboard/upgrade`,
     subscription_data: {
       metadata: { userId: session.user.id, tier: planConfig.tier },
     },

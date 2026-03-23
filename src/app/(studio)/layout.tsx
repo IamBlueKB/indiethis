@@ -12,6 +12,15 @@ export default async function StudioLayout({ children }: { children: ReactNode }
     redirect("/login");
   }
 
+  // Onboarding gate — new studio users must complete setup first
+  const onboardingCheck = await db.user.findUnique({
+    where:  { id: session.user.id },
+    select: { signupPath: true, setupCompletedAt: true },
+  });
+  if (onboardingCheck?.signupPath && !onboardingCheck.setupCompletedAt) {
+    redirect("/signup/setup");
+  }
+
   const studio = await db.studio.findFirst({
     where: { ownerId: session.user.id },
     select: { slug: true },

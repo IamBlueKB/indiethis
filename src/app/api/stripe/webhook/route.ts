@@ -271,6 +271,12 @@ export async function POST(req: NextRequest) {
         // Activate the affiliate referral if this user arrived via an affiliate link
         void activateAffiliateReferral(userId);
 
+        // Record plan selection timestamp for onboarding funnel analytics
+        void db.user.update({
+          where: { id: userId },
+          data:  { planSelectedAt: new Date() },
+        }).catch(console.error);
+
         // Cancel any pending follow-up sequences for this user —
         // no point sending "you should subscribe" to someone who just did.
         const subscribedUser = await db.user.findUnique({
