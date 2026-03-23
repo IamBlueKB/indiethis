@@ -28,6 +28,7 @@ import {
   FileText,
   PieChart,
   DollarSign,
+  Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -51,6 +52,7 @@ const navItems: NavItem[] = [
   { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag },
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
   { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },
+  { label: "License Vault", href: "/dashboard/vault",        icon: Archive },
   { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },
   { label: "Sessions",      href: "/dashboard/sessions",     icon: Calendar },
   { label: "Earnings",      href: "/dashboard/earnings",     icon: TrendingUp },

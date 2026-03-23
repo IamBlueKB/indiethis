@@ -195,8 +195,8 @@ export const ourFileRouter = {
 
   // License & receipt vault documents (PDF, PNG, JPG, max 10MB)
   licenseDocument: f({
-    "application/pdf": { maxFileSize: "10MB", maxFileCount: 1 },
-    image:             { maxFileSize: "10MB", maxFileCount: 1 },
+    "application/pdf": { maxFileSize: "8MB", maxFileCount: 1 },
+    image:             { maxFileSize: "8MB", maxFileCount: 1 },
   })
     .middleware(async ({ req }) => {
       const token = await getToken({
