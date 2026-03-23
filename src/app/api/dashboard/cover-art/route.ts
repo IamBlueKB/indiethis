@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
 import { embedIndieThisMetadata } from "@/lib/image-metadata";
+import { createNotification } from "@/lib/notifications";
 
 const utapi = new UTApi();
 
@@ -108,7 +109,7 @@ async function generateCoverArt(
       console.warn(`[cover-art] metadata embed/upload failed, using original URL: ${err}`);
     }
 
-    await db.aIGeneration.update({
+    const completedJob = await db.aIGeneration.update({
       where: { id: jobId },
       data: {
         status: "COMPLETED",
@@ -116,6 +117,15 @@ async function generateCoverArt(
         outputData: { revisedPrompt: data.data[0]?.revised_prompt },
       },
     });
+
+    // Notify the artist that their cover art is ready
+    void createNotification({
+      userId: completedJob.artistId,
+      type: "AI_JOB_COMPLETE",
+      title: "Your AI cover art is ready!",
+      message: "Click to view and download your generated album artwork.",
+      link: "/dashboard/ai/cover-art",
+    }).catch(() => {});
   } catch (err) {
     await db.aIGeneration.update({
       where: { id: jobId },

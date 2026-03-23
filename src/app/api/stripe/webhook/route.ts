@@ -19,6 +19,7 @@ import { upsertFanScore } from "@/lib/fan-scores";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import { sendEmail } from "@/lib/brevo/email";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
+import { createNotification } from "@/lib/notifications";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -107,6 +108,24 @@ export async function POST(req: NextRequest) {
             where: { artistId: buyerId, beatId: trackId, isActive: true },
             data:  { isActive: false, cancelledAt: new Date() },
           });
+
+          // Notify producer of the beat license sale
+          const soldTrack = await db.track.findUnique({
+            where: { id: trackId },
+            select: { title: true },
+          });
+          const buyer = await db.user.findUnique({
+            where: { id: buyerId },
+            select: { name: true, artistName: true },
+          });
+          const buyerName = buyer?.artistName ?? buyer?.name ?? "An artist";
+          void createNotification({
+            userId: producerId,
+            type: "BEAT_LICENSE_SOLD",
+            title: "Beat license sold!",
+            message: `${buyerName} purchased a ${licenseType} license for "${soldTrack?.title ?? "your beat"}" — $${paidAmount.toFixed(2)}`,
+            link: "/dashboard/producer/licensing",
+          }).catch(() => {});
         }
         break;
       }
@@ -134,6 +153,15 @@ export async function POST(req: NextRequest) {
 
           // Update fan spend ranking
           void upsertFanScore(artistId, supporterEmail, { tip: paidAmount });
+
+          // Notify artist of tip received
+          void createNotification({
+            userId: artistId,
+            type: "TIP_RECEIVED",
+            title: "You received a tip! 💸",
+            message: `${supporterEmail} sent you $${paidAmount.toFixed(2)}${message ? `: "${message}"` : ""}`,
+            link: "/dashboard/earnings",
+          }).catch(() => {});
         }
         break;
       }
@@ -171,6 +199,19 @@ export async function POST(req: NextRequest) {
 
           // Update fan spend ranking
           if (buyerEmail) void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
+
+          // Notify artist of merch order
+          const soldProduct = await db.merchProduct.findUnique({
+            where: { id: productId },
+            select: { title: true },
+          });
+          void createNotification({
+            userId: artistId,
+            type: "MERCH_ORDER",
+            title: "New merch order!",
+            message: `Someone ordered${soldProduct?.title ? ` "${soldProduct.title}"` : " your merch"} — you earn $${artistEarnings.toFixed(2)}`,
+            link: "/dashboard/merch/orders",
+          }).catch(() => {});
         }
         break;
       }
@@ -424,6 +465,15 @@ export async function POST(req: NextRequest) {
               })
             );
 
+            // In-app notification: payment failed
+            void createNotification({
+              userId: failedUser.id,
+              type: "SUBSCRIPTION_FAILED",
+              title: "Payment failed — action required",
+              message: `Your payment didn't go through. Update your payment method within 3 days to keep your ${activeLeases.length} stream lease${activeLeases.length !== 1 ? "s" : ""} active.`,
+              link: "/dashboard/settings",
+            }).catch(() => {});
+
             // Email artist: update payment method within 3 days
             const artistName = failedUser.artistName ?? failedUser.name;
             const billingUrl = `${appUrl}/dashboard/settings`;
@@ -485,6 +535,22 @@ export async function POST(req: NextRequest) {
         where: { userId: sub.userId, streamLeaseGraceUntil: { not: null } },
         data:  { streamLeaseGraceUntil: null },
       });
+
+      // Notify user of subscription renewal
+      const renewedSub = await db.subscription.findFirst({
+        where: { userId: sub.userId },
+        select: { tier: true },
+      });
+      if (renewedSub?.tier) {
+        const tierLabel = renewedSub.tier.charAt(0) + renewedSub.tier.slice(1).toLowerCase();
+        void createNotification({
+          userId: sub.userId,
+          type: "SUBSCRIPTION_RENEWED",
+          title: "Subscription renewed",
+          message: `Your ${tierLabel} plan renewed successfully — $${(amountPaid / 100).toFixed(2)}`,
+          link: "/dashboard/settings",
+        }).catch(() => {});
+      }
 
       // amount_paid is in cents
       void processAffiliateCommission(sub.userId, amountPaid);

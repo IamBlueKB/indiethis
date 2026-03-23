@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { sendEmail } from "@/lib/brevo/email";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
+import { createNotification } from "@/lib/notifications";
 
 // ─── Agreement HTML Generator ─────────────────────────────────────────────────
 
@@ -342,6 +343,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Notify producer async — fire-and-forget, never block the response
+  // Notify producer in-app
+  void createNotification({
+    userId: beat.artistId,
+    type: "STREAM_LEASE_ACTIVATED",
+    title: "New stream lease!",
+    message: `${artistName} stream-leased your beat "${beat.title}" for their track "${trackTitle.trim()}"`,
+    link: "/dashboard/producer/stream-leases",
+  }).catch(() => {});
+
   const producerEmail = beat.artist.email;
   const artistSlug    = artist.artistSlug;
   if (producerEmail) {

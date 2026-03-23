@@ -30,6 +30,7 @@ import {
   DollarSign,
   Archive,
   CalendarDays,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { label: "Splits",          href: "/dashboard/splits",            icon: Users },
   { label: "Release Planner", href: "/dashboard/release-planner",  icon: CalendarDays },
   { label: "Earnings",        href: "/dashboard/earnings",          icon: TrendingUp },
+  { label: "Notifications",   href: "/dashboard/notifications",     icon: Bell },
   { label: "Referrals",     href: "/dashboard/referrals",    icon: Gift },
   { label: "Affiliate",     href: "/dashboard/affiliate",    icon: Share2 },
   { label: "Upgrade",       href: "/dashboard/upgrade",      icon: Zap },

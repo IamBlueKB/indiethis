@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { cancelFollowUpByContactId } from "@/lib/email-sequence";
+import { createNotification } from "@/lib/notifications";
 
 // PATCH /api/studio/bookings/[id]
 // Updates status, paymentStatus, and/or engineerNotes on a booking.
@@ -16,7 +17,7 @@ export async function PATCH(
 
   const studio = await db.studio.findFirst({
     where: { ownerId: session.user.id },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
@@ -43,15 +44,45 @@ export async function PATCH(
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
+  // Fetch booking details for notification + follow-up cancellation
+  const booking = await db.bookingSession.findFirst({
+    where: { id, studioId: studio.id },
+    select: {
+      contactId: true,
+      artistId: true,
+      dateTime: true,
+      contact: { select: { name: true } },
+    },
+  });
+
   // When a booking is confirmed or completed, cancel any pending follow-up
   // emails for that contact — they've re-engaged so the sequence is no longer needed.
-  if ((status === "CONFIRMED" || status === "COMPLETED")) {
-    const booking = await db.bookingSession.findFirst({
-      where: { id, studioId: studio.id },
-      select: { contactId: true },
-    });
-    if (booking?.contactId) {
-      void cancelFollowUpByContactId(studio.id, booking.contactId);
+  if ((status === "CONFIRMED" || status === "COMPLETED") && booking?.contactId) {
+    void cancelFollowUpByContactId(studio.id, booking.contactId);
+  }
+
+  // Notify the artist when booking status changes
+  if (booking?.artistId && status) {
+    const sessionDateStr = booking.dateTime
+      ? new Date(booking.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "your session";
+
+    if (status === "CONFIRMED") {
+      void createNotification({
+        userId: booking.artistId,
+        type: "BOOKING_CONFIRMED",
+        title: "Booking confirmed!",
+        message: `${studio.name} confirmed your booking for ${sessionDateStr}.`,
+        link: "/dashboard/sessions",
+      }).catch(() => {});
+    } else if (status === "CANCELLED") {
+      void createNotification({
+        userId: booking.artistId,
+        type: "BOOKING_CANCELLED",
+        title: "Booking cancelled",
+        message: `${studio.name} cancelled your ${sessionDateStr} booking.`,
+        link: "/dashboard/sessions",
+      }).catch(() => {});
     }
   }
 

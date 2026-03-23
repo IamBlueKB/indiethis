@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { detectAudioFeaturesFromUrls } from "@/lib/audio-analysis";
+import { createNotification } from "@/lib/notifications";
 
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
@@ -209,6 +210,21 @@ export async function POST(
         },
       });
     }
+  }
+
+  // Notify studio owner of new intake submission
+  const studioOwner = await db.studio.findUnique({
+    where: { id: link.studioId },
+    select: { ownerId: true, name: true },
+  });
+  if (studioOwner?.ownerId) {
+    void createNotification({
+      userId: studioOwner.ownerId,
+      type: "INTAKE_SUBMISSION",
+      title: "New intake form submitted",
+      message: `${contactName}${artistName.trim() !== contactName ? ` (${artistName.trim()})` : ""} submitted an intake form`,
+      link: "/studio/inbox",
+    }).catch(() => {});
   }
 
   // Kick off audio analysis in the background — don't block the response
