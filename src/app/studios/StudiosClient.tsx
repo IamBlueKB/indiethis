@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Search, Building2, MapPin, Loader2, X, ChevronDown } from "lucide-react";
+import PublicNav from "@/components/layout/PublicNav";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -202,24 +203,7 @@ export default function StudiosClient() {
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
 
       {/* Nav */}
-      <header
-        className="sticky top-0 z-40 border-b"
-        style={{ backgroundColor: "rgba(10,10,10,0.92)", backdropFilter: "blur(12px)", borderColor: "#1a1a1a" }}
-      >
-        <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="shrink-0">
-            <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: 28, width: "auto" }} />
-          </Link>
-          <div className="flex items-center gap-2 shrink-0">
-            <Link href="/explore" className="text-sm font-semibold px-3 py-1.5 rounded-lg" style={{ color: "#aaa" }}>
-              Explore
-            </Link>
-            <Link href="/signup" className="text-sm font-bold px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicNav />
 
       {/* Page header */}
       <div className="max-w-5xl mx-auto px-4 md:px-6 pt-10 pb-6">

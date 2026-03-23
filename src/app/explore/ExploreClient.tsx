@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAudioStore } from "@/store";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
+import PublicNav from "@/components/layout/PublicNav";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X,
@@ -781,47 +782,30 @@ export default function ExploreClient() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-40" style={{ backgroundColor: "rgba(10,10,10,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid #1a1a1a" }}>
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
-          {/* Top row */}
-          <div className="h-14 flex items-center justify-between gap-4">
-            <Link href="/" className="shrink-0 flex items-center">
-              <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "32px", width: "auto" }} />
-            </Link>
-            <div className="flex-1 max-w-xl">
-              <SearchBar onFilter={handleFilterTab} />
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {loggedIn ? (
-                <Link href="/dashboard" className="text-sm font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#1a1a1a", color: "#D4A843" }}>Dashboard</Link>
-              ) : (
-                <>
-                  <Link href="/login" className="text-sm font-semibold px-3 py-1.5 rounded-lg" style={{ color: "#aaa" }}>Log in</Link>
-                  <Link href="/signup" className="text-sm font-bold px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>Sign up</Link>
-                </>
-              )}
-            </div>
-          </div>
+      <PublicNav center={<SearchBar onFilter={handleFilterTab} />} />
 
-          {/* Filter pills */}
-          <div className="pb-3 flex items-center gap-2 overflow-x-auto scrollbar-hide">
-            {FILTER_TABS.map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => handleFilterTab(key)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all"
-                style={activeFilter === key
-                  ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
-                  : { backgroundColor: "#1a1a1a", color: "#aaa", border: "1px solid #2a2a2a" }
-                }
-              >
-                {Icon && <Icon size={11} />}
-                {label}
-              </button>
-            ))}
-          </div>
+      {/* Filter pills */}
+      <div
+        className="sticky top-14 z-30 border-b"
+        style={{ backgroundColor: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderColor: "#1a1a1a" }}
+      >
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+          {FILTER_TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => handleFilterTab(key)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all"
+              style={activeFilter === key
+                ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                : { backgroundColor: "#1a1a1a", color: "#aaa", border: "1px solid #2a2a2a" }
+              }
+            >
+              {Icon && <Icon size={11} />}
+              {label}
+            </button>
+          ))}
         </div>
-      </header>
+      </div>
 
       {/* ── Page Content ── */}
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-14">
