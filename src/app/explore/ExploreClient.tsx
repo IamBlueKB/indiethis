@@ -23,7 +23,7 @@ type TrackItem = {
   genre: string | null;
   plays: number;
   createdAt?: string;
-  artist: { id: string; name: string; photo?: string | null; artistSlug?: string | null };
+  artist: { id: string; name: string; photo?: string | null; artistSlug?: string | null; artistSite?: { isPublished: boolean } | null };
 };
 
 type BeatItem = {
@@ -35,7 +35,7 @@ type BeatItem = {
   musicalKey: string | null;
   price: number | null;
   genre: string | null;
-  artist: { id: string; name: string; artistSlug?: string | null };
+  artist: { id: string; name: string; artistSlug?: string | null; artistSite?: { isPublished: boolean } | null };
   beatLeaseSettings: { streamLeaseEnabled: boolean; maxStreamLeases: number | null } | null;
   _count: { beatLicenses: number; streamLeases: number };
 };
@@ -157,7 +157,7 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 // ── Track Card ─────────────────────────────────────────────────────────────
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
-  const artistSlug = track.artist.artistSlug;
+  const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
   return (
     <div className="shrink-0 w-40 group">
       <div
@@ -322,7 +322,7 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
 
 function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPlaying: boolean; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
-  const artistSlug = beat.artist.artistSlug;
+  const artistSlug = beat.artist.artistSite?.isPublished ? beat.artist.artistSlug : null;
   return (
     <div
       className="rounded-xl border p-3 group transition-all hover:border-accent/40"
