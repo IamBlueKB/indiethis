@@ -1800,6 +1800,8 @@ model ProducerProfile {
   defaultLeasePrice        Float?
   defaultNonExclusivePrice Float?
   defaultExclusivePrice    Float?
+  separatePayoutEnabled    Boolean  @default(false)
+  producerStripeConnectId  String?  // Stripe Connect account ID for separate producer payouts
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

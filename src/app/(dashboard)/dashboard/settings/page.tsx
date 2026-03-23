@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff, AlertTriangle, X,
+  Mic2, DollarSign, Radio, CreditCard, ChevronDown,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -22,6 +23,39 @@ type UserSettings = {
   appleMusicUrl: string | null;
   artistSlug: string | null;
 };
+
+type ProducerProfileData = {
+  id: string;
+  displayName: string | null;
+  bio: string | null;
+  defaultLeasePrice: number | null;
+  defaultNonExclusivePrice: number | null;
+  defaultExclusivePrice: number | null;
+  separatePayoutEnabled: boolean;
+  producerStripeConnectId: string | null;
+};
+
+type ProducerLeaseSettingsData = {
+  id: string;
+  streamLeaseEnabled: boolean;
+  revocationPolicy: string;
+  contentRestrictions: string[];
+  creditFormat: string;
+};
+
+const CONTENT_RESTRICTION_OPTIONS = [
+  { value: "no_explicit",   label: "No explicit lyrics" },
+  { value: "no_political",  label: "No political content" },
+  { value: "no_religious",  label: "No religious content" },
+  { value: "no_violence",   label: "No violent content" },
+  { value: "no_commercial", label: "No commercial advertising use" },
+];
+
+const REVOCATION_POLICIES = [
+  { value: "A", label: "A — 30-day written notice required" },
+  { value: "B", label: "B — Violation only (breach of terms)" },
+  { value: "C", label: "C — Cannot revoke (irrevocable license)" },
+];
 
 export default function SettingsPage() {
   const [userData, setUserData] = useState<UserSettings | null>(null);
@@ -51,6 +85,27 @@ export default function SettingsPage() {
   const [pwSaving, setPwSaving]               = useState(false);
   const [pwSaved, setPwSaved]                 = useState(false);
   const [pwError, setPwError]                 = useState<string | null>(null);
+
+  // Producer settings state
+  const [producerProfile, setProducerProfile]         = useState<ProducerProfileData | null>(null);
+  const [producerLeaseSettings, setProducerLeaseSettings] = useState<ProducerLeaseSettingsData | null>(null);
+  const [producerLoaded, setProducerLoaded]           = useState(false);
+  const [producerSaving, setProducerSaving]           = useState(false);
+  const [producerSaved, setProducerSaved]             = useState(false);
+
+  // Producer profile fields
+  const [prodDisplayName, setProdDisplayName]               = useState("");
+  const [prodBio, setProdBio]                               = useState("");
+  const [prodLeasePrice, setProdLeasePrice]                 = useState("");
+  const [prodNonExclusivePrice, setProdNonExclusivePrice]   = useState("");
+  const [prodExclusivePrice, setProdExclusivePrice]         = useState("");
+  const [prodSeparatePayout, setProdSeparatePayout]         = useState(false);
+
+  // Producer lease settings fields
+  const [prodStreamEnabled, setProdStreamEnabled]           = useState(true);
+  const [prodRevocationPolicy, setProdRevocationPolicy]     = useState("A");
+  const [prodRestrictions, setProdRestrictions]             = useState<string[]>([]);
+  const [prodCreditFormat, setProdCreditFormat]             = useState("Prod. {producerName}");
 
   async function handlePasswordChange() {
     setPwError(null);
@@ -109,6 +164,32 @@ export default function SettingsPage() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Load producer settings separately
+  useEffect(() => {
+    fetch("/api/dashboard/producer/settings")
+      .then((r) => r.json())
+      .then((d: { profile: ProducerProfileData | null; leaseSettings: ProducerLeaseSettingsData | null }) => {
+        setProducerProfile(d.profile);
+        setProducerLeaseSettings(d.leaseSettings);
+        if (d.profile) {
+          setProdDisplayName(d.profile.displayName ?? "");
+          setProdBio(d.profile.bio ?? "");
+          setProdLeasePrice(d.profile.defaultLeasePrice?.toString() ?? "");
+          setProdNonExclusivePrice(d.profile.defaultNonExclusivePrice?.toString() ?? "");
+          setProdExclusivePrice(d.profile.defaultExclusivePrice?.toString() ?? "");
+          setProdSeparatePayout(d.profile.separatePayoutEnabled);
+        }
+        if (d.leaseSettings) {
+          setProdStreamEnabled(d.leaseSettings.streamLeaseEnabled);
+          setProdRevocationPolicy(d.leaseSettings.revocationPolicy);
+          setProdRestrictions(d.leaseSettings.contentRestrictions);
+          setProdCreditFormat(d.leaseSettings.creditFormat);
+        }
+        setProducerLoaded(true);
+      })
+      .catch(() => setProducerLoaded(true));
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     setSlugError(null);
@@ -132,6 +213,43 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleProducerSave() {
+    setProducerSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/producer/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName:              prodDisplayName || undefined,
+          bio:                      prodBio || undefined,
+          defaultLeasePrice:        prodLeasePrice        ? parseFloat(prodLeasePrice)        : null,
+          defaultNonExclusivePrice: prodNonExclusivePrice ? parseFloat(prodNonExclusivePrice) : null,
+          defaultExclusivePrice:    prodExclusivePrice    ? parseFloat(prodExclusivePrice)    : null,
+          separatePayoutEnabled:    prodSeparatePayout,
+          streamLeaseEnabled:       prodStreamEnabled,
+          revocationPolicy:         prodRevocationPolicy,
+          contentRestrictions:      prodRestrictions,
+          creditFormat:             prodCreditFormat || "Prod. {producerName}",
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json() as { profile: ProducerProfileData; leaseSettings: ProducerLeaseSettingsData };
+        setProducerProfile(d.profile);
+        setProducerLeaseSettings(d.leaseSettings);
+        setProducerSaved(true);
+        setTimeout(() => setProducerSaved(false), 2500);
+      }
+    } finally {
+      setProducerSaving(false);
+    }
+  }
+
+  function toggleRestriction(value: string) {
+    setProdRestrictions((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
   }
 
   if (loading) {
@@ -332,6 +450,244 @@ export default function SettingsPage() {
           </button>
         </div>
       </Section>
+
+      {/* ── Producer Settings (only when ProducerProfile exists) ─────────────── */}
+      {producerLoaded && producerProfile && (
+        <>
+          <div className="pt-2">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-px flex-1" style={{ backgroundColor: "var(--border)" }} />
+              <p className="text-[11px] font-bold tracking-[0.12em] uppercase px-2" style={{ color: "#D4A843" }}>
+                Producer
+              </p>
+              <div className="h-px flex-1" style={{ backgroundColor: "var(--border)" }} />
+            </div>
+          </div>
+
+          {/* Identity */}
+          <Section title="Producer Identity" icon={<Mic2 size={15} style={{ color: "#D4A843" }} />}>
+            <Field label="Producer Display Name">
+              <input
+                value={prodDisplayName}
+                onChange={(e) => setProdDisplayName(e.target.value)}
+                placeholder="Leave blank to use your artist name"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </Field>
+            <Field label={`Producer Bio (${prodBio.length}/300)`}>
+              <textarea
+                value={prodBio}
+                onChange={(e) => setProdBio(e.target.value.slice(0, 300))}
+                rows={3}
+                placeholder="Tell artists about your production style"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none resize-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </Field>
+          </Section>
+
+          {/* Default Pricing */}
+          <Section title="Default Pricing" icon={<DollarSign size={15} style={{ color: "#D4A843" }} />}>
+            <p className="text-xs text-muted-foreground -mt-1">These prices pre-fill when you upload new beats. You can override them per beat.</p>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Lease Price">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prodLeasePrice}
+                    onChange={(e) => setProdLeasePrice(e.target.value)}
+                    placeholder="29.99"
+                    className="w-full rounded-xl border pl-6 pr-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+              </Field>
+              <Field label="Non-Exclusive">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prodNonExclusivePrice}
+                    onChange={(e) => setProdNonExclusivePrice(e.target.value)}
+                    placeholder="99.99"
+                    className="w-full rounded-xl border pl-6 pr-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+              </Field>
+              <Field label="Exclusive">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prodExclusivePrice}
+                    onChange={(e) => setProdExclusivePrice(e.target.value)}
+                    placeholder="499.99"
+                    className="w-full rounded-xl border pl-6 pr-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+              </Field>
+            </div>
+          </Section>
+
+          {/* Default Stream Lease Settings */}
+          <Section title="Default Stream Lease Settings" icon={<Radio size={15} style={{ color: "#D4A843" }} />}>
+            <p className="text-xs text-muted-foreground -mt-1">These defaults apply to new beats. You can override them per beat.</p>
+
+            {/* Stream lease enabled toggle */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm font-medium text-foreground">Stream Lease enabled by default</p>
+                <p className="text-xs text-muted-foreground">New beats will have stream leasing turned on</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProdStreamEnabled((v) => !v)}
+                className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+                style={{ backgroundColor: prodStreamEnabled ? "#D4A843" : "var(--border)" }}
+              >
+                <span
+                  className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                  style={{ transform: prodStreamEnabled ? "translateX(16px)" : "translateX(0)" }}
+                />
+              </button>
+            </div>
+
+            {/* Revocation policy */}
+            <Field label="Default Revocation Policy">
+              <div className="relative">
+                <select
+                  value={prodRevocationPolicy}
+                  onChange={(e) => setProdRevocationPolicy(e.target.value)}
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none appearance-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  {REVOCATION_POLICIES.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              </div>
+            </Field>
+
+            {/* Content restrictions */}
+            <Field label="Default Content Restrictions">
+              <div className="grid grid-cols-2 gap-2">
+                {CONTENT_RESTRICTION_OPTIONS.map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
+                    <div
+                      onClick={() => toggleRestriction(opt.value)}
+                      className="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      style={{
+                        borderColor: prodRestrictions.includes(opt.value) ? "#D4A843" : "var(--border)",
+                        backgroundColor: prodRestrictions.includes(opt.value) ? "#D4A843" : "transparent",
+                      }}
+                    >
+                      {prodRestrictions.includes(opt.value) && <Check size={10} style={{ color: "#0A0A0A" }} />}
+                    </div>
+                    <span className="text-sm text-foreground group-hover:text-foreground/80 select-none" onClick={() => toggleRestriction(opt.value)}>
+                      {opt.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+
+            {/* Credit format */}
+            <Field label="Default Credit Format">
+              <input
+                value={prodCreditFormat}
+                onChange={(e) => setProdCreditFormat(e.target.value)}
+                placeholder={`Prod. ${prodDisplayName || artistName || "Your Name"}`}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Use <code className="text-accent">{"{producerName}"}</code> as a placeholder for your name.
+                Artists using your beats will credit you this way.
+              </p>
+            </Field>
+          </Section>
+
+          {/* Payout Settings */}
+          <Section title="Payout Settings" icon={<CreditCard size={15} style={{ color: "#D4A843" }} />}>
+            {/* Same payout toggle */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm font-medium text-foreground">Use same payout account as artist earnings</p>
+                <p className="text-xs text-muted-foreground">Producer earnings go to your main payout account</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProdSeparatePayout((v) => !v)}
+                className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+                style={{ backgroundColor: !prodSeparatePayout ? "#D4A843" : "var(--border)" }}
+              >
+                <span
+                  className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                  style={{ transform: !prodSeparatePayout ? "translateX(16px)" : "translateX(0)" }}
+                />
+              </button>
+            </div>
+
+            {/* Separate Stripe Connect CTA */}
+            {prodSeparatePayout && (
+              <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}>
+                {producerProfile.producerStripeConnectId ? (
+                  <div className="flex items-center gap-2">
+                    <Check size={14} className="text-emerald-400" />
+                    <p className="text-sm text-foreground font-medium">Separate Stripe account connected</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-foreground font-medium">Connect a separate Stripe account</p>
+                    <p className="text-xs text-muted-foreground">
+                      Producer earnings will be paid out to a different Stripe Connect account than your artist earnings.
+                    </p>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
+                      style={{ borderColor: "#D4A843", color: "#D4A843" }}
+                      onClick={() => {
+                        // Stripe Connect onboarding — will be wired in a future phase
+                        alert("Stripe Connect setup coming soon.");
+                      }}
+                    >
+                      <CreditCard size={13} />
+                      Connect Stripe Account
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </Section>
+
+          {/* Producer save button */}
+          <button
+            onClick={handleProducerSave}
+            disabled={producerSaving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          >
+            {producerSaved
+              ? <><Check size={14} /> Producer Settings Saved</>
+              : producerSaving
+              ? <><Loader2 size={14} className="animate-spin" /> Saving…</>
+              : "Save Producer Settings"}
+          </button>
+
+          <div className="h-px" style={{ backgroundColor: "var(--border)" }} />
+        </>
+      )}
 
       {userData && (
         <p className="text-xs text-muted-foreground">Account email: <span className="text-foreground">{userData.email}</span></p>
