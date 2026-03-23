@@ -14,7 +14,7 @@ const VIDEO_SELECT = {
   duration:       true,
   sortOrder:      true,
   isPublished:    true,
-  isYoutubeSynced: true,
+  syncedFromYouTube: true,
   linkedTrackId:  true,
   linkedBeatId:   true,
   linkedMerchId:  true,
@@ -41,7 +41,7 @@ export async function PATCH(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: Record<string, any> = {};
 
-  if (!existing.isYoutubeSynced) {
+  if (!existing.syncedFromYouTube) {
     if (body.title       !== undefined) data.title       = body.title;
     if (body.thumbnailUrl !== undefined) data.thumbnailUrl = body.thumbnailUrl ?? null;
   }

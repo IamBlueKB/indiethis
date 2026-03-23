@@ -27,7 +27,7 @@ type Video = {
   duration?:      number | null;
   sortOrder:      number;
   isPublished:    boolean;
-  isYoutubeSynced: boolean;
+  syncedFromYouTube: boolean;
   linkedTrackId?:  string | null;
   linkedBeatId?:   string | null;
   linkedMerchId?:  string | null;
@@ -71,7 +71,7 @@ function detectVideoType(url: string): { type: "YOUTUBE" | "VIMEO" | null; embed
 
 function sourceBadge(video: Video): { label: string; color: string } {
   if (video.type === "UPLOAD") return { label: "Upload", color: "#D4A843" };
-  if (video.isYoutubeSynced) return { label: "YouTube · Synced", color: "#E85D4A" };
+  if (video.syncedFromYouTube) return { label: "YouTube · Synced", color: "#E85D4A" };
   if (video.type === "YOUTUBE") return { label: "YouTube", color: "#E85D4A" };
   return { label: "Vimeo", color: "#9B9BFF" };
 }
@@ -99,7 +99,7 @@ function EditModal({ video, onClose, onSave }: {
     setSaving(true);
     try {
       const body: Record<string, unknown> = { description: description || null, category: category || null };
-      if (!video.isYoutubeSynced) body.title = title.trim() || video.title;
+      if (!video.syncedFromYouTube) body.title = title.trim() || video.title;
 
       const res = await fetch(`/api/dashboard/videos/${video.id}`, {
         method: "PATCH",
@@ -131,11 +131,11 @@ function EditModal({ video, onClose, onSave }: {
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              disabled={video.isYoutubeSynced}
+              disabled={video.syncedFromYouTube}
               placeholder="Video title"
-              style={{ backgroundColor: "#0D0D0D", opacity: video.isYoutubeSynced ? 0.5 : 1 }}
+              style={{ backgroundColor: "#0D0D0D", opacity: video.syncedFromYouTube ? 0.5 : 1 }}
             />
-            {video.isYoutubeSynced && (
+            {video.syncedFromYouTube && (
               <p style={{ fontSize: 11, color: "#555", marginTop: 5 }}>Title is managed by YouTube sync.</p>
             )}
           </div>
@@ -702,12 +702,15 @@ export default function VideosPage() {
   const dragId = useRef<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadVideos = useCallback(() => {
+    setLoading(true);
     fetch("/api/dashboard/videos")
       .then((r) => r.json())
       .then((d) => setVideos(d.videos || []))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadVideos(); }, [loadVideos]);
 
   const handleAdd    = useCallback((v: Video) => setVideos((prev) => [...prev, v].sort((a, b) => a.sortOrder - b.sortOrder)), []);
   const handleDelete = useCallback((id: string) => setVideos((prev) => prev.filter((v) => v.id !== id)), []);

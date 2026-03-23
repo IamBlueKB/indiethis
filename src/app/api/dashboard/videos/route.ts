@@ -14,7 +14,7 @@ const VIDEO_SELECT = {
   duration:       true,
   sortOrder:      true,
   isPublished:    true,
-  isYoutubeSynced: true,
+  syncedFromYouTube: true,
   linkedTrackId:  true,
   linkedBeatId:   true,
   linkedMerchId:  true,
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { title, description, videoUrl, thumbnailUrl, embedUrl, type, category, isYoutubeSynced } = body;
+  const { title, description, videoUrl, thumbnailUrl, embedUrl, type, category, syncedFromYouTube } = body;
 
   if (!title || !type) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       embedUrl:       embedUrl       || null,
       type,
       category:       category       || null,
-      isYoutubeSynced: !!isYoutubeSynced,
+      syncedFromYouTube: !!syncedFromYouTube,
       sortOrder:      count,
     },
     select: VIDEO_SELECT,
