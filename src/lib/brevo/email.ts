@@ -868,3 +868,198 @@ export async function sendArtistSessionFeedbackEmail(params: {
     tags: ["session-feedback"],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Split Sheet emails
+// ---------------------------------------------------------------------------
+
+/**
+ * Invite a contributor to review and agree to a split sheet.
+ */
+export async function sendSplitSheetInviteEmail(params: {
+  recipientEmail: string;
+  recipientName: string;
+  creatorName: string;
+  trackTitle: string;
+  role: string;
+  percentage: number;
+  reviewUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.recipientEmail, name: params.recipientName },
+    subject: `${params.creatorName} invited you to a split sheet`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Split Sheet Invitation</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;">Hi ${params.recipientName},</p>
+          <p style="margin:0 0 16px;"><strong>${params.creatorName}</strong> has invited you to agree to a split sheet for:</p>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin:0 0 16px;">
+            <p style="margin:0;font-weight:700;font-size:16px;">${params.trackTitle}</p>
+          </div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:14px 20px;margin:0 0 24px;display:flex;gap:24px;">
+            <div style="flex:1;">
+              <p style="margin:0 4px 0;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em;">Your Role</p>
+              <p style="margin:0;font-weight:700;">${params.role}</p>
+            </div>
+            <div style="flex:1;">
+              <p style="margin:0 4px 0;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em;">Your Share</p>
+              <p style="margin:0;font-weight:700;color:#D4A843;">${params.percentage}%</p>
+            </div>
+          </div>
+          <a href="${params.reviewUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">Review &amp; Sign Split Sheet →</a>
+          <p style="margin-top:32px;font-size:12px;color:#666;">You can agree or reject this split sheet. Your earnings will be distributed automatically once all contributors agree.</p>
+        </div>
+      </div>
+    `,
+    textContent: `Hi ${params.recipientName},\n\n${params.creatorName} has invited you to a split sheet for "${params.trackTitle}".\n\nYour role: ${params.role}\nYour share: ${params.percentage}%\n\nReview and sign here: ${params.reviewUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "invite"],
+  });
+}
+
+/**
+ * Notify split sheet creator that a contributor agreed.
+ */
+export async function sendSplitSheetAgreedEmail(params: {
+  creatorEmail: string;
+  creatorName: string;
+  contributorName: string;
+  trackTitle: string;
+  agreedCount: number;
+  totalCount: number;
+  dashboardUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.creatorEmail, name: params.creatorName },
+    subject: `${params.contributorName} agreed to the split sheet`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Split Sheet Agreed</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;"><strong>${params.contributorName}</strong> agreed to the split sheet for <strong>"${params.trackTitle}"</strong>.</p>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:14px 20px;margin:0 0 24px;">
+            <p style="margin:0;font-size:14px;color:#999;">${params.agreedCount} of ${params.totalCount} contributors agreed</p>
+            <div style="background:#2a2a2a;border-radius:4px;height:6px;margin-top:8px;overflow:hidden;">
+              <div style="background:#D4A843;height:100%;width:${Math.round((params.agreedCount / params.totalCount) * 100)}%;border-radius:4px;"></div>
+            </div>
+          </div>
+          <a href="${params.dashboardUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">View Split Sheet →</a>
+        </div>
+      </div>
+    `,
+    textContent: `${params.contributorName} agreed to the split sheet for "${params.trackTitle}".\n\n${params.agreedCount} of ${params.totalCount} contributors agreed.\n\nView: ${params.dashboardUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "agreed"],
+  });
+}
+
+/**
+ * Notify all contributors that the split sheet is now active (all agreed).
+ */
+export async function sendSplitSheetActiveEmail(params: {
+  recipientEmail: string;
+  recipientName: string;
+  trackTitle: string;
+  percentage: number;
+  role: string;
+  dashboardUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.recipientEmail, name: params.recipientName },
+    subject: `Split sheet for "${params.trackTitle}" is now active`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Split Sheet Active ✓</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;">Hi ${params.recipientName},</p>
+          <p style="margin:0 0 16px;">All contributors have agreed. The split sheet for <strong>"${params.trackTitle}"</strong> is now active.</p>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:14px 20px;margin:0 0 24px;">
+            <p style="margin:0 4px 0;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em;">Your Share</p>
+            <p style="margin:0;font-weight:700;font-size:20px;color:#D4A843;">${params.percentage}% as ${params.role}</p>
+          </div>
+          <p style="margin:0 0 24px;color:#aaa;font-size:14px;">Your earnings from this track will be distributed automatically according to your agreed split percentage.</p>
+          <a href="${params.dashboardUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">View Split Sheet →</a>
+        </div>
+      </div>
+    `,
+    textContent: `Hi ${params.recipientName},\n\nAll contributors agreed. The split sheet for "${params.trackTitle}" is now active.\n\nYour share: ${params.percentage}% as ${params.role}\n\nView: ${params.dashboardUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "active"],
+  });
+}
+
+/**
+ * Notify split sheet creator that a contributor rejected the sheet.
+ */
+export async function sendSplitSheetRejectedEmail(params: {
+  creatorEmail: string;
+  creatorName: string;
+  contributorName: string;
+  trackTitle: string;
+  reason?: string;
+  dashboardUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.creatorEmail, name: params.creatorName },
+    subject: `${params.contributorName} rejected the split sheet`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Split Sheet Disputed</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;"><strong>${params.contributorName}</strong> rejected the split sheet for <strong>"${params.trackTitle}"</strong>.</p>
+          ${params.reason ? `
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-left:3px solid #ef4444;border-radius:8px;padding:14px 20px;margin:0 0 24px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em;">Reason</p>
+            <p style="margin:0;font-size:14px;line-height:1.6;">${params.reason}</p>
+          </div>` : ""}
+          <p style="margin:0 0 24px;color:#aaa;font-size:14px;">You can edit the split sheet and re-send invites to resolve the dispute.</p>
+          <a href="${params.dashboardUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">View &amp; Edit Split Sheet →</a>
+        </div>
+      </div>
+    `,
+    textContent: `${params.contributorName} rejected the split sheet for "${params.trackTitle}".${params.reason ? `\n\nReason: "${params.reason}"` : ""}\n\nView and edit: ${params.dashboardUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "rejected"],
+  });
+}
+
+/**
+ * Notify a contributor they have a pending balance awaiting payout.
+ */
+export async function sendSplitPendingBalanceEmail(params: {
+  recipientEmail: string;
+  recipientName: string;
+  trackTitle: string;
+  pendingAmount: number;
+  reviewUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.recipientEmail, name: params.recipientName },
+    subject: `You have earnings pending from "${params.trackTitle}"`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Earnings Waiting for You</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;">Hi ${params.recipientName},</p>
+          <p style="margin:0 0 16px;">You have <strong style="color:#D4A843;">$${params.pendingAmount.toFixed(2)}</strong> in pending earnings from <strong>"${params.trackTitle}"</strong>.</p>
+          <p style="margin:0 0 24px;color:#aaa;font-size:14px;">Connect a Stripe account to receive your payout automatically.</p>
+          <a href="${params.reviewUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">Claim Your Earnings →</a>
+        </div>
+      </div>
+    `,
+    textContent: `Hi ${params.recipientName},\n\nYou have $${params.pendingAmount.toFixed(2)} in pending earnings from "${params.trackTitle}".\n\nClaim here: ${params.reviewUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["split-sheet", "pending-balance"],
+  });
+}

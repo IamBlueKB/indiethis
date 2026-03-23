@@ -142,6 +142,28 @@ enum NotificationType {
   BEAT_PREVIEW
   SESSION_NOTE_ADDED
   ARTIST_SESSION_FEEDBACK
+  SPLIT_SHEET_INVITE
+  SPLIT_SHEET_AGREED
+  SPLIT_SHEET_ACTIVE
+  SPLIT_SHEET_REJECTED
+  SPLIT_PAYMENT_RECEIVED
+}
+
+enum SplitSheetStatus {
+  PENDING
+  ACTIVE
+  DISPUTED
+  EXPIRED
+}
+
+enum SplitRole {
+  ARTIST
+  PRODUCER
+  ENGINEER
+  FEATURED_ARTIST
+  SONGWRITER
+  MIXER
+  OTHER
 }
 
 enum SessionNoteStatus {
@@ -442,6 +464,8 @@ model User {
   producerProfile       ProducerProfile?
   licenseDocuments      LicenseDocument[]
   artistSessionNotes    SessionNote[]
+  splitSheetsCreated    SplitSheet[]      @relation("SplitSheetCreator")
+  splits                Split[]           @relation("UserSplits")
 }
 
 model Studio {
@@ -623,6 +647,7 @@ model Track {
   beatLeaseSettings     BeatLeaseSettings?
   streamLeaseBookmarks  StreamLeaseBookmark[]
   licenseDocuments      LicenseDocument[]
+  splitSheet            SplitSheet?
 }
 
 model DeliveredFile {
@@ -1906,4 +1931,60 @@ model SessionNoteAttachment {
   sessionNote   SessionNote @relation(fields: [sessionNoteId], references: [id], onDelete: Cascade)
 
   @@index([sessionNoteId])
+}
+
+// ─── Split Sheets / Payment Splitting ────────────────────────────────────────
+
+model SplitSheet {
+  id          String           @id @default(cuid())
+  trackId     String           @unique
+  createdById String
+  status      SplitSheetStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  track       Track            @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdBy   User             @relation("SplitSheetCreator", fields: [createdById], references: [id])
+  splits      Split[]
+
+  @@index([createdById])
+}
+
+model Split {
+  id              String    @id @default(cuid())
+  splitSheetId    String
+  userId          String?
+  name            String
+  email           String
+  role            SplitRole
+  percentage      Float
+  reviewToken     String    @unique @default(cuid())
+  agreedAt        DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?   @db.Text
+  stripeConnectId String?
+  pendingBalance  Float     @default(0)
+  totalPaid       Float     @default(0)
+  createdAt       DateTime  @default(now())
+
+  splitSheet      SplitSheet   @relation(fields: [splitSheetId], references: [id], onDelete: Cascade)
+  user            User?        @relation("UserSplits", fields: [userId], references: [id])
+  payments        SplitPayment[]
+
+  @@index([splitSheetId])
+  @@index([userId])
+}
+
+model SplitPayment {
+  id               String   @id @default(cuid())
+  splitId          String
+  amount           Float
+  sourceType       String   // MERCH_SALE, TIP, STREAM_LEASE, LICENSE_SALE, MUSIC_SALE
+  sourceId         String
+  stripeTransferId String?
+  paidAt           DateTime @default(now())
+
+  split            Split    @relation(fields: [splitId], references: [id])
+
+  @@index([splitId])
 }

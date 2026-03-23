@@ -3,12 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2, Check,
-  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play, Zap,
+  Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play, Zap, Users,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import PreSaveTab from "./PreSaveTab";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import InlinePlayer from "@/components/audio/InlinePlayer";
+import SplitSheetModal from "./SplitSheetModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,15 +79,19 @@ async function fetchOEmbed(url: string): Promise<OEmbedResult | null> {
 
 // ─── My Tracks Tab ────────────────────────────────────────────────────────────
 
-function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
+function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, currentUserId, currentUserName, currentUserEmail }: {
   track: Track;
   context: import("@/store").AudioTrack[];
   onDelete: (id: string) => void;
   onToggleStatus: (id: string, status: "DRAFT" | "PUBLISHED") => void;
   onUpdate: (updated: Track) => void;
+  currentUserId: string;
+  currentUserName: string;
+  currentUserEmail: string;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showSplits, setShowSplits] = useState(false);
   const [editTitle, setEditTitle] = useState(track.title);
   const [editProject, setEditProject] = useState(track.projectName ?? "");
   const [editPrice, setEditPrice] = useState(track.price != null ? String(track.price) : "");
@@ -342,6 +348,16 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
         className="w-44 shrink-0"
       />
 
+      {/* Splits */}
+      <button
+        onClick={() => setShowSplits(true)}
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-all"
+        style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843" }}
+        title="Split Sheet"
+      >
+        <Users size={12} />
+      </button>
+
       {/* Edit */}
       <button
         onClick={startEdit}
@@ -362,11 +378,27 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate }: {
       >
         {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
       </button>
+
+      {/* Split Sheet Modal */}
+      {showSplits && (
+        <SplitSheetModal
+          trackId={track.id}
+          trackTitle={track.title}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          currentUserEmail={currentUserEmail}
+          onClose={() => setShowSplits(false)}
+        />
+      )}
     </div>
   );
 }
 
-function MyTracksTab() {
+function MyTracksTab({ currentUserId, currentUserName, currentUserEmail }: {
+  currentUserId: string;
+  currentUserName: string;
+  currentUserEmail: string;
+}) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -627,6 +659,9 @@ function MyTracksTab() {
               onDelete={handleDelete}
               onToggleStatus={handleToggleStatus}
               onUpdate={handleUpdate}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              currentUserEmail={currentUserEmail}
             />
           ))}
         </div>
@@ -828,6 +863,10 @@ function ReferencesTab() {
 
 export default function MusicPage() {
   const [tab, setTab] = useState<"tracks" | "presave" | "references">("tracks");
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id ?? "";
+  const currentUserName = session?.user?.name ?? "";
+  const currentUserEmail = session?.user?.email ?? "";
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -858,7 +897,7 @@ export default function MusicPage() {
         ))}
       </div>
 
-      {tab === "tracks"     && <MyTracksTab />}
+      {tab === "tracks"     && <MyTracksTab currentUserId={currentUserId} currentUserName={currentUserName} currentUserEmail={currentUserEmail} />}
       {tab === "presave"    && <PreSaveTab />}
       {tab === "references" && <ReferencesTab />}
     </div>
