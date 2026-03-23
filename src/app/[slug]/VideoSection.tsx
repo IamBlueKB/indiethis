@@ -87,6 +87,74 @@ function getSizes(productType: string): string[] | null {
   return null;
 }
 
+// ─── Track Buy Modal ──────────────────────────────────────────────────────────
+
+function TrackBuyModal({ track, artistSlug, onClose }: { track: LinkedTrack; artistSlug: string; onClose: () => void }) {
+  const [buying, setBuying] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  async function handleBuy() {
+    setBuying(true);
+    setError(null);
+    try {
+      const res  = await fetch("/api/public/tracks/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ trackId: track.id, artistSlug }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) { window.location.href = data.url; return; }
+      setError(data.error ?? "Checkout unavailable. Try again later.");
+    } catch {
+      setError("Network error. Try again.");
+    }
+    setBuying(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="rounded-2xl border w-full max-w-md p-6 space-y-5"
+        style={{ backgroundColor: "var(--card, #1a1a1a)", borderColor: "var(--border, rgba(255,255,255,0.1))" }}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Buy Track</p>
+            <p className="text-base font-bold text-foreground truncate">{track.title}</p>
+          </div>
+          <div className="flex items-start gap-2 shrink-0">
+            {track.coverArtUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={track.coverArtUrl} alt={track.title} className="w-14 h-14 rounded-xl object-cover" />
+            )}
+            <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors text-muted-foreground">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="rounded-xl border p-3" style={{ borderColor: "#D4A843", backgroundColor: "rgba(212,168,67,0.06)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-foreground">Digital Download</p>
+            <p className="text-sm font-bold text-foreground">${track.price!.toFixed(2)}</p>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">One-time purchase. Instant download.</p>
+        </div>
+        {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+        <div className="flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
+            style={{ borderColor: "var(--border, rgba(255,255,255,0.1))", color: "var(--foreground, #fff)" }}>
+            Cancel
+          </button>
+          <button onClick={() => void handleBuy()} disabled={buying}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+            {buying ? "Processing…" : `Purchase — $${track.price!.toFixed(2)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Merch Quick-Add Modal ────────────────────────────────────────────────────
 
 function MerchQuickAdd({
@@ -224,28 +292,9 @@ function ProductCTA({
   artistName: string;
 }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
-  const [merchOpen,     setMerchOpen]     = useState(false);
-  const [beatModalOpen, setBeatModalOpen] = useState(false);
-  const [trackBuying,   setTrackBuying]   = useState(false);
-  const [trackBuyErr,   setTrackBuyErr]   = useState<string | null>(null);
-
-  async function handleTrackBuy(trackId: string) {
-    setTrackBuying(true);
-    setTrackBuyErr(null);
-    try {
-      const res  = await fetch("/api/public/tracks/checkout", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ trackId, artistSlug }),
-      });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) { window.location.href = data.url; return; }
-      setTrackBuyErr(data.error ?? "Checkout unavailable. Try again later.");
-    } catch {
-      setTrackBuyErr("Network error. Try again.");
-    }
-    setTrackBuying(false);
-  }
+  const [merchOpen,      setMerchOpen]      = useState(false);
+  const [beatModalOpen,  setBeatModalOpen]  = useState(false);
+  const [trackBuyOpen,   setTrackBuyOpen]   = useState(false);
 
   // Track CTA
   if (video.linkedTrack) {
@@ -309,18 +358,16 @@ function ProductCTA({
           </button>
           {track.price && track.price > 0 && (
             <button
-              onClick={() => void handleTrackBuy(track.id)}
-              disabled={trackBuying}
+              onClick={() => setTrackBuyOpen(true)}
               style={{
                 display: "flex", alignItems: "center",
                 padding: "5px 11px", borderRadius: 6, border: "none",
                 backgroundColor: "rgba(255,255,255,0.06)",
                 color: "#ccc", fontSize: 11, fontWeight: 700,
                 cursor: "pointer", whiteSpace: "nowrap",
-                opacity: trackBuying ? 0.6 : 1,
               }}
             >
-              {trackBuying ? "…" : `Buy — $${track.price.toFixed(2)}`}
+              Buy — ${track.price.toFixed(2)}
             </button>
           )}
           <a
@@ -336,8 +383,18 @@ function ProductCTA({
           </a>
         </div>
       </div>
-      {trackBuyErr && (
-        <p style={{ fontSize: 10, color: "#E85D4A", margin: "4px 0 0 0", paddingLeft: 4 }}>{trackBuyErr}</p>
+      {trackBuyOpen && (
+        <BeatLicenseModal
+          track={{
+            id:                 track.id,
+            title:              track.title,
+            price:              track.price,
+            coverArtUrl:        track.coverArtUrl,
+            streamLeaseEnabled: false,
+            artist: { name: artistName, artistName: null, artistSlug },
+          }}
+          onClose={() => setTrackBuyOpen(false)}
+        />
       )}
     </>
     );
