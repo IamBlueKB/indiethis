@@ -224,9 +224,23 @@ function ProductCTA({
   artistName: string;
 }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
-  const [merchOpen, setMerchOpen] = useState(false);
+  const [merchOpen,     setMerchOpen]     = useState(false);
   const [beatModalOpen, setBeatModalOpen] = useState(false);
-  const [trackBuyOpen, setTrackBuyOpen] = useState(false);
+  const [trackBuying,   setTrackBuying]   = useState(false);
+
+  async function handleTrackBuy(trackId: string) {
+    setTrackBuying(true);
+    try {
+      const res  = await fetch("/api/public/tracks/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ trackId, artistSlug }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) { window.location.href = data.url; return; }
+    } catch { /* fall through */ }
+    setTrackBuying(false);
+  }
 
   // Track CTA
   if (video.linkedTrack) {
@@ -289,16 +303,18 @@ function ProductCTA({
           </button>
           {track.price && track.price > 0 && (
             <button
-              onClick={() => setTrackBuyOpen(true)}
+              onClick={() => void handleTrackBuy(track.id)}
+              disabled={trackBuying}
               style={{
                 display: "flex", alignItems: "center",
                 padding: "5px 11px", borderRadius: 6, border: "none",
                 backgroundColor: "rgba(255,255,255,0.06)",
                 color: "#ccc", fontSize: 11, fontWeight: 700,
                 cursor: "pointer", whiteSpace: "nowrap",
+                opacity: trackBuying ? 0.6 : 1,
               }}
             >
-              Buy — ${track.price.toFixed(2)}
+              {trackBuying ? "…" : `Buy — $${track.price.toFixed(2)}`}
             </button>
           )}
           <a

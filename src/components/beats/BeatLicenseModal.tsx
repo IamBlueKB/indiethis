@@ -89,7 +89,7 @@ export default function BeatLicenseModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
       <div
         className="rounded-2xl border w-full max-w-md p-6 space-y-5"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        style={{ backgroundColor: "var(--card, #1a1a1a)", borderColor: "var(--border, rgba(255,255,255,0.1))" }}
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
@@ -145,8 +145,8 @@ export default function BeatLicenseModal({
               onClick={() => setLicenseType(type)}
               className="w-full text-left rounded-xl border p-3 transition-all"
               style={{
-                borderColor:     licenseType === type ? "#D4A843" : "var(--border)",
-                backgroundColor: licenseType === type ? "rgba(212,168,67,0.06)" : "var(--background)",
+                borderColor:     licenseType === type ? "#D4A843" : "var(--border, rgba(255,255,255,0.1))",
+                backgroundColor: licenseType === type ? "rgba(212,168,67,0.06)" : "var(--background, #111)",
               }}
             >
               <div className="flex items-center justify-between">
@@ -190,7 +190,7 @@ export default function BeatLicenseModal({
           <button
             onClick={onClose}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
-            style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+            style={{ borderColor: "var(--border, rgba(255,255,255,0.1))", color: "var(--foreground, #fff)" }}
           >
             Cancel
           </button>
