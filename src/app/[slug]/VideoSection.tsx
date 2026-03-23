@@ -739,7 +739,8 @@ export default function VideoSection({ artistVideos = [], artistSlug, artistName
       {/* Zone 1 — Official (embeds + product CTAs) */}
       {hasEmbeds && (
         <div className="space-y-3">
-          <h2 className="text-[18px] font-semibold text-white leading-tight">Videos</h2>
+          <p className="text-[10px] font-bold uppercase" style={{ color: "#D4A843", letterSpacing: "1.5px" }}>WATCH</p>
+          <h2 className="text-[18px] font-semibold text-white leading-tight -mt-1">Videos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             {embedVideos.map((video) => (
               <EmbedTile
