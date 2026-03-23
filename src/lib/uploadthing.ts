@@ -193,6 +193,23 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // License & receipt vault documents (PDF, PNG, JPG, max 10MB)
+  licenseDocument: f({
+    "application/pdf": { maxFileSize: "10MB", maxFileCount: 1 },
+    image:             { maxFileSize: "10MB", maxFileCount: 1 },
+  })
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Studio file delivery
   deliveryFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 20 },
