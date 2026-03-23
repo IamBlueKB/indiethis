@@ -23,6 +23,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/uploadthing")) return true;
   if (pathname.startsWith("/api/public")) return true;
   if (pathname.startsWith("/api/explore")) return true;
+  if (pathname.startsWith("/api/artists")) return true;
+  if (pathname.startsWith("/api/studios")) return true;
+  if (pathname.startsWith("/api/beats")) return true;
   // Public studio contact form — /api/studio/[studioId]/contact
   if (/^\/api\/studio\/[^/]+\/contact$/.test(pathname)) return true;
   if (pathname.startsWith("/_next")) return true;
