@@ -525,6 +525,7 @@ model User {
   releasePlans          ReleasePlan[]
   recentPlays           RecentPlay[]
   featuredCards         ExploreFeatureCard[] @relation("FeaturedArtist")
+  onboardingEmails      OnboardingEmailLog[]
 }
 
 model Studio {
@@ -2191,4 +2192,18 @@ model RecentPlay {
 
   @@index([userId, playedAt])
   @@index([trackId])
+}
+
+// ─── Onboarding Email Log ─────────────────────────────────────────────────────
+
+model OnboardingEmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  emailType String   // WELCOME | DAY1_TRACK | DAY3_AI | DAY5_PAGE | DAY7_FANS | DAY14_DISCOVER | DAY30_MILESTONE
+  sentAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emailType])
+  @@index([userId])
 }

@@ -17,7 +17,7 @@ import {
 } from "@/lib/affiliate-commissions";
 import { upsertFanScore } from "@/lib/fan-scores";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
-import { sendEmail } from "@/lib/brevo/email";
+import { sendEmail, sendOnboardingWelcomeEmail } from "@/lib/brevo/email";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 
@@ -276,6 +276,21 @@ export async function POST(req: NextRequest) {
           where: { id: userId },
           data:  { planSelectedAt: new Date() },
         }).catch(console.error);
+
+        // Onboarding welcome email (Day 0) — fire and log
+        void (async () => {
+          try {
+            const newUser = await db.user.findUnique({
+              where:  { id: userId },
+              select: { email: true, name: true, onboardingEmails: { select: { emailType: true } } },
+            });
+            const alreadySent = newUser?.onboardingEmails.some((e) => e.emailType === "WELCOME");
+            if (newUser && !alreadySent) {
+              await sendOnboardingWelcomeEmail({ email: newUser.email, name: newUser.name ?? "there" });
+              await db.onboardingEmailLog.create({ data: { userId, emailType: "WELCOME" } });
+            }
+          } catch (e) { console.error("[onboarding-welcome]", e); }
+        })();
 
         // Cancel any pending follow-up sequences for this user —
         // no point sending "you should subscribe" to someone who just did.

@@ -1133,3 +1133,195 @@ export async function sendSplitSheetDocumentEmail(params: {
     tags: ["split-sheet", "document-delivery"],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Onboarding email sequence (Days 0 / 1 / 3 / 5 / 7 / 14 / 30)
+// ---------------------------------------------------------------------------
+
+function onboardingBase(bodyHtml: string, ctaText: string, ctaUrl: string): string {
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#0A0A0A;color:#C8C8C8;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+      <div style="padding:28px 32px 0 32px;">
+        <p style="margin:0 0 28px;font-size:18px;font-weight:800;color:#D4A843;letter-spacing:-0.5px;">IndieThis</p>
+        ${bodyHtml}
+        <table cellpadding="0" cellspacing="0" style="margin:28px 0 32px;">
+          <tr>
+            <td style="background-color:#D4A843;border-radius:10px;">
+              <a href="${ctaUrl}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:700;color:#0A0A0A;text-decoration:none;">${ctaText}</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+        <p style="margin:0;font-size:11px;color:#333;line-height:1.6;">IndieThis · Everything an independent artist needs.<br/>You're receiving this because you signed up at indiethis.com. <a href="${APP_URL()}/dashboard/settings" style="color:#444;text-decoration:underline;">Manage preferences</a></p>
+      </div>
+    </div>
+  `;
+}
+
+export async function sendOnboardingWelcomeEmail(user: { email: string; name: string }): Promise<void> {
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "You're in. Let's build something.",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day0"],
+    htmlContent: onboardingBase(
+      `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">Welcome to IndieThis, ${user.name}. You now have everything you need to create, sell, and grow as an independent artist — all in one place.</p>
+       <p style="margin:0;font-size:15px;line-height:1.7;">Here's your first move:</p>`,
+      "Upload Your First Track →",
+      `${APP_URL()}/dashboard/music`,
+    ),
+  });
+}
+
+export async function sendOnboardingDay1Email(user: { email: string; name: string }): Promise<void> {
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Your first track is waiting",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day1"],
+    htmlContent: onboardingBase(
+      `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">The artists who grow fastest on IndieThis upload their first track within 24 hours. It takes 2 minutes.</p>
+       <p style="margin:0;font-size:15px;line-height:1.7;">Upload a track and your artist page starts working for you.</p>`,
+      "Upload Now →",
+      `${APP_URL()}/dashboard/music`,
+    ),
+  });
+}
+
+export async function sendOnboardingDay3Email(user: { email: string; name: string }): Promise<void> {
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Try this — it takes 12 seconds",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day3"],
+    htmlContent: onboardingBase(
+      `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">Most artists spend $200 on cover art. On IndieThis, you describe what you want and get 4 options in 12 seconds.</p>
+       <p style="margin:0;font-size:15px;line-height:1.7;">Your first one might already be included in your plan.</p>`,
+      "Generate Cover Art →",
+      `${APP_URL()}/dashboard/ai/cover-art`,
+    ),
+  });
+}
+
+export async function sendOnboardingDay5Email(user: { email: string; name: string }): Promise<void> {
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Your page is ready. Just hit publish.",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day5"],
+    htmlContent: onboardingBase(
+      `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">You have a full artist website waiting — music, merch, shows, booking, tips, fan capture. 18 sections that build themselves from your data.</p>
+       <p style="margin:0;font-size:15px;line-height:1.7;">All you have to do is publish it.</p>`,
+      "Launch Your Page →",
+      `${APP_URL()}/dashboard/site`,
+    ),
+  });
+}
+
+export async function sendOnboardingDay7Email(user: { email: string; name: string; artistSlug: string | null }): Promise<void> {
+  const slug = user.artistSlug ?? "your-page";
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Share your page. Build your list.",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day7"],
+    htmlContent: onboardingBase(
+      `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">Your IndieThis page is live. Now share it.</p>
+       <p style="margin:0;font-size:15px;line-height:1.7;">Every person who visits can become a fan — email signups, merch buyers, tip supporters. The link is <span style="color:#D4A843;font-weight:600;">indiethis.com/${slug}</span>. Put it in your bio, your stories, your DMs.</p>`,
+      "View Your Page →",
+      `${APP_URL()}/${slug}`,
+    ),
+  });
+}
+
+export async function sendOnboardingDay14Email(
+  user: { email: string; name: string },
+  unusedFeatures: { name: string; description: string; url: string }[],
+): Promise<void> {
+  const top3 = unusedFeatures.slice(0, 3);
+  const featureRows = top3.map((f) => `
+    <div style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#fff;">${f.name}</p>
+      <p style="margin:0 0 6px;font-size:13px;color:#666;">${f.description}</p>
+      <a href="${f.url}" style="font-size:12px;color:#D4A843;text-decoration:none;font-weight:600;">Try it →</a>
+    </div>
+  `).join("");
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "3 features you haven't tried yet",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day14"],
+    htmlContent: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#0A0A0A;color:#C8C8C8;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+        <div style="padding:28px 32px;">
+          <p style="margin:0 0 20px;font-size:18px;font-weight:800;color:#D4A843;letter-spacing:-0.5px;">IndieThis</p>
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.7;">You've been on IndieThis for two weeks. Here are 3 features you haven't tried yet:</p>
+          ${featureRows}
+          <table cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+            <tr>
+              <td style="background-color:#D4A843;border-radius:10px;">
+                <a href="${APP_URL()}/dashboard" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:700;color:#0A0A0A;text-decoration:none;">Explore Your Dashboard →</a>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:11px;color:#333;">IndieThis · <a href="${APP_URL()}/dashboard/settings" style="color:#444;text-decoration:underline;">Manage preferences</a></p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendOnboardingDay30Email(
+  user:  { email: string; name: string; artistSlug: string | null },
+  stats: { pageViews: number; plays: number; fans: number; earnings: number },
+): Promise<void> {
+  const slug     = user.artistSlug ?? "your-page";
+  const hasStats = stats.pageViews > 0 || stats.plays > 0 || stats.fans > 0 || stats.earnings > 0;
+
+  const statsBlock = hasStats
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr>
+          ${[
+            ["Page Views", stats.pageViews.toLocaleString()],
+            ["Plays",      stats.plays.toLocaleString()],
+            ["Fans",       stats.fans.toLocaleString()],
+            ["Earned",     `$${stats.earnings.toFixed(2)}`],
+          ].map(([label, val]) => `
+          <td align="center" style="padding:16px 8px;background:#141414;border-right:1px solid rgba(255,255,255,0.06);">
+            <p style="margin:0 0 4px;font-size:20px;font-weight:800;color:#D4A843;">${val}</p>
+            <p style="margin:0;font-size:10px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:0.5px;">${label}</p>
+          </td>`).join("")}
+        </tr>
+      </table>`
+    : `<p style="margin:12px 0 20px;font-size:14px;color:#666;line-height:1.7;">Your page is set up and ready. The artists who earn on IndieThis share their page consistently. Your link: <span style="color:#D4A843;">indiethis.com/${slug}</span></p>`;
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Your first month on IndieThis",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["onboarding", "day30"],
+    htmlContent: `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#0A0A0A;color:#C8C8C8;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+        <div style="padding:28px 32px;">
+          <p style="margin:0 0 20px;font-size:18px;font-weight:800;color:#D4A843;letter-spacing:-0.5px;">IndieThis</p>
+          <p style="margin:0 0 8px;font-size:15px;line-height:1.7;">One month in. Here's how you're doing:</p>
+          ${statsBlock}
+          <table cellpadding="0" cellspacing="0" style="margin-top:8px;">
+            <tr>
+              <td style="background-color:#D4A843;border-radius:10px;">
+                <a href="${APP_URL()}/dashboard" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:700;color:#0A0A0A;text-decoration:none;">View Your Analytics →</a>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:11px;color:#333;">IndieThis · <a href="${APP_URL()}/dashboard/settings" style="color:#444;text-decoration:underline;">Manage preferences</a></p>
+        </div>
+      </div>
+    `,
+  });
+}
