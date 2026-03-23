@@ -165,6 +165,34 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Producer beat audio upload (mp3/wav, up to 256MB)
+  beatAudio: f({ audio: { maxFileSize: "256MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
+  // Producer beat cover art (image, up to 8MB)
+  beatCoverArt: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Studio file delivery
   deliveryFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 20 },

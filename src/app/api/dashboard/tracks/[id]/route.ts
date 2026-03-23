@@ -17,17 +17,27 @@ export async function PATCH(
     projectName?: string;
     description?: string;
     coverArtUrl?: string | null;
+    fileUrl?: string;
+    bpm?: number | null;
+    musicalKey?: string | null;
+    audioHash?: string | null;
+    genre?: string | null;
+    tags?: string[];
   };
 
   const track = await db.track.updateMany({
     where: { id, artistId: session.user.id },
     data: {
-      ...(body.title       !== undefined && { title:       body.title.trim() }),
-      ...(body.status      !== undefined && { status:      body.status }),
-      ...(body.price       !== undefined && { price:       body.price }),
-      ...(body.projectName !== undefined && { projectName: body.projectName }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.coverArtUrl !== undefined && { coverArtUrl: body.coverArtUrl }),
+      ...(body.title        !== undefined && { title:       body.title.trim() }),
+      ...(body.status       !== undefined && { status:      body.status }),
+      ...(body.price        !== undefined && { price:       body.price }),
+      ...(body.projectName  !== undefined && { projectName: body.projectName }),
+      ...(body.description  !== undefined && { description: body.description }),
+      ...(body.coverArtUrl  !== undefined && { coverArtUrl: body.coverArtUrl }),
+      ...(body.fileUrl      !== undefined && { fileUrl:     body.fileUrl }),
+      ...(body.bpm          !== undefined && { bpm:         body.bpm }),
+      ...(body.musicalKey   !== undefined && { musicalKey:  body.musicalKey }),
+      ...(body.audioHash    !== undefined && { audioHash:   body.audioHash }),
     },
   });
 
