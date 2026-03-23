@@ -13,12 +13,11 @@ export async function GET(req: NextRequest) {
   const [artists, tracks, studios] = await Promise.all([
     db.user.findMany({
       where: {
-        role: "ARTIST",
         name: { contains: q, mode: "insensitive" },
-        tracks: { some: { status: "PUBLISHED" } },
+        artistSite: { isPublished: true },
       },
-      select: { id: true, name: true, photo: true },
-      take: 3,
+      select: { id: true, name: true, photo: true, artistSlug: true },
+      take: 5,
     }),
 
     db.track.findMany({
@@ -38,7 +37,7 @@ export async function GET(req: NextRequest) {
         genre: true,
         artist: { select: { id: true, name: true } },
       },
-      take: 3,
+      take: 5,
     }),
 
     db.studio.findMany({
