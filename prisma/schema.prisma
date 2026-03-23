@@ -391,6 +391,13 @@ enum VideoCategory {
   REHEARSAL
 }
 
+enum SyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  FAILED
+}
+
 // ─── NextAuth Required Models ─────────────────────────────────────────────────
 
 model Account {
@@ -461,7 +468,6 @@ model User {
   onboardingStep   Int       @default(0)
   planSelectedAt   DateTime?
   setupCompletedAt DateTime?
-
   accounts         Account[]
   subscription     Subscription?
   tracks           Track[]
@@ -484,6 +490,7 @@ model User {
   youtubeReferences  YoutubeReference[]
   preSaveCampaigns   PreSaveCampaign[]
   artistVideos       ArtistVideo[]
+  youtubeSync        YouTubeSync?
   artistShows        ArtistShow[]
   showInterests      ShowInterest[]
   artistSupports          ArtistSupport[]
@@ -1386,7 +1393,8 @@ model ArtistVideo {
   duration        Int?
   sortOrder       Int            @default(0)
   isPublished     Boolean        @default(true)
-  isYoutubeSynced Boolean        @default(false)
+  syncedFromYouTube Boolean       @default(false)
+  youtubeVideoId  String?        @unique // YouTube video ID (for deduplication)
   linkedTrackId   String?
   linkedBeatId    String?
   linkedMerchId   String?
@@ -1395,6 +1403,25 @@ model ArtistVideo {
   linkedTrack     Track?         @relation("VideoTrackLink", fields: [linkedTrackId], references: [id], onDelete: SetNull)
   linkedBeat      Track?         @relation("VideoBeatLink",  fields: [linkedBeatId],  references: [id], onDelete: SetNull)
   linkedMerch     MerchProduct?  @relation("VideoMerchLink", fields: [linkedMerchId], references: [id], onDelete: SetNull)
+}
+
+// ─── YouTube Sync ─────────────────────────────────────────────────────────────
+
+model YouTubeSync {
+  id            String     @id @default(cuid())
+  userId        String     @unique
+  channelId     String
+  channelUrl    String
+  channelName   String?
+  channelAvatar String?
+  lastSyncedAt  DateTime?
+  nextSyncAt    DateTime?
+  syncStatus    SyncStatus @default(PENDING)
+  totalVideos   Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Shows & Events ───────────────────────────────────────────────────────────
