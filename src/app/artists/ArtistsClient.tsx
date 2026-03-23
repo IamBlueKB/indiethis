@@ -467,6 +467,17 @@ export default function ArtistsClient() {
             )}
           </div>
 
+          {/* Clear filters */}
+          {(query || genre || city) && (
+            <button
+              onClick={() => { setQuery(""); setGenre(""); setCity(""); }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all"
+              style={{ backgroundColor: "rgba(232,93,74,0.1)", color: "#E85D4A", border: "1px solid rgba(232,93,74,0.2)" }}
+            >
+              <X size={10} /> Clear filters
+            </button>
+          )}
+
           <div className="flex-1" />
 
           {/* Sort */}
