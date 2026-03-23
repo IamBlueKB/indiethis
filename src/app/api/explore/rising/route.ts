@@ -50,7 +50,7 @@ export async function GET() {
     .map((a) => ({
       id: a.id,
       name: a.name,
-      image: a.photo,
+      photo: a.photo,
       topTrack: a.tracks[0] ?? null,
       genre: a.tracks[0]?.genre ?? null,
       score: a._count.artistPageViews + (a.tracks[0]?.plays ?? 0),

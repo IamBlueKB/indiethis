@@ -20,7 +20,7 @@ const TASK_TEMPLATE: TaskDef[] = [
   // ── Week 4 (28 days before) ──────────────────────────────────────────────
   {
     title: "Upload and master your track",
-    description: "Use the AI Mastering tool to get a professional sound before distribution.",
+    description: "Use the AI Mastering tool to get a professional sound before your release.",
     category: "CREATIVE",
     actionType: "AI_MASTERING",
     actionUrl: "/dashboard/ai/mastering",

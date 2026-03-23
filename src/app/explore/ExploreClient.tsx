@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useAudioStore } from "@/store";
+import Footer from "@/components/layout/Footer";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X,
@@ -39,7 +40,7 @@ type BeatItem = {
 type ArtistItem = {
   id: string;
   name: string;
-  image: string | null;
+  photo: string | null;
   topTrack: TrackItem | null;
   genre: string | null;
   score: number;
@@ -66,11 +67,11 @@ type FeaturedCard = {
   gradient: string | null;
   ctaText: string;
   ctaUrl: string;
-  linkedArtist: { id: string; name: string; image: string | null } | null;
+  linkedArtist: { id: string; name: string; photo: string | null } | null;
 };
 
 type SearchResults = {
-  artists: { id: string; name: string; image: string | null }[];
+  artists: { id: string; name: string; photo: string | null }[];
   tracks: { id: string; title: string; coverArtUrl: string | null; fileUrl: string; genre: string | null; artist: { id: string; name: string } }[];
   studios: { id: string; name: string; slug: string; city: string | null; state: string | null; logoUrl: string | null }[];
 };
@@ -208,7 +209,7 @@ function FeaturedCarousel({ cards }: { cards: FeaturedCard[] }) {
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.2) 100%)" }} />
 
       {/* Content */}
-      <div className="absolute bottom-0 left-0 right-0 p-6">
+      <div className="absolute bottom-0 left-0 right-0 px-14 pb-6 pt-4">
         <p className="text-[10px] font-black uppercase tracking-widest mb-1.5 opacity-70" style={{ color: "#D4A843" }}>
           {card.type.replace(/_/g, " ")}
         </p>
@@ -379,8 +380,8 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
     <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}>
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "#1a1a1a" }}>
-          {artist.image
-            ? <img src={artist.image} alt={artist.name} className="w-full h-full object-cover" />
+          {artist.photo
+            ? <img src={artist.photo} alt={artist.name} className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center"><Users size={18} style={{ color: "#444" }} /></div>
           }
         </div>
@@ -475,7 +476,7 @@ function SearchBar({ onFilter }: { onFilter: (tab: FilterTab) => void }) {
               {results!.artists.map((a) => (
                 <Link key={a.id} href={`/artists/${a.id}`} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/5" onClick={() => setOpen(false)}>
                   <div className="w-7 h-7 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "#1e1e1e" }}>
-                    {a.image ? <img src={a.image} className="w-full h-full object-cover" /> : <Users size={13} className="m-auto text-gray-600" />}
+                    {a.photo ? <img src={a.photo} className="w-full h-full object-cover" /> : <Users size={13} className="m-auto text-gray-600" />}
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-white">{a.name}</p>
@@ -702,7 +703,9 @@ export default function ExploreClient() {
         <div className="max-w-6xl mx-auto px-4 md:px-6">
           {/* Top row */}
           <div className="h-14 flex items-center justify-between gap-4">
-            <Link href="/" className="font-black text-lg shrink-0" style={{ color: "#D4A843" }}>IndieThis</Link>
+            <Link href="/" className="shrink-0 flex items-center">
+              <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: "32px", width: "auto" }} />
+            </Link>
             <div className="flex-1 max-w-xl">
               <SearchBar onFilter={handleFilterTab} />
             </div>
@@ -906,7 +909,7 @@ export default function ExploreClient() {
         >
           <p className="text-2xl font-black text-white">Your music business, on one platform.</p>
           <p className="text-sm max-w-md mx-auto" style={{ color: "#888" }}>
-            Distribute, promote, connect, and get paid. Everything an independent artist needs.
+            Create, promote, sell, and get paid. Everything an independent artist needs.
           </p>
           {!loggedIn && (
             <Link href="/signup" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
@@ -915,6 +918,8 @@ export default function ExploreClient() {
           )}
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }

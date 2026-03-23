@@ -41,7 +41,7 @@ type ReleasePlan = {
 
 const CATEGORY_META: Record<TaskCategory, { label: string; color: string; bg: string }> = {
   CREATIVE:     { label: "Creative",     color: "#a855f7", bg: "rgba(168,85,247,0.1)" },
-  DISTRIBUTION: { label: "Distribution", color: "#3b82f6", bg: "rgba(59,130,246,0.1)" },
+  DISTRIBUTION: { label: "Publishing",   color: "#3b82f6", bg: "rgba(59,130,246,0.1)" },
   MARKETING:    { label: "Marketing",    color: "#D4A843", bg: "rgba(212,168,67,0.1)" },
   MERCH:        { label: "Merch",        color: "#f97316", bg: "rgba(249,115,22,0.1)" },
   ADMIN:        { label: "Admin",        color: "#888",    bg: "rgba(136,136,136,0.1)" },

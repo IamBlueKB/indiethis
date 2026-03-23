@@ -39,7 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const SOCIAL_TEMPLATES = {
-  Instagram: (code: string, url: string) => `🎵 Been using IndieThis for my music career and it's been a game changer! Distribution, AI tools, studio booking — all in one.
+  Instagram: (code: string, url: string) => `🎵 Been using IndieThis for my music career and it's been a game changer! AI tools, studio booking, merch — all in one.
 
 Use my code ${code} at signup and get a free trial 🔥
 
