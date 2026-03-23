@@ -7,6 +7,7 @@ import { useAudioStore } from "@/store";
 import BeatPreviewPlayer from "@/components/audio/BeatPreviewPlayer";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
+import BeatLicenseModal, { LICENSE_OPTIONS, type StreamLeaseTarget } from "@/components/beats/BeatLicenseModal";
 
 type BeatPreview = {
   id: string;
@@ -60,20 +61,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   EXPIRED:   { label: "Expired",  color: "text-red-400",     icon: Clock },
 };
 
-const LICENSE_OPTIONS = [
-  { type: "LEASE",         label: "Lease",         description: "Limited use — demos, non-commercial projects."   },
-  { type: "NON_EXCLUSIVE", label: "Non-Exclusive",  description: "Commercial use. Producer may sell to others."   },
-  { type: "EXCLUSIVE",     label: "Exclusive",      description: "Full rights. Producer stops selling this beat." },
-] as const;
-
 // ─── Stream Lease Modal ───────────────────────────────────────────────────────
-
-type StreamLeaseTarget = {
-  trackId: string;
-  beatTitle: string;
-  producerName: string;
-  coverArtUrl: string | null;
-};
 
 type StreamLeaseStep = "upload" | "details" | "agreement" | "confirm" | "licenses";
 
@@ -982,38 +970,14 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
 
   // License modal
   const [licenseTrack, setLicenseTrack] = useState<BrowseTrack | null>(null);
-  const [licenseType, setLicenseType]   = useState<string>("NON_EXCLUSIVE");
-  const [licensing, setLicensing]       = useState(false);
-  const [licenseError, setLicenseError] = useState<string | null>(null);
 
   // Stream lease state
   const [explainTarget, setExplainTarget] = useState<StreamLeaseTarget | null>(null);
   const [streamTarget,  setStreamTarget]  = useState<StreamLeaseTarget | null>(null);
   const [leaseSuccess,  setLeaseSuccess]  = useState(false);
 
-  async function handleLicense() {
-    if (!licenseTrack?.price) return;
-    setLicensing(true);
-    setLicenseError(null);
-    try {
-      const res  = await fetch("/api/beats/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackId: licenseTrack.id, licenseType }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else { setLicenseError(data.error ?? "Something went wrong."); setLicensing(false); }
-    } catch {
-      setLicenseError("Network error. Please try again.");
-      setLicensing(false);
-    }
-  }
-
   const openLicenseModal = useCallback((track: BrowseTrack) => {
     setLicenseTrack(track);
-    setLicenseType("NON_EXCLUSIVE");
-    setLicenseError(null);
   }, []);
 
   useEffect(() => {
@@ -1067,97 +1031,11 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
 
       {/* License modal */}
       {licenseTrack && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="rounded-2xl border w-full max-w-md p-6 space-y-5"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">License Beat</p>
-                <p className="text-base font-bold text-foreground truncate">{licenseTrack.title}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {licenseTrack.artist.artistSlug ? (
-                    <a href={`/${licenseTrack.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline hover:underline">
-                      by {licenseTrack.artist.artistName ?? licenseTrack.artist.name}
-                    </a>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">by {licenseTrack.artist.artistName ?? licenseTrack.artist.name}</p>
-                  )}
-                  {licenseTrack.artist.artistSlug && (
-                    <a href={`/${licenseTrack.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] no-underline hover:underline"
-                      style={{ color: "var(--accent)" }}>
-                      View all beats →
-                    </a>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-start gap-2 shrink-0">
-                {licenseTrack.coverArtUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={licenseTrack.coverArtUrl} alt={licenseTrack.title} className="w-14 h-14 rounded-xl object-cover" />
-                )}
-                <button onClick={() => setLicenseTrack(null)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors text-muted-foreground">
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">License Type</p>
-              {LICENSE_OPTIONS.map(({ type, label, description }) => (
-                <button key={type} onClick={() => setLicenseType(type)}
-                  className="w-full text-left rounded-xl border p-3 transition-all"
-                  style={{ borderColor: licenseType === type ? "#D4A843" : "var(--border)", backgroundColor: licenseType === type ? "rgba(212,168,67,0.06)" : "var(--background)" }}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-foreground">{label}</p>
-                    {licenseTrack.price && <p className="text-sm font-bold text-foreground">${licenseTrack.price.toFixed(2)}</p>}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                </button>
-              ))}
-              {/* Stream Lease option — only show if enabled for this beat */}
-              {licenseTrack.streamLeaseEnabled && <button
-                onClick={() => {
-                  const producerName = licenseTrack.artist.artistName ?? licenseTrack.artist.name;
-                  setLicenseTrack(null);
-                  setExplainTarget({ trackId: licenseTrack.id, beatTitle: licenseTrack.title, producerName, coverArtUrl: licenseTrack.coverArtUrl });
-                }}
-                className="w-full text-left rounded-xl border p-3 transition-all"
-                style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Radio size={13} style={{ color: "#E85D4A" }} />
-                    <p className="text-sm font-semibold text-foreground">Stream Lease</p>
-                  </div>
-                  <p className="text-sm font-bold" style={{ color: "#E85D4A" }}>$1/mo</p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 pl-5">
-                  Record your song over this beat and stream it exclusively on IndieThis. Cancel anytime.
-                </p>
-              </button>}
-            </div>
-            {licenseError && <p className="text-xs text-red-400 text-center">{licenseError}</p>}
-            {!licenseTrack.price && (
-              <p className="text-xs text-center text-muted-foreground">
-                This track doesn&apos;t have a price set. Contact the producer directly.
-              </p>
-            )}
-            <div className="flex gap-3">
-              <button onClick={() => setLicenseTrack(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
-                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
-                Cancel
-              </button>
-              <button onClick={handleLicense} disabled={licensing || !licenseTrack.price}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                {licensing ? <><Loader2 size={14} className="animate-spin" /> Processing…</> : `Purchase — $${licenseTrack.price?.toFixed(2) ?? "—"}`}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BeatLicenseModal
+          track={licenseTrack}
+          onClose={() => setLicenseTrack(null)}
+          onStreamLease={(target) => setExplainTarget(target)}
+        />
       )}
 
       {/* Stream lease explain modal */}

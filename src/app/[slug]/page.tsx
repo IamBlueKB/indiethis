@@ -126,6 +126,17 @@ async function ArtistSite({ slug }: { slug: string }) {
               id: true, title: true, coverArtUrl: true,
               price: true, bpm: true, musicalKey: true, fileUrl: true,
               beatLeaseSettings: { select: { streamLeaseEnabled: true } },
+              artist: {
+                select: {
+                  name: true, artistName: true, artistSlug: true,
+                  producerProfile: {
+                    select: {
+                      defaultNonExclusivePrice: true,
+                      defaultExclusivePrice:    true,
+                    },
+                  },
+                },
+              },
             },
           },
           linkedMerch: {
