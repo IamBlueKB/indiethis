@@ -431,6 +431,7 @@ model User {
   producerStreamLeases  StreamLease[]          @relation("ProducerStreamLeases")
   producerLeaseSettings ProducerLeaseSettings?
   streamLeaseBookmarks  StreamLeaseBookmark[]
+  producerProfile       ProducerProfile?
 }
 
 model Studio {
@@ -594,7 +595,10 @@ model Track {
   releaseId   String?
   bpm         Int?
   musicalKey  String?
-  audioHash   String?     // SHA-256 of the beat file — for duplicate detection
+  audioHash         String?  // SHA-256 of the beat file — for duplicate detection
+  totalLicenses     Int      @default(0)  // count of all license sales
+  totalStreamLeases Int      @default(0)  // count of active stream leases
+  totalPlays        Int      @default(0)  // sum of plays across all stream-leased tracks
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -1786,4 +1790,18 @@ model StreamLeaseBookmark {
   beat   Track @relation(fields: [beatId],   references: [id], onDelete: Cascade)
 
   @@unique([artistId, beatId])
+}
+
+model ProducerProfile {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  displayName              String?  // producer alias if different from artist name
+  bio                      String?  // producer-specific bio shown on beats section of artist page
+  defaultLeasePrice        Float?
+  defaultNonExclusivePrice Float?
+  defaultExclusivePrice    Float?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }
