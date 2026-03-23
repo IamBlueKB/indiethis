@@ -6,9 +6,9 @@ export const metadata: Metadata = {
   description: "IndieThis Privacy Policy. Learn how we collect, use, and protect your information.",
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 36 }}>
+    <div id={id} style={{ marginBottom: 36, scrollMarginTop: 80 }}>
       <h2 style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 10 }}>{title}</h2>
       <p style={{ fontSize: 14, color: "#aaa", lineHeight: 1.75 }}>{children}</p>
     </div>
@@ -124,7 +124,7 @@ export default function PrivacyPage() {
           .
         </Section>
 
-        <Section title="10. Cookies">
+        <Section title="10. Cookies" id="cookies">
           IndieThis uses essential cookies for authentication and session management. We use analytics to understand
           platform usage. We do not use third-party advertising cookies. We do not display ads on the platform.
         </Section>
