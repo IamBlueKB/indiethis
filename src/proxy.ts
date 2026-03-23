@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/pricing",
   "/studios",
+  "/explore",
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -21,6 +22,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/admin")) return true;
   if (pathname.startsWith("/api/uploadthing")) return true;
   if (pathname.startsWith("/api/public")) return true;
+  if (pathname.startsWith("/api/explore")) return true;
   // Public studio contact form — /api/studio/[studioId]/contact
   if (/^\/api\/studio\/[^/]+\/contact$/.test(pathname)) return true;
   if (pathname.startsWith("/_next")) return true;

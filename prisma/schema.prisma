@@ -470,6 +470,8 @@ model User {
   splitSheetsCreated    SplitSheet[]      @relation("SplitSheetCreator")
   splits                Split[]           @relation("UserSplits")
   releasePlans          ReleasePlan[]
+  recentPlays           RecentPlay[]
+  featuredCards         ExploreFeatureCard[] @relation("FeaturedArtist")
 }
 
 model Studio {
@@ -653,6 +655,8 @@ model Track {
   licenseDocuments      LicenseDocument[]
   splitSheet            SplitSheet?
   releasePlans          ReleasePlan[]
+  genre                 String?
+  recentPlays           RecentPlay[]
 }
 
 model DeliveredFile {
@@ -2065,4 +2069,41 @@ model ReleasePlanTask {
   releasePlan ReleasePlan @relation(fields: [releasePlanId], references: [id], onDelete: Cascade)
 
   @@index([releasePlanId])
+}
+
+// ─── Explore Page ─────────────────────────────────────────────────────────────
+
+model ExploreFeatureCard {
+  id          String    @id @default(cuid())
+  type        String    @default("ANNOUNCEMENT") // ARTIST_SPOTLIGHT | BEAT_PACK | STUDIO_PROMO | AI_SHOWCASE | ANNOUNCEMENT
+  headline    String
+  description String?   @db.Text
+  imageUrl    String?
+  gradient    String?   // fallback CSS gradient string
+  ctaText     String    @default("Learn More")
+  ctaUrl      String
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  linkedArtistId String?
+  linkedArtist   User?   @relation("FeaturedArtist", fields: [linkedArtistId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, sortOrder])
+}
+
+model RecentPlay {
+  id       String   @id @default(cuid())
+  userId   String
+  trackId  String
+  playedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt])
+  @@index([trackId])
 }

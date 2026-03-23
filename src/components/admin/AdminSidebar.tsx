@@ -21,6 +21,7 @@ import {
   TrendingUp,
   DollarSign,
   Archive,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -47,6 +48,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Promo Codes", href: "/admin/promo-codes",      icon: Tag,         page: "promo-codes"      },
   { label: "Ambassadors", href: "/admin/ambassadors",      icon: Star,        page: "ambassadors"      },
   { label: "Promo Analytics", href: "/admin/promo-analytics", icon: TrendingUp, page: "promo-analytics" },
+  { label: "Explore",      href: "/admin/explore",           icon: Compass,     page: "explore"          },
   { label: "Attribution", href: "/admin/attribution",      icon: Target,      page: "attribution"      },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",         icon: Settings,    page: "settings"     },
