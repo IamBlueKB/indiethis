@@ -26,7 +26,7 @@ export async function GET() {
       price: true,
       genre: true,
       artist: {
-        select: { id: true, name: true, photo: true },
+        select: { id: true, name: true, photo: true, artistSlug: true },
       },
       beatLeaseSettings: {
         select: { streamLeaseEnabled: true, maxStreamLeases: true },

@@ -9,30 +9,30 @@ import { cn } from "@/lib/utils";
 
 const footerLinks = {
   Platform: [
-    { label: "Features",         href: "#features" },
-    { label: "Pricing",          href: "#pricing" },
-    { label: "For Studios",      href: "#studios" },
-    { label: "Artist Pages",     href: "#" },
-    { label: "Beat Marketplace", href: "#" },
+    { label: "Features",         href: "/about" },
+    { label: "Pricing",          href: "/pricing" },
+    { label: "For Studios",      href: "/studios" },
+    { label: "Artist Pages",     href: "/artists" },
+    { label: "Beat Marketplace", href: "/beats" },
   ],
   Artists: [
     { label: "Sign Up",          href: "/signup" },
-    { label: "AI Music Videos",  href: "#" },
-    { label: "AI Cover Art",     href: "#" },
-    { label: "AI Mastering",     href: "#" },
-    { label: "Merch Store",      href: "#" },
+    { label: "AI Music Videos",  href: "/signup?next=/dashboard/ai/video" },
+    { label: "AI Cover Art",     href: "/signup?next=/dashboard/ai/cover-art" },
+    { label: "AI Mastering",     href: "/signup?next=/dashboard/ai/mastering" },
+    { label: "Merch Store",      href: "/signup?next=/dashboard/merch" },
   ],
   Studios: [
-    { label: "Onboard Your Studio", href: "/studios" },
+    { label: "Onboard Your Studio", href: "/signup" },
     { label: "Clear Ear Studios",   href: "/clearearstudios" },
-    { label: "Studio Features",     href: "#" },
-    { label: "Contact Us",          href: "#" },
+    { label: "Studio Features",     href: "/about#studios" },
+    { label: "Contact Us",          href: "/about#contact" },
   ],
   Legal: [
-    { label: "Terms of Service",  href: "#" },
-    { label: "Privacy Policy",    href: "#" },
-    { label: "Cookie Policy",     href: "#" },
-    { label: "Artist Agreement",  href: "#" },
+    { label: "Terms of Service",  href: "/terms" },
+    { label: "Privacy Policy",    href: "/privacy" },
+    { label: "Cookie Policy",     href: "/privacy#cookies" },
+    { label: "Artist Agreement",  href: "/terms#artist-agreement" },
   ],
 };
 
@@ -121,8 +121,12 @@ export default function Footer() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-text-muted">© {new Date().getFullYear()} IndieThis LLC. All rights reserved.</p>
           <div className="flex gap-6">
-            {["Terms", "Privacy", "Cookies"].map((label) => (
-              <Link key={label} href="#"
+            {[
+              { label: "Terms",   href: "/terms" },
+              { label: "Privacy", href: "/privacy" },
+              { label: "Cookies", href: "/privacy#cookies" },
+            ].map(({ label, href }) => (
+              <Link key={label} href={href}
                 className="text-xs text-text-muted hover:text-muted-foreground no-underline transition-colors">
                 {label}
               </Link>

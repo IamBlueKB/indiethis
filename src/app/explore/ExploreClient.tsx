@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAudioStore } from "@/store";
 import Footer from "@/components/layout/Footer";
+import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X,
@@ -20,7 +22,7 @@ type TrackItem = {
   genre: string | null;
   plays: number;
   createdAt?: string;
-  artist: { id: string; name: string; photo?: string | null };
+  artist: { id: string; name: string; photo?: string | null; artistSlug?: string | null };
 };
 
 type BeatItem = {
@@ -32,7 +34,7 @@ type BeatItem = {
   musicalKey: string | null;
   price: number | null;
   genre: string | null;
-  artist: { id: string; name: string };
+  artist: { id: string; name: string; artistSlug?: string | null };
   beatLeaseSettings: { streamLeaseEnabled: boolean; maxStreamLeases: number | null } | null;
   _count: { beatLicenses: number; streamLeases: number };
 };
@@ -41,6 +43,7 @@ type ArtistItem = {
   id: string;
   name: string;
   photo: string | null;
+  slug: string | null;
   topTrack: TrackItem | null;
   genre: string | null;
   score: number;
@@ -153,12 +156,14 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 // ── Track Card ─────────────────────────────────────────────────────────────
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
+  const artistSlug = track.artist.artistSlug;
   return (
-    <div
-      className="shrink-0 w-40 group cursor-pointer"
-      onClick={() => onPlay(track)}
-    >
-      <div className="relative w-40 h-40 rounded-xl overflow-hidden mb-2.5" style={{ backgroundColor: "#1a1a1a" }}>
+    <div className="shrink-0 w-40 group">
+      <div
+        className="relative w-40 h-40 rounded-xl overflow-hidden mb-2.5 cursor-pointer"
+        style={{ backgroundColor: "#1a1a1a" }}
+        onClick={() => onPlay(track)}
+      >
         {track.coverArtUrl
           ? <img src={track.coverArtUrl} alt={track.title} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Music2 size={28} style={{ color: "#444" }} /></div>
@@ -174,9 +179,20 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
           </div>
         </div>
       </div>
-      <p className="text-sm font-semibold text-white truncate">{track.title}</p>
-      <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{track.artist.name}</p>
+      <p className="text-sm font-semibold text-white truncate cursor-pointer" onClick={() => onPlay(track)}>{track.title}</p>
+      {artistSlug ? (
+        <Link href={`/${artistSlug}`} className="text-[11px] truncate mt-0.5 block hover:underline" style={{ color: "#888" }}>
+          {track.artist.name}
+        </Link>
+      ) : (
+        <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{track.artist.name}</p>
+      )}
       <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>{track.plays.toLocaleString()} plays</p>
+      {artistSlug && (
+        <Link href={`/${artistSlug}`} className="text-[9px] mt-1 block hover:underline" style={{ color: "#555" }}>
+          More from {track.artist.name} →
+        </Link>
+      )}
     </div>
   );
 }
@@ -303,15 +319,19 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
 
 // ── Beat Card ──────────────────────────────────────────────────────────────
 
-function BeatCard({ beat, onPlay }: { beat: BeatItem; onPlay: (b: BeatItem) => void }) {
+function BeatCard({ beat, onPlay, onLicense }: { beat: BeatItem; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
+  const artistSlug = beat.artist.artistSlug;
   return (
     <div
-      className="rounded-xl border p-3 cursor-pointer group transition-all hover:border-accent/40"
+      className="rounded-xl border p-3 group transition-all hover:border-accent/40"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
-      onClick={() => onPlay(beat)}
     >
-      <div className="relative w-full aspect-square rounded-lg overflow-hidden mb-2.5" style={{ backgroundColor: "#1a1a1a" }}>
+      <div
+        className="relative w-full aspect-square rounded-lg overflow-hidden mb-2.5 cursor-pointer"
+        style={{ backgroundColor: "#1a1a1a" }}
+        onClick={() => onPlay(beat)}
+      >
         {beat.coverArtUrl
           ? <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Headphones size={24} style={{ color: "#444" }} /></div>
@@ -327,9 +347,20 @@ function BeatCard({ beat, onPlay }: { beat: BeatItem; onPlay: (b: BeatItem) => v
           </span>
         )}
       </div>
-      <p className="text-xs font-semibold text-white truncate">{beat.title}</p>
-      <p className="text-[10px] truncate mb-1.5" style={{ color: "#888" }}>{beat.artist.name}</p>
-      <div className="flex items-center justify-between">
+      <p className="text-xs font-semibold text-white truncate cursor-pointer" onClick={() => onPlay(beat)}>{beat.title}</p>
+      {artistSlug ? (
+        <Link href={`/${artistSlug}`} className="text-[10px] truncate mb-1 block hover:underline" style={{ color: "#888" }}>
+          {beat.artist.name}
+        </Link>
+      ) : (
+        <p className="text-[10px] truncate mb-1" style={{ color: "#888" }}>{beat.artist.name}</p>
+      )}
+      {artistSlug && (
+        <Link href={`/${artistSlug}`} className="text-[9px] block mb-1.5 hover:underline" style={{ color: "#555" }}>
+          More from {beat.artist.name} →
+        </Link>
+      )}
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           {beat.bpm && <span className="text-[9px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>{beat.bpm}</span>}
           {beat.musicalKey && <span className="text-[9px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: "#1e1e1e", color: "#888" }}>{beat.musicalKey}</span>}
@@ -337,8 +368,15 @@ function BeatCard({ beat, onPlay }: { beat: BeatItem; onPlay: (b: BeatItem) => v
         {beat.price != null && <span className="text-xs font-bold" style={{ color: "#D4A843" }}>${beat.price.toFixed(0)}</span>}
       </div>
       {totalUses > 0 && (
-        <p className="text-[9px] mt-1" style={{ color: "#555" }}>{totalUses} artist{totalUses !== 1 ? "s" : ""} on this beat</p>
+        <p className="text-[9px] mb-2" style={{ color: "#555" }}>{totalUses} artist{totalUses !== 1 ? "s" : ""} on this beat</p>
       )}
+      <button
+        onClick={() => onLicense(beat)}
+        className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors"
+        style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
+      >
+        License
+      </button>
     </div>
   );
 }
@@ -349,21 +387,25 @@ function StudioCard({ studio }: { studio: StudioItem }) {
   const photo = studio.heroImage ?? studio.logoUrl ?? (studio.photos?.[0]);
   return (
     <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}>
-      <div className="w-full h-28 overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
-        {photo
-          ? <img src={photo} alt={studio.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center"><Building2 size={28} style={{ color: "#333" }} /></div>
-        }
-      </div>
-      <div className="p-3">
-        <p className="text-sm font-bold text-white truncate">{studio.name}</p>
-        {(studio.city || studio.state) && (
-          <p className="text-[11px] mt-0.5" style={{ color: "#888" }}>{[studio.city, studio.state].filter(Boolean).join(", ")}</p>
-        )}
-        {studio.tagline && <p className="text-[10px] mt-1 line-clamp-2 leading-relaxed" style={{ color: "#666" }}>{studio.tagline}</p>}
+      <Link href={`/${studio.slug}`} className="block">
+        <div className="w-full h-28 overflow-hidden group" style={{ backgroundColor: "#1a1a1a" }}>
+          {photo
+            ? <img src={photo} alt={studio.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            : <div className="w-full h-full flex items-center justify-center"><Building2 size={28} style={{ color: "#333" }} /></div>
+          }
+        </div>
+        <div className="px-3 pt-3">
+          <p className="text-sm font-bold text-white truncate hover:underline">{studio.name}</p>
+          {(studio.city || studio.state) && (
+            <p className="text-[11px] mt-0.5" style={{ color: "#888" }}>{[studio.city, studio.state].filter(Boolean).join(", ")}</p>
+          )}
+          {studio.tagline && <p className="text-[10px] mt-1 line-clamp-2 leading-relaxed" style={{ color: "#666" }}>{studio.tagline}</p>}
+        </div>
+      </Link>
+      <div className="px-3 pb-3 pt-2">
         <Link
           href={`/${studio.slug}`}
-          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
+          className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
           style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
         >
           <Mic2 size={10} /> Book a Session
@@ -379,14 +421,27 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
   return (
     <div className="rounded-xl border p-4 space-y-3" style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}>
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "#1a1a1a" }}>
-          {artist.photo
-            ? <img src={artist.photo} alt={artist.name} className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center"><Users size={18} style={{ color: "#444" }} /></div>
-          }
-        </div>
+        {artist.slug ? (
+          <Link href={`/${artist.slug}`} className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "#1a1a1a" }}>
+            {artist.photo
+              ? <img src={artist.photo} alt={artist.name} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center"><Users size={18} style={{ color: "#444" }} /></div>
+            }
+          </Link>
+        ) : (
+          <div className="w-12 h-12 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: "#1a1a1a" }}>
+            {artist.photo
+              ? <img src={artist.photo} alt={artist.name} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center"><Users size={18} style={{ color: "#444" }} /></div>
+            }
+          </div>
+        )}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-white truncate">{artist.name}</p>
+          {artist.slug ? (
+            <Link href={`/${artist.slug}`} className="font-bold text-white truncate block hover:underline">{artist.name}</Link>
+          ) : (
+            <p className="font-bold text-white truncate">{artist.name}</p>
+          )}
           {artist.genre && <p className="text-[11px]" style={{ color: "#888" }}>{artist.genre}</p>}
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full font-bold" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
@@ -603,9 +658,11 @@ export default function ExploreClient() {
   const { data: session } = useSession();
   const { play } = useAudioStore();
   const loggedIn = !!session?.user;
+  const searchParams = useSearchParams();
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
+  const [licenseBeat, setLicenseBeat] = useState<BeatItem | null>(null);
 
   const [featured, setFeatured] = useState<FeaturedCard[]>([]);
   const [trending, setTrending] = useState<TrackItem[]>([]);
@@ -664,6 +721,21 @@ export default function ExploreClient() {
     fetch("/api/explore/trending").then(r => r.json()).then(d => { setTrending(d.tracks ?? []); setLoadingTrending(false); });
     fetch("/api/explore/new-releases").then(r => r.json()).then(d => { setNewReleases(d.tracks ?? []); setLoadingNew(false); });
   }, [activeGenre]);
+
+  // URL param filter — auto-scroll to section on load (e.g. /explore?filter=studios)
+  useEffect(() => {
+    const filter = searchParams.get("filter") as FilterTab | null;
+    if (!filter || filter === "all") return;
+    setActiveFilter(filter);
+    setTimeout(() => {
+      const ref = sectionRefs[filter];
+      if (!ref?.current) return;
+      const headerH = (document.querySelector("header") as HTMLElement)?.offsetHeight ?? 100;
+      const top = ref.current.getBoundingClientRect().top + window.scrollY - headerH - 16;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }, 300);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function handlePlay(track: TrackItem) {
     play({ id: track.id, title: track.title, artist: track.artist.name, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined });
@@ -769,6 +841,15 @@ export default function ExploreClient() {
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
               : <TrackScroll tracks={trending} onPlay={handlePlay} />
             }
+            <div className="mt-5 text-center">
+              <Link
+                href="/artists"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors"
+                style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#D4A843", backgroundColor: "transparent" }}
+              >
+                Discover Artists →
+              </Link>
+            </div>
           </section>
         )}
 
@@ -831,9 +912,6 @@ export default function ExploreClient() {
                 <SectionLabel label="BEATS" />
                 <h2 className="text-xl font-bold text-white">Browse Beats</h2>
               </div>
-              <Link href="/dashboard/marketplace" className="text-xs font-semibold" style={{ color: "#D4A843" }}>
-                View All →
-              </Link>
             </div>
             {loadingBeats
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
@@ -842,9 +920,25 @@ export default function ExploreClient() {
                     <p className="text-sm" style={{ color: "#555" }}>No beats in the marketplace yet.</p>
                   </div>
                 : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {beats.map((b) => <BeatCard key={b.id} beat={b} onPlay={(beat) => handlePlay({ ...beat, plays: 0, artist: beat.artist })} />)}
+                    {beats.map((b) => (
+                      <BeatCard
+                        key={b.id}
+                        beat={b}
+                        onPlay={(beat) => handlePlay({ ...beat, plays: 0, artist: beat.artist })}
+                        onLicense={(beat) => setLicenseBeat(beat)}
+                      />
+                    ))}
                   </div>
             }
+            <div className="mt-5 text-center">
+              <Link
+                href="/beats"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors"
+                style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#D4A843", backgroundColor: "transparent" }}
+              >
+                Search All Beats →
+              </Link>
+            </div>
           </section>
         )}
 
@@ -884,6 +978,15 @@ export default function ExploreClient() {
                     {studios.map((s) => <StudioCard key={s.id} studio={s} />)}
                   </div>
             }
+            <div className="mt-5 text-center">
+              <Link
+                href="/studios"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors"
+                style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#D4A843", backgroundColor: "transparent" }}
+              >
+                Find a Studio →
+              </Link>
+            </div>
           </section>
         )}
 
@@ -901,6 +1004,15 @@ export default function ExploreClient() {
                     {rising.map((a) => <ArtistCard key={a.id} artist={a} onPlay={handlePlay} />)}
                   </div>
             }
+            <div className="mt-5 text-center">
+              <Link
+                href="/artists"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors"
+                style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#D4A843", backgroundColor: "transparent" }}
+              >
+                Discover More Artists →
+              </Link>
+            </div>
           </section>
         )}
 
@@ -923,13 +1035,31 @@ export default function ExploreClient() {
           </p>
           {!loggedIn && (
             <Link href="/signup" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-              Join IndieThis Free →
+              Join IndieThis →
             </Link>
           )}
         </div>
       </div>
 
       <Footer />
+
+      {licenseBeat && (
+        <BeatLicenseModal
+          track={{
+            id:                 licenseBeat.id,
+            title:              licenseBeat.title,
+            price:              licenseBeat.price,
+            coverArtUrl:        licenseBeat.coverArtUrl,
+            streamLeaseEnabled: licenseBeat.beatLeaseSettings?.streamLeaseEnabled ?? true,
+            artist: {
+              name:       licenseBeat.artist.name,
+              artistName: null,
+              artistSlug: licenseBeat.artist.artistSlug ?? null,
+            },
+          }}
+          onClose={() => setLicenseBeat(null)}
+        />
+      )}
     </div>
   );
 }

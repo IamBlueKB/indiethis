@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       genre: true,
       fileUrl: true,
       artist: {
-        select: { id: true, name: true, photo: true },
+        select: { id: true, name: true, photo: true, artistSlug: true },
       },
     },
     orderBy: { plays: "desc" },

@@ -22,6 +22,7 @@ export async function GET() {
       id: true,
       name: true,
       photo: true,
+      artistSlug: true,
       _count: {
         select: {
           artistPageViews: true,
@@ -51,6 +52,7 @@ export async function GET() {
       id: a.id,
       name: a.name,
       photo: a.photo,
+      slug: a.artistSlug,
       topTrack: a.tracks[0] ?? null,
       genre: a.tracks[0]?.genre ?? null,
       score: a._count.artistPageViews + (a.tracks[0]?.plays ?? 0),
