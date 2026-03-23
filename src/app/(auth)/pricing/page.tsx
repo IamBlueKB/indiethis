@@ -175,7 +175,7 @@ function PricingContent() {
           Choose your plan
         </h1>
         <p className="text-sm text-muted-foreground mt-1.5">
-          Month-to-month · Cancel anytime · All plans include the full platform
+          Month-to-month · Cancel anytime · Upgrade or downgrade whenever you want.
         </p>
       </div>
 
