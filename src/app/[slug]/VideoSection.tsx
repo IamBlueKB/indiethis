@@ -381,6 +381,7 @@ function ProductCTA({
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
   const [merchOpen, setMerchOpen] = useState(false);
   const [beatModalOpen, setBeatModalOpen] = useState(false);
+  const [trackBuying, setTrackBuying] = useState(false);
 
   // Track CTA
   if (video.linkedTrack) {
@@ -398,6 +399,22 @@ function ProductCTA({
         coverArt: track.coverArtUrl ?? undefined,
       };
       play(at);
+    }
+
+    async function handleTrackBuy() {
+      setTrackBuying(true);
+      try {
+        const res  = await fetch("/api/beats/checkout", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ trackId: track.id, licenseType: "NON_EXCLUSIVE" }),
+        });
+        const data = await res.json() as { url?: string; error?: string };
+        if (res.status === 401) { window.location.href = `/signup?next=/dashboard/marketplace`; return; }
+        if (data.url) { window.location.href = data.url; return; }
+      } catch { /* fall through */ }
+      finally { setTrackBuying(false); }
+      window.location.href = `/signup?next=/dashboard/marketplace`;
     }
 
     return (
@@ -441,22 +458,21 @@ function ProductCTA({
             {isThisPlaying ? <Pause size={10} fill="#D4A843" /> : <Play size={10} fill="#D4A843" style={{ marginLeft: 1 }} />}
             {isThisPlaying ? "Pause" : "Listen"}
           </button>
-          {track.fileUrl && (
-            <a
-              href={track.fileUrl}
-              download={track.title}
-              target="_blank"
-              rel="noopener noreferrer"
+          {track.price && track.price > 0 && (
+            <button
+              onClick={() => void handleTrackBuy()}
+              disabled={trackBuying}
               style={{
                 display: "flex", alignItems: "center",
-                padding: "5px 11px", borderRadius: 6,
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#888", fontSize: 11, fontWeight: 700,
-                textDecoration: "none", whiteSpace: "nowrap",
+                padding: "5px 11px", borderRadius: 6, border: "none",
+                backgroundColor: "rgba(255,255,255,0.06)",
+                color: "#ccc", fontSize: 11, fontWeight: 700,
+                cursor: trackBuying ? "default" : "pointer", whiteSpace: "nowrap",
+                opacity: trackBuying ? 0.6 : 1,
               }}
             >
-              Download
-            </a>
+              {trackBuying ? "…" : `Buy — $${track.price.toFixed(2)}`}
+            </button>
           )}
           <a
             href="#support"
