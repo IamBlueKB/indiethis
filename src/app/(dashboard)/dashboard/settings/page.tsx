@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff, AlertTriangle, X,
-  Mic2, DollarSign, Radio, CreditCard, ChevronDown,
+  Mic2, DollarSign, Radio, CreditCard, ChevronDown, RefreshCw, Unlink,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -22,6 +22,20 @@ type UserSettings = {
   spotifyUrl: string | null;
   appleMusicUrl: string | null;
   artistSlug: string | null;
+};
+
+type YtStatus = {
+  connected:        boolean;
+  channelUrl:       string | null;
+  channelId:        string | null;
+  channelName:      string | null;
+  channelAvatar:    string | null;
+  syncStatus:       string | null;
+  lastSyncAt:       string | null;
+  canSyncNow:       boolean;
+  nextAllowedAt:    string | null;
+  syncedVideoCount: number;
+  totalVideos:      number;
 };
 
 type ProducerProfileData = {
@@ -100,6 +114,14 @@ export default function SettingsPage() {
   const [prodNonExclusivePrice, setProdNonExclusivePrice]   = useState("");
   const [prodExclusivePrice, setProdExclusivePrice]         = useState("");
   const [prodSeparatePayout, setProdSeparatePayout]         = useState(false);
+
+  // YouTube Sync state
+  const [ytStatus, setYtStatus]         = useState<YtStatus | null>(null);
+  const [ytInput, setYtInput]           = useState("");
+  const [ytConnecting, setYtConnecting] = useState(false);
+  const [ytSyncing, setYtSyncing]       = useState(false);
+  const [ytError, setYtError]           = useState<string | null>(null);
+  const [ytMsg, setYtMsg]               = useState<string | null>(null);
 
   // Producer lease settings fields
   const [prodStreamEnabled, setProdStreamEnabled]           = useState(true);
@@ -189,6 +211,63 @@ export default function SettingsPage() {
       })
       .catch(() => setProducerLoaded(true));
   }, []);
+
+  // Load YouTube Sync status
+  useEffect(() => {
+    fetch("/api/dashboard/videos/youtube/status")
+      .then((r) => r.json())
+      .then((d: YtStatus) => setYtStatus(d))
+      .catch(() => {});
+  }, []);
+
+  async function handleYoutubeConnect() {
+    if (!ytInput.trim()) return;
+    setYtConnecting(true);
+    setYtError(null);
+    setYtMsg(null);
+    try {
+      const res  = await fetch("/api/dashboard/videos/youtube/connect", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ channelInput: ytInput.trim() }),
+      });
+      const data = await res.json() as { channel?: { title?: string }; syncResult?: { added: number }; error?: string };
+      if (!res.ok) { setYtError(data.error ?? "Could not connect channel."); return; }
+      setYtMsg(`Connected${data.channel?.title ? ` to ${data.channel.title}` : ""}. ${data.syncResult?.added ?? 0} videos imported.`);
+      setYtInput("");
+      // Refresh status
+      const s = await fetch("/api/dashboard/videos/youtube/status").then((r) => r.json()) as YtStatus;
+      setYtStatus(s);
+    } finally {
+      setYtConnecting(false);
+    }
+  }
+
+  async function handleYoutubeDisconnect() {
+    setYtError(null);
+    setYtMsg(null);
+    const res  = await fetch("/api/dashboard/videos/youtube/disconnect", { method: "DELETE" });
+    const data = await res.json() as { ok?: boolean; syncedVideosRetained?: number; error?: string };
+    if (!res.ok) { setYtError(data.error ?? "Disconnect failed."); return; }
+    setYtMsg(`Channel disconnected. ${data.syncedVideosRetained ?? 0} synced videos retained.`);
+    setYtStatus(null);
+  }
+
+  async function handleYoutubeSync() {
+    setYtSyncing(true);
+    setYtError(null);
+    setYtMsg(null);
+    try {
+      const res  = await fetch("/api/dashboard/videos/youtube/sync", { method: "POST" });
+      const data = await res.json() as { syncResult?: { added: number; updated: number }; error?: string };
+      if (!res.ok) { setYtError(data.error ?? "Sync failed."); return; }
+      setYtMsg(`Sync complete — ${data.syncResult?.added ?? 0} added, ${data.syncResult?.updated ?? 0} updated.`);
+      const s = await fetch("/api/dashboard/videos/youtube/status").then((r) => r.json()) as YtStatus;
+      setYtStatus(s);
+    } finally {
+      setYtSyncing(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -377,6 +456,92 @@ export default function SettingsPage() {
               className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50" style={{ borderColor: "var(--border)" }} />
           </Field>
         </div>
+      </Section>
+
+      {/* YouTube Sync */}
+      <Section title="YouTube Sync" icon={<Youtube size={15} className="text-accent" />}>
+        {ytError && (
+          <div className="flex items-center gap-2 text-sm text-red-500 bg-red-500/10 rounded-xl px-3 py-2">
+            <AlertTriangle size={14} /> {ytError}
+          </div>
+        )}
+        {ytMsg && (
+          <div className="flex items-center gap-2 text-sm text-green-500 bg-green-500/10 rounded-xl px-3 py-2">
+            <Check size={14} /> {ytMsg}
+          </div>
+        )}
+
+        {ytStatus?.connected ? (
+          <div className="space-y-3">
+            {/* Connected channel info */}
+            <div className="flex items-center gap-3 p-3 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+              {ytStatus.channelAvatar && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={ytStatus.channelAvatar} alt="" className="w-8 h-8 rounded-full" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{ytStatus.channelName ?? ytStatus.channelUrl}</p>
+                <p className="text-xs text-muted-foreground">
+                  {ytStatus.syncedVideoCount} video{ytStatus.syncedVideoCount !== 1 ? "s" : ""} synced
+                  {ytStatus.lastSyncAt ? ` · Last sync ${new Date(ytStatus.lastSyncAt).toLocaleDateString()}` : ""}
+                  {ytStatus.syncStatus ? ` · ${ytStatus.syncStatus}` : ""}
+                </p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500 font-medium">Connected</span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleYoutubeSync}
+                disabled={ytSyncing || !ytStatus.canSyncNow}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent/10 transition-colors"
+                style={{ borderColor: "var(--border)" }}
+                title={!ytStatus.canSyncNow && ytStatus.nextAllowedAt ? `Available at ${new Date(ytStatus.nextAllowedAt).toLocaleTimeString()}` : undefined}
+              >
+                <RefreshCw size={13} className={ytSyncing ? "animate-spin" : ""} />
+                {ytSyncing ? "Syncing…" : "Sync Now"}
+              </button>
+              <button
+                onClick={handleYoutubeDisconnect}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
+              >
+                <Unlink size={13} /> Disconnect
+              </button>
+            </div>
+            {!ytStatus.canSyncNow && ytStatus.nextAllowedAt && (
+              <p className="text-xs text-muted-foreground">
+                Manual sync available again at {new Date(ytStatus.nextAllowedAt).toLocaleTimeString()}.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Connect your YouTube channel to automatically import your videos into your artist page.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={ytInput}
+                onChange={(e) => setYtInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleYoutubeConnect()}
+                placeholder="https://youtube.com/@YourChannel"
+                className="flex-1 rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }}
+              />
+              <button
+                onClick={handleYoutubeConnect}
+                disabled={ytConnecting || !ytInput.trim()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {ytConnecting ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                {ytConnecting ? "Connecting…" : "Connect"}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Supports: @handle, channel URLs, or UCxxxxxx IDs.</p>
+          </div>
+        )}
       </Section>
 
       {/* Change Password */}
