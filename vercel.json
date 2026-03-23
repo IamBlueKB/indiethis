@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/onboarding-emails",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/re-engagement-emails",
+      "schedule": "0 14 * * *"
     }
   ]
 }

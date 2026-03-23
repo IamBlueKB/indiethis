@@ -526,6 +526,7 @@ model User {
   recentPlays           RecentPlay[]
   featuredCards         ExploreFeatureCard[] @relation("FeaturedArtist")
   onboardingEmails      OnboardingEmailLog[]
+  reEngagementEmails    ReEngagementEmailLog[]
 }
 
 model Studio {
@@ -2205,5 +2206,18 @@ model OnboardingEmailLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, emailType])
+  @@index([userId])
+}
+
+model ReEngagementEmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  emailType String   // 7DAY | 14DAY | 30DAY | 45DAY
+  cycleKey  String   // ISO date string of cycle start (lastLoginAt snapshot) — reset when user logs back in
+  sentAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emailType, cycleKey])
   @@index([userId])
 }

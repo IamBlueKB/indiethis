@@ -1325,3 +1325,107 @@ export async function sendOnboardingDay30Email(
     `,
   });
 }
+
+// ─── Re-engagement Emails ─────────────────────────────────────────────────────
+
+function reEngagementBase(bodyHtml: string, ctaText: string, ctaUrl: string): string {
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#0A0A0A;color:#C8C8C8;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+      <div style="padding:28px 32px;">
+        <p style="margin:0 0 20px;font-size:18px;font-weight:800;color:#D4A843;letter-spacing:-0.5px;">IndieThis</p>
+        ${bodyHtml}
+        <table cellpadding="0" cellspacing="0" style="margin-top:20px;">
+          <tr>
+            <td style="background-color:#D4A843;border-radius:10px;">
+              <a href="${ctaUrl}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:700;color:#0A0A0A;text-decoration:none;">${ctaText}</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+        <p style="margin:0;font-size:11px;color:#333;">IndieThis · <a href="${APP_URL()}/dashboard/settings" style="color:#444;text-decoration:underline;">Manage preferences</a></p>
+      </div>
+    </div>
+  `;
+}
+
+// 7-day inactive — page view nudge
+export async function sendReEngagement7DayEmail(
+  user:      { email: string; name: string; artistSlug: string | null },
+  pageViews: number,
+): Promise<void> {
+  const body = pageViews > 0
+    ? `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">People are visiting your page even when you're not here.</p>
+       <p style="margin:0 0 20px;font-size:32px;font-weight:800;color:#D4A843;">${pageViews} views this week</p>
+       <p style="margin:0;font-size:14px;color:#888;line-height:1.7;">Come see who's checking you out.</p>`
+    : `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;">You've been quiet for a week.</p>
+       <p style="margin:0;font-size:14px;color:#888;line-height:1.7;">Your page is still live at <span style="color:#D4A843;">indiethis.com/${user.artistSlug ?? "your-page"}</span> — the more you share it, the more it works.</p>`;
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     `Your page had ${pageViews} view${pageViews === 1 ? "" : "s"} this week`,
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["re-engagement", "7day"],
+    htmlContent: reEngagementBase(body, "View Your Analytics →", `${APP_URL()}/dashboard/analytics`),
+  });
+}
+
+// 14-day inactive — unused feature highlight
+export async function sendReEngagement14DayEmail(
+  user:    { email: string; name: string },
+  feature: { name: string; description: string; url: string },
+): Promise<void> {
+  const body = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">We built something new while you were away.</p>
+    <div style="background:#141414;border-radius:12px;border:1px solid rgba(255,255,255,0.08);padding:20px 24px;margin-bottom:4px;">
+      <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#fff;">${feature.name}</p>
+      <p style="margin:0;font-size:14px;color:#888;line-height:1.7;">${feature.description}</p>
+    </div>`;
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "We built something new while you were away",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["re-engagement", "14day"],
+    htmlContent: reEngagementBase(body, `Try ${feature.name} →`, feature.url),
+  });
+}
+
+// 30-day inactive — personal check-in
+export async function sendReEngagement30DayEmail(
+  user: { email: string; name: string },
+): Promise<void> {
+  const body = `
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.7;">Your IndieThis account is still active.</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#888;line-height:1.7;">Your page, your music, your merch — it's all still live. If you need help getting started or have questions, reply to this email. We read every one.</p>`;
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Still here if you need us",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["re-engagement", "30day"],
+    htmlContent: reEngagementBase(body, "Log In →", `${APP_URL()}/dashboard`),
+  });
+}
+
+// 45-day inactive — churn prevention (subscription renewal warning)
+export async function sendReEngagement45DayEmail(
+  user:         { email: string; name: string },
+  subscription: { tier: string; renewsAt: Date; amountCents: number },
+): Promise<void> {
+  const tierLabel  = subscription.tier.charAt(0) + subscription.tier.slice(1).toLowerCase();
+  const renewDate  = subscription.renewsAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const amount     = `$${(subscription.amountCents / 100).toFixed(0)}`;
+
+  const body = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">Your <strong style="color:#fff;">${tierLabel}</strong> subscription renews on <strong style="color:#fff;">${renewDate}</strong> for <strong style="color:#D4A843;">${amount}/mo</strong>.</p>
+    <p style="margin:0;font-size:14px;color:#888;line-height:1.7;">If IndieThis isn't working for you, we want to fix that. Reply and tell us what's missing — or if you'd like to pause, you can manage your subscription below.</p>`;
+
+  await sendEmail({
+    to:          { email: user.email, name: user.name },
+    subject:     "Your next month is coming up",
+    replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
+    tags:        ["re-engagement", "45day", "churn-prevention"],
+    htmlContent: reEngagementBase(body, "Manage Subscription →", `${APP_URL()}/dashboard/settings`),
+  });
+}
