@@ -703,6 +703,8 @@ model Track {
   releasePlans          ReleasePlan[]
   genre                 String?
   recentPlays           RecentPlay[]
+  videoTrackLinks       ArtistVideo[]  @relation("VideoTrackLink")
+  videoBeatLinks        ArtistVideo[]  @relation("VideoBeatLink")
 }
 
 model DeliveredFile {
@@ -738,8 +740,9 @@ model MerchProduct {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  artist       User        @relation(fields: [artistId], references: [id])
-  orders       MerchOrder[]
+  artist          User          @relation(fields: [artistId], references: [id])
+  orders          MerchOrder[]
+  videoMerchLinks ArtistVideo[] @relation("VideoMerchLink")
 }
 
 model MerchOrder {
@@ -1371,20 +1374,27 @@ enum PreSavePlatform {
 // ─── Artist Videos ────────────────────────────────────────────────────────────
 
 model ArtistVideo {
-  id           String         @id @default(cuid())
-  artistId     String
-  title        String
-  description  String?
-  videoUrl     String?
-  thumbnailUrl String?
-  embedUrl     String?
-  type         VideoType      @default(UPLOAD)
-  category     VideoCategory?
-  duration     Int?
-  sortOrder    Int            @default(0)
-  isPublished  Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  artist       User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  artistId        String
+  title           String
+  description     String?
+  videoUrl        String?
+  thumbnailUrl    String?
+  embedUrl        String?
+  type            VideoType      @default(UPLOAD)
+  category        VideoCategory?
+  duration        Int?
+  sortOrder       Int            @default(0)
+  isPublished     Boolean        @default(true)
+  isYoutubeSynced Boolean        @default(false)
+  linkedTrackId   String?
+  linkedBeatId    String?
+  linkedMerchId   String?
+  createdAt       DateTime       @default(now())
+  artist          User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  linkedTrack     Track?         @relation("VideoTrackLink", fields: [linkedTrackId], references: [id], onDelete: SetNull)
+  linkedBeat      Track?         @relation("VideoBeatLink",  fields: [linkedBeatId],  references: [id], onDelete: SetNull)
+  linkedMerch     MerchProduct?  @relation("VideoMerchLink", fields: [linkedMerchId], references: [id], onDelete: SetNull)
 }
 
 // ─── Shows & Events ───────────────────────────────────────────────────────────

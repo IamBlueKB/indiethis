@@ -106,13 +106,35 @@ async function ArtistSite({ slug }: { slug: string }) {
   // Filter releases that actually have tracks
   const releases = artist.artistReleases.filter((r) => r.tracks.length > 0);
 
-  // Artist videos — uploads and embeds
+  // Artist videos — uploads and embeds, with linked product data for CTAs
   const artistVideos = site.showVideos !== false
     ? await db.artistVideo.findMany({
         where:   { artistId: artist.id, isPublished: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
         take:    20,
-        select:  { id: true, title: true, videoUrl: true, thumbnailUrl: true, category: true, type: true, embedUrl: true },
+        select:  {
+          id: true, title: true, videoUrl: true, thumbnailUrl: true,
+          category: true, type: true, embedUrl: true, isYoutubeSynced: true,
+          linkedTrack: {
+            select: {
+              id: true, title: true, coverArtUrl: true,
+              price: true, fileUrl: true,
+            },
+          },
+          linkedBeat: {
+            select: {
+              id: true, title: true, coverArtUrl: true,
+              price: true, bpm: true, musicalKey: true, fileUrl: true,
+              beatLeaseSettings: { select: { streamLeaseEnabled: true } },
+            },
+          },
+          linkedMerch: {
+            select: {
+              id: true, title: true, imageUrl: true,
+              basePrice: true, artistMarkup: true, productType: true,
+            },
+          },
+        },
       })
     : [];
 
@@ -324,7 +346,7 @@ async function ArtistSite({ slug }: { slug: string }) {
 
         {/* 7. Videos */}
         {artistVideos.length > 0 && (
-          <VideoSection artistVideos={artistVideos} />
+          <VideoSection artistVideos={artistVideos} artistSlug={slug} artistName={displayName} />
         )}
 
         {/* 8. Photos */}

@@ -351,8 +351,8 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
       {/* Splits */}
       <button
         onClick={() => setShowSplits(true)}
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-all"
-        style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843" }}
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all hover:opacity-80"
+        style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
         title="Split Sheet"
       >
         <Users size={12} />

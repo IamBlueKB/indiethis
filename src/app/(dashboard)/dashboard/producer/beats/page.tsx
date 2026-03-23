@@ -134,13 +134,14 @@ function BeatModal({
       : EMPTY_FORM
   );
 
-  const [audioFile,   setAudioFile]   = useState<File | null>(null);
-  const [coverFile,   setCoverFile]   = useState<File | null>(null);
+  const [audioFile,    setAudioFile]    = useState<File | null>(null);
+  const [coverFile,    setCoverFile]    = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(beat?.coverArtUrl ?? null);
-  const [saving,      setSaving]      = useState(false);
-  const [uploadStep,  setUploadStep]  = useState<string>("");
-  const [error,       setError]       = useState<string | null>(null);
-  const [savedBeatId, setSavedBeatId] = useState<string | null>(null); // set after upload to show license attachment
+  const [saving,       setSaving]       = useState(false);
+  const [uploadStep,   setUploadStep]   = useState<string>("");
+  const [error,        setError]        = useState<string | null>(null);
+  const [savedBeatId,  setSavedBeatId]  = useState<string | null>(null);
+  const [analyzing,    setAnalyzing]    = useState(false); // true while describe endpoint is running
 
   const audioInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -150,6 +151,27 @@ function BeatModal({
 
   function setField<K extends keyof BeatFormData>(k: K, v: BeatFormData[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  // Fire-and-forget description generation whenever a new audio file is selected.
+  // Pre-fills BPM, key, and description — producer can edit or clear before saving.
+  async function analyzeAndDescribe(file: File) {
+    setAnalyzing(true);
+    try {
+      const fd = new FormData();
+      fd.append("audio", file);
+      const res = await fetch("/api/dashboard/beats/describe", { method: "POST", body: fd });
+      if (!res.ok) return;
+      const data = await res.json() as { bpm: number | null; key: string | null; description: string | null };
+      // Only pre-fill BPM/key if the producer hasn't typed a value yet
+      if (data.bpm !== null) setForm((f) => ({ ...f, bpm: f.bpm || String(data.bpm) }));
+      if (data.key !== null) setForm((f) => ({ ...f, musicalKey: f.musicalKey || data.key! }));
+      if (data.description) setForm((f) => ({ ...f, description: f.description || data.description! }));
+    } catch {
+      // Silent — never block the upload flow
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   function toggleRestriction(r: string) {
@@ -331,7 +353,12 @@ function BeatModal({
                 type="file"
                 accept="audio/mp3,audio/mpeg,audio/wav,audio/x-wav"
                 className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) setAudioFile(f); }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setAudioFile(f);
+                  void analyzeAndDescribe(f);
+                }}
               />
             </div>
           </div>
@@ -397,13 +424,27 @@ function BeatModal({
 
           {/* Description */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description</label>
+            <div className="flex items-center gap-2 mb-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              {analyzing && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Loader2 size={10} className="animate-spin" />
+                  Generating description…
+                </span>
+              )}
+              {!analyzing && form.description && audioFile && (
+                <span className="text-[11px]" style={{ color: "var(--accent)" }}>
+                  AI-generated · edit freely
+                </span>
+              )}
+            </div>
             <textarea
               value={form.description}
               onChange={(e) => setField("description", e.target.value)}
-              placeholder="Describe the vibe, mood, influences…"
-              rows={2}
-              className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-accent"
+              placeholder={analyzing ? "" : "Describe the vibe, mood, influences…"}
+              disabled={analyzing}
+              rows={3}
+              className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 disabled:cursor-wait"
               style={{ borderColor: "var(--border)" }}
             />
           </div>
@@ -450,7 +491,7 @@ function BeatModal({
                   onClick={() => setField("streamLeaseEnabled", !form.streamLeaseEnabled)}
                   className={`w-10 h-5 rounded-full transition-colors relative ${form.streamLeaseEnabled ? "bg-accent" : "bg-white/10"}`}
                 >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.streamLeaseEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${form.streamLeaseEnabled ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
               </div>
 

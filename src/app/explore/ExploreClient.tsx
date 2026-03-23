@@ -678,11 +678,21 @@ export default function ExploreClient() {
 
   function handleFilterTab(tab: FilterTab) {
     setActiveFilter(tab);
-    const key = tab === "music" ? "music" : tab;
-    const ref = sectionRefs[key];
-    if (ref?.current) {
-      ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    if (tab === "all") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
     }
+
+    // Wait one tick for React to flush the state update and render the target
+    // section (it may have been hidden under a previous specific filter).
+    setTimeout(() => {
+      const ref = sectionRefs[tab];
+      if (!ref?.current) return;
+      const headerH = (document.querySelector("header") as HTMLElement)?.offsetHeight ?? 100;
+      const top = ref.current.getBoundingClientRect().top + window.scrollY - headerH - 16;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }, 20);
   }
 
   async function handleStudioSearch() {
