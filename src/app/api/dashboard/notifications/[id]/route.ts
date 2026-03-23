@@ -9,17 +9,18 @@ import { db } from "@/lib/db";
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
   const body = await req.json() as { isRead?: boolean };
 
   const notification = await db.notification.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { userId: true },
   });
 
@@ -28,7 +29,7 @@ export async function PATCH(
   }
 
   const updated = await db.notification.update({
-    where: { id: params.id },
+    where: { id },
     data:  { isRead: body.isRead ?? true },
   });
 

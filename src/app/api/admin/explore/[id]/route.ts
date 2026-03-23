@@ -8,9 +8,10 @@ import { db } from "@/lib/db";
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   await requireAdminAccess("explore");
+  const { id } = await params;
 
   const body = await req.json() as {
     type?: string;
@@ -27,13 +28,13 @@ export async function PATCH(
     linkedArtistId?: string | null;
   };
 
-  const existing = await db.exploreFeatureCard.findUnique({ where: { id: params.id } });
+  const existing = await db.exploreFeatureCard.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const card = await db.exploreFeatureCard.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       ...(body.type        !== undefined && { type: body.type }),
       ...(body.headline    !== undefined && { headline: body.headline.trim() }),
@@ -62,15 +63,16 @@ export async function PATCH(
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   await requireAdminAccess("explore");
+  const { id } = await params;
 
-  const existing = await db.exploreFeatureCard.findUnique({ where: { id: params.id } });
+  const existing = await db.exploreFeatureCard.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await db.exploreFeatureCard.delete({ where: { id: params.id } });
+  await db.exploreFeatureCard.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
