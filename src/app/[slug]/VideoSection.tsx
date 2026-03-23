@@ -277,7 +277,7 @@ function ProductCTA({
           </button>
           {track.price && track.price > 0 && (
             <a
-              href={`#music`}
+              href={`#track-${track.id}`}
               style={{
                 display: "flex", alignItems: "center",
                 padding: "5px 11px", borderRadius: 6,
@@ -344,7 +344,7 @@ function ProductCTA({
         {/* Actions */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
           <a
-            href="#beats"
+            href={`#beat-${beat.id}`}
             style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "5px 11px", borderRadius: 6,
@@ -357,7 +357,7 @@ function ProductCTA({
           </a>
           {streamEnabled && (
             <a
-              href="#beats"
+              href={`#beat-${beat.id}`}
               style={{
                 display: "flex", alignItems: "center", gap: 4,
                 padding: "5px 9px", borderRadius: 6,

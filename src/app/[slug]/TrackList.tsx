@@ -168,7 +168,7 @@ function TrackRow({
   followGateEnabled: boolean; instagramHandle: string | null;
 }) {
   return (
-    <div className="flex items-center gap-2.5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <div id={`track-${track.id}`} className="flex items-center gap-2.5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", scrollMarginTop: "80px" }}>
       {/* Number / now-playing */}
       <div className="w-[18px] shrink-0 text-center text-[11px]" style={{ color: "#666" }}>
         {isActive && trackIsPlaying ? <NowPlayingBars /> : index + 1}

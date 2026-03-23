@@ -51,8 +51,9 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
 
   return (
     <div
+      id={`beat-${beat.id}`}
       className="shrink-0 w-[200px] rounded-2xl overflow-hidden flex flex-col"
-      style={GLASS}
+      style={{ ...GLASS, scrollMarginTop: "80px" }}
     >
       {/* Cover art + play button */}
       <div className="relative w-full aspect-square bg-white/5 shrink-0">
