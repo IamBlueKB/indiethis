@@ -147,6 +147,9 @@ enum NotificationType {
   SPLIT_SHEET_ACTIVE
   SPLIT_SHEET_REJECTED
   SPLIT_PAYMENT_RECEIVED
+  RELEASE_PLAN_TASK_DUE
+  RELEASE_PLAN_OVERDUE
+  RELEASE_PLAN_LAUNCH_DAY
 }
 
 enum SplitSheetStatus {
@@ -466,6 +469,7 @@ model User {
   artistSessionNotes    SessionNote[]
   splitSheetsCreated    SplitSheet[]      @relation("SplitSheetCreator")
   splits                Split[]           @relation("UserSplits")
+  releasePlans          ReleasePlan[]
 }
 
 model Studio {
@@ -648,6 +652,7 @@ model Track {
   streamLeaseBookmarks  StreamLeaseBookmark[]
   licenseDocuments      LicenseDocument[]
   splitSheet            SplitSheet?
+  releasePlans          ReleasePlan[]
 }
 
 model DeliveredFile {
@@ -1497,8 +1502,9 @@ model ArtistRelease {
   sortOrder   Int         @default(0)
   createdAt   DateTime    @default(now())
 
-  artist      User        @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  tracks      Track[]
+  artist       User        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  tracks       Track[]
+  releasePlans ReleasePlan[]
 
   @@index([artistId])
 }
@@ -1987,4 +1993,76 @@ model SplitPayment {
   split            Split    @relation(fields: [splitId], references: [id])
 
   @@index([splitId])
+}
+
+// ─── Release Planner ──────────────────────────────────────────────────────────
+
+enum ReleasePlanStatus {
+  PLANNING
+  IN_PROGRESS
+  LAUNCHED
+  CANCELLED
+}
+
+enum TaskCategory {
+  CREATIVE
+  DISTRIBUTION
+  MARKETING
+  MERCH
+  ADMIN
+}
+
+enum TaskActionType {
+  AI_COVER_ART
+  AI_VIDEO
+  AI_MASTERING
+  AI_LYRIC_VIDEO
+  AI_PRESS_KIT
+  AI_AR_REPORT
+  PRE_SAVE_CAMPAIGN
+  EMAIL_BLAST
+  SMS_BROADCAST
+  MERCH_LAUNCH
+  UPLOAD_TRACK
+  SPLIT_SHEET
+  CUSTOM
+}
+
+model ReleasePlan {
+  id          String            @id @default(cuid())
+  artistId    String
+  trackId     String?
+  releaseId   String?
+  title       String
+  releaseDate DateTime
+  status      ReleasePlanStatus @default(PLANNING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  artist  User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  track   Track?         @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  release ArtistRelease? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  tasks   ReleasePlanTask[]
+
+  @@index([artistId])
+}
+
+model ReleasePlanTask {
+  id            String          @id @default(cuid())
+  releasePlanId String
+  title         String
+  description   String?         @db.Text
+  category      TaskCategory
+  dueDate       DateTime
+  sortOrder     Int
+  isCompleted   Boolean         @default(false)
+  completedAt   DateTime?
+  actionType    TaskActionType?
+  actionUrl     String?
+  linkedItemId  String?
+  createdAt     DateTime        @default(now())
+
+  releasePlan ReleasePlan @relation(fields: [releasePlanId], references: [id], onDelete: Cascade)
+
+  @@index([releasePlanId])
 }
