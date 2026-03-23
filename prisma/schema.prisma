@@ -432,6 +432,7 @@ model User {
   producerLeaseSettings ProducerLeaseSettings?
   streamLeaseBookmarks  StreamLeaseBookmark[]
   producerProfile       ProducerProfile?
+  licenseDocuments      LicenseDocument[]
 }
 
 model Studio {
@@ -610,6 +611,7 @@ model Track {
   streamLeases          StreamLease[]
   beatLeaseSettings     BeatLeaseSettings?
   streamLeaseBookmarks  StreamLeaseBookmark[]
+  licenseDocuments      LicenseDocument[]
 }
 
 model DeliveredFile {
@@ -1100,6 +1102,8 @@ model AIJob {
   errorMessage    String?
   createdAt       DateTime     @default(now())
   completedAt     DateTime?
+
+  licenseDocuments LicenseDocument[]
 
   @@index([triggeredById])
   @@index([artistId])
@@ -1706,7 +1710,8 @@ model StreamLease {
   producer  User          @relation("ProducerStreamLeases", fields: [producerId], references: [id])
   payments  StreamLeasePayment[]
   plays     StreamLeasePlay[]
-  agreement StreamLeaseAgreement?
+  agreement        StreamLeaseAgreement?
+  licenseDocuments LicenseDocument[]
 }
 
 model StreamLeasePlay {
@@ -1806,4 +1811,49 @@ model ProducerProfile {
   updatedAt                DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
+}
+
+// ─── License & Receipt Vault ────────────────────────────────────────────────
+
+enum LicenseSource {
+  SPLICE
+  SUNO
+  UDIO
+  SOUNDRAW
+  LANDR
+  TRACKLIB
+  LOOPCLOUD
+  AI_GENERATION
+  SAMPLE_CLEARANCE
+  WORK_FOR_HIRE
+  CUSTOM
+  OTHER
+}
+
+model LicenseDocument {
+  id            String        @id @default(cuid())
+  userId        String
+  title         String        // user-provided name: "Splice License - Midnight Piano Loop"
+  fileUrl       String        // uploaded file URL (PDF, PNG, JPG)
+  fileType      String        // pdf, png, jpg
+  source        LicenseSource // where it came from
+  notes         String?       // optional user notes
+
+  // Linkage — what content this document is attached to
+  trackId       String?       // if attached to a track or beat (beats are Tracks in this schema)
+  streamLeaseId String?       // if attached to a stream lease
+  aiJobId       String?       // if attached to an AI tool output
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user        User         @relation(fields: [userId],        references: [id])
+  track       Track?       @relation(fields: [trackId],       references: [id])
+  streamLease StreamLease? @relation(fields: [streamLeaseId], references: [id])
+  aiJob       AIJob?       @relation(fields: [aiJobId],       references: [id])
+
+  @@index([userId])
+  @@index([trackId])
+  @@index([streamLeaseId])
+  @@index([aiJobId])
 }
