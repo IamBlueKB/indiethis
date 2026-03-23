@@ -119,6 +119,7 @@ async function ArtistSite({ slug }: { slug: string }) {
             select: {
               id: true, title: true, coverArtUrl: true,
               price: true, fileUrl: true,
+              beatLeaseSettings: { select: { streamLeaseEnabled: true } },
             },
           },
           linkedBeat: {
@@ -267,6 +268,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       <ArtistNav
         displayName={displayName}
         hasMusic={hasMusic}
+        hasVideos={artistVideos.length > 0}
         hasShows={shows.length > 0}
         hasMerch={artist.merchProducts.length > 0}
         hasAbout={!!bio}
@@ -357,7 +359,9 @@ async function ArtistSite({ slug }: { slug: string }) {
 
         {/* 7. Videos */}
         {artistVideos.length > 0 && (
-          <VideoSection artistVideos={artistVideos} artistSlug={slug} artistName={displayName} />
+          <div id="videos">
+            <VideoSection artistVideos={artistVideos} artistSlug={slug} artistName={displayName} />
+          </div>
         )}
 
         {/* 8. Photos */}

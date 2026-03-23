@@ -44,9 +44,10 @@ export default function BeatLicenseModal({
   onClose:        () => void;
   onStreamLease?: (target: StreamLeaseTarget) => void;
 }) {
-  const [licenseType, setLicenseType] = useState<string>("NON_EXCLUSIVE");
-  const [licensing,   setLicensing]   = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [licenseType,       setLicenseType]       = useState<string>("NON_EXCLUSIVE");
+  const [licensing,         setLicensing]         = useState(false);
+  const [error,             setError]             = useState<string | null>(null);
+  const [streamLeaseState,  setStreamLeaseState]  = useState<"idle" | "checking" | "no-sub">("idle");
 
   async function handleLicense() {
     if (!track.price) return;
@@ -69,19 +70,40 @@ export default function BeatLicenseModal({
     }
   }
 
-  function handleStreamLeaseClick() {
-    const producerName = track.artist.artistName ?? track.artist.name;
-    const target: StreamLeaseTarget = {
-      trackId:     track.id,
-      beatTitle:   track.title,
-      producerName,
-      coverArtUrl: track.coverArtUrl,
-    };
-    if (onStreamLease) {
-      onClose();
-      onStreamLease(target);
-    } else {
-      window.location.href = `/signup?next=/dashboard/marketplace`;
+  async function handleStreamLeaseClick() {
+    setStreamLeaseState("checking");
+    try {
+      const res  = await fetch("/api/auth/me");
+      const data = await res.json() as { loggedIn: boolean; hasSubscription: boolean };
+
+      if (!data.loggedIn) {
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.location.href = `/signup?next=${returnUrl}`;
+        return;
+      }
+
+      if (!data.hasSubscription) {
+        setStreamLeaseState("no-sub");
+        return;
+      }
+
+      // Logged in + active subscription → proceed to stream lease flow
+      setStreamLeaseState("idle");
+      const producerName = track.artist.artistName ?? track.artist.name;
+      const target: StreamLeaseTarget = {
+        trackId:     track.id,
+        beatTitle:   track.title,
+        producerName,
+        coverArtUrl: track.coverArtUrl,
+      };
+      if (onStreamLease) {
+        onClose();
+        onStreamLease(target);
+      } else {
+        window.location.href = `/dashboard/marketplace`;
+      }
+    } catch {
+      setStreamLeaseState("idle");
     }
   }
 
@@ -158,22 +180,43 @@ export default function BeatLicenseModal({
           ))}
 
           {track.streamLeaseEnabled && (
-            <button
-              onClick={handleStreamLeaseClick}
-              className="w-full text-left rounded-xl border p-3 transition-all"
-              style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Radio size={13} style={{ color: "#E85D4A" }} />
-                  <p className="text-sm font-semibold text-foreground">Stream Lease</p>
+            <div>
+              <button
+                onClick={() => void handleStreamLeaseClick()}
+                disabled={streamLeaseState === "checking"}
+                className="w-full text-left rounded-xl border p-3 transition-all disabled:opacity-60"
+                style={{ borderColor: "rgba(232,93,74,0.4)", backgroundColor: "rgba(232,93,74,0.04)" }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {streamLeaseState === "checking"
+                      ? <Loader2 size={13} className="animate-spin" style={{ color: "#E85D4A" }} />
+                      : <Radio size={13} style={{ color: "#E85D4A" }} />
+                    }
+                    <p className="text-sm font-semibold text-foreground">Stream Lease</p>
+                  </div>
+                  <p className="text-sm font-bold" style={{ color: "#E85D4A" }}>$1/mo</p>
                 </div>
-                <p className="text-sm font-bold" style={{ color: "#E85D4A" }}>$1/mo</p>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5 pl-5">
-                Record your song over this beat and stream it exclusively on IndieThis. Cancel anytime.
-              </p>
-            </button>
+                <p className="text-xs text-muted-foreground mt-0.5 pl-5">
+                  Record your song over this beat and stream it exclusively on IndieThis.
+                </p>
+              </button>
+
+              {streamLeaseState === "no-sub" && (
+                <div
+                  className="mt-2 rounded-xl p-3 text-xs"
+                  style={{ backgroundColor: "rgba(232,93,74,0.08)", border: "1px solid rgba(232,93,74,0.2)" }}
+                >
+                  <p className="font-semibold" style={{ color: "#E85D4A" }}>Subscription required</p>
+                  <p className="text-muted-foreground mt-0.5">
+                    Stream Lease is included with an IndieThis plan.{" "}
+                    <a href="/dashboard/upgrade" className="underline font-semibold" style={{ color: "#E85D4A" }}>
+                      Subscribe to unlock →
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

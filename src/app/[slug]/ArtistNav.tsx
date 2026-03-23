@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 interface ArtistNavProps {
   displayName: string;
   hasMusic:    boolean;
+  hasVideos:   boolean;
   hasShows:    boolean;
   hasMerch:    boolean;
   hasAbout:    boolean;
@@ -13,6 +14,7 @@ interface ArtistNavProps {
 export default function ArtistNav({
   displayName,
   hasMusic,
+  hasVideos,
   hasShows,
   hasMerch,
   hasAbout,
@@ -37,8 +39,9 @@ export default function ArtistNav({
   }
 
   const links = [
-    hasMusic && { label: "Music",   id: "music" },
-    hasShows && { label: "Shows",   id: "shows" },
+    hasMusic  && { label: "Music",   id: "music" },
+    hasVideos && { label: "Videos",  id: "videos" },
+    hasShows  && { label: "Shows",   id: "shows" },
     hasMerch && { label: "Merch",   id: "merch" },
     hasAbout && { label: "About",   id: "about" },
     { label: "Booking", id: "booking" },

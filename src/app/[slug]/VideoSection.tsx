@@ -15,6 +15,7 @@ type LinkedTrack = {
   coverArtUrl: string | null;
   price:       number | null;
   fileUrl:     string;
+  beatLeaseSettings: { streamLeaseEnabled: boolean } | null;
 };
 
 type LinkedBeat = {
@@ -390,7 +391,7 @@ function ProductCTA({
             title:              track.title,
             price:              track.price,
             coverArtUrl:        track.coverArtUrl,
-            streamLeaseEnabled: false,
+            streamLeaseEnabled: track.beatLeaseSettings?.streamLeaseEnabled ?? true,
             artist: { name: artistName, artistName: null, artistSlug },
           }}
           onClose={() => setTrackBuyOpen(false)}
@@ -404,7 +405,7 @@ function ProductCTA({
   if (video.linkedBeat) {
     const beat = video.linkedBeat;
     const meta = [beat.bpm && `${beat.bpm} BPM`, beat.musicalKey].filter(Boolean).join(" · ");
-    const streamEnabled = beat.beatLeaseSettings?.streamLeaseEnabled ?? false;
+    const streamEnabled = beat.beatLeaseSettings?.streamLeaseEnabled ?? true;
 
     return (
       <>
@@ -414,60 +415,44 @@ function ProductCTA({
           padding: "8px 12px",
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: 8,
           marginTop: 6,
+          overflow: "hidden",
         }}>
           {/* Art */}
           {beat.coverArtUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={beat.coverArtUrl} alt="" style={{ width: 32, height: 32, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} />
+            <img src={beat.coverArtUrl} alt="" style={{ width: 28, height: 28, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 32, height: 32, borderRadius: 5, backgroundColor: "#1a1a1a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Music2 size={14} style={{ color: "#444" }} />
+            <div style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: "#1a1a1a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Music2 size={12} style={{ color: "#444" }} />
             </div>
           )}
 
           {/* Info */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
               {beat.title}
             </p>
             {meta && (
-              <p style={{ fontSize: 10, color: "#555", margin: 0 }}>{meta}</p>
+              <p style={{ fontSize: 10, color: "#555", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</p>
             )}
           </div>
 
-          {/* Actions */}
-          <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-            <button
-              onClick={() => setBeatModalOpen(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 11px", borderRadius: 6, border: "none",
-                backgroundColor: "rgba(212,168,67,0.12)",
-                color: "#D4A843", fontSize: 11, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap",
-              }}
-            >
-              <ShoppingBag size={10} />
-              License{beat.price != null ? ` — from $${beat.price.toFixed(2)}` : ""}
-            </button>
-            {streamEnabled && (
-              <button
-                onClick={() => setBeatModalOpen(true)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  padding: "5px 9px", borderRadius: 6, border: "none",
-                  backgroundColor: "rgba(232,112,64,0.12)",
-                  color: "#E87040", fontSize: 10, fontWeight: 700,
-                  cursor: "pointer", whiteSpace: "nowrap",
-                }}
-              >
-                <Radio size={9} />
-                $1/mo
-              </button>
-            )}
-          </div>
+          {/* Single CTA */}
+          <button
+            onClick={() => setBeatModalOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "5px 10px", borderRadius: 6, border: "none",
+              backgroundColor: "rgba(212,168,67,0.12)",
+              color: "#D4A843", fontSize: 11, fontWeight: 700,
+              cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            }}
+          >
+            <ShoppingBag size={10} />
+            Buy
+          </button>
         </div>
         {beatModalOpen && (
           <BeatLicenseModal
@@ -476,7 +461,7 @@ function ProductCTA({
               title:              beat.title,
               price:              beat.price,
               coverArtUrl:        beat.coverArtUrl,
-              streamLeaseEnabled: beat.beatLeaseSettings?.streamLeaseEnabled ?? false,
+              streamLeaseEnabled: beat.beatLeaseSettings?.streamLeaseEnabled ?? true,
               artist: {
                 name:       beat.artist?.name ?? "",
                 artistName: beat.artist?.artistName ?? null,
@@ -772,9 +757,6 @@ export default function VideoSection({ artistVideos = [], artistSlug, artistName
       {/* Zone 2 — Live (uploads, horizontal scroll) */}
       {hasUploads && (
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase" style={{ color: "#D4A843", letterSpacing: "1.5px" }}>
-            {hasEmbeds ? "LIVE" : "WATCH"}
-          </p>
           <div
             style={{
               display: "flex",
