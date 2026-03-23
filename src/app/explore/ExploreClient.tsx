@@ -466,6 +466,11 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
           </div>
         </button>
       )}
+      {artist.slug && (
+        <Link href={`/${artist.slug}`} className="text-[9px] block hover:underline" style={{ color: "#555" }}>
+          More from {artist.name} →
+        </Link>
+      )}
     </div>
   );
 }

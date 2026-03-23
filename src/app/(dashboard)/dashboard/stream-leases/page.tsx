@@ -41,7 +41,7 @@ type StreamLease = {
   createdAt: string;
   playCount: number;
   beat:     { id: string; title: string; coverArtUrl: string | null };
-  producer: { name: string; artistName: string | null };
+  producer: { name: string; artistName: string | null; artistSlug: string | null };
   agreement: { id: string; artistAcceptedAt: string } | null;
 };
 
@@ -283,8 +283,20 @@ function LeaseCard({
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             on <span className="text-foreground font-medium">{lease.beat.title}</span>
-            {" · "}prod. {producer}
+            {" · "}prod.{" "}
+            {lease.producer.artistSlug ? (
+              <a href={`/${lease.producer.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors hover:underline">
+                {producer}
+              </a>
+            ) : producer}
           </p>
+          {lease.producer.artistSlug && (
+            <a href={`/${lease.producer.artistSlug}`} target="_blank" rel="noopener noreferrer"
+              className="text-[10px] no-underline hover:underline mt-0.5 block" style={{ color: "var(--accent)" }}>
+              More from {producer} →
+            </a>
+          )}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <Calendar size={10} />

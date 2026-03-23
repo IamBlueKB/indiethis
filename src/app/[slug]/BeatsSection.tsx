@@ -127,7 +127,7 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
         {/* CTA buttons */}
         <div className="flex gap-1.5 mt-auto pt-1.5">
           <Link
-            href="/dashboard/marketplace"
+            href="/beats"
             className="flex-1 text-center py-1.5 rounded-lg text-[11px] font-semibold no-underline transition-colors hover:brightness-110"
             style={{ backgroundColor: "rgba(212,168,67,0.2)", color: "#D4A843" }}
           >
@@ -135,7 +135,7 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
           </Link>
           {beat.streamLeaseEnabled && (
             <Link
-              href="/dashboard/marketplace"
+              href="/beats"
               className="flex-1 text-center py-1.5 rounded-lg text-[11px] font-semibold no-underline transition-colors hover:brightness-110 flex items-center justify-center gap-1"
               style={{ backgroundColor: "rgba(232,112,64,0.2)", color: "#E87040" }}
             >
@@ -175,7 +175,7 @@ export default function BeatsSection({
           <h2 className="text-xl font-bold text-white">Beats by {producerName}</h2>
         </div>
         <Link
-          href="/dashboard/marketplace"
+          href="/beats"
           className="text-xs font-medium no-underline hover:underline"
           style={{ color: "rgba(255,255,255,0.4)" }}
         >
@@ -198,7 +198,7 @@ export default function BeatsSection({
 
         {/* View all card */}
         <Link
-          href="/dashboard/marketplace"
+          href="/beats"
           className="shrink-0 w-[140px] rounded-2xl flex flex-col items-center justify-center gap-2 no-underline transition-colors hover:bg-white/8"
           style={{ ...GLASS, minHeight: 240 }}
         >

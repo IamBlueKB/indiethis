@@ -403,7 +403,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       include: {
         beat:      { select: { id: true, title: true, coverArtUrl: true } },
-        producer:  { select: { name: true, artistName: true } },
+        producer:  { select: { name: true, artistName: true, artistSlug: true } },
         plays:     { select: { id: true } },
         agreement: { select: { id: true, artistAcceptedAt: true } },
       },

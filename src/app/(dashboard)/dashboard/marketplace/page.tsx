@@ -1093,6 +1093,12 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                     )}
                     {t.projectName && <><span className="text-xs text-muted-foreground/40">·</span><p className="text-xs text-muted-foreground truncate">{t.projectName}</p></>}
                   </div>
+                  {t.artist.artistSlug && (
+                    <a href={`/${t.artist.artistSlug}`} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] no-underline hover:underline" style={{ color: "var(--accent)" }}>
+                      More from {producerName} →
+                    </a>
+                  )}
                   {t.plays > 0 && <p className="text-[11px] text-muted-foreground mt-0.5">{t.plays} plays</p>}
                   {/* Stream Lease badge — prominent CTA directly on the card */}
                   {t.streamLeaseEnabled && (
