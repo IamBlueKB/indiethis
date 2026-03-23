@@ -728,18 +728,21 @@ export default function ExploreClient() {
     fetch("/api/explore/new-releases").then(r => r.json()).then(d => { setNewReleases(d.tracks ?? []); setLoadingNew(false); });
   }, [activeGenre]);
 
+  // Shared scroll helper — accounts for both the sticky nav and the pills bar
+  function scrollToSection(ref: React.RefObject<HTMLElement | null>) {
+    if (!ref?.current) return;
+    const navH   = (document.querySelector("header") as HTMLElement)?.offsetHeight ?? 56;
+    const pillsH = (document.getElementById("explore-pills-bar") as HTMLElement)?.offsetHeight ?? 44;
+    const top    = ref.current.getBoundingClientRect().top + window.scrollY - navH - pillsH - 8;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+
   // URL param filter — auto-scroll to section on load (e.g. /explore?filter=studios)
   useEffect(() => {
     const filter = searchParams.get("filter") as FilterTab | null;
     if (!filter || filter === "all") return;
     setActiveFilter(filter);
-    setTimeout(() => {
-      const ref = sectionRefs[filter];
-      if (!ref?.current) return;
-      const headerH = (document.querySelector("header") as HTMLElement)?.offsetHeight ?? 100;
-      const top = ref.current.getBoundingClientRect().top + window.scrollY - headerH - 16;
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    }, 300);
+    setTimeout(() => scrollToSection(sectionRefs[filter]), 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -764,13 +767,7 @@ export default function ExploreClient() {
 
     // Wait one tick for React to flush the state update and render the target
     // section (it may have been hidden under a previous specific filter).
-    setTimeout(() => {
-      const ref = sectionRefs[tab];
-      if (!ref?.current) return;
-      const headerH = (document.querySelector("header") as HTMLElement)?.offsetHeight ?? 100;
-      const top = ref.current.getBoundingClientRect().top + window.scrollY - headerH - 16;
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    }, 20);
+    setTimeout(() => scrollToSection(sectionRefs[tab]), 20);
   }
 
   async function handleStudioSearch() {
@@ -791,6 +788,7 @@ export default function ExploreClient() {
 
       {/* Filter pills */}
       <div
+        id="explore-pills-bar"
         className="sticky top-14 z-30 border-b"
         style={{ backgroundColor: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderColor: "#1a1a1a" }}
       >
