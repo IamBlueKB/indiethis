@@ -175,7 +175,7 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
           </span>
         )}
         <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/40">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
             <Play size={16} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
           </div>
         </div>
