@@ -25,6 +25,12 @@ type LinkedBeat = {
   musicalKey:  string | null;
   fileUrl:     string;
   beatLeaseSettings: { streamLeaseEnabled: boolean } | null;
+  artist?: {
+    producerProfile?: {
+      defaultNonExclusivePrice: number | null;
+      defaultExclusivePrice:    number | null;
+    } | null;
+  } | null;
 };
 
 type LinkedMerch = {
@@ -75,6 +81,165 @@ function getSizes(productType: string): string[] | null {
   if (SIZED_TYPES.has(productType)) return APPAREL_SIZES;
   if (HAT_TYPES.has(productType))   return HAT_SIZES;
   return null;
+}
+
+// ─── Beat License Modal ───────────────────────────────────────────────────────
+
+function BeatLicenseModal({ beat, onClose }: { beat: LinkedBeat; onClose: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
+
+  const nonExPrice = beat.artist?.producerProfile?.defaultNonExclusivePrice ?? beat.price;
+  const excPrice   = beat.artist?.producerProfile?.defaultExclusivePrice ?? null;
+  const streamEnabled = beat.beatLeaseSettings?.streamLeaseEnabled ?? false;
+
+  async function handleLicense(licenseType: "NON_EXCLUSIVE" | "EXCLUSIVE") {
+    setLoading(licenseType);
+    setError(null);
+    try {
+      const res  = await fetch("/api/beats/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ trackId: beat.id, licenseType }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (res.status === 401) {
+        window.location.href = `/signup?next=/dashboard/marketplace`;
+        return;
+      }
+      if (!res.ok || !data.url) { setError(data.error ?? "Checkout failed. Try again."); return; }
+      window.location.href = data.url;
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function handleStreamLease() {
+    window.location.href = `/signup?next=/dashboard/marketplace`;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border p-5 space-y-4"
+        style={{ backgroundColor: "rgba(18,18,18,0.97)", border: "1px solid rgba(212,168,67,0.2)" }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {beat.coverArtUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={beat.coverArtUrl} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.08)" }}>
+                <Music2 size={16} style={{ color: "rgba(212,168,67,0.4)" }} />
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-bold text-white leading-snug line-clamp-1">{beat.title}</p>
+              {(beat.bpm || beat.musicalKey) && (
+                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  {[beat.bpm && `${beat.bpm} BPM`, beat.musicalKey].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white/80 p-1 shrink-0"><X size={15} /></button>
+        </div>
+
+        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Choose your license type below.</p>
+
+        {/* Tiers */}
+        <div className="space-y-2">
+
+          {/* Stream Lease */}
+          {streamEnabled && (
+            <button
+              onClick={handleStreamLease}
+              className="w-full text-left rounded-xl border p-3.5 transition-all hover:border-orange-500/50 hover:bg-orange-500/5 group"
+              style={{ borderColor: "rgba(232,112,64,0.25)", backgroundColor: "rgba(232,112,64,0.06)" }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio size={14} style={{ color: "#E87040" }} />
+                  <span className="text-sm font-bold" style={{ color: "#E87040" }}>Stream Lease</span>
+                </div>
+                <span className="text-sm font-black" style={{ color: "#E87040" }}>$1<span className="text-xs font-medium">/mo</span></span>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Use this beat on your releases. Cancel anytime. Revocable with 30-day notice.
+              </p>
+            </button>
+          )}
+
+          {/* Non-Exclusive */}
+          {nonExPrice != null && (
+            <button
+              onClick={() => void handleLicense("NON_EXCLUSIVE")}
+              disabled={loading === "NON_EXCLUSIVE"}
+              className="w-full text-left rounded-xl border p-3.5 transition-all hover:border-accent/50 hover:bg-accent/5 disabled:opacity-60"
+              style={{ borderColor: "rgba(212,168,67,0.25)", backgroundColor: "rgba(212,168,67,0.06)" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: "#D4A843" }}>
+                  {loading === "NON_EXCLUSIVE" ? "Redirecting…" : "Non-Exclusive License"}
+                </span>
+                <span className="text-sm font-black" style={{ color: "#D4A843" }}>${nonExPrice.toFixed(2)}</span>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                One-time payment. Producer retains rights and can license to others.
+              </p>
+            </button>
+          )}
+
+          {/* Exclusive */}
+          {excPrice != null ? (
+            <button
+              onClick={() => void handleLicense("EXCLUSIVE")}
+              disabled={loading === "EXCLUSIVE"}
+              className="w-full text-left rounded-xl border p-3.5 transition-all hover:border-white/20 hover:bg-white/5 disabled:opacity-60"
+              style={{ borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.04)" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-white">
+                  {loading === "EXCLUSIVE" ? "Redirecting…" : "Exclusive License"}
+                </span>
+                <span className="text-sm font-black text-white">${excPrice.toFixed(2)}</span>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Beat pulled from marketplace. Full exclusive rights transfer to you.
+              </p>
+            </button>
+          ) : (
+            <div
+              className="w-full text-left rounded-xl border p-3.5"
+              style={{ borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.02)" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.4)" }}>Exclusive License</span>
+                <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)" }}>Contact</span>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.25)" }}>
+                Full exclusive rights. Reach out to the producer directly.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
+        <p className="text-[10px] text-center" style={{ color: "rgba(255,255,255,0.2)" }}>
+          You&apos;ll create a free account or sign in to complete checkout.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 // ─── Merch Quick-Add Modal ────────────────────────────────────────────────────
@@ -215,6 +380,7 @@ function ProductCTA({
 }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
   const [merchOpen, setMerchOpen] = useState(false);
+  const [beatModalOpen, setBeatModalOpen] = useState(false);
 
   // Track CTA
   if (video.linkedTrack) {
@@ -275,9 +441,12 @@ function ProductCTA({
             {isThisPlaying ? <Pause size={10} fill="#D4A843" /> : <Play size={10} fill="#D4A843" style={{ marginLeft: 1 }} />}
             {isThisPlaying ? "Pause" : "Listen"}
           </button>
-          {track.price && track.price > 0 && (
+          {track.fileUrl && (
             <a
-              href={`#track-${track.id}`}
+              href={track.fileUrl}
+              download={track.title}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: "flex", alignItems: "center",
                 padding: "5px 11px", borderRadius: 6,
@@ -286,7 +455,7 @@ function ProductCTA({
                 textDecoration: "none", whiteSpace: "nowrap",
               }}
             >
-              Buy — ${track.price.toFixed(2)}
+              Download
             </a>
           )}
           <a
@@ -312,66 +481,72 @@ function ProductCTA({
     const streamEnabled = beat.beatLeaseSettings?.streamLeaseEnabled ?? false;
 
     return (
-      <div style={{
-        backgroundColor: "#111",
-        borderRadius: 8,
-        padding: "8px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        marginTop: 6,
-      }}>
-        {/* Art */}
-        {beat.coverArtUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={beat.coverArtUrl} alt="" style={{ width: 32, height: 32, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} />
-        ) : (
-          <div style={{ width: 32, height: 32, borderRadius: 5, backgroundColor: "#1a1a1a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Music2 size={14} style={{ color: "#444" }} />
-          </div>
-        )}
-
-        {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
-            {beat.title}
-          </p>
-          {meta && (
-            <p style={{ fontSize: 10, color: "#555", margin: 0 }}>{meta}</p>
+      <>
+        <div style={{
+          backgroundColor: "#111",
+          borderRadius: 8,
+          padding: "8px 12px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginTop: 6,
+        }}>
+          {/* Art */}
+          {beat.coverArtUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={beat.coverArtUrl} alt="" style={{ width: 32, height: 32, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 32, height: 32, borderRadius: 5, backgroundColor: "#1a1a1a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Music2 size={14} style={{ color: "#444" }} />
+            </div>
           )}
-        </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-          <a
-            href={`#beat-${beat.id}`}
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "5px 11px", borderRadius: 6,
-              backgroundColor: "rgba(212,168,67,0.12)",
-              color: "#D4A843", fontSize: 11, fontWeight: 700,
-              textDecoration: "none", whiteSpace: "nowrap",
-            }}
-          >
-            License{beat.price != null ? ` — $${beat.price.toFixed(2)}` : ""}
-          </a>
-          {streamEnabled && (
-            <a
-              href={`#beat-${beat.id}`}
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+              {beat.title}
+            </p>
+            {meta && (
+              <p style={{ fontSize: 10, color: "#555", margin: 0 }}>{meta}</p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+            <button
+              onClick={() => setBeatModalOpen(true)}
               style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "5px 9px", borderRadius: 6,
-                backgroundColor: "rgba(232,112,64,0.12)",
-                color: "#E87040", fontSize: 10, fontWeight: 700,
-                textDecoration: "none", whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "5px 11px", borderRadius: 6, border: "none",
+                backgroundColor: "rgba(212,168,67,0.12)",
+                color: "#D4A843", fontSize: 11, fontWeight: 700,
+                cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
-              <Radio size={9} />
-              $1/mo
-            </a>
-          )}
+              <ShoppingBag size={10} />
+              License{beat.price != null ? ` — from $${beat.price.toFixed(2)}` : ""}
+            </button>
+            {streamEnabled && (
+              <button
+                onClick={() => setBeatModalOpen(true)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "5px 9px", borderRadius: 6, border: "none",
+                  backgroundColor: "rgba(232,112,64,0.12)",
+                  color: "#E87040", fontSize: 10, fontWeight: 700,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                <Radio size={9} />
+                $1/mo
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+        {beatModalOpen && (
+          <BeatLicenseModal beat={beat} onClose={() => setBeatModalOpen(false)} />
+        )}
+      </>
     );
   }
 
