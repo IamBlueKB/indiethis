@@ -51,10 +51,10 @@ export async function GET(req: Request) {
       tracks:           { select: { id: true }, take: 1 },
       artistSite:       { select: { isPublished: true } },
       fanContacts:      { select: { id: true }, take: 6 },
-      aiJobs:           { where: { triggeredBy: "ARTIST" },   select: { type: true } },
+      aiGenerations:    { select: { type: true } },
       merchProducts:    { select: { id: true }, take: 1 },
       preSaveCampaigns: { select: { id: true }, take: 1 },
-      beatLicensesAsBuyer: { select: { id: true }, take: 1 },
+      artistLicenses:   { select: { id: true }, take: 1 },
     },
   });
 
@@ -77,7 +77,7 @@ export async function GET(req: Request) {
       }
 
       // Day 3 — no AI tool used yet
-      if (days >= 3 && days < 6 && !alreadySent(logged, "DAY3_AI") && user.aiJobs.length === 0) {
+      if (days >= 3 && days < 6 && !alreadySent(logged, "DAY3_AI") && user.aiGenerations.length === 0) {
         await sendOnboardingDay3Email(u);
         await logSent(user.id, "DAY3_AI");
         sent++; continue;
@@ -99,12 +99,12 @@ export async function GET(req: Request) {
 
       // Day 14 — feature discovery
       if (days >= 14 && days < 18 && !alreadySent(logged, "DAY14_DISCOVER")) {
-        const usedTypes = new Set(user.aiJobs.map((j) => j.type));
+        const usedTypes = new Set(user.aiGenerations.map((j) => j.type));
         const unused = FEATURE_CATALOGUE
           .filter((f) => {
             if (f.key === "MERCH")   return user.merchProducts.length === 0;
             if (f.key === "PRESAVE") return user.preSaveCampaigns.length === 0;
-            if (f.key === "BEATS")   return user.beatLicensesAsBuyer.length === 0;
+            if (f.key === "BEATS")   return user.artistLicenses.length === 0;
             return !usedTypes.has(f.key as "VIDEO" | "COVER_ART" | "MASTERING" | "LYRIC_VIDEO");
           })
           .map((f) => ({ name: f.name, description: f.description, url: `${appUrl}${f.url}` }));

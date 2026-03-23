@@ -76,7 +76,7 @@ export async function GET(req: Request) {
           artistSlug:   true,
           lastLoginAt:  true,
           reEngagementEmails: { select: { emailType: true, cycleKey: true } },
-          aiJobs:       { where: { triggeredBy: "ARTIST" }, select: { type: true } },
+          aiGenerations: { select: { type: true } },
           merchProducts: { select: { id: true }, take: 1 },
           preSaveCampaigns: { select: { id: true }, take: 1 },
         },
@@ -112,7 +112,7 @@ export async function GET(req: Request) {
         await sendReEngagement7DayEmail(u, pageViews);
 
       } else if (threshold === "14DAY") {
-        const usedTypes = new Set(user.aiJobs.map((j) => j.type));
+        const usedTypes = new Set(user.aiGenerations.map((j) => j.type));
         const unused = FEATURE_CATALOGUE.filter((f) => {
           if (f.key === "MERCH")   return user.merchProducts.length === 0;
           if (f.key === "PRESAVE") return user.preSaveCampaigns.length === 0;
