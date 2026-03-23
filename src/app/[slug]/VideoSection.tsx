@@ -227,9 +227,11 @@ function ProductCTA({
   const [merchOpen,     setMerchOpen]     = useState(false);
   const [beatModalOpen, setBeatModalOpen] = useState(false);
   const [trackBuying,   setTrackBuying]   = useState(false);
+  const [trackBuyErr,   setTrackBuyErr]   = useState<string | null>(null);
 
   async function handleTrackBuy(trackId: string) {
     setTrackBuying(true);
+    setTrackBuyErr(null);
     try {
       const res  = await fetch("/api/public/tracks/checkout", {
         method:  "POST",
@@ -238,7 +240,10 @@ function ProductCTA({
       });
       const data = await res.json() as { url?: string; error?: string };
       if (data.url) { window.location.href = data.url; return; }
-    } catch { /* fall through */ }
+      setTrackBuyErr(data.error ?? "Checkout unavailable. Try again later.");
+    } catch {
+      setTrackBuyErr("Network error. Try again.");
+    }
     setTrackBuying(false);
   }
 
@@ -261,6 +266,7 @@ function ProductCTA({
     }
 
     return (
+      <>
       <div style={{
         backgroundColor: "#111",
         borderRadius: 8,
@@ -330,6 +336,10 @@ function ProductCTA({
           </a>
         </div>
       </div>
+      {trackBuyErr && (
+        <p style={{ fontSize: 10, color: "#E85D4A", margin: "4px 0 0 0", paddingLeft: 4 }}>{trackBuyErr}</p>
+      )}
+    </>
     );
   }
 
