@@ -210,6 +210,23 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Session note attachments (studio admin — any file type up to 64MB, up to 5 files)
+  sessionNoteFiles: f({
+    "application/octet-stream": { maxFileSize: "64MB", maxFileCount: 5 },
+    audio: { maxFileSize: "64MB", maxFileCount: 5 },
+    image: { maxFileSize: "16MB", maxFileCount: 5 },
+    video: { maxFileSize: "64MB", maxFileCount: 5 },
+    "application/pdf": { maxFileSize: "32MB", maxFileCount: 5 },
+  })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Studio file delivery
   deliveryFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 20 },

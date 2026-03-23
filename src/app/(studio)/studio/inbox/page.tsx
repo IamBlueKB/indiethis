@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Inbox, FileText, Music2, Youtube, ChevronDown, ChevronUp, ExternalLink, Trash2, CalendarClock, Mail, Phone, Zap } from "lucide-react";
+import { Inbox, FileText, Music2, Youtube, ChevronDown, ChevronUp, ExternalLink, Trash2, CalendarClock, Mail, Phone, Zap, StickyNote } from "lucide-react";
 
 type Submission = {
   id: string;
@@ -298,7 +298,8 @@ export default function StudioInboxPage() {
                         {s.contact ? (
                           <a href={`/studio/contacts/${s.contact.id}`}
                             className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline no-underline">
-                            View contact: {s.contact.name} →
+                            <StickyNote size={11} />
+                            {s.contact.name} · View project history →
                           </a>
                         ) : <span />}
                         <button

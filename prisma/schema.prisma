@@ -140,6 +140,14 @@ enum NotificationType {
   AI_GENERATION_COMPLETE
   NEW_MESSAGE
   BEAT_PREVIEW
+  SESSION_NOTE_ADDED
+  ARTIST_SESSION_FEEDBACK
+}
+
+enum SessionNoteStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
 enum ActivityLogType {
@@ -433,6 +441,7 @@ model User {
   streamLeaseBookmarks  StreamLeaseBookmark[]
   producerProfile       ProducerProfile?
   licenseDocuments      LicenseDocument[]
+  artistSessionNotes    SessionNote[]
 }
 
 model Studio {
@@ -513,6 +522,7 @@ model Studio {
   credits            StudioCredit[]
   engineers          StudioEngineer[]
   equipment          StudioEquipment[]
+  sessionNotes       SessionNote[]
 }
 
 model StudioArtist {
@@ -578,6 +588,7 @@ model BookingSession {
   artist         User            @relation(fields: [artistId], references: [id])
   contact        Contact?        @relation(fields: [contactId], references: [id])
   deliveredFiles DeliveredFile[]
+  sessionNotes   SessionNote[]
 }
 
 model Track {
@@ -1856,4 +1867,43 @@ model LicenseDocument {
   @@index([trackId])
   @@index([streamLeaseId])
   @@index([aiJobId])
+}
+
+// ─── Session Notes / Project Tracker ─────────────────────────────────────────
+
+model SessionNote {
+  id               String            @id @default(cuid())
+  bookingSessionId String
+  studioId         String
+  artistId         String
+  title            String
+  body             String            @db.Text
+  status           SessionNoteStatus @default(DRAFT)
+  isShared         Boolean           @default(false)  // true = visible to artist
+  artistFeedback   String?           @db.Text
+  feedbackAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  bookingSession   BookingSession    @relation(fields: [bookingSessionId], references: [id], onDelete: Cascade)
+  studio           Studio            @relation(fields: [studioId], references: [id])
+  artist           User              @relation(fields: [artistId], references: [id])
+  attachments      SessionNoteAttachment[]
+
+  @@index([bookingSessionId])
+  @@index([studioId])
+  @@index([artistId])
+}
+
+model SessionNoteAttachment {
+  id            String      @id @default(cuid())
+  sessionNoteId String
+  fileUrl       String
+  fileName      String
+  fileSize      Int?
+  createdAt     DateTime    @default(now())
+
+  sessionNote   SessionNote @relation(fields: [sessionNoteId], references: [id], onDelete: Cascade)
+
+  @@index([sessionNoteId])
 }

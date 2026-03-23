@@ -794,3 +794,77 @@ export async function sendDocumentationRequestEmail(params: {
     tags: ["moderation", "documentation-request"],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Session Notes / Project Tracker emails
+// ---------------------------------------------------------------------------
+
+/**
+ * Notify artist that the studio added/shared session notes.
+ */
+export async function sendSessionNoteEmail(params: {
+  artistEmail: string;
+  artistName: string;
+  studioName: string;
+  noteTitle: string;
+  sessionDate: string;
+  dashboardUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.artistEmail, name: params.artistName },
+    subject: `${params.studioName} added session notes for you`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Session Notes Ready</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;">Hi ${params.artistName},</p>
+          <p style="margin:0 0 16px;"><strong>${params.studioName}</strong> has shared session notes from your <strong>${params.sessionDate}</strong> session:</p>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
+            <p style="margin:0;font-weight:700;font-size:15px;">${params.noteTitle}</p>
+          </div>
+          <a href="${params.dashboardUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">View Session Notes →</a>
+          <p style="margin-top:32px;font-size:12px;color:#666;">You can leave feedback directly in your IndieThis sessions dashboard.</p>
+        </div>
+      </div>
+    `,
+    textContent: `Hi ${params.artistName},\n\n${params.studioName} has shared session notes from your ${params.sessionDate} session: "${params.noteTitle}".\n\nView them here: ${params.dashboardUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["session-notes"],
+  });
+}
+
+/**
+ * Notify studio that an artist submitted feedback on a session note.
+ */
+export async function sendArtistSessionFeedbackEmail(params: {
+  studioEmail: string;
+  studioName: string;
+  artistName: string;
+  noteTitle: string;
+  feedback: string;
+  bookingsUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.studioEmail, name: params.studioName },
+    subject: `${params.artistName} left feedback on session notes`,
+    htmlContent: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;border-radius:12px;overflow:hidden;">
+        <div style="background:#D4A843;padding:20px 32px;">
+          <h1 style="margin:0;font-size:20px;color:#0A0A0A;font-weight:800;">Artist Feedback Received</h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;"><strong>${params.artistName}</strong> left feedback on your session notes <em>"${params.noteTitle}"</em>:</p>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-left:3px solid #D4A843;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
+            <p style="margin:0;font-size:14px;line-height:1.6;">${params.feedback}</p>
+          </div>
+          <a href="${params.bookingsUrl}" style="display:inline-block;background:#D4A843;color:#0A0A0A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;">View in Bookings →</a>
+        </div>
+      </div>
+    `,
+    textContent: `${params.artistName} left feedback on your session notes "${params.noteTitle}":\n\n"${params.feedback}"\n\nView in bookings: ${params.bookingsUrl}`,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["session-feedback"],
+  });
+}

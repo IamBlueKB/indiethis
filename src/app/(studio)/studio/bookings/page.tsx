@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Calendar, Clock, CheckCircle2, XCircle, AlertCircle, DollarSign,
   X, Pencil, Check, Loader2, User, StickyNote, Send, Mail, Phone,
+  FileText, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Plus, MessageSquare,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
@@ -191,6 +192,272 @@ function SendIntakeModal({
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Session Notes Section ────────────────────────────────────────────────────
+
+type SessionNoteAttachment = { id: string; fileUrl: string; fileName: string; fileSize: number | null };
+type SessionNote = {
+  id: string;
+  title: string;
+  body: string;
+  status: string;
+  isShared: boolean;
+  artistFeedback: string | null;
+  feedbackAt: string | null;
+  createdAt: string;
+  attachments: SessionNoteAttachment[];
+};
+
+function SessionNotesSection({ bookingId }: { bookingId: string }) {
+  const [notes, setNotes]             = useState<SessionNote[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [expanded, setExpanded]       = useState<string | null>(null);
+  const [composing, setComposing]     = useState(false);
+  const [newTitle, setNewTitle]       = useState("");
+  const [newBody, setNewBody]         = useState("");
+  const [newShared, setNewShared]     = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [togglingId, setTogglingId]   = useState<string | null>(null);
+  const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [saveError, setSaveError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/studio/session-notes?sessionId=${bookingId}`)
+      .then((r) => r.json())
+      .then((d) => { setNotes(d.notes ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [bookingId]);
+
+  async function createNote() {
+    if (!newTitle.trim() || !newBody.trim()) {
+      setSaveError("Title and notes are required.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/studio/session-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingSessionId: bookingId,
+          title: newTitle.trim(),
+          body: newBody.trim(),
+          isShared: newShared,
+        }),
+      });
+      if (!res.ok) { setSaveError("Failed to save note."); return; }
+      const data = await res.json() as { note: SessionNote };
+      setNotes((prev) => [data.note, ...prev]);
+      setNewTitle(""); setNewBody(""); setNewShared(false); setComposing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleShare(note: SessionNote) {
+    setTogglingId(note.id);
+    try {
+      const res = await fetch(`/api/studio/session-notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isShared: !note.isShared }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { note: SessionNote };
+        setNotes((prev) => prev.map((n) => n.id === note.id ? data.note : n));
+      }
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function deleteNote(id: string) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/studio/session-notes/${id}`, { method: "DELETE" });
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+      if (expanded === id) setExpanded(null);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session Notes</p>
+        <button
+          onClick={() => { setComposing((v) => !v); setSaveError(null); }}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors hover:bg-white/5"
+          style={{ color: "#D4A843" }}
+        >
+          <Plus size={12} /> Add Note
+        </button>
+      </div>
+
+      {/* Compose form */}
+      {composing && (
+        <div
+          className="rounded-xl border p-4 space-y-3"
+          style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}
+        >
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Note title (e.g. Mix notes, Stem list)"
+            className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/30"
+            style={{ borderColor: "var(--border)" }}
+          />
+          <textarea
+            value={newBody}
+            onChange={(e) => setNewBody(e.target.value)}
+            rows={4}
+            placeholder="Write your session notes here…"
+            className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none resize-none focus:ring-2 focus:ring-accent/30"
+            style={{ borderColor: "var(--border)" }}
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <button
+                type="button"
+                onClick={() => setNewShared((v) => !v)}
+                className="relative w-9 h-5 rounded-full transition-colors"
+                style={{ backgroundColor: newShared ? "#D4A843" : "rgba(255,255,255,0.12)" }}
+              >
+                <span
+                  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: newShared ? "translateX(16px)" : "translateX(0)" }}
+                />
+              </button>
+              <span className="text-xs text-muted-foreground">Share with artist</span>
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setComposing(false); setSaveError(null); }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createNote}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                Save
+              </button>
+            </div>
+          </div>
+          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+        </div>
+      )}
+
+      {/* Notes list */}
+      {loading ? (
+        <div className="py-4 flex justify-center">
+          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : notes.length === 0 ? (
+        <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground opacity-50">
+          <FileText size={13} /> No session notes yet.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((note) => (
+            <div
+              key={note.id}
+              className="rounded-xl border overflow-hidden"
+              style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}
+            >
+              {/* Note header row */}
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-white/3 transition-colors"
+                onClick={() => setExpanded((v) => v === note.id ? null : note.id)}
+              >
+                <FileText size={13} className="shrink-0" style={{ color: "#D4A843" }} />
+                <span className="flex-1 text-sm font-semibold text-foreground truncate">{note.title}</span>
+                {note.artistFeedback && (
+                  <MessageSquare size={12} className="text-emerald-400 shrink-0" />
+                )}
+                <span
+                  className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                  style={{
+                    backgroundColor: note.isShared ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.07)",
+                    color: note.isShared ? "#D4A843" : "var(--muted-foreground)",
+                  }}
+                >
+                  {note.isShared ? "Shared" : "Studio only"}
+                </span>
+                {expanded === note.id ? <ChevronUp size={13} className="text-muted-foreground shrink-0" /> : <ChevronDown size={13} className="text-muted-foreground shrink-0" />}
+              </div>
+
+              {/* Expanded body */}
+              {expanded === note.id && (
+                <div className="border-t px-3 py-3 space-y-3" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{note.body}</p>
+
+                  {/* Artist feedback */}
+                  {note.artistFeedback && (
+                    <div
+                      className="rounded-lg p-3 space-y-1"
+                      style={{ backgroundColor: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.2)" }}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">Artist Feedback</p>
+                      <p className="text-xs text-foreground leading-relaxed">{note.artistFeedback}</p>
+                      {note.feedbackAt && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(note.feedbackAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Note actions */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleShare(note)}
+                      disabled={togglingId === note.id}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border disabled:opacity-50"
+                      style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                      title={note.isShared ? "Hide from artist" : "Share with artist"}
+                    >
+                      {togglingId === note.id ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : note.isShared ? (
+                        <EyeOff size={12} />
+                      ) : (
+                        <Eye size={12} />
+                      )}
+                      {note.isShared ? "Hide from artist" : "Share with artist"}
+                    </button>
+                    <button
+                      onClick={() => deleteNote(note.id)}
+                      disabled={deletingId === note.id}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border disabled:opacity-50"
+                      style={{ borderColor: "rgba(239,68,68,0.3)", color: "#f87171" }}
+                    >
+                      {deletingId === note.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      Delete
+                    </button>
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -409,6 +676,11 @@ function BookingDrawer({
                 )}
               </p>
             )}
+          </div>
+
+          {/* Session Notes */}
+          <div className="border-t pt-5" style={{ borderColor: "var(--border)" }}>
+            <SessionNotesSection bookingId={booking.id} />
           </div>
         </div>
 

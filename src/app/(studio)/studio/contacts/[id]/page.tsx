@@ -7,6 +7,7 @@ import {
   ArrowLeft, Mail, Phone, Instagram, Music2, DollarSign,
   Calendar, Send, FolderOpen, FileText, UserCircle2,
   MessageSquare, Link2, Pencil, Check, X, Youtube, Tag, MailX, MailCheck,
+  StickyNote, Eye, EyeOff,
 } from "lucide-react";
 
 type ActivityLog = {
@@ -55,6 +56,18 @@ type Contact = {
   deliveredFiles: { id: string; fileName: string; deliveredAt: string }[];
   activityLog: ActivityLog[];
   aiVideoRequested: boolean;
+};
+
+type SessionNote = {
+  id: string;
+  title: string;
+  body: string;
+  isShared: boolean;
+  artistFeedback: string | null;
+  feedbackAt: string | null;
+  createdAt: string;
+  bookingSessionId: string;
+  attachments: { id: string; fileUrl: string; fileName: string }[];
 };
 
 const ACTIVITY_ICONS: Record<string, React.ElementType> = {
@@ -122,22 +135,70 @@ export default function ContactDetailPage() {
   const [saving, setSaving] = useState(false);
   const [pendingEmailCount, setPendingEmailCount] = useState(0);
   const [cancellingSequence, setCancellingSequence] = useState(false);
+  // Session notes indexed by bookingSessionId
+  const [sessionNotesMap, setSessionNotesMap] = useState<Record<string, SessionNote[]>>({});
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [togglingNoteId, setTogglingNoteId] = useState<string | null>(null);
 
   useEffect(() => {
 fetch(`/api/studio/contacts/${id}`)
       .then((r) => r.json())
-      .then((d) => {
+      .then(async (d) => {
         const aiVideoRequested = (d.contact?.activityLog ?? []).some(
           (a: ActivityLog) => a.type === "AI_VIDEO_REQUESTED"
         );
-        setContact({ ...d.contact, aiVideoRequested });
+        const contactData = { ...d.contact, aiVideoRequested };
+        setContact(contactData);
         setNotes(d.contact?.notes ?? "");
         setYoutubeRefs(d.youtubeReferences ?? []);
         setScheduledEmails(d.scheduledEmails ?? []);
         setPendingEmailCount(d.pendingEmailCount ?? 0);
         setLoading(false);
+
+        // Fetch session notes for all sessions in parallel
+        const sessions: { id: string }[] = d.contact?.sessions ?? [];
+        if (sessions.length > 0) {
+          setNotesLoading(true);
+          const results = await Promise.all(
+            sessions.map((s: { id: string }) =>
+              fetch(`/api/studio/session-notes?sessionId=${s.id}`)
+                .then((r) => r.json())
+                .then((data: { notes?: SessionNote[] }) => ({ sessionId: s.id, notes: data.notes ?? [] }))
+                .catch(() => ({ sessionId: s.id, notes: [] as SessionNote[] }))
+            )
+          );
+          const map: Record<string, SessionNote[]> = {};
+          results.forEach(({ sessionId, notes: n }) => {
+            if (n.length > 0) map[sessionId] = n;
+          });
+          setSessionNotesMap(map);
+          setNotesLoading(false);
+        }
       });
   }, [id]);
+
+  async function toggleNoteShare(note: SessionNote) {
+    setTogglingNoteId(note.id);
+    try {
+      const res = await fetch(`/api/studio/session-notes/${note.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isShared: !note.isShared }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { note: SessionNote };
+        setSessionNotesMap((prev) => {
+          const updated = { ...prev };
+          const sid = note.bookingSessionId;
+          updated[sid] = (updated[sid] ?? []).map((n) => n.id === note.id ? data.note : n);
+          return updated;
+        });
+      }
+    } finally {
+      setTogglingNoteId(null);
+    }
+  }
 
   async function cancelSequence() {
     if (!contact || cancellingSequence) return;
@@ -294,7 +355,15 @@ fetch(`/api/studio/contacts/${id}`)
                         weekday: "short", month: "short", day: "numeric", year: "numeric",
                       })}
                     </p>
-                    <p className="text-xs text-muted-foreground">{s.sessionType ?? "Studio Session"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.sessionType ?? "Studio Session"}
+                      {sessionNotesMap[s.id]?.length > 0 && (
+                        <span className="ml-2 inline-flex items-center gap-1" style={{ color: "#D4A843" }}>
+                          <StickyNote size={10} />
+                          {sessionNotesMap[s.id].length} note{sessionNotesMap[s.id].length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <span className={`text-xs font-semibold ${SESSION_STATUS_COLOR[s.status] ?? "text-muted-foreground"}`}>
                     {s.status}
@@ -332,6 +401,97 @@ fetch(`/api/studio/contacts/${id}`)
               ))
             )}
           </div>
+
+          {/* Project History — session notes */}
+          {(notesLoading || Object.keys(sessionNotesMap).length > 0) && (
+            <div
+              className="rounded-2xl border overflow-hidden"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
+                <StickyNote size={15} style={{ color: "#D4A843" }} />
+                <h2 className="text-sm font-semibold text-foreground">Project History</h2>
+                {!notesLoading && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {Object.values(sessionNotesMap).reduce((acc, n) => acc + n.length, 0)} note{Object.values(sessionNotesMap).reduce((acc, n) => acc + n.length, 0) !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              {notesLoading ? (
+                <div className="px-5 py-4 flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="w-3 h-3 rounded-full border border-accent border-t-transparent animate-spin" />
+                  Loading notes…
+                </div>
+              ) : (
+                contact.sessions
+                  .filter((s) => sessionNotesMap[s.id]?.length > 0)
+                  .map((s) => (
+                    <div key={s.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+                      {/* Session header */}
+                      <div className="px-5 py-2.5" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          {new Date(s.dateTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                          {s.sessionType ? ` · ${s.sessionType}` : ""}
+                        </p>
+                      </div>
+                      {/* Notes for this session */}
+                      {sessionNotesMap[s.id].map((note) => (
+                        <div key={note.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                          <div
+                            className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-white/3 transition-colors"
+                            onClick={() => setExpandedNoteId((v) => v === note.id ? null : note.id)}
+                          >
+                            <FileText size={13} style={{ color: "#D4A843" }} className="shrink-0" />
+                            <span className="flex-1 text-sm text-foreground font-medium truncate">{note.title}</span>
+                            {note.artistFeedback && (
+                              <MessageSquare size={12} className="text-emerald-400 shrink-0" />
+                            )}
+                            <span
+                              className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-semibold"
+                              style={{
+                                backgroundColor: note.isShared ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.07)",
+                                color: note.isShared ? "#D4A843" : "var(--muted-foreground)",
+                              }}
+                            >
+                              {note.isShared ? "Shared" : "Private"}
+                            </span>
+                          </div>
+                          {expandedNoteId === note.id && (
+                            <div className="px-5 pb-4 space-y-2.5">
+                              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{note.body}</p>
+                              {note.artistFeedback && (
+                                <div
+                                  className="rounded-lg p-3"
+                                  style={{ backgroundColor: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.2)" }}
+                                >
+                                  <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider mb-1">Artist Feedback</p>
+                                  <p className="text-xs text-foreground leading-relaxed">{note.artistFeedback}</p>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => toggleNoteShare(note)}
+                                disabled={togglingNoteId === note.id}
+                                className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+                                style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                              >
+                                {togglingNoteId === note.id ? (
+                                  <div className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
+                                ) : note.isShared ? (
+                                  <EyeOff size={11} />
+                                ) : (
+                                  <Eye size={11} />
+                                )}
+                                {note.isShared ? "Make private" : "Share with artist"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+              )}
+            </div>
+          )}
 
           {/* YouTube References */}
           {youtubeRefs.length > 0 && (
