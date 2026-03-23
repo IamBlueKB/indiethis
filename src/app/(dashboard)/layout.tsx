@@ -17,7 +17,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const userId = session.user.id as string;
 
   const [beatCount, producerLeaseCount, gracePeriod] = await Promise.all([
-    db.track.count({ where: { artistId: userId } }),
+    // Count only Tracks that have BeatLeaseSettings (i.e. actual beats, not music uploads)
+    db.track.count({ where: { artistId: userId, beatLeaseSettings: { isNot: null } } }),
     db.streamLease.count({ where: { producerId: userId } }),
     db.promoRedemption.findFirst({
       where: {
