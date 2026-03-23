@@ -114,7 +114,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         take:    20,
         select:  {
           id: true, title: true, videoUrl: true, thumbnailUrl: true,
-          category: true, type: true, embedUrl: true, isYoutubeSynced: true,
+          category: true, type: true, embedUrl: true, syncedFromYouTube: true,
           linkedTrack: {
             select: {
               id: true, title: true, coverArtUrl: true,

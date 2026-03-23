@@ -44,7 +44,7 @@ export type ArtistVideo = {
   embedUrl:       string | null;
   type:           VideoType;
   category:       VideoCategory | null;
-  isYoutubeSynced?: boolean;
+  syncedFromYouTube?: boolean;
   linkedTrack:    LinkedTrack | null;
   linkedBeat:     LinkedBeat  | null;
   linkedMerch:    LinkedMerch | null;
