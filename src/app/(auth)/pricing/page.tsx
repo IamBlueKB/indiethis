@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import PublicNav from "@/components/layout/PublicNav";
 import { CheckCircle2, Loader2, Mic2, Building2, Music4, Zap, Star } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
@@ -161,15 +162,6 @@ function PricingContent() {
   return (
     <div className="w-full max-w-4xl">
 
-      {/* Logo */}
-      <div className="flex justify-center mb-7">
-        <img
-          src="/images/brand/indiethis-logo-dark-bg.svg"
-          alt="IndieThis"
-          style={{ height: "32px", width: "auto" }}
-        />
-      </div>
-
       {/* Header */}
       <div className="text-center mb-8">
         <div
@@ -285,8 +277,13 @@ function PricingContent() {
 
 export default function PricingPage() {
   return (
-    <Suspense>
-      <PricingContent />
-    </Suspense>
+    <div className="fixed inset-0 overflow-y-auto" style={{ backgroundColor: "#0A0A0A", zIndex: 10 }}>
+      <PublicNav />
+      <div className="max-w-4xl mx-auto px-4 py-12 flex flex-col items-center">
+        <Suspense>
+          <PricingContent />
+        </Suspense>
+      </div>
+    </div>
   );
 }
