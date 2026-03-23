@@ -337,9 +337,9 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
           ? <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Headphones size={24} style={{ color: "#444" }} /></div>
         }
-        <div className={`absolute inset-0 flex items-center justify-center transition-all ${isPlaying ? "bg-black/50" : "bg-black/0 group-hover:bg-black/50"}`}>
+        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/50">
           <div
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-opacity ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+            className="w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity"
             style={{ backgroundColor: isPlaying ? "#E85D4A" : "#D4A843" }}
           >
             {isPlaying ? (
