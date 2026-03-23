@@ -45,6 +45,13 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Auto-create ProducerProfile on first beat upload — fire and forget
+  void db.producerProfile.upsert({
+    where:  { userId: session.user.id },
+    create: { userId: session.user.id },
+    update: {},
+  }).catch(() => { /* silent — non-critical */ });
+
   // Kick off audio analysis in the background — don't block the response
   const fileUrl = body.fileUrl.trim();
   const trackId = track.id;

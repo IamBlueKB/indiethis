@@ -24,6 +24,10 @@ import {
   MessageSquare,
   QrCode,
   Radio,
+  ListMusic,
+  FileText,
+  PieChart,
+  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -35,28 +39,46 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Music", href: "/dashboard/music", icon: Music },
-  { label: "Videos", href: "/dashboard/videos", icon: Video },
-  { label: "Shows", href: "/dashboard/shows", icon: Mic2 },
-  { label: "Fans", href: "/dashboard/fans", icon: Users },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
-  { label: "Broadcasts", href: "/dashboard/broadcasts", icon: MessageSquare },
-  { label: "QR Code", href: "/dashboard/qr", icon: QrCode },
-  { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
-  { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
-  { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
-  { label: "Stream Leases", href: "/dashboard/stream-leases", icon: Radio },
-  { label: "Artist Site", href: "/dashboard/site", icon: Globe },
-  { label: "Sessions", href: "/dashboard/sessions", icon: Calendar },
-  { label: "Earnings", href: "/dashboard/earnings", icon: TrendingUp },
-  { label: "Referrals", href: "/dashboard/referrals", icon: Gift },
-  { label: "Affiliate", href: "/dashboard/affiliate", icon: Share2 },
-  { label: "Upgrade", href: "/dashboard/upgrade", icon: Zap },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Dashboard",     href: "/dashboard",              icon: LayoutDashboard },
+  { label: "Music",         href: "/dashboard/music",        icon: Music },
+  { label: "Videos",        href: "/dashboard/videos",       icon: Video },
+  { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
+  { label: "Fans",          href: "/dashboard/fans",         icon: Users },
+  { label: "Analytics",     href: "/dashboard/analytics",    icon: BarChart2 },
+  { label: "Broadcasts",    href: "/dashboard/broadcasts",   icon: MessageSquare },
+  { label: "QR Code",       href: "/dashboard/qr",           icon: QrCode },
+  { label: "AI Tools",      href: "/dashboard/ai/video",     icon: Wand2 },
+  { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag },
+  { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
+  { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },
+  { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },
+  { label: "Sessions",      href: "/dashboard/sessions",     icon: Calendar },
+  { label: "Earnings",      href: "/dashboard/earnings",     icon: TrendingUp },
+  { label: "Referrals",     href: "/dashboard/referrals",    icon: Gift },
+  { label: "Affiliate",     href: "/dashboard/affiliate",    icon: Share2 },
+  { label: "Upgrade",       href: "/dashboard/upgrade",      icon: Zap },
+  { label: "Settings",      href: "/dashboard/settings",     icon: Settings },
 ];
 
-export default function DashboardSidebar() {
+const producerNavItems: NavItem[] = [
+  { label: "My Beats",           href: "/dashboard/producer/beats",     icon: ListMusic },
+  { label: "Licensing",          href: "/dashboard/producer/licensing", icon: FileText },
+  { label: "Analytics",          href: "/dashboard/producer/analytics", icon: PieChart },
+  { label: "Earnings",           href: "/dashboard/producer/earnings",  icon: DollarSign },
+];
+
+const producerStreamLeaseItem: NavItem = {
+  label: "Stream Leases",
+  href: "/dashboard/producer/stream-leases",
+  icon: Radio,
+};
+
+type Props = {
+  hasProducerActivity: boolean;
+  hasProducerStreamLeases: boolean;
+};
+
+export default function DashboardSidebar({ hasProducerActivity, hasProducerStreamLeases }: Props) {
   const pathname = usePathname();
   const { user } = useUserStore();
 
@@ -64,6 +86,10 @@ export default function DashboardSidebar() {
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   }
+
+  const producerItems = hasProducerStreamLeases
+    ? [producerNavItems[0], producerStreamLeaseItem, ...producerNavItems.slice(1)]
+    : producerNavItems;
 
   return (
     <aside
@@ -93,15 +119,42 @@ export default function DashboardSidebar() {
                   : "text-muted-foreground hover:text-foreground hover:bg-white/5"
               )}
             >
-              <Icon
-                size={17}
-                strokeWidth={active ? 2.25 : 1.75}
-                className="shrink-0"
-              />
+              <Icon size={17} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
               {item.label}
             </Link>
           );
         })}
+
+        {/* Producer section — only shown when user has beats */}
+        {hasProducerActivity && (
+          <div className="pt-4">
+            <p
+              className="px-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase"
+              style={{ color: "#D4A843" }}
+            >
+              Producer
+            </p>
+            {producerItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors no-underline",
+                    active
+                      ? "bg-accent/10 text-accent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  )}
+                >
+                  <Icon size={17} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom: user + sign out */}

@@ -14,20 +14,31 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/login");
   }
 
-  // Check for active grace period
-  const gracePeriod = await db.promoRedemption.findFirst({
-    where: {
-      userId: session.user.id as string,
-      status: "ACTIVE",
-      graceUntil: { not: null, gt: new Date() },
-    },
-    select: { graceUntil: true },
-    orderBy: { graceUntil: "asc" },
-  });
+  const userId = session.user.id as string;
+
+  const [beatCount, producerLeaseCount, gracePeriod] = await Promise.all([
+    db.track.count({ where: { artistId: userId } }),
+    db.streamLease.count({ where: { producerId: userId } }),
+    db.promoRedemption.findFirst({
+      where: {
+        userId,
+        status: "ACTIVE",
+        graceUntil: { not: null, gt: new Date() },
+      },
+      select: { graceUntil: true },
+      orderBy: { graceUntil: "asc" },
+    }),
+  ]);
+
+  const hasProducerActivity = beatCount > 0;
+  const hasProducerStreamLeases = producerLeaseCount > 0;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--background)" }}>
-      <DashboardSidebar />
+      <DashboardSidebar
+        hasProducerActivity={hasProducerActivity}
+        hasProducerStreamLeases={hasProducerStreamLeases}
+      />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <DashboardTopBar />
         {gracePeriod?.graceUntil && (
