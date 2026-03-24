@@ -1,21 +1,8 @@
-"use client";
-
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function HomepageHero() {
-  const handleHearItClick = () => {
-    const el = document.getElementById("player-section");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
-      // trigger play after scroll
-      setTimeout(() => {
-        const playBtn = document.getElementById("demo-play-btn");
-        if (playBtn) playBtn.click();
-      }, 800);
-    }
-  };
 
   return (
     <section
@@ -71,16 +58,16 @@ export default function HomepageHero() {
           >
             Start Creating
           </Link>
-          <button
-            onClick={handleHearItClick}
+          <Link
+            href="/explore"
             className={cn(
               buttonVariants({ variant: "outline" }),
               "rounded-full h-auto px-6 py-3 text-sm font-semibold"
             )}
             style={{ borderColor: "rgba(255,255,255,0.2)", color: "#fff", background: "transparent" }}
           >
-            Hear It In Action
-          </button>
+            Explore the Platform →
+          </Link>
         </div>
       </div>
     </section>

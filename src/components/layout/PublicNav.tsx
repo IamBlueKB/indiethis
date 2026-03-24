@@ -5,11 +5,9 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const NAV_LINKS = [
-  { href: "/explore",  label: "Explore"  },
-  { href: "/beats",    label: "Beats"    },
-  { href: "/studios",  label: "Studios"  },
-  { href: "/artists",  label: "Artists"  },
-  { href: "/pricing",  label: "Pricing"  },
+  { href: "/explore", label: "Explore" },
+  { href: "/about",   label: "About"   },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 /**
@@ -41,10 +39,13 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
           />
         </Link>
 
-        {/* Directory links — hidden on small screens */}
+        {/* Nav links — hidden on small screens */}
         <nav className="hidden md:flex items-center gap-0.5 shrink-0">
           {NAV_LINKS.map(({ href, label }) => {
-            const active = pathname === href || (href !== "/explore" && pathname?.startsWith(href));
+            const active =
+              pathname === href ||
+              (href === "/explore" && pathname === "/") ||
+              (href !== "/explore" && href !== "/" && pathname?.startsWith(href));
             return (
               <Link
                 key={href}
@@ -71,13 +72,35 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
         {/* Auth */}
         <div className="flex items-center gap-2 shrink-0">
           {loggedIn ? (
-            <Link
-              href="/dashboard"
-              className="text-sm font-semibold px-3 py-1.5 rounded-lg"
-              style={{ backgroundColor: "#1a1a1a", color: "#D4A843", border: "1px solid #2a2a2a" }}
-            >
-              Dashboard
-            </Link>
+            <>
+              {/* User avatar / first name */}
+              <div className="hidden sm:flex items-center gap-2">
+                {session.user?.image ? (
+                  <img
+                    src={session.user.image}
+                    alt={session.user.name ?? ""}
+                    className="w-7 h-7 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
+                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                  >
+                    {(session.user?.name ?? "?")[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="text-xs font-medium" style={{ color: "#888" }}>
+                  {session.user?.name?.split(" ")[0]}
+                </span>
+              </div>
+              <Link
+                href="/dashboard"
+                className="text-sm font-semibold px-3 py-1.5 rounded-lg"
+                style={{ backgroundColor: "#1a1a1a", color: "#D4A843", border: "1px solid #2a2a2a" }}
+              >
+                Dashboard
+              </Link>
+            </>
           ) : (
             <>
               <Link
@@ -85,18 +108,19 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
                 className="text-sm font-semibold px-3 py-1.5 rounded-lg hidden sm:block"
                 style={{ color: "#888" }}
               >
-                Log in
+                Sign In
               </Link>
               <Link
                 href="/signup"
                 className="text-sm font-bold px-3 py-1.5 rounded-lg"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                style={{ backgroundColor: "#E85D4A", color: "#fff" }}
               >
-                Sign up
+                Start Creating
               </Link>
             </>
           )}
         </div>
+
       </div>
     </header>
   );
