@@ -313,39 +313,59 @@ export async function GET(
     return NextResponse.json({ error: "Unknown tool type" }, { status: 400 });
   }
 
-  const jobsQuery = db.aIJob.findMany({
-    where:   { triggeredById: session.user.id, type },
-    orderBy: { createdAt: "desc" },
-    take:    20,
-    select:  {
-      id:           true,
-      type:         true,
-      status:       true,
-      priceCharged: true,
-      createdAt:    true,
-      completedAt:  true,
-      errorMessage: true,
-      outputData:   true,
-    },
-  });
+  // Credit field + pricing key for each tool type
+  type ToolCreditFields = {
+    usedField:  "aiArtCreditsUsed" | "aiMasterCreditsUsed" | "lyricVideoCreditsUsed" |
+                "aarReportCreditsUsed" | "pressKitCreditsUsed" | "aiVideoCreditsUsed";
+    limitField: "aiArtCreditsLimit" | "aiMasterCreditsLimit" | "lyricVideoCreditsLimit" |
+                "aarReportCreditsLimit" | "pressKitCreditsLimit" | "aiVideoCreditsLimit";
+    pricingKey: string;
+  };
+  const TOOL_CREDIT_FIELDS: Partial<Record<AIJobType, ToolCreditFields>> = {
+    COVER_ART:   { usedField: "aiArtCreditsUsed",      limitField: "aiArtCreditsLimit",      pricingKey: "AI_COVER_ART"    },
+    MASTERING:   { usedField: "aiMasterCreditsUsed",   limitField: "aiMasterCreditsLimit",   pricingKey: "AI_MASTERING"    },
+    LYRIC_VIDEO: { usedField: "lyricVideoCreditsUsed", limitField: "lyricVideoCreditsLimit", pricingKey: "AI_LYRIC_VIDEO"  },
+    AR_REPORT:   { usedField: "aarReportCreditsUsed",  limitField: "aarReportCreditsLimit",  pricingKey: "AI_AAR_REPORT"   },
+    PRESS_KIT:   { usedField: "pressKitCreditsUsed",   limitField: "pressKitCreditsLimit",   pricingKey: "AI_PRESS_KIT"    },
+    VIDEO:       { usedField: "aiVideoCreditsUsed",    limitField: "aiVideoCreditsLimit",    pricingKey: "AI_VIDEO_MEDIUM" },
+  };
 
-  // For press kit, also return subscription credits + live price from PlatformPricing
-  if (type === "PRESS_KIT") {
+  const creditFields = TOOL_CREDIT_FIELDS[type];
+
+  if (creditFields) {
+    const { usedField, limitField, pricingKey } = creditFields;
     const [jobs, subscription, pricing] = await Promise.all([
-      jobsQuery,
+      db.aIJob.findMany({
+        where:   { triggeredById: session.user.id, type },
+        orderBy: { createdAt: "desc" },
+        take:    20,
+        select:  { id: true, type: true, status: true, priceCharged: true, createdAt: true, completedAt: true, errorMessage: true, outputData: true },
+      }),
       db.subscription.findUnique({
         where:  { userId: session.user.id },
-        select: { tier: true, pressKitCreditsUsed: true, pressKitCreditsLimit: true },
+        select: { tier: true, [usedField]: true, [limitField]: true },
       }),
       getPricing(),
     ]);
-    const credits = subscription
-      ? { used: subscription.pressKitCreditsUsed, limit: subscription.pressKitCreditsLimit, tier: subscription.tier }
+    const subRecord = subscription as Record<string, unknown> | null;
+    const credits = subRecord
+      ? {
+          used:  subRecord[usedField] as number,
+          limit: subRecord[limitField] as number,
+          tier:  (subRecord.tier as string).toLowerCase(),
+        }
       : null;
-    const priceDisplay = pricing["AI_PRESS_KIT"]?.display ?? PRICING_DEFAULTS.AI_PRESS_KIT.display;
+    const fallbackPrice = PRICING_DEFAULTS[pricingKey as keyof typeof PRICING_DEFAULTS];
+    const priceDisplay = pricing[pricingKey]?.display ?? (fallbackPrice ? fallbackPrice.display : "");
     return NextResponse.json({ jobs, credits, priceDisplay });
   }
 
-  const jobs = await jobsQuery;
+  // Tools without per-tool credit tracking (shouldn't happen with current tools, but safe fallback)
+  const jobs = await db.aIJob.findMany({
+    where:   { triggeredById: session.user.id, type },
+    orderBy: { createdAt: "desc" },
+    take:    20,
+    select:  { id: true, type: true, status: true, priceCharged: true, createdAt: true, completedAt: true, errorMessage: true, outputData: true },
+  });
   return NextResponse.json({ jobs });
 }

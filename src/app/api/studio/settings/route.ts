@@ -97,6 +97,9 @@ export async function PATCH(req: NextRequest) {
         ? body.emailSequenceEnabled : undefined,
       averageSessionRate: typeof body.averageSessionRate === "number"
         ? body.averageSessionRate : undefined,
+      customDomain: body.customDomain !== undefined
+        ? (body.customDomain?.trim() || null)
+        : undefined,
     },
   });
 

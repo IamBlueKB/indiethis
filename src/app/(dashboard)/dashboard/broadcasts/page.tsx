@@ -205,10 +205,28 @@ export default function BroadcastsPage() {
         </div>
 
         {remaining === 0 && (
-          <p className="text-xs text-red-400 flex items-center gap-1.5">
-            <AlertCircle size={12} />
-            Monthly limit reached. Upgrade your plan or wait until next month.
-          </p>
+          <div
+            className="rounded-xl border p-3 space-y-1.5"
+            style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
+          >
+            <p className="text-xs font-semibold text-foreground">
+              You&apos;ve used all {limit.toLocaleString()} SMS broadcasts this month.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {tier !== "REIGN" && (
+                <a
+                  href="/dashboard/upgrade"
+                  className="text-xs font-medium hover:opacity-80 transition-opacity"
+                  style={{ color: "#D4A843" }}
+                >
+                  Upgrade to {tier === "LAUNCH" ? "Push for 250" : "Reign for 500"}/mo →
+                </a>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {tier === "REIGN" ? "Resets next billing cycle." : "or wait until next month"}
+              </span>
+            </div>
+          </div>
         )}
       </div>
 

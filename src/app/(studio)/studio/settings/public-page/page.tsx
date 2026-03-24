@@ -127,7 +127,7 @@ function ImageUploadBtn({ label, value, onUpload, hint }: {
 
 // ─── Gallery Editor ───────────────────────────────────────────────────────────
 
-function GalleryEditor({ images, onChange, max }: { images: string[]; onChange: (imgs: string[]) => void; max: number }) {
+function GalleryEditor({ images, onChange, max, isElite }: { images: string[]; onChange: (imgs: string[]) => void; max: number; isElite?: boolean }) {
   const { startUpload, isUploading } = useUploadThing("studioImages");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
@@ -176,6 +176,12 @@ function GalleryEditor({ images, onChange, max }: { images: string[]; onChange: 
           </label>
         )}
       </div>
+      {images.length >= max && !isElite && (
+        <p className="text-xs" style={{ color: "#D4A843" }}>
+          You&apos;ve added {max} of {max} photos.{" "}
+          <a href="/dashboard/upgrade" className="underline hover:opacity-80">Upgrade to Elite for up to 12.</a>
+        </p>
+      )}
     </div>
   );
 }
@@ -294,6 +300,7 @@ function SectionCard({ section, index, total, onToggle, onContentChange, onMoveU
 
 function SectionEditPanel({
   sectionKey, saving, saved, onSave,
+  isElite,
   // All data fields
   name, setName, tagline, setTagline, heroImage, setHeroImage, logoUrl, setLogoUrl,
   services, setServices, gallery, setGallery, galleryMax,
@@ -306,6 +313,7 @@ function SectionEditPanel({
   savingConfig, configSaved, handleSaveConfig, handleResetConfig,
 }: {
   sectionKey: string; saving: boolean; saved: boolean; onSave: () => void;
+  isElite: boolean;
   name: string; setName: (v: string) => void;
   tagline: string; setTagline: (v: string) => void;
   heroImage: string; setHeroImage: (v: string) => void;
@@ -348,7 +356,7 @@ function SectionEditPanel({
       </div>
     ),
     services: <ServicesEditor services={services} onChange={setServices} />,
-    gallery: <GalleryEditor images={gallery} onChange={setGallery} max={galleryMax} />,
+    gallery: <GalleryEditor images={gallery} onChange={setGallery} max={galleryMax} isElite={isElite} />,
     about: (
       <div className="space-y-4">
         <Field label="Bio" hint={`${bio.length}/500`}>
@@ -480,16 +488,27 @@ function SectionEditPanel({
         {sectionKey === "ai-sections" && pageConfig && (
           <div className="space-y-2">
             {pageConfig.sections.map((section, i) => (
-              <SectionCard
-                key={section.id}
-                section={section}
-                index={i}
-                total={pageConfig.sections.length}
-                onToggle={() => updateSection(i, { visible: !section.visible })}
-                onContentChange={(key, val) => updateSectionContent(i, key, val)}
-                onMoveUp={() => moveSection(i, -1)}
-                onMoveDown={() => moveSection(i, 1)}
-              />
+              section.type === "featured_artists" && !isElite ? (
+                <div key={section.id} className="rounded-xl border px-4 py-3 flex items-center gap-3" style={{ borderColor: "var(--border)", backgroundColor: "var(--background)", opacity: 0.7 }}>
+                  <Lock size={13} className="text-muted-foreground shrink-0" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-foreground">Featured Artists</span>
+                    <span className="text-xs text-muted-foreground ml-2">Available on Elite</span>
+                  </div>
+                  <a href="/dashboard/upgrade" className="text-xs font-semibold shrink-0 hover:opacity-80" style={{ color: "#D4A843" }}>Upgrade →</a>
+                </div>
+              ) : (
+                <SectionCard
+                  key={section.id}
+                  section={section}
+                  index={i}
+                  total={pageConfig.sections.length}
+                  onToggle={() => updateSection(i, { visible: !section.visible })}
+                  onContentChange={(key, val) => updateSectionContent(i, key, val)}
+                  onMoveUp={() => moveSection(i, -1)}
+                  onMoveDown={() => moveSection(i, 1)}
+                />
+              )
             ))}
             <button onClick={handleSaveConfig} disabled={savingConfig}
               className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
@@ -1040,6 +1059,7 @@ export default function PublicPageEditor() {
             <SectionEditPanel
               sectionKey={selectedSection}
               saving={saving} saved={saved} onSave={handleSectionSave}
+              isElite={isElite}
               name={name} setName={setName}
               tagline={tagline} setTagline={setTagline}
               heroImage={heroImage} setHeroImage={setHeroImage}

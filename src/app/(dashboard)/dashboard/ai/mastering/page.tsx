@@ -6,6 +6,7 @@ import { Music, Loader2, CheckCircle2, Clock, AlertCircle, Download, Upload, X, 
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import MasteringComparisonPlayer, { type MasteringVersion } from "@/components/audio/MasteringComparisonPlayer";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,10 @@ interface HistoryItem {
   outputData:   { outputs?: MasteringOutput[]; successCount?: number } | null;
   errorMessage: string | null;
 }
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const NEXT_CREDITS: Record<string, number> = { launch: 3, push: 10 };
 
 // ─── Profile colour map ────────────────────────────────────────────────────────
 
@@ -83,6 +88,10 @@ export default function MasteringPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobData,     setJobData]     = useState<PollData | null>(null);
 
+  // Credits
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -99,7 +108,13 @@ export default function MasteringPage() {
   useEffect(() => {
     fetch("/api/dashboard/ai/mastering")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
+        }
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -144,8 +159,7 @@ export default function MasteringPage() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "9.99"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -269,6 +283,18 @@ export default function MasteringPage() {
               <AlertCircle size={14} className="flex-shrink-0" />
               {submitError}
             </div>
+          )}
+
+          {creditExhausted && creditInfo && (
+            <CreditExhaustedBanner
+              toolLabel="mastering"
+              creditsLimit={creditInfo.limit}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_MASTERING.display}
+              nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+              nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+              isMaxTier={creditInfo.tier === "reign"}
+            />
           )}
 
           <div className="flex items-center justify-between pt-1">

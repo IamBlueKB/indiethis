@@ -7,6 +7,8 @@ import {
   ListMusic, Radio, FileText, DollarSign, Loader2, Check, AlertCircle,
 } from "lucide-react";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
+import { useUserStore } from "@/store";
+import UpgradeGate from "@/components/dashboard/UpgradeGate";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -648,7 +650,7 @@ function BeatModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function ProducerBeatsPage() {
+function ProducerBeatsContent() {
   const [beats, setBeats]   = useState<Beat[]>([]);
   const [stats, setStats]   = useState<ProducerStats>({ totalBeats: 0, totalActiveLeases: 0, totalLicenses: 0, totalRevenue: 0 });
   const [loading, setLoading] = useState(true);
@@ -878,4 +880,29 @@ export default function ProducerBeatsPage() {
       )}
     </div>
   );
+}
+
+export default function ProducerBeatsPage() {
+  const { user } = useUserStore();
+
+  // user is undefined while the store is hydrating — show nothing to avoid flash
+  if (user === undefined) return null;
+
+  // Beat marketplace selling is a Reign-only feature
+  if (user?.tier !== "reign") {
+    return (
+      <UpgradeGate
+        requiredTier="REIGN"
+        featureName="Beat Marketplace"
+        featureDescription="List your beats for stream licensing and earn per play from artists on IndieThis."
+        features={[
+          "Stream Lease licensing — artists pay $1/mo per beat",
+          "Set your own pricing, license terms, and restrictions",
+          "Track plays, active leases, and monthly earnings in real time",
+        ]}
+      />
+    );
+  }
+
+  return <ProducerBeatsContent />;
 }

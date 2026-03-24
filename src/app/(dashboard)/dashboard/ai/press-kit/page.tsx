@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, Copy, Check, ExternalLink, Plus, X,
 } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ interface HistoryItem {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
+
+const NEXT_CREDITS: Record<string, number> = { launch: 1, push: 3 };
 
 const GENRES = [
   "Hip-Hop / Rap", "R&B / Soul", "Pop", "Alternative / Indie",
@@ -214,9 +217,8 @@ export default function PressKitPage() {
   const [expandedId,     setExpandedId]     = useState<string | null>(null);
 
   // Credits
-  const [creditsUsed,  setCreditsUsed]  = useState<number | null>(null);
-  const [creditsLimit, setCreditsLimit] = useState<number | null>(null);
-  const [priceDisplay, setPriceDisplay] = useState(PRICING_DEFAULTS.AI_PRESS_KIT.display);
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
 
   // ── Load history + credits on mount ────────────────────────────────────────
   useEffect(() => {
@@ -225,10 +227,9 @@ export default function PressKitPage() {
       .then(d => {
         setHistory(d.jobs ?? []);
         if (d.credits) {
-          setCreditsUsed(d.credits.used ?? 0);
-          setCreditsLimit(d.credits.limit ?? 0);
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
         }
-        if (d.priceDisplay) setPriceDisplay(d.priceDisplay);
       })
       .finally(() => setHistoryLoading(false));
   }, []);
@@ -290,8 +291,7 @@ export default function PressKitPage() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "19.99"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -464,16 +464,28 @@ export default function PressKitPage() {
             </div>
           )}
 
+          {creditExhausted && creditInfo && (
+            <CreditExhaustedBanner
+              toolLabel="press kit"
+              creditsLimit={creditInfo.limit}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_PRESS_KIT.display}
+              nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+              nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+              isMaxTier={creditInfo.tier === "reign"}
+            />
+          )}
+
           <div className="flex items-center justify-between pt-1">
-            {creditsLimit !== null && creditsLimit > 0 ? (
+            {creditInfo && creditInfo.limit > 0 ? (
               <p className="text-xs text-muted-foreground">
                 Full EPK + PDF ·{" "}
-                <span style={{ color: (creditsLimit - (creditsUsed ?? 0)) > 0 ? "#34C759" : "#E85D4A" }}>
-                  {Math.max(0, creditsLimit - (creditsUsed ?? 0))} of {creditsLimit} included this month
+                <span style={{ color: (creditInfo.limit - creditInfo.used) > 0 ? "#34C759" : "#E85D4A" }}>
+                  {Math.max(0, creditInfo.limit - creditInfo.used)} of {creditInfo.limit} included this month
                 </span>
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">Full EPK + PDF · Pay per use — {priceDisplay}</p>
+              <p className="text-xs text-muted-foreground">Full EPK + PDF · Pay per use — {creditInfo?.priceDisplay || PRICING_DEFAULTS.AI_PRESS_KIT.display}</p>
             )}
             <button
               type="submit"

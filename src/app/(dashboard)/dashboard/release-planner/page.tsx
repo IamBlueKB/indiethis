@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store";
 import {
-  CalendarDays, Plus, Loader2, CheckCircle2, Clock, Rocket, XCircle, Zap, Music2, ChevronRight,
+  CalendarDays, Plus, Loader2, CheckCircle2, Clock, Rocket, XCircle, Music2, ChevronRight,
 } from "lucide-react";
+import UpgradeGate from "@/components/dashboard/UpgradeGate";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,45 +43,6 @@ function countdownLabel(days: number): { text: string; color: string } {
   return { text: `Released ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`, color: "#888" };
 }
 
-// ── Upgrade Gate ────────────────────────────────────────────────────────────
-
-function UpgradeGate() {
-  return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div
-        className="rounded-2xl border p-8 text-center space-y-5"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
-          style={{ backgroundColor: "rgba(212,168,67,0.1)" }}
-        >
-          <CalendarDays size={28} style={{ color: "#D4A843" }} />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold">Release Planner</h1>
-          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Plan your entire release rollout — auto-generated timelines, coordinated tasks, and integrated launch workflows.
-          </p>
-        </div>
-        <div
-          className="rounded-xl border p-4 space-y-2"
-          style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
-        >
-          <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>Available on Push & Reign</p>
-          <p className="text-xs text-muted-foreground">Upgrade to get auto-generated release timelines, integrated task checklists, and coordinated launch workflows across all your IndieThis tools.</p>
-        </div>
-        <a
-          href="/dashboard/upgrade"
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Zap size={14} /> Upgrade to Push
-        </a>
-      </div>
-    </div>
-  );
-}
 
 // ── Create Plan Modal ────────────────────────────────────────────────────────
 
@@ -214,7 +176,18 @@ export default function ReleasePlannerPage() {
       .catch(() => setLoading(false));
   }, [hasAccess]);
 
-  if (!hasAccess) return <UpgradeGate />;
+  if (!hasAccess) return (
+    <UpgradeGate
+      requiredTier="PUSH"
+      featureName="Release Planner"
+      featureDescription="Plan your entire release rollout — auto-generated timelines, coordinated tasks, and integrated launch workflows."
+      features={[
+        "Auto-generated 20-task release checklist",
+        "Countdown timer and status tracking per release",
+        "Coordinated launch tasks across all your IndieThis tools",
+      ]}
+    />
+  );
 
   function handleCreated(plan: PlanSummary) {
     setShowCreate(false);

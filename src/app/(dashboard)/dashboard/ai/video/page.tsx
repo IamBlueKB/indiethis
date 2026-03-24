@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ interface HistoryItem {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
+const NEXT_CREDITS: Record<string, number> = { launch: 2, push: 5 };
+
 const STYLES = [
   { value: "cinematic",    label: "Cinematic",    desc: "Epic wide shots, dramatic pacing" },
   { value: "music-video",  label: "Music Video",  desc: "Performance cuts, fast edits" },
@@ -84,6 +87,10 @@ export default function AIVideoPage() {
   const [activeJobId,  setActiveJobId]  = useState<string | null>(null);
   const [jobData,      setJobData]      = useState<PollData | null>(null);
 
+  // Credits
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -100,7 +107,13 @@ export default function AIVideoPage() {
   useEffect(() => {
     fetch("/api/dashboard/ai/video")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
+        }
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -150,9 +163,7 @@ export default function AIVideoPage() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        const tier = DURATION_TIERS.find(t => t.value === durationTier);
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? tier?.price ?? "29"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -339,6 +350,18 @@ export default function AIVideoPage() {
                 <AlertCircle size={14} className="flex-shrink-0" />
                 {submitError}
               </div>
+            )}
+
+            {creditExhausted && creditInfo && (
+              <CreditExhaustedBanner
+                toolLabel="video"
+                creditsLimit={creditInfo.limit}
+                ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_VIDEO_MEDIUM.display}
+                nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+                nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+                nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+                isMaxTier={creditInfo.tier === "reign"}
+              />
             )}
 
             <div className="flex items-center justify-between pt-1">

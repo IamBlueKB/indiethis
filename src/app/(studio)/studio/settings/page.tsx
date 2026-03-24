@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Settings, MapPin, Phone, Mail, Clock, FileText, Check,
   Link2, Instagram, Youtube, Facebook, CreditCard,
-  ChevronDown, Loader2, CheckCircle2, XCircle, DollarSign,
+  ChevronDown, Loader2, CheckCircle2, XCircle, DollarSign, Globe, Lock,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
@@ -77,6 +77,8 @@ type Studio = {
   venmoHandle: string | null;
   stripePaymentsEnabled: boolean;
   averageSessionRate: number;
+  studioTier: "PRO" | "ELITE";
+  customDomain: string | null;
 };
 
 // ─── Input style helper ────────────────────────────────────────────────────────
@@ -124,6 +126,8 @@ export default function StudioSettingsPage() {
   const [venmoHandle, setVenmoHandle] = useState("");
   const [stripePaymentsEnabled, setStripePaymentsEnabled] = useState(false);
   const [averageSessionRate, setAverageSessionRate] = useState(150);
+  const [studioTier, setStudioTier] = useState<"PRO" | "ELITE">("PRO");
+  const [customDomain, setCustomDomain] = useState("");
 
   useEffect(() => {
     fetch("/api/studio/settings")
@@ -152,6 +156,8 @@ export default function StudioSettingsPage() {
         setVenmoHandle(s.venmoHandle ?? "");
         setStripePaymentsEnabled(s.stripePaymentsEnabled ?? false);
         setAverageSessionRate(s.averageSessionRate ?? 150);
+        setStudioTier(s.studioTier ?? "PRO");
+        setCustomDomain(s.customDomain ?? "");
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -196,6 +202,7 @@ export default function StudioSettingsPage() {
           cashAppHandle, zelleHandle, paypalHandle, venmoHandle,
           stripePaymentsEnabled,
           averageSessionRate,
+          customDomain: studioTier === "ELITE" ? customDomain : undefined,
         }),
       });
       const data = await res.json();
@@ -539,6 +546,28 @@ export default function StudioSettingsPage() {
         <p className="text-xs text-muted-foreground -mt-2">
           What&apos;s your average session rate? This helps us show you the estimated value of leads from IndieThis.
         </p>
+      </Section>
+
+      {/* ── Custom Domain ── */}
+      <Section icon={<Globe size={15} className="text-muted-foreground" />} title="Custom Domain">
+        <p className="text-xs text-muted-foreground -mt-2">Point your own domain to your studio booking page.</p>
+        {studioTier === "PRO" ? (
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2.5 opacity-60" style={{ borderColor: "var(--border)" }}>
+            <Lock size={12} className="text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground flex-1">yourstudio.com</span>
+            <a href="/dashboard/upgrade" className="text-[11px] font-semibold shrink-0" style={{ color: "#D4A843" }}>Elite only — $99/mo →</a>
+          </div>
+        ) : (
+          <Field icon={<Globe size={13} />} label="Custom Domain">
+            <input
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+              placeholder="yourstudio.com"
+              className={inputCls}
+              style={{ borderColor: "var(--border)" }}
+            />
+          </Field>
+        )}
       </Section>
 
       {/* ── Save ── */}

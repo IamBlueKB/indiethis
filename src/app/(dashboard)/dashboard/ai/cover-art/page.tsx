@@ -4,6 +4,7 @@ import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useState, useEffect } from "react";
 import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ interface HistoryItem {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
+const NEXT_CREDITS: Record<string, number> = { launch: 10, push: 15 };
+
 const STYLES = [
   "Photorealistic", "Digital Art", "Oil Painting", "Watercolor",
   "Minimalist", "Abstract", "Retro / Vintage", "Cinematic",
@@ -58,6 +61,10 @@ export default function CoverArtPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobData,     setJobData]     = useState<PollData | null>(null);
 
+  // Credits
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -66,7 +73,13 @@ export default function CoverArtPage() {
   useEffect(() => {
     fetch("/api/dashboard/ai/cover-art")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
+        }
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -111,8 +124,7 @@ export default function CoverArtPage() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "4.99"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -221,6 +233,18 @@ export default function CoverArtPage() {
               <AlertCircle size={14} className="flex-shrink-0" />
               {submitError}
             </div>
+          )}
+
+          {creditExhausted && creditInfo && (
+            <CreditExhaustedBanner
+              toolLabel="cover art"
+              creditsLimit={creditInfo.limit}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART.display}
+              nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+              nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+              isMaxTier={creditInfo.tier === "reign"}
+            />
           )}
 
           <div className="flex items-center justify-between pt-1">

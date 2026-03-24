@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users, Gift, CheckCircle2, ArrowDownCircle, DollarSign } from "lucide-react";
+import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users, Gift, CheckCircle2, ArrowDownCircle, DollarSign, Lock } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
 import { parseHistory, type CreditEvent } from "@/lib/studio-referral";
@@ -69,6 +69,63 @@ export default async function StudioAnalyticsPage() {
   });
 
   if (!studio) redirect("/studio/setup");
+
+  // Studio analytics is an Elite-only feature
+  if (studio.studioTier !== "ELITE") {
+    return (
+      <div className="p-6 max-w-md mx-auto">
+        <div
+          className="rounded-2xl border p-8 text-center space-y-5"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        >
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
+            style={{ backgroundColor: "rgba(212,168,67,0.1)" }}
+          >
+            <Lock size={28} style={{ color: "#D4A843" }} />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-xl font-bold text-foreground">Studio Analytics</h1>
+            <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>Available on Elite</p>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
+              Get deep insight into how your studio page is performing and where your bookings come from.
+            </p>
+          </div>
+          <div
+            className="rounded-xl border p-4 text-left space-y-2"
+            style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
+          >
+            {[
+              "Page views, track plays, and booking trends over 90 days",
+              "Contact source breakdown — Instagram, intake forms, walk-ins, referrals",
+              "Email campaign open rates and click-through stats",
+            ].map((f) => (
+              <div key={f} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="shrink-0 mt-0.5" style={{ color: "#D4A843" }}>•</span>
+                {f}
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <a
+              href="/dashboard/upgrade"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm w-full justify-center"
+              style={{ backgroundColor: "#E85D4A", color: "white" }}
+            >
+              <Zap size={14} />
+              Upgrade to Elite — $99/mo
+            </a>
+            <a
+              href="/pricing"
+              className="block text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+            >
+              See all plans
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

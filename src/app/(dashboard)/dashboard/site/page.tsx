@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X, DollarSign, QrCode, Bell, ChevronDown, ChevronUp, Trash2, Activity } from "lucide-react";
+import { Globe, Eye, EyeOff, ExternalLink, Pencil, Check, ImagePlus, Loader2, Instagram, Heart, Award, Plus, X, DollarSign, QrCode, Bell, ChevronDown, ChevronUp, Trash2, Activity, Lock } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { useArtistSite, useUpdateSite } from "@/hooks/queries";
+import { useUserStore } from "@/store";
+import UpgradeGate from "@/components/dashboard/UpgradeGate";
 import Link from "next/link";
 
 export default function ArtistSitePage() {
@@ -13,6 +15,8 @@ export default function ArtistSitePage() {
   const instagramHandle = data?.instagramHandle ?? null;
 
   const { mutate: updateSite, isPending: saving } = useUpdateSite();
+  const { user } = useUserStore();
+  const tier = user?.tier ?? "launch";
 
   const [togglingDraft, setTogglingDraft] = useState(false);
   const [editingBio, setEditingBio]       = useState(false);
@@ -70,6 +74,11 @@ export default function ArtistSitePage() {
   const [newPressTitle,  setNewPressTitle]  = useState("");
   const [newPressUrl,    setNewPressUrl]    = useState("");
   const [savingPress,  setSavingPress]  = useState(false);
+
+  // ── Custom Domain ────────────────────────────────────────────────────────────
+  const [customDomain,     setCustomDomain]     = useState("");
+  const [editingDomain,    setEditingDomain]    = useState(false);
+  const [savingDomain,     setSavingDomain]     = useState(false);
 
   // Sync bio from server data when it first loads
   const bioValue = editingBio ? bio : (site?.bioContent ?? "");
@@ -198,11 +207,29 @@ export default function ArtistSitePage() {
     setPinnedActionUrl(s.pinnedActionUrl ?? "");
   }, [site]);
 
+  // Sync custom domain from loaded site data
+  useEffect(() => {
+    if (!site) return;
+    const s = site as { customDomain?: string | null };
+    setCustomDomain(s.customDomain ?? "");
+  }, [site]);
+
   async function saveIdentity() {
     setSavingIdentity(true);
     updateSite(
       { genre: genreInput || null, role: roleInput || null, city: cityInput || null, soundcloudUrl: soundcloudInput || null } as never,
       { onSettled: () => setSavingIdentity(false) }
+    );
+  }
+
+  async function saveDomain() {
+    setSavingDomain(true);
+    updateSite(
+      { customDomain: customDomain.trim() || null } as never,
+      {
+        onSuccess: () => setEditingDomain(false),
+        onSettled: () => setSavingDomain(false),
+      }
     );
   }
 
@@ -835,268 +862,369 @@ export default function ArtistSitePage() {
             </Link>
           )}
 
-          {/* ── Pinned Announcement ────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <button
-              onClick={() => setPinnedOpen((v) => !v)}
-              className="w-full flex items-center justify-between p-5 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(232,93,74,0.10)" }}>
-                  <Bell size={16} style={{ color: "#E85D4A" }} />
+          {/* ── Extended sections (Push+) ──────────────────────────────────── */}
+          {tier === "launch" ? (
+            <div className="space-y-4">
+              {/* Dimmed preview grid */}
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+                <div className="px-5 pt-5 pb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">More sections — available on Push</p>
                 </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Pinned Announcement</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Show a banner message at the top of your page</p>
-                </div>
-              </div>
-              {pinnedOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-            </button>
-            {pinnedOpen && (
-              <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="pt-4 space-y-2">
-                  <textarea
-                    value={pinnedMsg}
-                    onChange={(e) => setPinnedMsg(e.target.value)}
-                    placeholder="Announcement message (e.g. 'New album out now!')"
-                    rows={2}
-                    className="w-full rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none resize-none"
-                    style={{ borderColor: "var(--border)" }}
-                  />
-                  <div className="flex gap-2">
-                    <input type="text" value={pinnedActionText} onChange={(e) => setPinnedActionText(e.target.value)} placeholder="Button label (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                    <input type="url" value={pinnedActionUrl} onChange={(e) => setPinnedActionUrl(e.target.value)} placeholder="Button URL (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-muted-foreground">Leave empty to hide the announcement</p>
-                    <button onClick={savePinned} disabled={savingPinned} className="px-4 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 transition-all hover:brightness-110" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
-                      {savingPinned ? <Loader2 size={11} className="animate-spin" /> : "Save"}
-                    </button>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 px-5 pb-5 opacity-40 pointer-events-none select-none" aria-hidden="true">
+                  {[
+                    { icon: <Bell size={15} style={{ color: "#E85D4A" }} />, bg: "rgba(232,93,74,0.10)", label: "Pinned Announcement", sub: "Banner at top of page" },
+                    { icon: <Activity size={15} style={{ color: "#4CAF50" }} />, bg: "rgba(76,175,80,0.10)", label: "Activity Ticker", sub: "Live fan activity feed" },
+                    { icon: <ImagePlus size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Photo Gallery", sub: "Up to 9 photos" },
+                    { icon: <Award size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Testimonials", sub: "Quotes & co-signs" },
+                    { icon: <Heart size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Collaborators", sub: "Artists you've worked with" },
+                    { icon: <ExternalLink size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Press / Media", sub: "Articles & features" },
+                    { icon: <Globe size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Custom Domain", sub: "yourname.com" },
+                    { icon: <Eye size={15} className="text-accent" />, bg: "rgba(212,168,67,0.10)", label: "Full Publishing Controls", sub: "Draft / live scheduling" },
+                  ].map(({ icon, bg, label, sub }) => (
+                    <div key={label} className="flex items-center gap-3 p-3 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: bg }}>
+                        {icon}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{label}</p>
+                        <p className="text-[10px] text-muted-foreground">{sub}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* ── Activity Ticker ─────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border p-5"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(76,175,80,0.10)" }}>
-                  <Activity size={16} style={{ color: "#4CAF50" }} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Activity Ticker</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Show live activity (purchases, pre-saves, listeners) as a scrolling bar</p>
-                </div>
-              </div>
-              <button
-                onClick={toggleTicker}
-                disabled={togglingTicker || saving}
-                className="relative w-11 h-6 rounded-full transition-colors disabled:opacity-40"
-                style={{ backgroundColor: (site as { activityTickerEnabled?: boolean })?.activityTickerEnabled ? "#4CAF50" : "var(--border)" }}
-              >
-                <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform" style={{ left: (site as { activityTickerEnabled?: boolean })?.activityTickerEnabled ? "calc(100% - 22px)" : "2px" }} />
-              </button>
+              <UpgradeGate
+                requiredTier="PUSH"
+                featureName="Full Artist Site"
+                featureDescription="Build a complete multi-section artist page that goes far beyond a basic profile."
+                features={[
+                  "Pinned announcements, activity ticker, and photo gallery",
+                  "Testimonials, collaborator spotlights, and press mentions",
+                  "Custom domain and full publishing controls",
+                ]}
+              />
             </div>
-          </div>
+          ) : (
+            <>
+              {/* ── Pinned Announcement ──────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => setPinnedOpen((v) => !v)}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(232,93,74,0.10)" }}>
+                      <Bell size={16} style={{ color: "#E85D4A" }} />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Pinned Announcement</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Show a banner message at the top of your page</p>
+                    </div>
+                  </div>
+                  {pinnedOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                </button>
+                {pinnedOpen && (
+                  <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
+                    <div className="pt-4 space-y-2">
+                      <textarea
+                        value={pinnedMsg}
+                        onChange={(e) => setPinnedMsg(e.target.value)}
+                        placeholder="Announcement message (e.g. 'New album out now!')"
+                        rows={2}
+                        className="w-full rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none resize-none"
+                        style={{ borderColor: "var(--border)" }}
+                      />
+                      <div className="flex gap-2">
+                        <input type="text" value={pinnedActionText} onChange={(e) => setPinnedActionText(e.target.value)} placeholder="Button label (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                        <input type="url" value={pinnedActionUrl} onChange={(e) => setPinnedActionUrl(e.target.value)} placeholder="Button URL (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs text-muted-foreground">Leave empty to hide the announcement</p>
+                        <button onClick={savePinned} disabled={savingPinned} className="px-4 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 transition-all hover:brightness-110" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
+                          {savingPinned ? <Loader2 size={11} className="animate-spin" /> : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-          {/* ── Photo Gallery ────────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <button
-              onClick={() => { setPhotosOpen((v) => !v); if (!photosOpen) loadPhotos(); }}
-              className="w-full flex items-center justify-between p-5 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
-                  <ImagePlus size={16} className="text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Photo Gallery</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Add up to 9 photos to your artist page gallery</p>
+              {/* ── Activity Ticker ──────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border p-5"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(76,175,80,0.10)" }}>
+                      <Activity size={16} style={{ color: "#4CAF50" }} />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Activity Ticker</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Show live activity (purchases, pre-saves, listeners) as a scrolling bar</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleTicker}
+                    disabled={togglingTicker || saving}
+                    className="relative w-11 h-6 rounded-full transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: (site as { activityTickerEnabled?: boolean })?.activityTickerEnabled ? "#4CAF50" : "var(--border)" }}
+                  >
+                    <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform" style={{ left: (site as { activityTickerEnabled?: boolean })?.activityTickerEnabled ? "calc(100% - 22px)" : "2px" }} />
+                  </button>
                 </div>
               </div>
-              {photosOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-            </button>
-            {photosOpen && (
-              <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="pt-4">
-                  {loadingPhotos ? (
-                    <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-muted-foreground" /></div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {photos.map((p) => (
-                        <div key={p.id} className="relative group rounded-lg overflow-hidden" style={{ height: 80 }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => deletePhoto(p.id)}
-                            className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
-                          >
-                            <X size={10} className="text-white" />
-                          </button>
+
+              {/* ── Photo Gallery ────────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => { setPhotosOpen((v) => !v); if (!photosOpen) loadPhotos(); }}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
+                      <ImagePlus size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Photo Gallery</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Add up to 9 photos to your artist page gallery</p>
+                    </div>
+                  </div>
+                  {photosOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                </button>
+                {photosOpen && (
+                  <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
+                    <div className="pt-4">
+                      {loadingPhotos ? (
+                        <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-muted-foreground" /></div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {photos.map((p) => (
+                            <div key={p.id} className="relative group rounded-lg overflow-hidden" style={{ height: 80 }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => deletePhoto(p.id)}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+                              >
+                                <X size={10} className="text-white" />
+                              </button>
+                            </div>
+                          ))}
+                          {photos.length < 9 && (
+                            <label
+                              className="flex flex-col items-center justify-center rounded-lg cursor-pointer border border-dashed transition-colors hover:border-accent"
+                              style={{ height: 80, borderColor: "var(--border)" }}
+                            >
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto([f]); }} />
+                              {photoUploading ? <Loader2 size={16} className="animate-spin text-muted-foreground" /> : <Plus size={16} className="text-muted-foreground" />}
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Testimonials ─────────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => { setTestimsOpen((v) => !v); if (!testimsOpen) loadTestimonials(); }}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
+                      <Award size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Testimonials / Co-Signs</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Quotes from fans, artists, or press</p>
+                    </div>
+                  </div>
+                  {testimsOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                </button>
+                {testimsOpen && (
+                  <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
+                    <div className="pt-4 space-y-2">
+                      {testims.map((t) => (
+                        <div key={t.id} className="flex items-start gap-2 p-3 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs italic text-foreground/80">&ldquo;{t.quote}&rdquo;</p>
+                            <p className="text-[10px] mt-1" style={{ color: "#D4A843" }}>— {t.attribution}</p>
+                          </div>
+                          <button onClick={() => deleteTestimonial(t.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
                         </div>
                       ))}
-                      {photos.length < 9 && (
-                        <label
-                          className="flex flex-col items-center justify-center rounded-lg cursor-pointer border border-dashed transition-colors hover:border-accent"
-                          style={{ height: 80, borderColor: "var(--border)" }}
-                        >
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto([f]); }} />
-                          {photoUploading ? <Loader2 size={16} className="animate-spin text-muted-foreground" /> : <Plus size={16} className="text-muted-foreground" />}
-                        </label>
-                      )}
+                      <div className="space-y-2 pt-1">
+                        <textarea value={newQuote} onChange={(e) => setNewQuote(e.target.value)} placeholder="Quote" rows={2} className="w-full rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none resize-none" style={{ borderColor: "var(--border)" }} />
+                        <div className="flex gap-2">
+                          <input type="text" value={newAttrib} onChange={(e) => setNewAttrib(e.target.value)} placeholder="Attribution (e.g. 'DJ Clark Kent')" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                          <button onClick={addTestimonial} disabled={savingTestim || !newQuote.trim() || !newAttrib.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                            {savingTestim ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Collaborators ────────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => { setCollabsOpen((v) => !v); if (!collabsOpen) loadCollaborators(); }}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
+                      <Heart size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Collaborators</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Artists and producers you&apos;ve worked with</p>
+                    </div>
+                  </div>
+                  {collabsOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                </button>
+                {collabsOpen && (
+                  <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
+                    <div className="pt-4 space-y-2">
+                      {collabs.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2 p-2 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                          <span className="flex-1 text-sm text-foreground">{c.name}</span>
+                          {c.artistSlug && <span className="text-xs text-muted-foreground">/{c.artistSlug}</span>}
+                          <button onClick={() => deleteCollaborator(c.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <input type="text" value={newCollabName} onChange={(e) => setNewCollabName(e.target.value)} placeholder="Name" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                        <input type="text" value={newCollabSlug} onChange={(e) => setNewCollabSlug(e.target.value)} placeholder="Artist slug (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                        <button onClick={addCollaborator} disabled={savingCollab || !newCollabName.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                          {savingCollab ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Press ────────────────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => { setPressOpen((v) => !v); if (!pressOpen) loadPressItems(); }}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
+                      <ExternalLink size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Press / Media</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Articles and features from blogs, magazines, and outlets</p>
+                    </div>
+                  </div>
+                  {pressOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                </button>
+                {pressOpen && (
+                  <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
+                    <div className="pt-4 space-y-2">
+                      {pressItems.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 p-2 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                          <span className="text-xs font-semibold w-16 shrink-0" style={{ color: "#D4A843" }}>{p.source}</span>
+                          <span className="flex-1 text-sm text-foreground truncate">{p.title}</span>
+                          <button onClick={() => deletePressItem(p.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input type="text" value={newPressSource} onChange={(e) => setNewPressSource(e.target.value)} placeholder="Source (e.g. 'XXL')" className="w-28 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                          <input type="text" value={newPressTitle} onChange={(e) => setNewPressTitle(e.target.value)} placeholder="Article title" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                        </div>
+                        <div className="flex gap-2">
+                          <input type="url" value={newPressUrl} onChange={(e) => setNewPressUrl(e.target.value)} placeholder="Article URL" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
+                          <button onClick={addPressItem} disabled={savingPress || !newPressSource.trim() || !newPressTitle.trim() || !newPressUrl.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                            {savingPress ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Custom Domain ────────────────────────────────────────────── */}
+              <div
+                className="rounded-2xl border p-5 space-y-3"
+                style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
+                      <Globe size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Custom Domain</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Point your own domain to your artist page</p>
+                    </div>
+                  </div>
+                  {tier === "reign" && !editingDomain && (
+                    <button
+                      onClick={() => setEditingDomain(true)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  {tier === "reign" && editingDomain && (
+                    <div className="flex gap-1">
+                      <button onClick={saveDomain} disabled={savingDomain} className="p-1.5 rounded-lg text-emerald-400 hover:bg-white/5 disabled:opacity-50">
+                        <Check size={13} />
+                      </button>
+                      <button onClick={() => setEditingDomain(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5">✕</button>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Testimonials ─────────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <button
-              onClick={() => { setTestimsOpen((v) => !v); if (!testimsOpen) loadTestimonials(); }}
-              className="w-full flex items-center justify-between p-5 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
-                  <Award size={16} className="text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Testimonials / Co-Signs</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Quotes from fans, artists, or press</p>
-                </div>
-              </div>
-              {testimsOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-            </button>
-            {testimsOpen && (
-              <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="pt-4 space-y-2">
-                  {testims.map((t) => (
-                    <div key={t.id} className="flex items-start gap-2 p-3 rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs italic text-foreground/80">&ldquo;{t.quote}&rdquo;</p>
-                        <p className="text-[10px] mt-1" style={{ color: "#D4A843" }}>— {t.attribution}</p>
-                      </div>
-                      <button onClick={() => deleteTestimonial(t.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
-                    </div>
-                  ))}
-                  <div className="space-y-2 pt-1">
-                    <textarea value={newQuote} onChange={(e) => setNewQuote(e.target.value)} placeholder="Quote" rows={2} className="w-full rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none resize-none" style={{ borderColor: "var(--border)" }} />
-                    <div className="flex gap-2">
-                      <input type="text" value={newAttrib} onChange={(e) => setNewAttrib(e.target.value)} placeholder="Attribution (e.g. 'DJ Clark Kent')" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                      <button onClick={addTestimonial} disabled={savingTestim || !newQuote.trim() || !newAttrib.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                        {savingTestim ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                      </button>
-                    </div>
+                {tier === "push" ? (
+                  <div className="flex items-center gap-2 rounded-xl border px-3 py-2.5 opacity-60" style={{ borderColor: "var(--border)" }}>
+                    <Lock size={12} className="text-muted-foreground shrink-0" />
+                    <span className="text-sm text-muted-foreground flex-1">yourname.com</span>
+                    <a href="/dashboard/upgrade" className="text-[11px] font-semibold shrink-0" style={{ color: "#D4A843" }}>Reign only →</a>
                   </div>
-                </div>
+                ) : editingDomain ? (
+                  <input
+                    type="text"
+                    value={customDomain}
+                    onChange={(e) => setCustomDomain(e.target.value)}
+                    placeholder="yourname.com"
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {(site as { customDomain?: string | null })?.customDomain ?? "No custom domain set. Click the pencil to add one."}
+                  </p>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* ── Collaborators ────────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <button
-              onClick={() => { setCollabsOpen((v) => !v); if (!collabsOpen) loadCollaborators(); }}
-              className="w-full flex items-center justify-between p-5 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
-                  <Heart size={16} className="text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Collaborators</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Artists and producers you&apos;ve worked with</p>
-                </div>
-              </div>
-              {collabsOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-            </button>
-            {collabsOpen && (
-              <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="pt-4 space-y-2">
-                  {collabs.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 p-2 rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                      <span className="flex-1 text-sm text-foreground">{c.name}</span>
-                      {c.artistSlug && <span className="text-xs text-muted-foreground">/{c.artistSlug}</span>}
-                      <button onClick={() => deleteCollaborator(c.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
-                    <input type="text" value={newCollabName} onChange={(e) => setNewCollabName(e.target.value)} placeholder="Name" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                    <input type="text" value={newCollabSlug} onChange={(e) => setNewCollabSlug(e.target.value)} placeholder="Artist slug (optional)" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                    <button onClick={addCollaborator} disabled={savingCollab || !newCollabName.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                      {savingCollab ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Press ────────────────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl border"
-            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <button
-              onClick={() => { setPressOpen((v) => !v); if (!pressOpen) loadPressItems(); }}
-              className="w-full flex items-center justify-between p-5 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.10)" }}>
-                  <ExternalLink size={16} className="text-accent" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Press / Media</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Articles and features from blogs, magazines, and outlets</p>
-                </div>
-              </div>
-              {pressOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-            </button>
-            {pressOpen && (
-              <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <div className="pt-4 space-y-2">
-                  {pressItems.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2 p-2 rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                      <span className="text-xs font-semibold w-16 shrink-0" style={{ color: "#D4A843" }}>{p.source}</span>
-                      <span className="flex-1 text-sm text-foreground truncate">{p.title}</span>
-                      <button onClick={() => deletePressItem(p.id)} className="shrink-0 p-1 text-muted-foreground hover:text-red-400"><Trash2 size={12} /></button>
-                    </div>
-                  ))}
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input type="text" value={newPressSource} onChange={(e) => setNewPressSource(e.target.value)} placeholder="Source (e.g. 'XXL')" className="w-28 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                      <input type="text" value={newPressTitle} onChange={(e) => setNewPressTitle(e.target.value)} placeholder="Article title" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="url" value={newPressUrl} onChange={(e) => setNewPressUrl(e.target.value)} placeholder="Article URL" className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none" style={{ borderColor: "var(--border)" }} />
-                      <button onClick={addPressItem} disabled={savingPress || !newPressSource.trim() || !newPressTitle.trim() || !newPressUrl.trim()} className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                        {savingPress ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+            </>
+          )}
 
           {/* View link */}
           {publicUrl && (

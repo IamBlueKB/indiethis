@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ interface HistoryItem {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
+
+const NEXT_CREDITS: Record<string, number> = { launch: 1, push: 3 };
 
 const VISUAL_STYLES = [
   { value: "gradient",  label: "Gradient",  desc: "Smooth colour gradient background" },
@@ -191,6 +194,10 @@ function LyricVideoContent() {
   const [activeJobId,  setActiveJobId]  = useState<string | null>(null);
   const [jobData,      setJobData]      = useState<PollData | null>(null);
 
+  // Credits
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -207,7 +214,13 @@ function LyricVideoContent() {
   useEffect(() => {
     fetch("/api/dashboard/ai/lyric-video")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
+        }
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -258,8 +271,7 @@ function LyricVideoContent() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "24.99"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -470,6 +482,18 @@ function LyricVideoContent() {
                 <AlertCircle size={14} className="flex-shrink-0" />
                 {submitError}
               </div>
+            )}
+
+            {creditExhausted && creditInfo && (
+              <CreditExhaustedBanner
+                toolLabel="lyric video"
+                creditsLimit={creditInfo.limit}
+                ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_LYRIC_VIDEO.display}
+                nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+                nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+                nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+                isMaxTier={creditInfo.tier === "reign"}
+              />
             )}
 
             <div className="flex items-center justify-between pt-1">

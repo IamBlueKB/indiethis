@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, Loader2, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,8 @@ interface HistoryItem {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
+
+const NEXT_CREDITS: Record<string, number> = { launch: 2, push: 5 };
 
 const GENRES = [
   "Hip-Hop / Rap", "R&B / Soul", "Pop", "Alternative / Indie",
@@ -123,6 +126,10 @@ export default function ARReportPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobData,     setJobData]     = useState<PollData | null>(null);
 
+  // Credits
+  const [creditExhausted, setCreditExhausted] = useState(false);
+  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -140,7 +147,13 @@ export default function ARReportPage() {
   useEffect(() => {
     fetch("/api/dashboard/ai/ar-report")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
+          if (d.credits?.limit === 0) setCreditExhausted(true);
+        }
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -191,8 +204,7 @@ export default function ARReportPage() {
       });
 
       if (res.status === 402) {
-        const d = await res.json();
-        setSubmitError(`No credits remaining. Pay-per-use: $${d.amountDollars ?? "14.99"}. Add a payment method in Settings.`);
+        setCreditExhausted(true);
         return;
       }
 
@@ -340,6 +352,18 @@ export default function ARReportPage() {
               <AlertCircle size={14} className="flex-shrink-0" />
               {submitError}
             </div>
+          )}
+
+          {creditExhausted && creditInfo && (
+            <CreditExhaustedBanner
+              toolLabel="AR report"
+              creditsLimit={creditInfo.limit}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_AAR_REPORT.display}
+              nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+              nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+              isMaxTier={creditInfo.tier === "reign"}
+            />
           )}
 
           <div className="flex items-center justify-between pt-1">
