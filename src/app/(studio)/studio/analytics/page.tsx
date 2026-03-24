@@ -223,13 +223,14 @@ export default async function StudioAnalyticsPage() {
   const contactsDelta = calcDelta(newContactsThisMonth, newContactsLastMonth);
 
   // ── Lead tracking ─────────────────────────────────────────────────────────
-  const leadsThisMonth   = contactSubsThisMonth + intakeSubsThisMonth;
-  const leadsLastMonth   = contactSubsLastMonth + intakeSubsLastMonth;
-  const leadsDelta       = calcDelta(leadsThisMonth, leadsLastMonth);
-  const avgRate          = studio.averageSessionRate ?? 150;
-  const estimatedValue   = convertedThisMonth * avgRate;
-  const estimatedValueLast = convertedLastMonth * avgRate;
-  const valueDelta       = calcDelta(estimatedValue, estimatedValueLast);
+  const leadsThisMonth     = contactSubsThisMonth + intakeSubsThisMonth;
+  const leadsLastMonth     = contactSubsLastMonth + intakeSubsLastMonth;
+  const leadsDelta         = calcDelta(leadsThisMonth, leadsLastMonth);
+  const avgRate            = studio.averageSessionRate ?? 150;
+  // Potential value = all leads this month × avg rate (shows value before any booking is confirmed)
+  const potentialValue     = leadsThisMonth * avgRate;
+  const potentialValueLast = leadsLastMonth * avgRate;
+  const valueDelta         = calcDelta(potentialValue, potentialValueLast);
 
   // ── Email sequence stats ─────────────────────────────────────────────────
 
@@ -338,15 +339,15 @@ export default async function StudioAnalyticsPage() {
         <StatCard
           label="Leads from IndieThis"
           value={leadsThisMonth}
-          sub="contact + intake forms this month"
+          sub={`${convertedThisMonth} converted to booking${convertedThisMonth !== 1 ? "s" : ""} this month`}
           delta={leadsDelta}
           icon={Users}
           color="#D4A843"
         />
         <StatCard
-          label="Estimated Session Value"
-          value={estimatedValue}
-          sub={`from ${convertedThisMonth} converted booking${convertedThisMonth !== 1 ? "s" : ""}`}
+          label="Potential Lead Value"
+          value={potentialValue}
+          sub={`${leadsThisMonth} lead${leadsThisMonth !== 1 ? "s" : ""} × $${avgRate} avg rate`}
           delta={valueDelta}
           icon={DollarSign}
           color="#34C759"

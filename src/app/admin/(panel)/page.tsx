@@ -197,11 +197,11 @@ export default async function AdminDashboardPage({
     return Object.entries(sources).map(([name, value]) => ({ name, value: Math.round(value) }));
   })();
 
-  // Platform lead ROI
+  // Platform lead ROI — potential value based on all leads × each studio's avg rate
   const totalEstimatedValue = studioLeadBreakdown.reduce((sum, s) => {
-    const converted = s._count.contacts;
-    const rate = s.averageSessionRate ?? 150;
-    return sum + converted * rate;
+    const leads = s._count.contactSubmissions + s._count.intakeSubmissions;
+    const rate  = s.averageSessionRate ?? 150;
+    return sum + leads * rate;
   }, 0);
 
   const artistDelta = pctDelta(artistCount, artistCountLastMonth);
@@ -402,9 +402,9 @@ export default async function AdminDashboardPage({
             href: "/admin/studios",
           },
           {
-            label: "Est. Session Value",
+            label: "Potential Lead Value",
             value: `$${totalEstimatedValue.toLocaleString()}`,
-            sub: `from ${totalConvertedThisMonth} converted booking${totalConvertedThisMonth !== 1 ? "s" : ""}`,
+            sub: `${totalLeadsThisMonth} leads × studio avg rates`,
             icon: DollarSign,
             color: "#34C759",
             href: "/admin/studios",
