@@ -76,6 +76,7 @@ type Studio = {
   paypalHandle: string | null;
   venmoHandle: string | null;
   stripePaymentsEnabled: boolean;
+  averageSessionRate: number;
 };
 
 // ─── Input style helper ────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export default function StudioSettingsPage() {
   const [paypalHandle, setPaypalHandle] = useState("");
   const [venmoHandle, setVenmoHandle] = useState("");
   const [stripePaymentsEnabled, setStripePaymentsEnabled] = useState(false);
+  const [averageSessionRate, setAverageSessionRate] = useState(150);
 
   useEffect(() => {
     fetch("/api/studio/settings")
@@ -149,6 +151,7 @@ export default function StudioSettingsPage() {
         setPaypalHandle(s.paypalHandle ?? "");
         setVenmoHandle(s.venmoHandle ?? "");
         setStripePaymentsEnabled(s.stripePaymentsEnabled ?? false);
+        setAverageSessionRate(s.averageSessionRate ?? 150);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -192,6 +195,7 @@ export default function StudioSettingsPage() {
           instagram, tiktok, youtube, facebook,
           cashAppHandle, zelleHandle, paypalHandle, venmoHandle,
           stripePaymentsEnabled,
+          averageSessionRate,
         }),
       });
       const data = await res.json();
@@ -517,6 +521,24 @@ export default function StudioSettingsPage() {
             />
           </button>
         </div>
+      </Section>
+
+      {/* ── Lead ROI ── */}
+      <Section icon={<DollarSign size={14} className="text-accent" />} title="Lead Tracking">
+        <Field icon={<DollarSign size={13} />} label="Average Session Rate ($)">
+          <input
+            value={averageSessionRate}
+            onChange={(e) => setAverageSessionRate(Number(e.target.value) || 0)}
+            type="number"
+            min={0}
+            placeholder="150"
+            className={inputCls}
+            style={{ borderColor: "var(--border)" }}
+          />
+        </Field>
+        <p className="text-xs text-muted-foreground -mt-2">
+          What&apos;s your average session rate? This helps us show you the estimated value of leads from IndieThis.
+        </p>
       </Section>
 
       {/* ── Save ── */}

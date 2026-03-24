@@ -95,6 +95,8 @@ export async function PATCH(req: NextRequest) {
         ? body.onboardingCompleted : undefined,
       emailSequenceEnabled: typeof body.emailSequenceEnabled === "boolean"
         ? body.emailSequenceEnabled : undefined,
+      averageSessionRate: typeof body.averageSessionRate === "number"
+        ? body.averageSessionRate : undefined,
     },
   });
 

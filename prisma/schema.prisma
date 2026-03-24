@@ -584,6 +584,7 @@ model Studio {
   referralCredits          Float     @default(0)
   referralCreditHistory    Json?
   emailSequenceEnabled     Boolean   @default(false)
+  averageSessionRate       Float     @default(150)
   ownerId      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -897,6 +898,8 @@ model Contact {
   totalSpent           Float         @default(0)
   lastSessionDate      DateTime?
   referredToIndieThis  Boolean       @default(false)
+  convertedToBooking   Boolean       @default(false)
+  convertedAt          DateTime?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 

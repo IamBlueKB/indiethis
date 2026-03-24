@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users, Gift, CheckCircle2, ArrowDownCircle } from "lucide-react";
+import { Eye, MessageSquare, Calendar, BookUser, Mail, TrendingUp, TrendingDown, Minus, BarChart2, Zap, MailCheck, SendHorizonal, Clock, Users, Gift, CheckCircle2, ArrowDownCircle, DollarSign } from "lucide-react";
 import AdminLineChart from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
 import { parseHistory, type CreditEvent } from "@/lib/studio-referral";
@@ -64,6 +64,7 @@ export default async function StudioAnalyticsPage() {
       generationResetDate: true,
       referralCredits:       true,
       referralCreditHistory: true,
+      averageSessionRate:    true,
     },
   });
 
@@ -95,6 +96,8 @@ export default async function StudioAnalyticsPage() {
     seqPendingNow,
     seqAllSentEmails,
     seqStepBreakdown,
+    convertedThisMonth,
+    convertedLastMonth,
   ] = await Promise.all([
     db.pageView.count({
       where: { studioId: studio.id, viewedAt: { gte: startOfMonth } },
@@ -164,6 +167,13 @@ export default async function StudioAnalyticsPage() {
       where: { studioId: studio.id },
       _count: { id: true },
     }),
+    // Booking lead conversions (contacts converted to bookings)
+    db.contact.count({
+      where: { studioId: studio.id, convertedToBooking: true, convertedAt: { gte: startOfMonth } },
+    }),
+    db.contact.count({
+      where: { studioId: studio.id, convertedToBooking: true, convertedAt: { gte: lastMonthStart, lt: startOfMonth } },
+    }),
   ]);
 
   // ── Build chart data ─────────────────────────────────────────────────────
@@ -211,6 +221,15 @@ export default async function StudioAnalyticsPage() {
   const inquiriesDelta = calcDelta(contactSubsThisMonth, contactSubsLastMonth);
   const bookingsDelta = calcDelta(intakeSubsThisMonth, intakeSubsLastMonth);
   const contactsDelta = calcDelta(newContactsThisMonth, newContactsLastMonth);
+
+  // ── Lead tracking ─────────────────────────────────────────────────────────
+  const leadsThisMonth   = contactSubsThisMonth + intakeSubsThisMonth;
+  const leadsLastMonth   = contactSubsLastMonth + intakeSubsLastMonth;
+  const leadsDelta       = calcDelta(leadsThisMonth, leadsLastMonth);
+  const avgRate          = studio.averageSessionRate ?? 150;
+  const estimatedValue   = convertedThisMonth * avgRate;
+  const estimatedValueLast = convertedLastMonth * avgRate;
+  const valueDelta       = calcDelta(estimatedValue, estimatedValueLast);
 
   // ── Email sequence stats ─────────────────────────────────────────────────
 
@@ -311,6 +330,27 @@ export default async function StudioAnalyticsPage() {
           delta={contactsDelta}
           icon={BookUser}
           color="#34C759"
+        />
+      </div>
+
+      {/* Lead tracking cards */}
+      <div className="grid grid-cols-2 gap-4">
+        <StatCard
+          label="Leads from IndieThis"
+          value={leadsThisMonth}
+          sub="contact + intake forms this month"
+          delta={leadsDelta}
+          icon={Users}
+          color="#D4A843"
+        />
+        <StatCard
+          label="Estimated Session Value"
+          value={estimatedValue}
+          sub={`from ${convertedThisMonth} converted booking${convertedThisMonth !== 1 ? "s" : ""}`}
+          delta={valueDelta}
+          icon={DollarSign}
+          color="#34C759"
+          prefix="$"
         />
       </div>
 
@@ -764,6 +804,7 @@ function StatCard({
   delta,
   icon: Icon,
   color,
+  prefix,
 }: {
   label: string;
   value: number;
@@ -771,6 +812,7 @@ function StatCard({
   delta: number | null;
   icon: React.ElementType;
   color: string;
+  prefix?: string;
 }) {
   return (
     <div
@@ -786,7 +828,7 @@ function StatCard({
           <Icon size={15} style={{ color }} strokeWidth={1.75} />
         </div>
       </div>
-      <p className="text-2xl font-bold text-foreground font-display">{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold text-foreground font-display">{prefix ?? ""}{value.toLocaleString()}</p>
       <div className="flex items-center justify-between mt-1">
         <p className="text-xs text-muted-foreground">{sub}</p>
         {delta !== null && (

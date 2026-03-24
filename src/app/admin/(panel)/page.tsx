@@ -67,6 +67,9 @@ export default async function AdminDashboardPage({
     totalLeasePlays,
     uniqueBeatLeaseCount,
     duplicateFlagCount,
+    totalLeadsThisMonth,
+    totalConvertedThisMonth,
+    studioLeadBreakdown,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -103,6 +106,29 @@ export default async function AdminDashboardPage({
     db.streamLeasePlay.count(),
     db.streamLease.groupBy({ by: ["beatId"], where: { isActive: true } }).then((r) => r.length),
     db.streamLease.count({ where: { duplicateFlag: true } }),
+    // Platform-wide booking leads this month
+    Promise.all([
+      db.contactSubmission.count({ where: { createdAt: { gte: startOfMonth } } }),
+      db.intakeSubmission.count({ where: { createdAt: { gte: startOfMonth } } }),
+    ]).then(([c, i]) => c + i),
+    // Platform-wide converted bookings this month
+    db.contact.count({ where: { convertedToBooking: true, convertedAt: { gte: startOfMonth } } }),
+    // Per-studio lead breakdown
+    db.studio.findMany({
+      select: {
+        id: true,
+        name: true,
+        averageSessionRate: true,
+        _count: {
+          select: {
+            contactSubmissions: { where: { createdAt: { gte: startOfMonth } } },
+            intakeSubmissions:  { where: { createdAt: { gte: startOfMonth } } },
+            contacts:           { where: { convertedToBooking: true, convertedAt: { gte: startOfMonth } } },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const mrr = activeSubscriptions.reduce((sum, s) => sum + (TIER_PRICE[s.tier] ?? 0), 0);
@@ -170,6 +196,13 @@ export default async function AdminDashboardPage({
     }
     return Object.entries(sources).map(([name, value]) => ({ name, value: Math.round(value) }));
   })();
+
+  // Platform lead ROI
+  const totalEstimatedValue = studioLeadBreakdown.reduce((sum, s) => {
+    const converted = s._count.contacts;
+    const rate = s.averageSessionRate ?? 150;
+    return sum + converted * rate;
+  }, 0);
 
   const artistDelta = pctDelta(artistCount, artistCountLastMonth);
   const studioDelta = pctDelta(studioCount, studioCountLastMonth);
@@ -356,6 +389,86 @@ export default async function AdminDashboardPage({
           );
         })}
       </div>
+
+      {/* Booking Lead Tracking */}
+      <div className="grid grid-cols-2 gap-4">
+        {[
+          {
+            label: "Platform Leads / Month",
+            value: totalLeadsThisMonth,
+            sub: "contact + intake forms this month",
+            icon: Users,
+            color: "#D4A843",
+            href: "/admin/studios",
+          },
+          {
+            label: "Est. Session Value",
+            value: `$${totalEstimatedValue.toLocaleString()}`,
+            sub: `from ${totalConvertedThisMonth} converted booking${totalConvertedThisMonth !== 1 ? "s" : ""}`,
+            icon: DollarSign,
+            color: "#34C759",
+            href: "/admin/studios",
+          },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="rounded-2xl border p-5 no-underline block hover:border-accent/40 transition-colors"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${stat.color}18` }}>
+                  <Icon size={15} style={{ color: stat.color }} strokeWidth={1.75} />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-foreground font-display">{stat.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Per-studio lead breakdown */}
+      {studioLeadBreakdown.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="px-5 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
+            <p className="text-sm font-semibold text-foreground">Studio Lead Breakdown — This Month</p>
+          </div>
+          <div
+            className="grid text-xs font-semibold uppercase tracking-wider text-muted-foreground px-5 py-3 border-b"
+            style={{ borderColor: "var(--border)", gridTemplateColumns: "1fr 80px 80px 80px 110px" }}
+          >
+            <span>Studio</span>
+            <span>Inquiries</span>
+            <span>Bookings</span>
+            <span>Converted</span>
+            <span>Est. Value</span>
+          </div>
+          {studioLeadBreakdown.map((s) => {
+            const leads     = s._count.contactSubmissions + s._count.intakeSubmissions;
+            const converted = s._count.contacts;
+            const estValue  = converted * (s.averageSessionRate ?? 150);
+            return (
+              <div
+                key={s.id}
+                className="grid items-center px-5 py-3 border-b last:border-b-0 text-sm"
+                style={{ borderColor: "var(--border)", gridTemplateColumns: "1fr 80px 80px 80px 110px" }}
+              >
+                <p className="font-medium text-foreground truncate pr-4">{s.name}</p>
+                <p className="text-muted-foreground">{s._count.contactSubmissions}</p>
+                <p className="text-muted-foreground">{s._count.intakeSubmissions}</p>
+                <p className="text-muted-foreground">{converted}</p>
+                <p className="font-semibold" style={{ color: estValue > 0 ? "#34C759" : "var(--muted-foreground)" }}>
+                  ${estValue.toLocaleString()}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_260px] gap-5">
         {/* Recent signups */}

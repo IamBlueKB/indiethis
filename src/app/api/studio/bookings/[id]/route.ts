@@ -57,8 +57,13 @@ export async function PATCH(
 
   // When a booking is confirmed or completed, cancel any pending follow-up
   // emails for that contact — they've re-engaged so the sequence is no longer needed.
+  // Also mark the contact as converted (for lead ROI tracking).
   if ((status === "CONFIRMED" || status === "COMPLETED") && booking?.contactId) {
     void cancelFollowUpByContactId(studio.id, booking.contactId);
+    void db.contact.updateMany({
+      where: { id: booking.contactId, studioId: studio.id, convertedToBooking: false },
+      data: { convertedToBooking: true, convertedAt: new Date() },
+    }).catch(() => {});
   }
 
   // Notify the artist when booking status changes
