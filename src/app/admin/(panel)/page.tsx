@@ -18,6 +18,7 @@ import {
   Play,
   Disc3,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -70,6 +71,7 @@ export default async function AdminDashboardPage({
     totalLeadsThisMonth,
     totalConvertedThisMonth,
     studioLeadBreakdown,
+    smsSentThisMonth,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -128,6 +130,11 @@ export default async function AdminDashboardPage({
         },
       },
       orderBy: { name: "asc" },
+    }),
+    // SMS broadcasts sent this month (platform-wide)
+    db.broadcastLog.aggregate({
+      where: { sentAt: { gte: startOfMonth } },
+      _sum:  { recipientCount: true },
     }),
   ]);
 
@@ -291,12 +298,13 @@ export default async function AdminDashboardPage({
       </div>
 
       {/* Promo & Ambassador Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: "Active Promo Codes", value: activePromoCount, sub: "codes live", icon: Tag, color: "#FB923C", href: "/admin/promo-codes" },
           { label: "Total Redemptions", value: totalRedemptions, sub: "all time", icon: BarChart2, color: "#A78BFA", href: "/admin/promo-analytics" },
           { label: "Conversions / Month", value: conversionsThisMonth, sub: "this month", icon: TrendingUp, color: "#34D399", href: "/admin/promo-analytics" },
           { label: "Ambassador Balance", value: `$${(ambassadorBalanceOwed as number).toFixed(2)}`, sub: "owed to ambassadors", icon: Star, color: "#D4A843", href: "/admin/ambassadors" },
+          { label: "SMS Sent This Month", value: (smsSentThisMonth._sum.recipientCount ?? 0).toLocaleString(), sub: "recipients across all artists", icon: MessageSquare, color: "#5AC8FA", href: "/admin/users" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (

@@ -43,7 +43,9 @@ type UserDetail = {
     id: string; tier: string; status: string;
     createdAt: string; canceledAt: string | null; cancelReason: string | null;
     currentPeriodEnd: string | null; stripeSubscriptionId: string | null;
+    smsBroadcastsUsed: number;
   } | null;
+  smsLimit: number;
   _count: { sessions: number; aiGenerations: number; tracks: number; receipts: number; merchProducts: number; producerLicenses: number };
   sessions: Array<{ id: string; dateTime: string; status: string; paymentStatus: string; sessionType: string | null; studio: { id: string; name: string; slug: string } }>;
   aiGenerations: Array<{ id: string; type: string; status: string; createdAt: string }>;
@@ -372,6 +374,12 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
                       <p className="font-mono text-[10px] text-muted-foreground break-all">{user.subscription.stripeSubscriptionId}</p>
                     </div>
                   )}
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">SMS Broadcasts</p>
+                  <p className="text-sm text-foreground">
+                    {user.subscription.smsBroadcastsUsed} / {user.smsLimit} this billing cycle
+                  </p>
                 </div>
                 <ASelect label="Tier Override" value={subTier} onChange={(v) => { setSubTier(v); save({ subscriptionTier: v }); }}
                   options={[{ v: "LAUNCH", l: "Launch" }, { v: "PUSH", l: "Push" }, { v: "REIGN", l: "Reign" }]} />

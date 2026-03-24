@@ -44,6 +44,7 @@ export async function GET(
               cancelReason: true,
               currentPeriodEnd: true,
               stripeSubscriptionId: true,
+              smsBroadcastsUsed: true,
             },
           },
           _count: {
@@ -157,12 +158,17 @@ export async function GET(
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const SMS_LIMITS: Record<string, number> = { LAUNCH: 100, PUSH: 500, REIGN: 2000 };
+  const tier = user.subscription?.tier ?? "LAUNCH";
+  const smsLimit = SMS_LIMITS[tier] ?? 100;
+
   return NextResponse.json({
     ...user,
     aiBreakdown,       // [{ type: "VIDEO", _count: { type: 3 } }, ...]
     beatLicenses,      // beats this user has licensed (as artist/buyer)
     totalBeatLicenses, // total purchased
     totalMerchOrders,  // total merch orders from their products
+    smsLimit,
   });
 }
 

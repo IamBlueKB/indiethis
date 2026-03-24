@@ -643,6 +643,7 @@ model Subscription {
   aarReportCreditsLimit  Int
   pressKitCreditsUsed    Int                @default(0)
   pressKitCreditsLimit   Int                @default(0)
+  smsBroadcastsUsed      Int                @default(0)
   cancelReason           String?
   canceledAt             DateTime?
   streamLeaseGraceUntil  DateTime?          // set when invoice.payment_failed; cleared on invoice.paid

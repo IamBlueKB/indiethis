@@ -244,6 +244,7 @@ export async function POST(req: NextRequest) {
             lyricVideoCreditsUsed: 0,
             aarReportCreditsUsed: 0,
             pressKitCreditsUsed: 0,
+            smsBroadcastsUsed: 0,
           },
           create: {
             userId,
@@ -259,6 +260,7 @@ export async function POST(req: NextRequest) {
             lyricVideoCreditsUsed: 0,
             aarReportCreditsUsed: 0,
             pressKitCreditsUsed: 0,
+            smsBroadcastsUsed: 0,
           },
         });
 
@@ -348,6 +350,7 @@ export async function POST(req: NextRequest) {
             lyricVideoCreditsUsed: 0,
             aarReportCreditsUsed: 0,
             pressKitCreditsUsed: 0,
+            smsBroadcastsUsed: 0,
           },
         });
 
@@ -566,6 +569,7 @@ export async function POST(req: NextRequest) {
             lyricVideoCreditsUsed: 0,
             aarReportCreditsUsed:  0,
             pressKitCreditsUsed:   0,
+            smsBroadcastsUsed:     0,
           },
         });
       }

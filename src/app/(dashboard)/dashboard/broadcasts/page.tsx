@@ -5,6 +5,7 @@ import {
   MessageSquare, Users, Send, Loader2, CheckCircle2,
   AlertCircle, ChevronDown, BarChart2,
 } from "lucide-react";
+import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -198,36 +199,12 @@ export default function BroadcastsPage() {
               className="h-full rounded-full transition-all"
               style={{
                 width: `${usagePct}%`,
-                backgroundColor: usagePct >= 90 ? "#E85D4A" : usagePct >= 70 ? "#D4A843" : "#34C759",
+                backgroundColor: usagePct >= 95 ? "#E85D4A" : usagePct >= 80 ? "#D4A843" : "#34C759",
               }}
             />
           </div>
         </div>
 
-        {remaining === 0 && (
-          <div
-            className="rounded-xl border p-3 space-y-1.5"
-            style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
-          >
-            <p className="text-xs font-semibold text-foreground">
-              You&apos;ve used all {limit.toLocaleString()} SMS broadcasts this month.
-            </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {tier !== "REIGN" && (
-                <a
-                  href="/dashboard/upgrade"
-                  className="text-xs font-medium hover:opacity-80 transition-opacity"
-                  style={{ color: "#D4A843" }}
-                >
-                  Upgrade to {tier === "LAUNCH" ? "Push for 250" : "Reign for 500"}/mo →
-                </a>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {tier === "REIGN" ? "Resets next billing cycle." : "or wait until next month"}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Compose ─────────────────────────────────────────────────────── */}
@@ -282,11 +259,6 @@ export default function BroadcastsPage() {
             ) : (
               <span className="text-muted-foreground">—</span>
             )}
-            {recipCount !== null && remaining < recipCount && (
-              <span className="text-yellow-400 ml-1">
-                (capped at {remaining} by monthly limit)
-              </span>
-            )}
           </div>
         </div>
 
@@ -326,6 +298,37 @@ export default function BroadcastsPage() {
           </div>
         </div>
 
+        {/* Pre-send partial-limit warning */}
+        {recipCount !== null && recipCount > remaining && remaining > 0 && (
+          <div
+            className="rounded-xl border p-3 space-y-2"
+            style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.2)" }}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              This broadcast would go to {recipCount.toLocaleString()} people, but you only have{" "}
+              {remaining.toLocaleString()} remaining this month.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!message.trim() || sending}
+                className="font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
+                style={{ color: "#D4A843" }}
+              >
+                Send to {remaining.toLocaleString()} →
+              </button>
+              <a
+                href="/dashboard/upgrade"
+                className="font-medium hover:opacity-80 transition-opacity"
+                style={{ color: "#E85D4A" }}
+              >
+                Upgrade for more
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Errors / success */}
         {error && (
           <div className="flex items-center gap-2 text-sm text-red-400 rounded-xl border border-red-500/20 bg-red-500/05 px-3 py-2.5">
@@ -340,19 +343,31 @@ export default function BroadcastsPage() {
           </div>
         )}
 
-        {/* Send button */}
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ backgroundColor: "#E85D4A", color: "white" }}
-        >
-          {sending ? (
-            <><Loader2 size={14} className="animate-spin" /> Sending…</>
-          ) : (
-            <><Send size={14} /> Send Broadcast</>
-          )}
-        </button>
+        {/* Send button / exhausted banner */}
+        {remaining === 0 ? (
+          <CreditExhaustedBanner
+            toolLabel="SMS broadcasts"
+            creditsLimit={limit}
+            ppuPrice="—"
+            nextTierName={tier === "LAUNCH" ? "Push" : "Reign"}
+            nextTierCredits={tier === "LAUNCH" ? 500 : 2000}
+            nextTierPrice={tier === "LAUNCH" ? "$49/mo" : "$149/mo"}
+            isMaxTier={tier === "REIGN"}
+          />
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#E85D4A", color: "white" }}
+          >
+            {sending ? (
+              <><Loader2 size={14} className="animate-spin" /> Sending…</>
+            ) : (
+              <><Send size={14} /> Send Broadcast</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Broadcast history ────────────────────────────────────────────── */}

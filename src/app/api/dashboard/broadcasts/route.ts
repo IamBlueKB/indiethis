@@ -15,7 +15,6 @@ import { db } from "@/lib/db";
 import {
   SMS_LIMITS,
   SMS_COST_PER_SEGMENT,
-  getSmsUsedThisMonth,
   resolveBroadcastRecipients,
   sendBroadcast,
 } from "@/lib/brevo/broadcast-sms";
@@ -30,7 +29,7 @@ export async function GET() {
     }
     const artistId = session.user.id;
 
-    const [logs, sub, usedThisMonth] = await Promise.all([
+    const [logs, sub] = await Promise.all([
       db.broadcastLog.findMany({
         where:   { artistId },
         orderBy: { sentAt: "desc" },
@@ -46,13 +45,13 @@ export async function GET() {
       }),
       db.subscription.findUnique({
         where:  { userId: artistId },
-        select: { tier: true, status: true },
+        select: { tier: true, status: true, smsBroadcastsUsed: true },
       }),
-      getSmsUsedThisMonth(artistId),
     ]);
 
-    const tier  = sub?.tier ?? "LAUNCH";
-    const limit = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
+    const tier          = sub?.tier ?? "LAUNCH";
+    const limit         = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
+    const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
 
     return NextResponse.json({ logs, usedThisMonth, limit, tier });
   } catch (err) {
@@ -84,16 +83,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Check tier limit
-    const [sub, usedThisMonth] = await Promise.all([
-      db.subscription.findUnique({
-        where:  { userId: artistId },
-        select: { tier: true },
-      }),
-      getSmsUsedThisMonth(artistId),
-    ]);
-    const tier  = sub?.tier ?? "LAUNCH";
-    const limit = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
-    const remaining = limit - usedThisMonth;
+    const sub = await db.subscription.findUnique({
+      where:  { userId: artistId },
+      select: { tier: true, smsBroadcastsUsed: true },
+    });
+    const tier          = sub?.tier ?? "LAUNCH";
+    const limit         = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
+    const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
+    const remaining     = limit - usedThisMonth;
 
     if (remaining <= 0) {
       return NextResponse.json({
@@ -116,6 +113,12 @@ export async function POST(req: NextRequest) {
 
     // Send
     const result = await sendBroadcast(artistId, message, segment, allowed);
+
+    // Increment usage counter (fire-and-forget; failure shouldn't block response)
+    void db.subscription.updateMany({
+      where: { userId: artistId },
+      data:  { smsBroadcastsUsed: { increment: result.successCount } },
+    }).catch((err: unknown) => console.error("[broadcasts POST] counter increment failed:", err));
 
     return NextResponse.json({
       ok:             true,
