@@ -48,20 +48,14 @@ export default function HomepageHero() {
         <div className="flex gap-3 flex-wrap justify-center">
           <Link
             href="/signup"
-            className={cn(
-              buttonVariants({ variant: "default" }),
-              "rounded-full h-auto px-6 py-3 text-sm font-bold"
-            )}
+            className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-bold transition-colors"
             style={{ backgroundColor: "#E85D4A", color: "#fff", border: "none" }}
           >
             Start Creating
           </Link>
           <Link
             href="/explore"
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "rounded-full h-auto px-6 py-3 text-sm font-semibold"
-            )}
+            className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-colors border"
             style={{ borderColor: "rgba(255,255,255,0.2)", color: "#fff", background: "transparent" }}
           >
             Explore the Platform →
