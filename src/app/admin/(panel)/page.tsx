@@ -399,7 +399,6 @@ export default async function AdminDashboardPage({
             sub: "contact + intake forms this month",
             icon: Users,
             color: "#D4A843",
-            href: "/admin/studios",
           },
           {
             label: "Potential Lead Value",
@@ -407,15 +406,13 @@ export default async function AdminDashboardPage({
             sub: `${totalLeadsThisMonth} leads × studio avg rates`,
             icon: DollarSign,
             color: "#34C759",
-            href: "/admin/studios",
           },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
-            <Link
+            <div
               key={stat.label}
-              href={stat.href}
-              className="rounded-2xl border p-5 no-underline block hover:border-accent/40 transition-colors"
+              className="rounded-2xl border p-5"
               style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -426,7 +423,7 @@ export default async function AdminDashboardPage({
               </div>
               <p className="text-2xl font-bold text-foreground font-display">{stat.value}</p>
               <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
-            </Link>
+            </div>
           );
         })}
       </div>
