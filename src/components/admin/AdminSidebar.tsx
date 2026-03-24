@@ -22,6 +22,7 @@ import {
   DollarSign,
   Archive,
   Compass,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -49,6 +50,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Ambassadors", href: "/admin/ambassadors",      icon: Star,        page: "ambassadors"      },
   { label: "Promo Analytics", href: "/admin/promo-analytics", icon: TrendingUp, page: "promo-analytics" },
   { label: "Explore",      href: "/admin/explore",           icon: Compass,     page: "explore"          },
+  { label: "Lead Submissions", href: "/admin/lead-tracking/leads", icon: Megaphone, page: "lead-tracking" },
+  { label: "Lead Value",       href: "/admin/lead-tracking/value", icon: DollarSign, page: "lead-tracking" },
   { label: "Attribution", href: "/admin/attribution",      icon: Target,      page: "attribution"      },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",         icon: Settings,    page: "settings"     },

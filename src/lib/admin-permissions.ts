@@ -6,7 +6,7 @@
  * Pages / sections recognised by this module:
  *   dashboard | users | studios | moderation | content | affiliates | attribution |
  *   support-chat | ai-usage | revenue | settings | team |
- *   promo-codes | ambassadors | promo-analytics | explore
+ *   promo-codes | ambassadors | promo-analytics | explore | lead-tracking
  *
  * Access matrix:
  * ┌──────────────┬─────────────┬───────────┬───────────────┐
@@ -116,6 +116,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     SUPPORT_ADMIN: "none",
   },
   explore: {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
+  "lead-tracking": {
     SUPER_ADMIN:   "full",
     OPS_ADMIN:     "full",
     SUPPORT_ADMIN: "none",
