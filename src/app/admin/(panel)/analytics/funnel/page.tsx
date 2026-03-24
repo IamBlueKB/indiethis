@@ -33,50 +33,56 @@ export default async function FunnelPage({ searchParams }: Props) {
     : "30d";
 
   const since = rangeStart(range);
-  const createdFilter = since ? { gte: since } : undefined;
 
-  // ── Funnel counts (users who signed up within range) ──────────────────────
-  const [
-    visited,
-    created,
-    planned,
-    setup,
-    content,
-    published,
-    active30,
-  ] = await Promise.all([
-    // Visited site (firstVisitAt set — only tracked for new signups)
-    db.user.count({ where: { createdAt: createdFilter, firstVisitAt: { not: null } } }),
-    // Created account
-    db.user.count({ where: { createdAt: createdFilter } }),
-    // Selected plan
-    db.user.count({ where: { createdAt: createdFilter, planSelectedAt: { not: null } } }),
-    // Completed setup
-    db.user.count({ where: { createdAt: createdFilter, setupCompletedAt: { not: null } } }),
-    // Uploaded first content
-    db.user.count({ where: { createdAt: createdFilter, firstContentAt: { not: null } } }),
-    // Published artist page
-    db.user.count({ where: { createdAt: createdFilter, pagePublishedAt: { not: null } } }),
-    // Still active after 30 days (logged in at least once 30+ days after signup)
+  // planSelectedAt IS the signup timestamp on IndieThis.
+  // Payment and account creation are a single atomic action via Stripe checkout.
+  // There is no user record without a completed subscription.
+  const paidFilter = since ? { gte: since } : undefined;
+
+  // ── Funnel counts ─────────────────────────────────────────────────────────
+  const [signedUp, setup, content, published, retained] = await Promise.all([
+    // 1. Signed up & paid — the top of funnel
+    db.user.count({
+      where: { planSelectedAt: paidFilter },
+    }),
+    // 2. Completed onboarding setup
+    db.user.count({
+      where: { planSelectedAt: paidFilter, setupCompletedAt: { not: null } },
+    }),
+    // 3. Uploaded first content (track, beat, etc.)
+    db.user.count({
+      where: { planSelectedAt: paidFilter, firstContentAt: { not: null } },
+    }),
+    // 4. Published artist/studio page
+    db.user.count({
+      where: { planSelectedAt: paidFilter, pagePublishedAt: { not: null } },
+    }),
+    // 5. Retained — signed up 30+ days ago AND still has an active subscription
     db.user.count({
       where: {
-        createdAt: createdFilter,
-        lastLoginAt: { not: null },
         AND: [
-          { lastLoginAt: { gte: subDays(new Date(), 30) } },
+          ...(paidFilter ? [{ planSelectedAt: paidFilter }] : []),
+          { planSelectedAt: { lte: subDays(new Date(), 30), not: null } },
+          { subscription: { status: "ACTIVE" } },
         ],
       },
     }),
   ]);
 
-  // ── Acquisition source breakdown ──────────────────────────────────────────
+  // ── Acquisition source breakdown (base = paid within range) ───────────────
   const [referral, promo, ambassador, organic] = await Promise.all([
-    db.user.count({ where: { createdAt: createdFilter, referredByCode: { not: null } } }),
-    db.user.count({ where: { createdAt: createdFilter, attribution: { ref: { not: null } } } }),
-    db.user.count({ where: { createdAt: createdFilter, attribution: { affiliateId: { not: null } } } }),
+    db.user.count({
+      where: { planSelectedAt: paidFilter, referredByCode: { not: null } },
+    }),
+    db.user.count({
+      where: { planSelectedAt: paidFilter, attribution: { ref: { not: null } } },
+    }),
+    db.user.count({
+      where: { planSelectedAt: paidFilter, attribution: { affiliateId: { not: null } } },
+    }),
     db.user.count({
       where: {
-        createdAt: createdFilter,
+        planSelectedAt: paidFilter,
         referredByCode: null,
         AND: [
           { OR: [{ attribution: null }, { attribution: { affiliateId: null, ref: null } }] },
@@ -85,57 +91,55 @@ export default async function FunnelPage({ searchParams }: Props) {
     }),
   ]);
 
-  // ── Users stuck at a step (for drill-down) ────────────────────────────────
-  type StuckUser = { id: string; name: string | null; email: string; createdAt: Date };
+  // ── Users stuck at a step (drill-down) ────────────────────────────────────
+  type StuckUser = { id: string; name: string | null; email: string; planSelectedAt: Date | null };
   let stuckUsers: StuckUser[] = [];
   let stuckLabel = "";
 
   if (focusStep) {
-    const baseWhere = { createdAt: createdFilter };
-    const stepWhere: Record<string, unknown> = { ...baseWhere };
+    const baseFilter = paidFilter ? [{ planSelectedAt: paidFilter }] : [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let stuckWhere: any = {};
 
-    if (focusStep === "visited") {
-      stuckLabel = "Created account but no visit tracked";
-      stepWhere.firstVisitAt = null;
-    } else if (focusStep === "created") {
-      stuckLabel = "Created account but never selected a plan";
-      stepWhere.planSelectedAt = null;
-    } else if (focusStep === "planned") {
-      stuckLabel = "Selected a plan but never completed setup";
-      stepWhere.planSelectedAt = { not: null };
-      stepWhere.setupCompletedAt = null;
+    if (focusStep === "signedUp") {
+      stuckLabel = "All signups in this period";
+      stuckWhere = { AND: [...baseFilter] };
     } else if (focusStep === "setup") {
-      stuckLabel = "Completed setup but never uploaded content";
-      stepWhere.setupCompletedAt = { not: null };
-      stepWhere.firstContentAt = null;
+      stuckLabel = "Signed up but never completed onboarding";
+      stuckWhere = { AND: [...baseFilter, { setupCompletedAt: null }] };
     } else if (focusStep === "content") {
-      stuckLabel = "Uploaded content but never published their page";
-      stepWhere.firstContentAt = { not: null };
-      stepWhere.pagePublishedAt = null;
+      stuckLabel = "Completed onboarding but never uploaded content";
+      stuckWhere = { AND: [...baseFilter, { setupCompletedAt: { not: null } }, { firstContentAt: null }] };
     } else if (focusStep === "published") {
-      stuckLabel = "Published page but not active after 30 days";
-      stepWhere.pagePublishedAt = { not: null };
-      stepWhere.lastLoginAt = null;
+      stuckLabel = "Uploaded content but never published their page";
+      stuckWhere = { AND: [...baseFilter, { firstContentAt: { not: null } }, { pagePublishedAt: null }] };
+    } else if (focusStep === "retained") {
+      stuckLabel = "Published page but did not renew";
+      stuckWhere = {
+        AND: [
+          ...baseFilter,
+          { pagePublishedAt: { not: null } },
+          { planSelectedAt: { lte: subDays(new Date(), 30) } },
+          { OR: [{ subscription: null }, { subscription: { status: { not: "ACTIVE" } } }] },
+        ],
+      };
     }
 
     stuckUsers = await db.user.findMany({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      where: stepWhere as any,
-      select: { id: true, name: true, email: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
+      where: stuckWhere,
+      select: { id: true, name: true, email: true, planSelectedAt: true },
+      orderBy: { planSelectedAt: "desc" },
       take: 200,
     });
   }
 
   // ── Funnel steps definition ────────────────────────────────────────────────
   const steps = [
-    { key: "visited",   label: "Visited site",              count: visited,   note: "tracked from new signups only" },
-    { key: "created",   label: "Created account",           count: created,   note: "" },
-    { key: "planned",   label: "Selected plan",             count: planned,   note: "" },
-    { key: "setup",     label: "Completed setup",           count: setup,     note: "" },
-    { key: "content",   label: "Uploaded first content",    count: content,   note: "" },
-    { key: "published", label: "Published artist page",     count: published, note: "" },
-    { key: "active",    label: "Still active after 30 days",count: active30,  note: "" },
+    { key: "signedUp",   label: "Signed up",               count: signedUp,   note: "paid via Stripe" },
+    { key: "setup",      label: "Completed onboarding",     count: setup,      note: "" },
+    { key: "content",    label: "Uploaded first content",   count: content,    note: "" },
+    { key: "published",  label: "Published page",           count: published,  note: "" },
+    { key: "retained",   label: "Retained after renewal",   count: retained,   note: "active sub + 30 days" },
   ];
 
   const maxCount = Math.max(...steps.map((s) => s.count), 1);
@@ -171,10 +175,10 @@ export default async function FunnelPage({ searchParams }: Props) {
       {/* Funnel */}
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: "#111", borderColor: "#2a2a2a" }}>
         {steps.map((step, i) => {
-          const prev      = i > 0 ? steps[i - 1].count : step.count;
-          const pct       = dropPct(prev, step.count);
-          const barWidth  = Math.round((step.count / maxCount) * 100);
-          const isActive  = focusStep === step.key;
+          const prev     = i > 0 ? steps[i - 1].count : step.count;
+          const pct      = dropPct(prev, step.count);
+          const barWidth = Math.round((step.count / maxCount) * 100);
+          const isActive = focusStep === step.key;
 
           return (
             <div key={step.key}>
@@ -188,7 +192,7 @@ export default async function FunnelPage({ searchParams }: Props) {
                 </div>
               )}
 
-              {/* Step row */}
+              {/* Step row — click to drill down */}
               <Link
                 href={`/admin/analytics/funnel?range=${range}&step=${focusStep === step.key ? "" : step.key}`}
                 className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-white/5 block"
@@ -236,16 +240,16 @@ export default async function FunnelPage({ searchParams }: Props) {
         <h2 className="text-sm font-bold text-white">Acquisition Source</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Organic",     count: organic,    color: "#34C759" },
-            { label: "Referral",    count: referral,   color: "#D4A843" },
-            { label: "Promo Code",  count: promo,      color: "#60a5fa" },
-            { label: "Ambassador",  count: ambassador, color: "#a78bfa" },
+            { label: "Organic",    count: organic,    color: "#34C759" },
+            { label: "Referral",   count: referral,   color: "#D4A843" },
+            { label: "Promo Code", count: promo,      color: "#60a5fa" },
+            { label: "Ambassador", count: ambassador, color: "#a78bfa" },
           ].map(({ label, count, color }) => (
             <div key={label} className="rounded-lg p-4 space-y-1" style={{ backgroundColor: "#1a1a1a", border: "1px solid #2a2a2a" }}>
               <p className="text-xs font-medium" style={{ color: "#888" }}>{label}</p>
               <p className="text-2xl font-bold tabular-nums" style={{ color }}>{count.toLocaleString()}</p>
               <p className="text-[10px]" style={{ color: "#555" }}>
-                {dropPct(created, count)} of signups
+                {dropPct(signedUp, count)} of signups
               </p>
             </div>
           ))}
@@ -259,7 +263,7 @@ export default async function FunnelPage({ searchParams }: Props) {
             <div>
               <h2 className="text-sm font-bold text-white">{stuckLabel}</h2>
               <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-                {stuckUsers.length} users — click a user to view their profile
+                {stuckUsers.length} users — click to view profile
               </p>
             </div>
             <Users size={16} style={{ color: "#D4A843" }} />
@@ -277,7 +281,7 @@ export default async function FunnelPage({ searchParams }: Props) {
                   <p className="text-xs" style={{ color: "#666" }}>{u.email}</p>
                 </div>
                 <p className="text-xs" style={{ color: "#555" }}>
-                  {new Date(u.createdAt).toLocaleDateString()}
+                  {u.planSelectedAt ? new Date(u.planSelectedAt).toLocaleDateString() : "—"}
                 </p>
               </Link>
             ))}
@@ -287,7 +291,7 @@ export default async function FunnelPage({ searchParams }: Props) {
 
       {focusStep && stuckUsers.length === 0 && (
         <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: "#111", borderColor: "#2a2a2a" }}>
-          <p className="text-sm" style={{ color: "#888" }}>No users stuck at this step in the selected range.</p>
+          <p className="text-sm" style={{ color: "#888" }}>No users at this step in the selected range.</p>
         </div>
       )}
     </div>
