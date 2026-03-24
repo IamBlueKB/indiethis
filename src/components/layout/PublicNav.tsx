@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const NAV_LINKS = [
-  { href: "/explore", label: "Explore" },
-  { href: "/about",   label: "About"   },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/explore",  label: "Explore"  },
+  { href: "/beats",    label: "Beats"    },
+  { href: "/studios",  label: "Studios"  },
+  { href: "/artists",  label: "Artists"  },
+  { href: "/about",    label: "About"    },
+  { href: "/pricing",  label: "Pricing"  },
 ];
 
 /**
@@ -73,26 +76,21 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
         <div className="flex items-center gap-2 shrink-0">
           {loggedIn ? (
             <>
-              {/* User avatar / first name */}
-              <div className="hidden sm:flex items-center gap-2">
-                {session.user?.image ? (
-                  <img
-                    src={session.user.image}
-                    alt={session.user.name ?? ""}
-                    className="w-7 h-7 rounded-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                  >
-                    {(session.user?.name ?? "?")[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="text-xs font-medium" style={{ color: "#888" }}>
-                  {session.user?.name?.split(" ")[0]}
-                </span>
-              </div>
+              {/* Avatar (no name text — keeps auth section compact for search bar) */}
+              {session.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt={session.user.name ?? ""}
+                  className="w-7 h-7 rounded-full object-cover hidden sm:block"
+                />
+              ) : (
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold hidden sm:block"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  {(session.user?.name ?? "?")[0].toUpperCase()}
+                </div>
+              )}
               <Link
                 href="/dashboard"
                 className="text-sm font-semibold px-3 py-1.5 rounded-lg"
@@ -115,7 +113,7 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
                 className="text-sm font-bold px-3 py-1.5 rounded-lg"
                 style={{ backgroundColor: "#E85D4A", color: "#fff" }}
               >
-                Start Creating
+                Sign up
               </Link>
             </>
           )}
