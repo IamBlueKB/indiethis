@@ -220,10 +220,10 @@ function FeaturedCarousel({ cards }: { cards: FeaturedCard[] }) {
       <div
         className="absolute inset-0 transition-all duration-700"
         style={{
-          background: card.imageUrl ? `url(${card.imageUrl}) center/cover no-repeat` : (card.gradient ?? "#1a1a1a"),
+          background: card.imageUrl ? `url(${card.imageUrl}) top center / cover no-repeat` : (card.gradient ?? "#1a1a1a"),
         }}
       />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.2) 100%)" }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: card.imageUrl ? "linear-gradient(to top, rgba(0,0,0,0.7) 35%, rgba(0,0,0,0.05) 100%)" : "linear-gradient(to top, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.2) 100%)" }} />
 
       {/* Content */}
       <div className="absolute bottom-0 left-0 right-0 px-14 pb-6 pt-4">
