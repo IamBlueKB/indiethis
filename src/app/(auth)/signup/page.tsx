@@ -56,6 +56,13 @@ function SignupForm() {
     typeof window !== "undefined" ? (document.referrer || window.location.href) : undefined
   );
 
+  // Read first-visit timestamp from cookie set by TrackVisit component
+  const [firstVisitAt] = useState<string | undefined>(() => {
+    if (typeof document === "undefined") return undefined;
+    const match = document.cookie.split(";").find((c) => c.trim().startsWith("itev="));
+    return match ? match.trim().slice(5) : undefined;
+  });
+
   // Form state
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -123,6 +130,7 @@ function SignupForm() {
           utmMedium,
           utmCampaign,
           landingPage,
+          firstVisitAt: firstVisitAt ? new Date(Number(firstVisitAt)).toISOString() : undefined,
         }),
       });
 

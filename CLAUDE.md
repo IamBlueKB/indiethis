@@ -1,195 +1,201 @@
-# CLAUDE.md — IndieThis Build System
+# CLAUDE.md — IndieThis Project Context
 
-## What This Project Is
-
-**IndieThis** is a full-stack SaaS platform for independent music artists and recording studios.
-Stack: Next.js 16 · TypeScript · Tailwind v4 · shadcn/ui (base-nova) · Zustand · Brevo · Dolby.io · UploadThing
-
-All source lives in `src/`. No CMS, no monorepo, no separate API server — everything is Next.js App Router.
+Read this file before every task. Do not assume what exists — check the codebase first.
 
 ---
 
-## Session Boot Sequence
+## What Is IndieThis
 
-At the start of every session, read in order:
-
-```
-1. Read: memory/project-notes.md       ← current build state, what's done, what's next
-2. Read: memory/learned-patterns.md    ← stack-specific patterns and gotchas
-3. Read: memory/decisions-log.md       ← why key decisions were made; don't relitigate them
-4. Read: tracking/active-workflows.md  ← any features mid-build?
-5. Read: tracking/session-context.md   ← last session's ending state
-6. Scan: src/                          ← understand current file layout before writing
-```
-
-Do NOT start writing code until steps 1–5 are complete.
+IndieThis (indiethis.com) is a SaaS music platform for independent artists, producers, and recording studios. One platform for creating, selling, promoting, and managing music careers. Owner: Blue. Flagship studio: Clear Ear Studios (7411 S Stony Island Ave, Chicago IL 60649, blue@clearearstudios.com, 708-929-8745).
 
 ---
 
-## Non-Negotiable Rules
+## Tech Stack (do not change, do not add alternatives)
 
-| # | Rule |
-|---|------|
-| 1 | **Read before write** — always read a file before editing it |
-| 2 | **Build must pass** — run `npm run build` after every significant change set |
-| 3 | **Log all decisions** — add an entry to `memory/decisions-log.md` for every architectural choice |
-| 4 | **Update project-notes** — mark features complete in `memory/project-notes.md` when done |
-| 5 | **One feature, one session** — don't half-build two things; finish one before starting another |
-| 6 | **No fake data in production paths** — mock data only inside `src/lib/mock/` or `__tests__/` |
-| 7 | **Server-only libs stay server-only** — Brevo, Dolby, DB clients never imported in client components |
-
----
-
-## Directory Map
-
-```
-src/
-  app/                   ← Next.js App Router pages and layouts
-    (auth)/              ← sign-in, sign-up, password reset (TODO)
-    (dashboard)/         ← artist dashboard (TODO)
-    (studio)/            ← studio owner panel (TODO)
-    api/                 ← API route handlers
-  components/
-    layout/              ← Navbar, Footer (shared across all pages)
-    public/              ← Homepage sections (Hero, Features, Pricing, etc.)
-    ui/                  ← shadcn/ui components (do not hand-edit; re-add via CLI)
-    providers.tsx        ← ThemeProvider and any future global context
-  lib/
-    brevo/               ← Email (transactional + campaigns) and SMS via Brevo
-    dolby/               ← AI Mastering via Dolby.io Media API
-    utils.ts             ← cn() and shared utilities
-  store/
-    audio.ts             ← Zustand: audio player state
-    notifications.ts     ← Zustand: notification bell state
-    user.ts              ← Zustand: user profile + tier (persisted)
-    index.ts             ← barrel export
-
-memory/                  ← persistent build context (tracked in git)
-tracking/                ← active workflows and session state
-```
+- Next.js 14+ App Router, TypeScript
+- Tailwind CSS + shadcn/ui
+- Prisma + Supabase PostgreSQL
+- NextAuth v5
+- Stripe (payments, Connect for payouts)
+- Brevo (email + SMS, transactional + automations)
+- Cloudflare R2 + Uploadthing (file storage)
+- Zustand (state management)
+- Tanstack Table, React Query, Recharts
+- wavesurfer.js (audio player)
+- Framer Motion (animations)
+- Dolby.io via fal.ai (AI mastering)
+- web-audio-beat-detector (BPM detection, free)
+- essentia.js (key detection, free)
+- embla-carousel-react (carousels)
 
 ---
 
-## Tech Stack Quick Reference
+## Design Rules (enforce on every task)
 
-| Layer | Choice | Notes |
-|-------|--------|-------|
-| Framework | Next.js 16.1.6 | App Router, Turbopack dev |
-| Language | TypeScript 5 | strict mode |
-| Styling | Tailwind CSS v4 | CSS-first `@theme {}` — no tailwind.config.ts directives |
-| Components | shadcn/ui base-nova | Uses `@base-ui/react` — **no `asChild` prop**; use `buttonVariants` + Link |
-| State | Zustand 5 | `persist` middleware on user store |
-| Email / SMS | Brevo (`@getbrevo/brevo`) | `BrevoClient` — see `src/lib/brevo/` |
-| AI Mastering | Dolby.io (`@dolbyio/dolbyio-rest-apis-client`) | App Key + Secret → JWT; see `src/lib/dolby/` |
-| File Uploads | UploadThing (`uploadthing`, `@uploadthing/react`) | Not yet wired to routes |
-| Tables | TanStack Table v8 | For admin and studio data tables |
-| Charts | Recharts 3 | For earnings and analytics dashboards |
-| Theme | next-themes | Forced dark — `forcedTheme="dark"` in providers.tsx |
-| Toast | Sonner | Replaces deprecated shadcn toast |
-
----
-
-## Environment Variables
-
-All vars live in `.env.local`. Required vars by feature:
-
-| Feature | Vars |
-|---------|------|
-| Brevo email/SMS | `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, `BREVO_FROM_NAME`, `BREVO_SMS_SENDER` |
-| Brevo lists | `BREVO_WAITLIST_LIST_ID`, `BREVO_ARTISTS_LIST_ID`, `BREVO_STUDIOS_LIST_ID`, `BREVO_NEWSLETTER_LIST_ID` |
-| Dolby mastering | `DOLBY_APP_KEY`, `DOLBY_APP_SECRET` |
-| UploadThing | `UPLOADTHING_TOKEN` |
-| App URL | `NEXT_PUBLIC_APP_URL` |
-| Auth (pending) | `NEXTAUTH_SECRET`, `NEXTAUTH_URL` |
-| Database (pending) | `DATABASE_URL` |
+- **Dark theme ONLY** — no light mode anywhere
+- **Colors:** Gold/amber #D4A843 accents, coral #E85D4A CTAs, bg #0A0A0A, elevated #111111, surface #1A1A1A
+- **No purple anywhere**
+- **No prices on public studio pages** — pricing lives in booking/intake flow
+- **No placeholder sections** — if data is empty, hide the section entirely. Never show "Coming Soon"
+- **No geo-locked copy** — no "Chicago artists" or city-specific language on templates
+- **No third-party branding** — no "powered by Dolby/DALL-E/Twilio." "Powered by IndieThis" in footer is fine
+- **No fake stats or testimonials** — only show what's actually in the database
+- **No free tier, no free trials** (unless via promo code)
+- **Hours in 12-hour AM/PM format**
+- **Social links only render for platforms with saved handles**
+- **"Pay Per Use" replaces "à la carte" everywhere**
+- **Fonts:** Playfair Display (headings), DM Sans (body)
+- **All prices must import from PlatformPricing via src/lib/pricing.ts** — never hardcode prices
 
 ---
 
-## Build & Dev Commands
+## Subscription Tiers
 
-```bash
-npm run dev      # Turbopack dev server on port 3456 (via start-indiethis.js)
-npm run build    # Production build — must pass before any PR / deploy
-npm run lint     # ESLint
-```
+### Artist Tiers
+| | Launch $19/mo | Push $49/mo | Reign $149/mo |
+|---|---|---|---|
+| Artist page | Profile only | Full 18 sections | Full 18 sections |
+| AI tool credits | Tier-limited | More credits | Most credits |
+| Email blasts | 100/mo | 500/mo | 2000/mo |
+| SMS broadcasts | 100/mo | 500/mo | 2000/mo |
+| Beat marketplace selling | No | No | Yes |
+| Custom domain | No | No | Yes |
+| Release planner | No | Yes | Yes |
+| Press kit credits | 0 (pay-per-use) | 1/mo | 3/mo |
 
-Preview server launcher: `C:\Users\brian\Documents\ai-tools\claude-system\claude-system\start-indiethis.js`
+### Studio Tiers
+| | Pro $49/mo | Elite $99/mo |
+|---|---|---|
+| All studio features | Yes | Yes |
+| Email blasts | 500/mo | 2000/mo |
+| Gallery photos | Max 6 | Max 12 |
+| Featured artists | No | Yes |
+| Custom accent color | No | Yes |
+| Custom domain | No | Yes |
+| Analytics dashboard | No | Yes |
 
----
+### Pay-Per-Use AI Tools
+Cover Art $4.99, Video $19/$29/$49, Mastering $9.99, Lyric Video $24.99, A&R Report $14.99, Press Kit $19.99
 
-## Coding Conventions
-
-- **Server components** by default; add `"use client"` only when needed (event handlers, hooks, stores)
-- **Lib modules are server-only** — Brevo and Dolby clients must never be imported in `"use client"` files; call them from API routes or Server Actions
-- **Component naming**: PascalCase files, one component per file for pages/sections
-- **Import alias**: `@/` maps to `src/`
-- **CSS tokens**: use `var(--color-accent)`, `var(--card)`, etc. — never hardcode hex in Tailwind classes except for one-off inline styles
-- **Colors reference**: accent `#D4A843` · CTA `#E85D4A` · bg `#0A0A0B` · card `#141416` · text `#F5F0E8`
-
----
-
-## Feature Build Order (Roadmap)
-
-```
-Phase 1 — Homepage          ✅ DONE
-Phase 2 — Auth              sign-up, sign-in, password reset, email verify
-Phase 3 — Artist Dashboard  earnings, AI tools, merch, artist mini-site editor
-Phase 4 — Studio Panel      booking management, artist roster, file delivery, invoicing
-Phase 5 — AI Tool Pages     AI Music Video, Cover Art, Mastering (Dolby), A&R Report
-Phase 6 — Marketplace       beat marketplace, merch storefront
-Phase 7 — Artist Mini-Sites public artist pages, custom domain support
-Phase 8 — Admin             platform admin, user management, analytics
-```
+### Stream Lease
+$1/mo per beat. Split: $0.70 producer, $0.30 IndieThis. Bundles into subscription invoice.
 
 ---
 
-## AI Services
+## What's Been Built (verified)
 
-### Dolby.io — AI Mastering (`src/lib/dolby/mastering.ts`)
-- **Auth:** `DOLBY_APP_KEY` + `DOLBY_APP_SECRET` → JWT (cached 25 min)
-- **Tiers:** Quick = -14 LUFS (streaming), Studio Grade = -9 LUFS (commercial/radio)
-- **Both tiers hit the same API** — only loudness target and preset differ
-- **Job flow:** upload to dlb:// → `startMastering()` → `pollMasteringJob()` → download
-- **Preview:** `previewMastering()` for A/B comparison (max 30 seconds)
-- **Key gotcha:** `jobContent` must be `JSON.stringify(spec)` — not a plain object
+### Artist System
+- Artist dashboard with all pages
+- Artist public page with 18 sections (hero, pinned announcement, live ticker, pre-save, music with waveform players, videos with 2 zones, photos, shows, email/SMS capture, merch, tips, about, testimonials, collaborators, press, booking form, footer, persistent player bar)
+- Performance video upload system with categories (LIVE, SESSION, FREESTYLE, BTS, ACOUSTIC, REHEARSAL)
+- AI tools: cover art, video, mastering, lyric video, A&R report, press kit
+- Merch storefronts (15% IndieThis cut)
+- Music sales (10% cut)
+- Beat marketplace with licensing (Lease, Non-Exclusive, Exclusive) and PDF agreements
+- Stream lease system (8 phases complete) — $1/mo per beat, producer notifications, agreement system, play tracking, saved beats, explanation screen, cancellation with 30-day retention
+- BPM and key auto-detection on beat uploads and studio intake
+- Auto-generated beat descriptions via Claude API
+- Invoicing, CRM with activity log, file delivery
+- Email blasts via Brevo
+- PWA quick-send page
+- Smart links (detect device, reorder streaming pills)
+- YouTube channel sync with video-to-product linking
 
-### Brevo — Email + SMS (`src/lib/brevo/`)
-- **Auth:** Single `BREVO_API_KEY` via `BrevoClient`
-- **Transactional email:** `sendEmail()`, `sendTemplateEmail()` + typed helpers in `email.ts`
-- **SMS:** `sendSMS()` + typed helpers in `sms.ts` — `tag` is `{ field: string }` object
-- **Campaigns:** `createEmailCampaign()`, `sendCampaignNow()`, `addWaitlistSignup()` in `campaigns.ts`
-- **Lists:** Configure list IDs in `.env.local` — `BREVO_WAITLIST_LIST_ID` etc.
-- **Key gotcha:** Tag is `{ field: "string" }` not a bare string; campaign send takes `{ campaignId }` not a number
+### Studio System
+- Studio dashboard with all pages
+- Studio public page with 3 templates (Classic, Bold, Editorial) + 4 additional sections (audio portfolio, notable artists, engineer profiles, equipment list)
+- Studio profile editor in admin panel
+- Contact form on public pages → CRM + Brevo notification
+- Studio tiers (Pro/Elite) with feature gating
+- Intake form system with AI video upsell
+- Clear Ear Studios as flagship on Bold template
 
-### UploadThing — File Uploads (`uploadthing`, `@uploadthing/react`)
-- **Status:** Installed, not yet wired to routes
-- **Pattern:** Define router in `src/app/api/uploadthing/core.ts`, expose at `src/app/api/uploadthing/route.ts`
-- **Client:** `useUploadThing()` hook from `@uploadthing/react`
-- **Auth var:** `UPLOADTHING_TOKEN`
+### Platform-Wide
+- Promo code system (FREE_TRIAL, DISCOUNT, COMP, CREDIT, AI_BUNDLE)
+- Ambassador program with per-ambassador reward config, auto-payout at $25 via Stripe Connect
+- PlatformPricing model — all prices stored in DB, admin editable at /admin/settings/pricing
+- Pricing page with Artist/Studio toggle
+- Terms of Service and Privacy Policy pages
+- Explore page with 9 sections (featured carousel, trending, new releases, genre browse, beats, studios, rising artists, AI showcase, search bar)
+- Seed data across all pages
+- GitHub repo + Vercel deployment + indiethis.com domain connected
 
 ---
 
-## Pending Architecture Decisions
+## What's In Progress / Queued (do not build unless specifically told to)
 
-These must be resolved before Phase 2 (Auth) begins:
+### Producer Integration (16 phases — spec file: indiethis-producer-integration-license-vault-spec.md)
+- Auto-detecting producer mode when artist uploads first beat
+- Producer sidebar section (My Beats, Stream Leases, Licensing, Analytics, Earnings)
+- Producer section on artist public page
+- Producer settings with display name, bio, default pricing
+- License & Receipt Vault (platform-wide document storage for Splice licenses, Suno receipts, AI generation auto-receipts)
 
-| Decision | Options | Status |
-|----------|---------|--------|
-| Auth library | NextAuth v5 / Clerk / custom JWT | ⬜ Pending |
-| Database | Prisma + Postgres / Supabase / PlanetScale | ⬜ Pending |
-| File storage | UploadThing (installed) / S3 / Cloudflare R2 | Leaning UploadThing |
-| Payments | Stripe (standard) | ⬜ Pending |
+### Gap Features (5 features — spec file: indiethis-gap-features-spec.md)
+1. Session notes / project tracker
+2. Split sheets / payment splitting via Stripe Connect
+3. Release planner (Push + Reign tiers)
+4. Explore page enhancements
+5. Notification center (30+ trigger types)
+
+### Flow & Revenue Fixes (11 items — spec file: indiethis-flow-revenue-polish-spec.md)
+1. Multi-step signup flow
+2. Onboarding email sequence (7 emails over 30 days via Brevo)
+3. Re-engagement emails for inactive users
+4. Press kit tier credits
+5. SMS broadcast limit enforcement
+6. Upsell prompts (UpgradeGate component)
+7. Artist-to-studio connection
+8. Booking lead tracking + ROI analytics for studios
+9. Explore page as default landing (/ serves explore, marketing page moves to /about)
+10. Mobile optimization + SEO (OG images, structured data, sitemap)
+11. Signup funnel tracking in admin
+
+### Search Directory Pages (spec file: indiethis-search-directory-pages-spec.md)
+- /studios — studio directory with search by name/city/service
+- /beats — beat search with genre/BPM/key/price/stream lease filters
+- /artists — artist + producer directory with toggle, search by name/genre/city
+- Explore page fixes (dead footer links, gateway CTAs, cross-linking, URL params)
+- Public nav update with links to all directory pages
+
+### YouTube Sync (spec file: indiethis-youtube-sync-spec.md)
+- Channel connection, batch sync cron (80/day limit), deduplication
+- Video-to-product linking (track, beat, merch CTAs on videos)
+- Video management dashboard
+
+### Homepage
+- Spec written (indiethis-homepage-rebuild-spec.md) — cinematic hero, live activity bar, AI demo, value prop cards, timeline, studio strip
+- Will move to /about when explore becomes the landing page
 
 ---
 
-## Agent Routing
+## Key Architecture Patterns
 
-| Task type | Approach |
-|-----------|----------|
-| New page or feature | Read project-notes → check decisions-log → plan in tracking/ → build |
-| Bug fix | Read the failing file first → check learned-patterns for known gotchas |
-| New lib integration | Add to decisions-log first → create `src/lib/[name]/` → update project-notes |
-| UI component | Check if shadcn has it → `npx shadcn@latest add [name]` before building custom |
-| API route | `src/app/api/[route]/route.ts` — never call Brevo/Dolby from client components |
-| Database schema | Update decisions-log → create migration → update project-notes |
-| Session end | Update `tracking/session-context.md` with what changed and what's next |
+- **Conditional rendering:** never show empty sections. Always check data exists before rendering.
+- **Tier gating:** use UpgradeGate component for locked features. Never show blank pages or 403s — show what they're missing with upgrade CTA.
+- **Prices:** always import from `src/lib/pricing.ts` which reads from PlatformPricing DB with 5-minute cache. Never hardcode dollar amounts.
+- **Notifications:** use `createNotification(userId, type, title, body, actionUrl)` utility for all in-app notifications.
+- **Email:** use Brevo for all transactional and automated emails. Never use another email provider.
+- **File uploads:** use Uploadthing for all file uploads. Store URLs in database.
+- **Audio playback:** use wavesurfer.js for waveform players. Persistent MiniPlayer for track/beat previews.
+
+---
+
+## Commit Rules
+
+- Commit after every working step
+- Use descriptive commit messages
+- Push after every commit
+- Do not combine multiple features in one commit
+- Do not refactor unrelated code while building a feature
+
+---
+
+## Critical Reminders
+
+- Do ONLY what is asked. Do not add features, refactor code, or change files not mentioned in the instruction.
+- Confirm your plan BEFORE writing code if the task is complex.
+- Check what already exists in the codebase before building something new. Do not recreate existing components.
+- If you need to reuse a component that's inline (not exported), extract it into a shared component first, then use it in both places.
+- When told to stop, STOP. Do not continue building.
+- No Python scripts — this environment may not have Python. Use Node.js alternatives.

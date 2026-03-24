@@ -468,6 +468,9 @@ model User {
   onboardingStep   Int       @default(0)
   planSelectedAt   DateTime?
   setupCompletedAt DateTime?
+  firstVisitAt     DateTime?
+  firstContentAt   DateTime?
+  pagePublishedAt  DateTime?
   accounts         Account[]
   subscription     Subscription?
   tracks           Track[]

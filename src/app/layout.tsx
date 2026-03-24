@@ -3,6 +3,7 @@ import { Outfit, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { PWARegister } from "@/components/shared/PWARegister";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
+import TrackVisit from "@/components/shared/TrackVisit";
 import "./globals.css";
 
 const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"], display: "swap" });
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <meta name="theme-color" content="#D4A843" />
       </head>
       <body>
+        <TrackVisit />
         <PWARegister />
         <ImpersonationBanner />
         <Providers>{children}</Providers>

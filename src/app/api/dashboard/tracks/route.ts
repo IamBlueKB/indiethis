@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Record first content upload timestamp — fire and forget
+  void db.user.updateMany({
+    where: { id: session.user.id, firstContentAt: null },
+    data:  { firstContentAt: new Date() },
+  }).catch(() => { /* silent — non-critical */ });
+
   // Auto-create ProducerProfile on first beat upload — fire and forget
   void db.producerProfile.upsert({
     where:  { userId: session.user.id },

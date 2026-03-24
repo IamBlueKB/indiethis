@@ -47,6 +47,14 @@ export async function PATCH(req: NextRequest) {
   if (city !== undefined) data.city = city || null;
   if (soundcloudUrl !== undefined) data.soundcloudUrl = soundcloudUrl || null;
 
+  // Record first page publish timestamp — fire and forget
+  if (isPublished === true) {
+    void db.user.updateMany({
+      where: { id: session.user.id, pagePublishedAt: null },
+      data:  { pagePublishedAt: new Date() },
+    }).catch(() => { /* silent — non-critical */ });
+  }
+
   const site = await db.artistSite.upsert({
     where: { artistId: session.user.id },
     update: data,

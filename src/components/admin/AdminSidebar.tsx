@@ -23,6 +23,7 @@ import {
   Archive,
   Compass,
   Megaphone,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -49,6 +50,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Promo Codes", href: "/admin/promo-codes",      icon: Tag,         page: "promo-codes"      },
   { label: "Ambassadors", href: "/admin/ambassadors",      icon: Star,        page: "ambassadors"      },
   { label: "Promo Analytics", href: "/admin/promo-analytics", icon: TrendingUp, page: "promo-analytics" },
+  { label: "Signup Funnel",   href: "/admin/analytics/funnel", icon: Filter,     page: "analytics"       },
   { label: "Explore",      href: "/admin/explore",           icon: Compass,     page: "explore"          },
   { label: "Lead Submissions", href: "/admin/lead-tracking/leads", icon: Megaphone, page: "lead-tracking" },
   { label: "Lead Value",       href: "/admin/lead-tracking/value", icon: DollarSign, page: "lead-tracking" },

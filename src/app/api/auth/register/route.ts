@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       utmMedium,
       utmCampaign,
       landingPage,
+      firstVisitAt,
     } = body as {
       name: string;
       email: string;
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       utmMedium?: string;
       utmCampaign?: string;
       landingPage?: string;
+      firstVisitAt?: string;
     };
 
     // Validate required fields
@@ -110,7 +112,8 @@ export async function POST(req: NextRequest) {
         // Store the literal referral code that was entered (for display/auditing)
         referredByCode: referredById ? usedReferralCode?.toUpperCase() : undefined,
         // Onboarding funnel tracking
-        signupPath: signupPath ?? (userRole === "STUDIO_ADMIN" ? "studio" : "artist"),
+        signupPath:   signupPath ?? (userRole === "STUDIO_ADMIN" ? "studio" : "artist"),
+        firstVisitAt: firstVisitAt ? new Date(firstVisitAt) : null,
       },
     });
 
