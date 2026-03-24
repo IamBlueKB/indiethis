@@ -551,6 +551,25 @@ export async function POST(req: NextRequest) {
 
       const amountPaid = (paidInvoice.amount_paid as number) ?? 0;
 
+      // Reset all AI credit usage counters on monthly renewal.
+      // billing_reason === "subscription_cycle" fires only on recurring renewals,
+      // not on initial creation (subscription_create) or mid-cycle upgrades
+      // (subscription_update / proration). Initial creation already resets credits
+      // inside the checkout.session.completed handler above.
+      if (paidInvoice.billing_reason === "subscription_cycle") {
+        await db.subscription.updateMany({
+          where: { userId: sub.userId },
+          data: {
+            aiVideoCreditsUsed:    0,
+            aiArtCreditsUsed:      0,
+            aiMasterCreditsUsed:   0,
+            lyricVideoCreditsUsed: 0,
+            aarReportCreditsUsed:  0,
+            pressKitCreditsUsed:   0,
+          },
+        });
+      }
+
       // Clear any stream lease grace period — payment succeeded
       await db.subscription.updateMany({
         where: { userId: sub.userId, streamLeaseGraceUntil: { not: null } },
