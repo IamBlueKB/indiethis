@@ -213,11 +213,23 @@ export default function PressKitPage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [expandedId,     setExpandedId]     = useState<string | null>(null);
 
-  // ── Load history on mount ───────────────────────────────────────────────────
+  // Credits
+  const [creditsUsed,  setCreditsUsed]  = useState<number | null>(null);
+  const [creditsLimit, setCreditsLimit] = useState<number | null>(null);
+  const [priceDisplay, setPriceDisplay] = useState(PRICING_DEFAULTS.AI_PRESS_KIT.display);
+
+  // ── Load history + credits on mount ────────────────────────────────────────
   useEffect(() => {
     fetch("/api/dashboard/ai/press-kit")
       .then(r => r.ok ? r.json() : { jobs: [] })
-      .then(d => setHistory(d.jobs ?? []))
+      .then(d => {
+        setHistory(d.jobs ?? []);
+        if (d.credits) {
+          setCreditsUsed(d.credits.used ?? 0);
+          setCreditsLimit(d.credits.limit ?? 0);
+        }
+        if (d.priceDisplay) setPriceDisplay(d.priceDisplay);
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -453,7 +465,16 @@ export default function PressKitPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">Full EPK + PDF · {PRICING_DEFAULTS.AI_PRESS_KIT.display} or 1 credit</p>
+            {creditsLimit !== null && creditsLimit > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Full EPK + PDF ·{" "}
+                <span style={{ color: (creditsLimit - (creditsUsed ?? 0)) > 0 ? "#34C759" : "#E85D4A" }}>
+                  {Math.max(0, creditsLimit - (creditsUsed ?? 0))} of {creditsLimit} included this month
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Full EPK + PDF · Pay per use — {priceDisplay}</p>
+            )}
             <button
               type="submit"
               disabled={submitting || !!isActive || !artistName.trim()}

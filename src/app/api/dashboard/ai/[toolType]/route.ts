@@ -29,6 +29,7 @@ import { db }                               from "@/lib/db";
 import { createAIJob }                      from "@/lib/ai-jobs";
 import { processAIJob }                     from "@/lib/ai-job-processor";
 import { AIJobType, AIJobTrigger }          from "@prisma/client";
+import { getPricing, PRICING_DEFAULTS }     from "@/lib/pricing";
 
 // ─── URL param → AIJobType normalisation ──────────────────────────────────────
 
@@ -312,7 +313,7 @@ export async function GET(
     return NextResponse.json({ error: "Unknown tool type" }, { status: 400 });
   }
 
-  const jobs = await db.aIJob.findMany({
+  const jobsQuery = db.aIJob.findMany({
     where:   { triggeredById: session.user.id, type },
     orderBy: { createdAt: "desc" },
     take:    20,
@@ -328,5 +329,23 @@ export async function GET(
     },
   });
 
+  // For press kit, also return subscription credits + live price from PlatformPricing
+  if (type === "PRESS_KIT") {
+    const [jobs, subscription, pricing] = await Promise.all([
+      jobsQuery,
+      db.subscription.findUnique({
+        where:  { userId: session.user.id },
+        select: { tier: true, pressKitCreditsUsed: true, pressKitCreditsLimit: true },
+      }),
+      getPricing(),
+    ]);
+    const credits = subscription
+      ? { used: subscription.pressKitCreditsUsed, limit: subscription.pressKitCreditsLimit, tier: subscription.tier }
+      : null;
+    const priceDisplay = pricing["AI_PRESS_KIT"]?.display ?? PRICING_DEFAULTS.AI_PRESS_KIT.display;
+    return NextResponse.json({ jobs, credits, priceDisplay });
+  }
+
+  const jobs = await jobsQuery;
   return NextResponse.json({ jobs });
 }
