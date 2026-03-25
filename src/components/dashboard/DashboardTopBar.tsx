@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { Menu, ChevronDown, User, LogOut, ExternalLink } from "lucide-react";
+import { Menu, ChevronDown, User, LogOut, ExternalLink, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -112,6 +112,13 @@ export default function DashboardTopBar({ title }: DashboardTopBarProps) {
             >
               <User size={14} />
               Profile Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => { window.location.href = "/explore"; }}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <Compass size={14} />
+              Explore
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -9,6 +9,7 @@ import {
   ChevronDown,
   User,
   LogOut,
+  Compass,
   LayoutDashboard,
   Calendar,
   Users,
@@ -119,6 +120,13 @@ export default function StudioTopBar({ studioSlug }: { studioSlug: string | null
             >
               <User size={14} />
               Studio Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => { window.location.href = "/explore"; }}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <Compass size={14} />
+              Explore
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
