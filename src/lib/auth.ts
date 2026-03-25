@@ -10,6 +10,7 @@ import type { Role } from "@prisma/client";
 // Add the adapter back when OAuth providers are implemented.
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     Credentials({
       credentials: {
