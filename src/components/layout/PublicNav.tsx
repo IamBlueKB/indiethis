@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import { useState, useRef, useEffect } from "react";
 
 const NAV_LINKS = [
   { href: "/explore",  label: "Explore"  },
@@ -21,6 +22,21 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname          = usePathname();
   const loggedIn          = !!session?.user;
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const menuRef                   = useRef<HTMLDivElement>(null);
+
+  const dashboardHref = (session?.user as any)?.role?.startsWith("STUDIO") ? "/studio" : "/dashboard";
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
     <header
@@ -75,30 +91,56 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
         {/* Auth */}
         <div className="flex items-center gap-2 shrink-0">
           {loggedIn ? (
-            <>
-              {/* Avatar (no name text — keeps auth section compact for search bar) */}
-              {session.user?.image ? (
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? ""}
-                  className="w-7 h-7 rounded-full object-cover hidden sm:block"
-                />
-              ) : (
+            <div className="relative" ref={menuRef}>
+              {/* Avatar button */}
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className="flex items-center gap-2 focus:outline-none"
+              >
+                {session.user?.image ? (
+                  <img
+                    src={session.user.image}
+                    alt={session.user.name ?? ""}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold"
+                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                  >
+                    {(session.user?.name ?? "?")[0].toUpperCase()}
+                  </div>
+                )}
+              </button>
+
+              {/* Dropdown */}
+              {menuOpen && (
                 <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold hidden sm:block"
-                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                  className="absolute right-0 mt-2 w-44 rounded-xl overflow-hidden shadow-xl"
+                  style={{ backgroundColor: "#141414", border: "1px solid #2a2a2a" }}
                 >
-                  {(session.user?.name ?? "?")[0].toUpperCase()}
+                  <div className="px-4 py-2.5 border-b" style={{ borderColor: "#2a2a2a" }}>
+                    <p className="text-xs font-semibold text-white truncate">{session.user?.name}</p>
+                    <p className="text-[11px] truncate" style={{ color: "#666" }}>{session.user?.email}</p>
+                  </div>
+                  <Link
+                    href={dashboardHref}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/5"
+                    style={{ color: "#D4A843" }}
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/explore" })}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/5"
+                    style={{ color: "#888" }}
+                  >
+                    Sign out
+                  </button>
                 </div>
               )}
-              <Link
-                href={session.user?.role?.startsWith("STUDIO") ? "/studio" : "/dashboard"}
-                className="text-sm font-semibold px-3 py-1.5 rounded-lg"
-                style={{ backgroundColor: "#1a1a1a", color: "#D4A843", border: "1px solid #2a2a2a" }}
-              >
-                Dashboard
-              </Link>
-            </>
+            </div>
           ) : (
             <>
               <Link
