@@ -120,7 +120,7 @@ export async function POST(
       subject: `Booking request from ${name.trim()} — ${studio.name}`,
       htmlContent: html,
       tags: ["studio-booking-request"],
-    }).catch(() => {});
+    });
   }
 
   return NextResponse.json({ ok: true });
