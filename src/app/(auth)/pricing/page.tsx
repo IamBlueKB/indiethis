@@ -130,6 +130,7 @@ const PATH_META: Record<string, { icon: React.ReactNode; label: string }> = {
 function PricingContent() {
   const searchParams = useSearchParams();
   const path         = searchParams.get("path") ?? "artist";
+  const pendingId    = searchParams.get("pending") ?? undefined;
   const isStudio     = path === "studio";
   const plans        = isStudio ? STUDIO_PLANS : ARTIST_PLANS;
   const pathMeta     = PATH_META[path] ?? PATH_META.artist;
@@ -144,7 +145,7 @@ function PricingContent() {
       const res  = await fetch("/api/stripe/checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ plan: planKey, onboarding: true }),
+        body:    JSON.stringify({ plan: planKey, onboarding: true, pendingId }),
       });
       const data = await res.json() as { url?: string; error?: string };
       if (data.url) {

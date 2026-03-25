@@ -20,6 +20,7 @@ import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import { sendEmail, sendOnboardingWelcomeEmail } from "@/lib/brevo/email";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
+import { createUserFromPending } from "@/lib/create-user-from-pending";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -214,6 +215,30 @@ export async function POST(req: NextRequest) {
           }).catch(() => {});
         }
         break;
+      }
+
+      // --- Atomic new-signup fallback (PendingSignup flow) ---
+      // The /signup/complete page is the primary account creator; this webhook
+      // handler is the idempotent fallback in case the user closes the tab before
+      // the complete page polls successfully.
+      const pendingSignupId = checkSession.metadata?.pending_signup_id;
+      if (pendingSignupId) {
+        const pending = await db.pendingSignup.findUnique({ where: { id: pendingSignupId } });
+        if (pending) {
+          const alreadyExists = await db.user.findUnique({
+            where:  { email: pending.email },
+            select: { id: true },
+          });
+          if (!alreadyExists) {
+            const stripeSubscriptionId =
+              typeof checkSession.subscription === "string"
+                ? checkSession.subscription
+                : (checkSession.subscription as { id: string } | null)?.id ?? null;
+            const tier = pending.tier ?? checkSession.metadata?.tier ?? "LAUNCH";
+            await createUserFromPending(pending, stripeSubscriptionId, tier);
+          }
+        }
+        return NextResponse.json({ received: true });
       }
 
       if (!userId) break;

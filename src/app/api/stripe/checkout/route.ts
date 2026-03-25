@@ -5,12 +5,20 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { plan?: string; onboarding?: boolean };
+  const session = await auth();
+  const body = await req.json() as { plan?: string; onboarding?: boolean; pendingId?: string };
   const plan       = body.plan?.toLowerCase();
   const onboarding = !!body.onboarding;
+  const pendingId  = body.pendingId as string | undefined;
+
+  // New-signup flow: unauthenticated, pendingId provided
+  const isNewSignup = !!pendingId && !session?.user?.id;
+
+  // Existing users upgrading must be authenticated
+  if (!isNewSignup && !session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   if (!plan || !PLAN_PRICES[plan]) {
     return NextResponse.json({ error: "Invalid plan." }, { status: 400 });
@@ -25,15 +33,52 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
+
+  // ── New Signup Branch ─────────────────────────────────────────────────────
+  if (isNewSignup) {
+    const pending = await db.pendingSignup.findUnique({ where: { id: pendingId } });
+
+    if (!pending) {
+      return NextResponse.json({ error: "Signup session not found. Please start again." }, { status: 404 });
+    }
+    if (pending.expiresAt < new Date()) {
+      return NextResponse.json({ error: "Signup session expired. Please start again." }, { status: 410 });
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: planConfig.priceId, quantity: 1 }],
+      customer_email: pending.email,
+      success_url: `${appUrl}/signup/complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${appUrl}/pricing?onboarding=1&path=${pending.signupPath ?? "artist"}&pending=${pendingId}`,
+      subscription_data: {
+        metadata: { pending_signup_id: pendingId, tier: planConfig.tier },
+      },
+      metadata: { pending_signup_id: pendingId, tier: planConfig.tier },
+      allow_promotion_codes: true,
+    });
+
+    // Store the Stripe session ID on the PendingSignup so the webhook and
+    // complete-signup route can look it up.
+    await db.pendingSignup.update({
+      where: { id: pendingId },
+      data:  { stripeSessionId: checkoutSession.id, tier: planConfig.tier },
+    });
+
+    return NextResponse.json({ url: checkoutSession.url });
+  }
+
+  // ── Existing User Upgrade Branch ──────────────────────────────────────────
   // Get or create Stripe customer; also check for a pending affiliate referral
   // so we can auto-apply the 10% / 3-month discount at checkout.
   const [user, affiliateRef] = await Promise.all([
     db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: session!.user!.id },
       select: { email: true, name: true, stripeCustomerId: true },
     }),
     db.affiliateReferral.findUnique({
-      where: { referredUserId: session.user.id },
+      where: { referredUserId: session!.user!.id },
       select: {
         monthsRemaining: true,
         affiliate: { select: { discountCode: true, status: true } },
@@ -49,16 +94,14 @@ export async function POST(req: NextRequest) {
     const customer = await stripe.customers.create({
       email: user.email ?? undefined,
       name: user.name ?? undefined,
-      metadata: { userId: session.user.id },
+      metadata: { userId: session!.user!.id },
     });
     customerId = customer.id;
     await db.user.update({
-      where: { id: session.user.id },
+      where: { id: session!.user!.id },
       data: { stripeCustomerId: customerId },
     });
   }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
   // Resolve affiliate discount coupon — applies 10% off for the first 3 months.
   // Only applies if the user was referred via an affiliate link and the affiliate is still APPROVED.
@@ -100,9 +143,9 @@ export async function POST(req: NextRequest) {
       ? `${appUrl}/pricing?onboarding=1`
       : `${appUrl}/dashboard/upgrade`,
     subscription_data: {
-      metadata: { userId: session.user.id, tier: planConfig.tier },
+      metadata: { userId: session!.user!.id, tier: planConfig.tier },
     },
-    metadata: { userId: session.user.id, tier: planConfig.tier },
+    metadata: { userId: session!.user!.id, tier: planConfig.tier },
     // Auto-apply affiliate coupon if eligible; otherwise allow manual promo codes
     ...(affiliateCouponId
       ? { discounts: [{ coupon: affiliateCouponId }] }

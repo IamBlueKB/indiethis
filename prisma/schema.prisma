@@ -466,11 +466,13 @@ model User {
   soundcloudUrl    String?
   signupPath       String?
   onboardingStep   Int       @default(0)
-  planSelectedAt   DateTime?
-  setupCompletedAt DateTime?
-  firstVisitAt     DateTime?
-  firstContentAt   DateTime?
-  pagePublishedAt  DateTime?
+  planSelectedAt           DateTime?
+  setupCompletedAt         DateTime?
+  firstVisitAt             DateTime?
+  firstContentAt           DateTime?
+  pagePublishedAt          DateTime?
+  autoSigninToken          String?   @unique
+  autoSigninTokenExpiresAt DateTime?
   accounts         Account[]
   subscription     Subscription?
   tracks           Track[]
@@ -2227,4 +2229,28 @@ model ReEngagementEmailLog {
 
   @@unique([userId, emailType, cycleKey])
   @@index([userId])
+}
+
+// Temporary signup data stored before Stripe payment completes.
+// Deleted once the account is created. Expires after 24 hours.
+model PendingSignup {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  role            Role
+  signupPath      String?
+  referredByCode  String?
+  affiliateId     String?
+  promoCode       String?
+  source          String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  landingPage     String?
+  firstVisitAt    DateTime?
+  stripeSessionId String?   @unique
+  tier            String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
 }

@@ -3,7 +3,6 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { Loader2, Mic2, Music4, Building2, Gift, ChevronDown, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -113,7 +112,9 @@ function SignupForm() {
       // Map path → DB role
       const role = path === "studio" ? "STUDIO_ADMIN" : "ARTIST";
 
-      const res = await fetch("/api/auth/register", {
+      // Create a PendingSignup — account is not created yet.
+      // The real User record is created after Stripe payment succeeds.
+      const res = await fetch("/api/auth/signup-init", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -121,7 +122,7 @@ function SignupForm() {
           email,
           password,
           role,
-          signupPath: path,
+          signupPath:   path,
           referralCode: refCode,
           affiliateId,
           promoCode:    promoCode.trim() || undefined,
@@ -134,27 +135,16 @@ function SignupForm() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as { pendingId?: string; error?: string };
 
       if (!res.ok) {
         setError(data.error ?? "Something went wrong.");
         return;
       }
 
-      // Auto sign-in
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        router.push("/login?registered=1");
-      } else {
-        // Send to pricing so they can pick a plan
-        router.push(`/pricing?onboarding=1&path=${path}`);
-        router.refresh();
-      }
+      // Redirect to pricing — user selects a plan, then pays via Stripe.
+      // The pendingId links their info to the checkout session.
+      router.push(`/pricing?onboarding=1&path=${path}&pending=${data.pendingId}`);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -182,7 +172,7 @@ function SignupForm() {
             Create your account
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
-            No credit card required to get started
+            Create your account, then pick a plan
           </p>
         </div>
 
@@ -376,7 +366,7 @@ function SignupForm() {
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Creating account…</>
             ) : (
-              "Create Account"
+              "Continue to Payment →"
             )}
           </button>
 
