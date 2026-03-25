@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { detectAudioFeaturesFromUrls } from "@/lib/audio-analysis";
 import { createNotification } from "@/lib/notifications";
 
 // GET /api/intake/[token] — fetch intake link details (public)
@@ -230,7 +229,9 @@ export async function POST(
   // Kick off audio analysis in the background — don't block the response
   const submissionId = submission.id;
   const uploadedUrls: string[] = fileUrls ?? [];
-  void detectAudioFeaturesFromUrls(uploadedUrls).then(({ bpm, musicalKey }) => {
+  void import("@/lib/audio-analysis").then(({ detectAudioFeaturesFromUrls }) =>
+    detectAudioFeaturesFromUrls(uploadedUrls)
+  ).then(({ bpm, musicalKey }) => {
     if (bpm !== null || musicalKey !== null) {
       return db.intakeSubmission.update({
         where: { id: submissionId },
