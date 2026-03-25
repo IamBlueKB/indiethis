@@ -35,7 +35,7 @@ export async function POST(
 
   const studio = await db.studio.findUnique({
     where: { id: studioId },
-    select: { id: true, name: true, email: true, isPublished: true, slug: true, owner: { select: { email: true } } },
+    select: { id: true, name: true, email: true, isPublished: true, slug: true },
   });
 
   if (!studio || !studio.isPublished) {
@@ -76,9 +76,8 @@ export async function POST(
     }).catch(() => {});
   }
 
-  // Notify studio — use studio email or fall back to owner email
-  const notifyEmail = studio.email || studio.owner?.email;
-  if (notifyEmail) {
+  // Notify studio
+  if (studio.email) {
     const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A0A0A;">
         <div style="background: #D4A843; padding: 24px 32px; border-radius: 12px 12px 0 0;">
@@ -116,7 +115,7 @@ export async function POST(
       </div>
     `;
     await sendEmail({
-      to: { email: notifyEmail, name: studio.name },
+      to: { email: studio.email, name: studio.name },
       replyTo: { email: email.trim(), name: name.trim() },
       subject: `Booking request from ${name.trim()} — ${studio.name}`,
       htmlContent: html,
