@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 interface ArtistNavProps {
   displayName: string;
@@ -70,6 +71,13 @@ export default function ArtistNav({
 
         {/* Section links */}
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <Link
+            href="/explore"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors hover:bg-white/10"
+            style={{ color: "#D4A843" }}
+          >
+            Explore
+          </Link>
           {links.map(({ label, id }) => (
             <button
               key={id}
