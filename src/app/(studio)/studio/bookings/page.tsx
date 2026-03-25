@@ -728,6 +728,7 @@ export default function StudioBookingsPage() {
   const [filter, setFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<Booking | null>(null);
   const [sendIntakeOpen, setSendIntakeOpen] = useState(false);
+  const [intakeRequest, setIntakeRequest] = useState<BookingRequest | null>(null);
 
   useEffect(() => {
     fetch("/api/studio/bookings")
@@ -767,6 +768,13 @@ export default function StudioBookingsPage() {
       </div>
 
       {sendIntakeOpen && <SendIntakeModal onClose={() => setSendIntakeOpen(false)} />}
+      {intakeRequest && (
+        <SendIntakeModal
+          defaultEmail={intakeRequest.email}
+          defaultPhone={intakeRequest.phone ?? ""}
+          onClose={() => setIntakeRequest(null)}
+        />
+      )}
 
       {/* Booking Requests from public page */}
       {requests.length > 0 && (
@@ -788,17 +796,26 @@ export default function StudioBookingsPage() {
                     <p className="text-xs text-muted-foreground mt-1">{lines.join(" · ")}</p>
                   )}
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="shrink-0 text-right space-y-1">
                   <p className="text-xs text-muted-foreground">
                     {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </p>
-                  <a
-                    href={`mailto:${r.email}?subject=Re: Your booking request`}
-                    className="text-xs font-semibold mt-1 inline-block"
-                    style={{ color: "#D4A843" }}
-                  >
-                    Reply →
-                  </a>
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      onClick={() => setIntakeRequest(r)}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    >
+                      Send Intake
+                    </button>
+                    <a
+                      href={`mailto:${r.email}?subject=Re: Your booking request`}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg border"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                    >
+                      Reply
+                    </a>
+                  </div>
                 </div>
               </div>
             );
