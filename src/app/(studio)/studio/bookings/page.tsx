@@ -712,8 +712,18 @@ function BookingDrawer({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type BookingRequest = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  message: string | null;
+  createdAt: string;
+};
+
 export default function StudioBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<Booking | null>(null);
@@ -722,7 +732,7 @@ export default function StudioBookingsPage() {
   useEffect(() => {
     fetch("/api/studio/bookings")
       .then((r) => r.json())
-      .then((d) => { setBookings(d.bookings ?? []); setLoading(false); });
+      .then((d) => { setBookings(d.bookings ?? []); setRequests(d.requests ?? []); setLoading(false); });
   }, []);
 
   const handleUpdate = useCallback((id: string, patch: Partial<Booking>) => {
@@ -757,6 +767,44 @@ export default function StudioBookingsPage() {
       </div>
 
       {sendIntakeOpen && <SendIntakeModal onClose={() => setSendIntakeOpen(false)} />}
+
+      {/* Booking Requests from public page */}
+      {requests.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
+            <MessageSquare size={14} className="text-yellow-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Booking Requests ({requests.length})
+            </span>
+          </div>
+          {requests.map((r) => {
+            const lines = (r.message ?? "").split("\n").filter((l) => l && !l.startsWith("["));
+            return (
+              <div key={r.id} className="px-5 py-4 border-b last:border-b-0 flex items-start justify-between gap-4" style={{ borderColor: "var(--border)" }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{r.name}</p>
+                  <p className="text-xs text-muted-foreground">{r.email}{r.phone ? ` · ${r.phone}` : ""}</p>
+                  {lines.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">{lines.join(" · ")}</p>
+                  )}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                  <a
+                    href={`mailto:${r.email}?subject=Re: Your booking request`}
+                    className="text-xs font-semibold mt-1 inline-block"
+                    style={{ color: "#D4A843" }}
+                  >
+                    Reply →
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>

@@ -11,14 +11,20 @@ export async function GET() {
   const studio = await db.studio.findFirst({ where: { ownerId: session.user.id } });
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
-  const bookings = await db.bookingSession.findMany({
-    where: { studioId: studio.id },
-    orderBy: { dateTime: "desc" },
-    include: {
-      artist: { select: { name: true, email: true } },
-      contact: { select: { id: true, name: true } },
-    },
-  });
+  const [bookings, requests] = await Promise.all([
+    db.bookingSession.findMany({
+      where: { studioId: studio.id },
+      orderBy: { dateTime: "desc" },
+      include: {
+        artist: { select: { name: true, email: true } },
+        contact: { select: { id: true, name: true } },
+      },
+    }),
+    db.contactSubmission.findMany({
+      where: { studioId: studio.id, source: "BOOKING_REQUEST" },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-  return NextResponse.json({ bookings });
+  return NextResponse.json({ bookings, requests });
 }
