@@ -64,7 +64,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
           </p>
         </div>
 
-        <BookingRequestForm studioId={studio.id} studioName={studio.name} accent={accent} services={services} />
+        <BookingRequestForm studioId={studio.id} studioName={studio.name} studioSlug={slug} accent={accent} services={services} />
       </div>
     </div>
   );

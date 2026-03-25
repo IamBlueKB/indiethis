@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, MapPin, Phone, Mail, Loader2, Check, ImageIcon, Plus, X } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { formatPhoneInput } from "@/lib/formatPhone";
 
 // ─── Image upload box ─────────────────────────────────────────────────────────
 
@@ -261,7 +262,7 @@ export default function StudioSetupPage() {
               <div className="relative">
                 <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input type="tel" placeholder="(555) 555-0100" value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
                   className={inputClass} style={{ paddingLeft: "2.25rem", borderColor: "var(--border)" }} />
               </div>
             </div>

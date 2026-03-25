@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Mail, Phone, CheckCircle, AlertCircle } from "lucide-react";
+import { formatPhoneInput } from "@/lib/formatPhone";
 import type { SectionSharedProps } from "../ConfigRenderer";
 
 export function ContactFormStandard({ content, studio, socials }: SectionSharedProps) {
@@ -119,7 +120,7 @@ export function ContactFormStandard({ content, studio, socials }: SectionSharedP
                 <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
                   Phone <span style={{ color: "rgba(255,255,255,0.25)" }}>(optional)</span>
                 </label>
-                <input type="tel" className={inputClass} placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={submitting} />
+                <input type="tel" className={inputClass} placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} disabled={submitting} />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>Message *</label>

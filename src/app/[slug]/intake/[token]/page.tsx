@@ -7,6 +7,7 @@ import {
   Upload, Camera, DollarSign, ExternalLink, Phone, Mail,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { formatPhoneInput } from "@/lib/formatPhone";
 
 type StudioData = {
   name: string;
@@ -343,7 +344,7 @@ export default function IntakeFormPage() {
               <Field label="Phone">
                 <div className="relative">
                   <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  <input type="tel" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
                     placeholder="(555) 123-4567" inputMode="tel"
                     className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
                 </div>

@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { Send, CheckCircle } from "lucide-react";
+import { formatPhoneInput } from "@/lib/formatPhone";
 
 type Props = {
   studioId: string;
   studioName: string;
+  studioSlug: string;
   accent: string;
   services: { name: string }[];
 };
 
-export function BookingRequestForm({ studioId, studioName, accent, services }: Props) {
+export function BookingRequestForm({ studioId, studioName, studioSlug, accent, services }: Props) {
   const [name, setName]                 = useState("");
   const [email, setEmail]               = useState("");
   const [phone, setPhone]               = useState("");
@@ -54,6 +56,13 @@ export function BookingRequestForm({ studioId, studioName, accent, services }: P
             {studioName} will check availability and reach out to confirm your session.
           </p>
         </div>
+        <a
+          href={`/${studioSlug}`}
+          className="inline-block px-6 py-3 rounded-xl font-bold text-sm transition-opacity hover:opacity-90"
+          style={{ backgroundColor: accent, color: "#080808" }}
+        >
+          ← Back to {studioName}
+        </a>
       </div>
     );
   }
@@ -92,7 +101,7 @@ export function BookingRequestForm({ studioId, studioName, accent, services }: P
       {/* Phone */}
       <div>
         {label("Phone")}
-        <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(555) 000-0000" style={input} />
+        <input type="tel" value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} placeholder="(555) 000-0000" style={input} />
       </div>
 
       {/* Session type */}

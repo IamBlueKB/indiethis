@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Send, CheckCircle } from "lucide-react";
+import { formatPhoneInput } from "@/lib/formatPhone";
 
 type Props = {
   studioId: string;
@@ -101,7 +102,7 @@ export function ContactForm({ studioId, studioName, accent }: Props) {
         <input
           type="tel"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
           placeholder="(555) 000-0000"
           style={inputStyle}
         />
