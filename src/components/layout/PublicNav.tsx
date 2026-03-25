@@ -92,7 +92,7 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
                 </div>
               )}
               <Link
-                href="/dashboard"
+                href={session.user?.role?.startsWith("STUDIO") ? "/studio" : "/dashboard"}
                 className="text-sm font-semibold px-3 py-1.5 rounded-lg"
                 style={{ backgroundColor: "#1a1a1a", color: "#D4A843", border: "1px solid #2a2a2a" }}
               >
