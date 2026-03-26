@@ -760,54 +760,18 @@ function TrackAnalysisSection({
   intake: IntakeSubmissionItem;
   onSave: (bpm: number | null, key: string | null) => void;
 }) {
-  const [editing, setEditing]       = useState(false);
-  const [bpmVal, setBpmVal]         = useState(intake.bpmDetected?.toString() ?? "");
-  const [keyVal, setKeyVal]         = useState(intake.keyDetected ?? "");
-  const [saving, setSaving]         = useState(false);
-  const [analyzing, setAnalyzing]   = useState(false);
-  const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
-  const analyzedRef                 = useRef(false);
+  const [editing, setEditing] = useState(false);
+  const [bpmVal, setBpmVal]   = useState(intake.bpmDetected?.toString() ?? "");
+  const [keyVal, setKeyVal]   = useState(intake.keyDetected ?? "");
+  const [saving, setSaving]   = useState(false);
 
-  const hasAudio   = (intake.fileUrls?.length ?? 0) > 0;
-  const hasResults = !!(intake.bpmDetected || intake.keyDetected);
-
-  // Auto-analyze when drawer opens if audio exists but no results yet
-  useEffect(() => {
-    if (hasAudio && !hasResults && !analyzedRef.current) {
-      analyzedRef.current = true;
-      runAnalyze();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Sync edit fields when parent values change (after auto-analyze completes)
+  // Sync edit fields when parent values update
   useEffect(() => {
     if (!editing) {
       setBpmVal(intake.bpmDetected?.toString() ?? "");
       setKeyVal(intake.keyDetected ?? "");
     }
   }, [intake.bpmDetected, intake.keyDetected, editing]);
-
-  async function runAnalyze() {
-    setAnalyzing(true);
-    setAnalyzeErr(null);
-    try {
-      const res  = await fetch(`/api/studio/intake-submissions/${intake.id}/analyze`, { method: "POST" });
-      const text = await res.text();
-      let data: { bpmDetected?: number | null; keyDetected?: string | null; error?: string } = {};
-      try { data = JSON.parse(text); } catch { /* non-JSON response */ }
-      if (res.ok) {
-        onSave(data.bpmDetected ?? null, data.keyDetected ?? null);
-      } else {
-        setAnalyzeErr(data.error ?? `Server error ${res.status}`);
-      }
-    } catch (e) {
-      setAnalyzeErr(`Error: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    setAnalyzing(false);
-  }
-
-  function handleAnalyze() { analyzedRef.current = true; runAnalyze(); }
 
   async function handleSave() {
     setSaving(true);
@@ -828,23 +792,12 @@ function TrackAnalysisSection({
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Track Analysis</p>
         {!editing && (
-          <div className="flex items-center gap-2">
-            {hasAudio && (
-              <button onClick={handleAnalyze} disabled={analyzing}
-                className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg disabled:opacity-50 transition-colors"
-                style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                {analyzing ? <Loader2 size={10} className="animate-spin" /> : <Music2 size={10} />}
-                {analyzing ? "Analyzing…" : hasResults ? "Re-analyze" : "Analyze"}
-              </button>
-            )}
-            <button onClick={() => { setBpmVal(intake.bpmDetected?.toString() ?? ""); setKeyVal(intake.keyDetected ?? ""); setEditing(true); }}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              <Pencil size={10} /> Edit
-            </button>
-          </div>
+          <button onClick={() => { setBpmVal(intake.bpmDetected?.toString() ?? ""); setKeyVal(intake.keyDetected ?? ""); setEditing(true); }}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <Pencil size={10} /> Edit
+          </button>
         )}
       </div>
-      {analyzeErr && <p className="text-[10px] text-red-400 mb-2">{analyzeErr}</p>}
       {editing ? (
         <div className="rounded-xl border p-3 space-y-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
           <div className="grid grid-cols-2 gap-3">
@@ -878,25 +831,20 @@ function TrackAnalysisSection({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
-            {analyzing ? (
-              <Loader2 size={14} className="animate-spin text-accent" />
-            ) : (
-              <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
-                {intake.bpmDetected ?? "—"}
-              </p>
-            )}
+            <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
+              {intake.bpmDetected ?? "—"}
+            </p>
           </div>
           <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
-            {analyzing ? (
-              <Loader2 size={14} className="animate-spin text-accent" />
-            ) : (
-              <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
-                {intake.keyDetected ?? "—"}
-              </p>
-            )}
+            <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
+              {intake.keyDetected ?? "—"}
+            </p>
           </div>
         </div>
+        {!intake.bpmDetected && !intake.keyDetected && (intake.fileUrls?.length ?? 0) > 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">Auto-detected on new submissions — use Edit to enter manually</p>
+        )}
       )}
     </div>
   );
