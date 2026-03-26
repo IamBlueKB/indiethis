@@ -2,6 +2,8 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 
+export const maxDuration = 60;
+
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
   _req: NextRequest,
