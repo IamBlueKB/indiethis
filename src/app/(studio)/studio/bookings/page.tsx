@@ -148,7 +148,7 @@ function SendIntakeModal({
         style={{ pointerEvents: "none" }}
       >
         <div
-          className="w-full max-w-sm rounded-2xl border p-6 space-y-4 shadow-xl"
+          className="w-full max-w-sm rounded-2xl border p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", pointerEvents: "auto" }}
         >
           <div className="flex items-center justify-between">
