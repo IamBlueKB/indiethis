@@ -27,9 +27,13 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { status } = body as { status: string };
+  const { status, bpmDetected, keyDetected } = body as {
+    status?: string;
+    bpmDetected?: number | null;
+    keyDetected?: string | null;
+  };
 
-  if (!VALID_STATUSES.includes(status as IntakeStatus)) {
+  if (status !== undefined && !VALID_STATUSES.includes(status as IntakeStatus)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
@@ -45,9 +49,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const updateData: Record<string, unknown> = {};
+  if (status !== undefined) updateData.status = status;
+  if (bpmDetected !== undefined) updateData.bpmDetected = bpmDetected;
+  if (keyDetected !== undefined) updateData.keyDetected = keyDetected;
+
   const updated = await db.intakeSubmission.update({
     where: { id },
-    data: { status },
+    data: updateData,
   });
 
   // Send email notification to client if they have an email

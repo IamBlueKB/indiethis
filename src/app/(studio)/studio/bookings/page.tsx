@@ -753,6 +753,92 @@ type IntakeSubmissionItem = {
   intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null } | null;
 };
 
+function TrackAnalysisSection({
+  intake,
+  onSave,
+}: {
+  intake: IntakeSubmissionItem;
+  onSave: (bpm: number | null, key: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [bpmVal, setBpmVal]   = useState(intake.bpmDetected?.toString() ?? "");
+  const [keyVal, setKeyVal]   = useState(intake.keyDetected ?? "");
+  const [saving, setSaving]   = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const bpm = bpmVal.trim() ? parseInt(bpmVal.trim(), 10) : null;
+    const key = keyVal.trim() || null;
+    await fetch(`/api/studio/intake-submissions/${intake.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bpmDetected: bpm, keyDetected: key }),
+    });
+    onSave(bpm, key);
+    setSaving(false);
+    setEditing(false);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Track Analysis</p>
+        {!editing && (
+          <button onClick={() => { setBpmVal(intake.bpmDetected?.toString() ?? ""); setKeyVal(intake.keyDetected ?? ""); setEditing(true); }}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <Pencil size={10} /> Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="rounded-xl border p-3 space-y-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
+              <input type="number" value={bpmVal} onChange={(e) => setBpmVal(e.target.value)}
+                placeholder="e.g. 140" min="1" max="300"
+                className="w-full rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }} />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
+              <input type="text" value={keyVal} onChange={(e) => setKeyVal(e.target.value)}
+                placeholder="e.g. A minor"
+                className="w-full rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Save
+            </button>
+            <button onClick={() => setEditing(false)} className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground border" style={{ borderColor: "var(--border)" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
+            <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
+              {intake.bpmDetected ?? "—"}
+            </p>
+          </div>
+          <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
+            <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
+              {intake.keyDetected ?? "—"}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 async function downloadFile(url: string, filename: string) {
   try {
     const res = await fetch(url);
@@ -1216,25 +1302,15 @@ export default function StudioBookingsPage() {
                 </div>
               )}
 
+              {/* BPM / Key */}
+              <TrackAnalysisSection intake={selectedIntake} onSave={(bpm, key) => {
+                setSelectedIntake((p) => p ? { ...p, bpmDetected: bpm, keyDetected: key } : p);
+                setIntakeSubmissions((p) => p.map((x) => x.id === selectedIntake.id ? { ...x, bpmDetected: bpm, keyDetected: key } : x));
+              }} />
+
               {/* Uploaded files */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Uploaded Files</p>
-                  {(selectedIntake.bpmDetected || selectedIntake.keyDetected) && (
-                    <div className="flex items-center gap-2">
-                      {selectedIntake.bpmDetected && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                          {selectedIntake.bpmDetected} BPM
-                        </span>
-                      )}
-                      {selectedIntake.keyDetected && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(96,165,250,0.15)", color: "#60a5fa" }}>
-                          {selectedIntake.keyDetected}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Uploaded Files</p>
                 {(selectedIntake.fileUrls ?? []).filter(Boolean).length === 0 ? (
                   <p className="text-xs text-muted-foreground opacity-50">No files submitted.</p>
                 ) : (
