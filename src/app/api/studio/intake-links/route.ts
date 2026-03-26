@@ -89,10 +89,15 @@ export async function POST(req: NextRequest) {
   // Send intake link via email and/or SMS — don't fail the request if delivery fails
   if (email?.trim()) {
     await sendIntakeLinkEmail({
-      email: email.trim(),
-      name: name?.trim() ?? "Artist",
-      studioName: studio.name,
+      email:        email.trim(),
+      name:         name?.trim() ?? "Artist",
+      studioName:   studio.name,
       intakeUrl,
+      sessionDate:  link.sessionDate?.toISOString() ?? null,
+      sessionTime:  link.sessionTime ?? null,
+      endTime:      link.endTime ?? null,
+      hourlyRate:   link.hourlyRate ?? null,
+      sessionHours: link.sessionHours ?? null,
     }).catch(() => {});
   }
   if (phone?.trim()) {

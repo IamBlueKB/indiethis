@@ -699,6 +699,39 @@ export default function IntakeFormPage() {
             </section>
           )}
 
+          {/* ── Session Cost summary (repeated below payment so balance is visible) ── */}
+          {link.hourlyRate && link.sessionHours && (() => {
+            const sessionTotal = link.hourlyRate! * link.sessionHours!;
+            const dep = depositPaid ? (parseFloat(depositAmount) || 0) : 0;
+            const balance = sessionTotal - dep;
+            return (
+              <div className="rounded-2xl border p-4 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "rgba(212,168,67,0.4)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#D4A843" }}>Session Cost Summary</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {link.sessionHours} hr{link.sessionHours !== 1 ? "s" : ""} × ${link.hourlyRate}/hr
+                    </span>
+                    <span className="text-sm font-bold text-foreground">${sessionTotal.toFixed(2)}</span>
+                  </div>
+                  {dep > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Deposit paid</span>
+                      <span className="text-sm font-semibold text-emerald-400">−${dep.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t" style={{ borderColor: "rgba(212,168,67,0.2)" }} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-foreground">Balance Due</span>
+                    <span className="text-base font-bold" style={{ color: dep > 0 && balance <= 0 ? "#34C759" : "#D4A843" }}>
+                      ${balance.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── Additional Notes ── */}
           <section className="rounded-2xl border p-6" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
             <Field label="Additional Notes">

@@ -289,18 +289,62 @@ export async function sendIntakeLinkEmail(params: {
   name: string;
   studioName: string;
   intakeUrl: string;
+  sessionDate?: string | null;
+  sessionTime?: string | null;
+  endTime?: string | null;
+  hourlyRate?: number | null;
+  sessionHours?: number | null;
 }): Promise<void> {
+  const { sessionDate, sessionTime, endTime, hourlyRate, sessionHours } = params;
+
+  // Session date line
+  let sessionLine = "";
+  if (sessionDate) {
+    const dateStr = new Date(sessionDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const timeStr = sessionTime ? ` at ${sessionTime}${endTime ? ` – ${endTime}` : ""}` : "";
+    sessionLine = `<p style="margin:0 0 8px 0"><strong>Session:</strong> ${dateStr}${timeStr}</p>`;
+  }
+
+  // Pricing lines
+  let pricingBlock = "";
+  if (hourlyRate && sessionHours) {
+    const total = hourlyRate * sessionHours;
+    pricingBlock = `
+      <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:16px 0;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden">
+        <tr style="background:#fafafa">
+          <td style="padding:10px 14px;font-size:13px;color:#555">
+            ${sessionHours} hr${sessionHours !== 1 ? "s" : ""} × $${hourlyRate}/hr
+          </td>
+          <td style="padding:10px 14px;font-size:14px;font-weight:700;color:#111;text-align:right">
+            $${total.toFixed(2)}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 14px;font-size:12px;color:#888">
+            Deposit and balance due are confirmed on the form
+          </td>
+          <td></td>
+        </tr>
+      </table>`;
+  }
+
   await sendEmail({
     to: { email: params.email, name: params.name },
     subject: `${params.studioName} sent you a booking intake form`,
     htmlContent: `
-      <h1>Complete Your Booking Intake</h1>
-      <p>Hi ${params.name},</p>
-      <p><strong>${params.studioName}</strong> has sent you a personalized intake form to get started on your session.</p>
-      <p>Please complete the form within 72 hours:</p>
-      <p><a href="${params.intakeUrl}" style="background:#7B61FF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Complete Intake Form</a></p>
-      <p>Or copy this link:<br><code>${params.intakeUrl}</code></p>
-      <p style="color:#888;font-size:12px;">This link expires in 72 hours.</p>
+      <h1 style="margin:0 0 16px 0;font-size:20px">Complete Your Booking Intake</h1>
+      <p style="margin:0 0 12px 0">Hi ${params.name},</p>
+      <p style="margin:0 0 16px 0"><strong>${params.studioName}</strong> has sent you a personalized intake form to complete before your session.</p>
+      ${sessionLine}
+      ${pricingBlock}
+      <p style="margin:16px 0 8px 0">Please complete the form within 72 hours:</p>
+      <p style="margin:0 0 16px 0">
+        <a href="${params.intakeUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">
+          Complete Intake Form
+        </a>
+      </p>
+      <p style="margin:0 0 16px 0">Or copy this link:<br><code style="font-size:12px">${params.intakeUrl}</code></p>
+      <p style="color:#888;font-size:12px;margin:0">This link expires in 72 hours.</p>
     `,
     replyTo: { email: "support@indiethis.com", name: "IndieThis Support" },
     tags: ["intake-link"],
