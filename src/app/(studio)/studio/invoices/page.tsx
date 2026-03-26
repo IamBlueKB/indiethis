@@ -279,14 +279,192 @@ function CreateModal({
   );
 }
 
+// ─── Edit Draft Modal ─────────────────────────────────────────────────────────
+
+function EditModal({
+  invoice,
+  onClose,
+  onSaved,
+}: {
+  invoice: Invoice;
+  onClose: () => void;
+  onSaved: (updated: Invoice) => void;
+}) {
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    Array.isArray(invoice.lineItems) ? (invoice.lineItems as LineItem[]) : [{ description: "", quantity: 1, rate: 0, total: 0 }]
+  );
+  const [taxRate, setTaxRate] = useState(invoice.taxRate);
+  const [dueDate, setDueDate] = useState(invoice.dueDate.slice(0, 10));
+  const [notes, setNotes] = useState(invoice.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function updateLine(i: number, field: keyof LineItem, raw: string) {
+    setLineItems((prev) => {
+      const next = [...prev];
+      const item = { ...next[i] };
+      if (field === "description") {
+        item.description = raw;
+      } else {
+        (item as unknown as Record<string, number>)[field] = parseFloat(raw) || 0;
+      }
+      item.total = item.quantity * item.rate;
+      next[i] = item;
+      return next;
+    });
+  }
+
+  const subtotal = lineItems.reduce((s, l) => s + l.total, 0);
+  const tax = subtotal * (taxRate / 100);
+  const total = subtotal + tax;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (lineItems.length === 0) return setError("At least one line item required.");
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/studio/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineItems, taxRate, dueDate, notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setError(data.error ?? "Failed to save.");
+      onSaved({ ...invoice, lineItems, subtotal, tax, taxRate, total, dueDate, notes: notes.trim() || null });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+      <div className="w-full max-w-2xl rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+          <h2 className="text-base font-bold text-foreground">Edit Invoice #{String(invoice.invoiceNumber).padStart(4, "0")}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5"><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+            {/* Due Date */}
+            <div className="w-56">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Due Date</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none"
+                style={{ borderColor: "var(--border)", colorScheme: "dark" }}
+              />
+            </div>
+
+            {/* Line Items */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-muted-foreground">Line Items</label>
+                <button type="button" onClick={() => setLineItems((p) => [...p, { description: "", quantity: 1, rate: 0, total: 0 }])} className="text-xs text-accent hover:underline">+ Add line</button>
+              </div>
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_64px_88px_88px_28px] gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                  <span>Description</span><span>Qty</span><span>Rate ($)</span><span>Total</span><span />
+                </div>
+                {lineItems.map((item, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_64px_88px_88px_28px] gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Service description"
+                      value={item.description}
+                      onChange={(e) => updateLine(i, "description", e.target.value)}
+                      className="rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none"
+                      style={{ borderColor: "var(--border)" }}
+                    />
+                    <input
+                      type="number" min="1" step="1"
+                      value={item.quantity}
+                      onChange={(e) => updateLine(i, "quantity", e.target.value)}
+                      className="rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none text-center"
+                      style={{ borderColor: "var(--border)" }}
+                    />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={item.rate}
+                      onChange={(e) => updateLine(i, "rate", e.target.value)}
+                      className="rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none text-right"
+                      style={{ borderColor: "var(--border)" }}
+                    />
+                    <p className="text-sm font-semibold text-foreground text-right pr-1">${item.total.toFixed(2)}</p>
+                    <button
+                      type="button"
+                      onClick={() => setLineItems((p) => p.filter((_, idx) => idx !== i))}
+                      disabled={lineItems.length === 1}
+                      className="p-1 rounded text-muted-foreground hover:text-red-400 disabled:opacity-30"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tax + Totals */}
+            <div className="flex items-end justify-between gap-4">
+              <div className="w-36">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tax Rate (%)</label>
+                <input
+                  type="number" min="0" max="100" step="0.1"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+              <div className="text-right space-y-1">
+                <p className="text-xs text-muted-foreground">Subtotal: <span className="text-foreground font-semibold">${subtotal.toFixed(2)}</span></p>
+                {taxRate > 0 && <p className="text-xs text-muted-foreground">Tax ({taxRate}%): <span className="text-foreground font-semibold">${tax.toFixed(2)}</span></p>}
+                <p className="text-sm font-bold text-foreground">Total: ${total.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes (optional)</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="Payment instructions, discounts, etc."
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none resize-none"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+          </div>
+
+          <div className="px-6 py-4 border-t flex justify-end gap-2" style={{ borderColor: "var(--border)" }}>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold border" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+              {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Invoice Row ─────────────────────────────────────────────────────────────
 
-function InvoiceRow({ invoice, onUpdate }: { invoice: Invoice; onUpdate: (id: string, status: string) => void }) {
+function InvoiceRow({ invoice: initialInvoice, onUpdate }: { invoice: Invoice; onUpdate: (id: string, status: string) => void }) {
+  const [invoice, setInvoice] = useState(initialInvoice);
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentOk, setSentOk] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const cfg = STATUS_CONFIG[invoice.status] ?? STATUS_CONFIG.DRAFT;
   const StatusIcon = cfg.icon;
@@ -454,10 +632,27 @@ function InvoiceRow({ invoice, onUpdate }: { invoice: Invoice; onUpdate: (id: st
                   {sending ? "Sending…" : sentOk ? "Sent!" : canSend ? "Send Invoice" : "Resend"}
                 </button>
               )}
+              {invoice.status === "DRAFT" && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  Edit
+                </button>
+              )}
               {sendError && <p className="text-xs text-destructive">{sendError}</p>}
             </div>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <EditModal
+          invoice={invoice}
+          onClose={() => setEditing(false)}
+          onSaved={(updated) => { setInvoice(updated); setEditing(false); }}
+        />
       )}
     </div>
   );
