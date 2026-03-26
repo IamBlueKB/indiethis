@@ -5,7 +5,7 @@ import {
   Calendar, Clock, CheckCircle2, XCircle, AlertCircle, DollarSign,
   X, Pencil, Check, Loader2, User, StickyNote, Send, Mail, Phone,
   FileText, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Plus, MessageSquare,
-  Music2, ExternalLink, Youtube, Download,
+  Music2, ExternalLink, Youtube, Download, RotateCcw,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
@@ -1146,6 +1146,12 @@ export default function StudioBookingsPage() {
                         Cancel
                       </button>
                     )}
+                    {s.status === "CANCELLED" && (
+                      <button onClick={() => updateIntakeStatus(s.id, "PENDING")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-yellow-400/10 text-yellow-400 hover:bg-yellow-400/20 transition-colors">
+                        Restore
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1276,6 +1282,13 @@ export default function StudioBookingsPage() {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
                       style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#f87171" }}>
                       <X size={12} /> Cancel
+                    </button>
+                  )}
+                  {selectedIntake.status === "CANCELLED" && (
+                    <button onClick={() => updateIntakeStatus(selectedIntake.id, "PENDING")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                      style={{ borderColor: "#D4A843", color: "#D4A843" }}>
+                      <RotateCcw size={12} /> Restore
                     </button>
                   )}
                 </div>
