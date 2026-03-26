@@ -1005,6 +1005,18 @@ export default function StudioBookingsPage() {
                     >
                       Reply
                     </a>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Delete this booking request?")) return;
+                        await fetch(`/api/studio/booking-requests/${r.id}`, { method: "DELETE" });
+                        setRequests((prev) => prev.filter((x) => x.id !== r.id));
+                      }}
+                      className="p-1.5 rounded-lg border text-red-400 hover:bg-red-400/10 transition-colors"
+                      style={{ borderColor: "var(--border)" }}
+                      title="Delete request"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               </div>
