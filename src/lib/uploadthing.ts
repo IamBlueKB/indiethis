@@ -82,7 +82,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
-      return { url: file.url };
+      return { url: file.ufsUrl ?? file.url };
     }),
 
   // Quick send: any file type, up to 10 files, 512MB each

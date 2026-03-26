@@ -1408,6 +1408,72 @@ export async function sendReEngagement30DayEmail(
   });
 }
 
+// ─── Intake Status Notifications ─────────────────────────────────────────────
+
+export async function sendIntakeConfirmedEmail(params: {
+  email: string;
+  name: string;
+  studioName: string;
+  sessionDate?: string | null;
+  sessionTime?: string | null;
+  endTime?: string | null;
+}): Promise<void> {
+  const dateInfo = params.sessionDate
+    ? `<p style="margin:0 0 8px;font-size:14px;"><strong>Date:</strong> ${params.sessionDate}${params.sessionTime ? ` at ${params.sessionTime}` : ""}${params.endTime ? ` – ${params.endTime}` : ""}</p>`
+    : "";
+  await sendEmail({
+    to: { email: params.email, name: params.name },
+    subject: `Your session is confirmed — ${params.studioName}`,
+    htmlContent: `
+      <div style="font-family:sans-serif;background:#0A0A0A;color:#e0e0e0;padding:40px 24px;max-width:520px;margin:auto;border-radius:12px;">
+        <h2 style="color:#D4A843;margin:0 0 16px;">Session Confirmed ✓</h2>
+        <p style="margin:0 0 16px;">Hi ${params.name}, your session at <strong>${params.studioName}</strong> has been confirmed.</p>
+        ${dateInfo}
+        <p style="margin:16px 0 0;font-size:13px;color:#888;">Reply to this email if you have any questions.</p>
+      </div>`,
+    replyTo: { email: FROM_EMAIL(), name: FROM_NAME() },
+    tags: ["intake", "confirmed"],
+  });
+}
+
+export async function sendIntakeCompletedEmail(params: {
+  email: string;
+  name: string;
+  studioName: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.email, name: params.name },
+    subject: `Session completed — ${params.studioName}`,
+    htmlContent: `
+      <div style="font-family:sans-serif;background:#0A0A0A;color:#e0e0e0;padding:40px 24px;max-width:520px;margin:auto;border-radius:12px;">
+        <h2 style="color:#D4A843;margin:0 0 16px;">Session Completed</h2>
+        <p style="margin:0 0 16px;">Hi ${params.name}, your session at <strong>${params.studioName}</strong> has been marked as completed. Thanks for coming in!</p>
+        <p style="margin:0;font-size:13px;color:#888;">Reply to this email if you have any questions.</p>
+      </div>`,
+    replyTo: { email: FROM_EMAIL(), name: FROM_NAME() },
+    tags: ["intake", "completed"],
+  });
+}
+
+export async function sendIntakeCancelledEmail(params: {
+  email: string;
+  name: string;
+  studioName: string;
+}): Promise<void> {
+  await sendEmail({
+    to: { email: params.email, name: params.name },
+    subject: `Session cancelled — ${params.studioName}`,
+    htmlContent: `
+      <div style="font-family:sans-serif;background:#0A0A0A;color:#e0e0e0;padding:40px 24px;max-width:520px;margin:auto;border-radius:12px;">
+        <h2 style="color:#e05252;margin:0 0 16px;">Session Cancelled</h2>
+        <p style="margin:0 0 16px;">Hi ${params.name}, your session at <strong>${params.studioName}</strong> has been cancelled.</p>
+        <p style="margin:0;font-size:13px;color:#888;">If you'd like to reschedule, please reach out to the studio directly.</p>
+      </div>`,
+    replyTo: { email: FROM_EMAIL(), name: FROM_NAME() },
+    tags: ["intake", "cancelled"],
+  });
+}
+
 // 45-day inactive — churn prevention (subscription renewal warning)
 export async function sendReEngagement45DayEmail(
   user:         { email: string; name: string },

@@ -172,7 +172,10 @@ export default function IntakeFormPage() {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     const result = await uploadFiles(files);
-    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => ({ name: f.name, url: f.ufsUrl ?? f.url }))]);
+    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => {
+      const url = (f as any).serverData?.url ?? f.ufsUrl ?? (f as any).url ?? "";
+      return { name: f.name, url };
+    })]);
     e.target.value = "";
   }
 
@@ -183,7 +186,7 @@ export default function IntakeFormPage() {
     try {
       const result = await uploadPhoto([file]);
       if (result?.[0]) {
-        const url = result[0].ufsUrl ?? result[0].url ?? (result[0] as any).serverData?.url;
+        const url = (result[0] as any).serverData?.url ?? result[0].ufsUrl ?? (result[0] as any).url ?? "";
         if (url) { setPhotoUrl(url); setPhotoName(result[0].name); }
         else setPhotoError("Upload succeeded but URL was missing. Try again.");
       }
@@ -484,8 +487,10 @@ export default function IntakeFormPage() {
               className="rounded-xl border border-dashed p-6 flex flex-col items-center gap-2 cursor-pointer transition-colors"
               style={{ borderColor: dragging ? "#D4A843" : "var(--border)", backgroundColor: dragging ? "#D4A84310" : "transparent" }}
             >
-              {filesUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : <Upload size={22} className="text-muted-foreground" />}
-              <p className="text-sm font-medium text-muted-foreground">{filesUploading ? "Uploading…" : "Drop files here or click to browse"}</p>
+              {filesUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : uploadedFiles.length > 0 ? <CheckCircle2 size={22} className="text-emerald-400" /> : <Upload size={22} className="text-muted-foreground" />}
+              <p className="text-sm font-medium" style={{ color: uploadedFiles.length > 0 && !filesUploading ? "var(--color-emerald-400, #34d399)" : "var(--muted-foreground)" }}>
+                {filesUploading ? "Uploading…" : uploadedFiles.length > 0 ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? "s" : ""} added — drop more or click to add` : "Drop files here or click to browse"}
+              </p>
               <p className="text-[10px] text-muted-foreground">MP3 · WAV · FLAC · PDF · up to 128 MB each</p>
             </div>
             <input ref={fileInputRef} type="file" multiple accept="audio/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" className="hidden" onChange={handleFileSelect} />
@@ -643,6 +648,13 @@ export default function IntakeFormPage() {
             <a href="https://instagram.com/indiethisofficial" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs text-foreground hover:border-accent transition-colors"
               style={{ borderColor: "var(--border)" }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <defs><linearGradient id="ig-ft" x1="0" y1="20" x2="20" y2="0"><stop offset="0%" stopColor="#f09433"/><stop offset="40%" stopColor="#dc2743"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs>
+                <rect width="20" height="20" rx="5" fill="url(#ig-ft)"/>
+                <rect x="5.5" y="5.5" width="9" height="9" rx="2" stroke="white" strokeWidth="1.4" fill="none"/>
+                <circle cx="10" cy="10" r="2.3" stroke="white" strokeWidth="1.4" fill="none"/>
+                <circle cx="14" cy="6" r="1" fill="white"/>
+              </svg>
               @indiethisofficial <ExternalLink size={10} className="text-muted-foreground" />
             </a>
           </div>

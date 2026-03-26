@@ -973,6 +973,7 @@ model IntakeSubmission {
   depositAmount         Float?
   aiVideoRequested      Boolean  @default(false)
   convertedToBookingId  String?
+  status                String   @default("PENDING") // PENDING | CONFIRMED | COMPLETED | CANCELLED
   createdAt             DateTime @default(now())
 
   intakeLink  IntakeLink @relation(fields: [intakeLinkId], references: [id])

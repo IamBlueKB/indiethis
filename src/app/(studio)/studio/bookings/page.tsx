@@ -157,6 +157,7 @@ function SendIntakeModal({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</label>
                 <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
                   className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                   style={{ borderColor: "var(--border)" }} />
               </div>
@@ -164,12 +165,14 @@ function SendIntakeModal({
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start Time</label>
                   <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)}
+                    min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                     style={{ borderColor: "var(--border)" }} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">End Time</label>
                   <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                    min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                     style={{ borderColor: "var(--border)" }} />
                 </div>
@@ -721,9 +724,20 @@ type BookingRequest = {
   createdAt: string;
 };
 
+type IntakeSubmissionItem = {
+  id: string;
+  artistName: string;
+  genre: string | null;
+  status: string;
+  createdAt: string;
+  contact: { name: string; email: string; phone: string | null } | null;
+  intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null } | null;
+};
+
 export default function StudioBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [requests, setRequests] = useState<BookingRequest[]>([]);
+  const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmissionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<Booking | null>(null);
@@ -733,7 +747,7 @@ export default function StudioBookingsPage() {
   useEffect(() => {
     fetch("/api/studio/bookings")
       .then((r) => r.json())
-      .then((d) => { setBookings(d.bookings ?? []); setRequests(d.requests ?? []); setLoading(false); });
+      .then((d) => { setBookings(d.bookings ?? []); setRequests(d.requests ?? []); setIntakeSubmissions(d.intakeSubmissions ?? []); setLoading(false); });
   }, []);
 
   const handleUpdate = useCallback((id: string, patch: Partial<Booking>) => {
@@ -815,6 +829,92 @@ export default function StudioBookingsPage() {
                     >
                       Reply
                     </a>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Intake Submissions — pending confirmation */}
+      {intakeSubmissions.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
+            <FileText size={14} className="text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Intake Submitted ({intakeSubmissions.length})
+            </span>
+          </div>
+          {intakeSubmissions.map((s) => {
+            const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+              PENDING:   { label: "Pending",   color: "text-yellow-400",  bg: "bg-yellow-400/15" },
+              CONFIRMED: { label: "Confirmed", color: "text-emerald-400", bg: "bg-emerald-400/15" },
+              COMPLETED: { label: "Completed", color: "text-blue-400",    bg: "bg-blue-400/15" },
+            };
+            const sc = statusConfig[s.status] ?? statusConfig.PENDING;
+
+            const updateStatus = async (newStatus: string) => {
+              const res = await fetch(`/api/studio/intake-submissions/${s.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+              });
+              if (res.ok) {
+                if (newStatus === "CANCELLED") {
+                  setIntakeSubmissions((prev) => prev.filter((x) => x.id !== s.id));
+                } else {
+                  setIntakeSubmissions((prev) => prev.map((x) => x.id === s.id ? { ...x, status: newStatus } : x));
+                }
+              }
+            };
+
+            return (
+              <div key={s.id} className="px-5 py-4 border-b last:border-b-0 flex items-start justify-between gap-4" style={{ borderColor: "var(--border)" }}>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {s.contact?.email ?? "—"}{s.contact?.phone ? ` · ${s.contact.phone}` : ""}
+                  </p>
+                  {s.intakeLink?.sessionDate && (
+                    <p className="text-xs text-muted-foreground">
+                      📅 {new Date(s.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {s.intakeLink.sessionTime ? ` at ${s.intakeLink.sessionTime}` : ""}
+                      {s.intakeLink.endTime ? ` – ${s.intakeLink.endTime}` : ""}
+                    </p>
+                  )}
+                  {s.genre && <p className="text-xs text-muted-foreground">{s.genre}</p>}
+                </div>
+                <div className="shrink-0 text-right space-y-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                  <div className="flex flex-col gap-1 items-end">
+                    {s.status === "PENDING" && (
+                      <button
+                        onClick={() => updateStatus("CONFIRMED")}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-400/15 text-emerald-400 hover:bg-emerald-400/25 transition-colors"
+                      >
+                        Confirm
+                      </button>
+                    )}
+                    {(s.status === "PENDING" || s.status === "CONFIRMED") && (
+                      <button
+                        onClick={() => updateStatus("COMPLETED")}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-400/15 text-blue-400 hover:bg-blue-400/25 transition-colors"
+                      >
+                        Complete
+                      </button>
+                    )}
+                    <button
+                      onClick={() => updateStatus("CANCELLED")}
+                      className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               </div>

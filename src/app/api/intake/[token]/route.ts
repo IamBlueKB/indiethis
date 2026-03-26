@@ -186,6 +186,14 @@ export async function POST(
     },
   });
 
+  // Remove matching booking request now that intake has been submitted
+  const matchEmail = link.email || contactEmail;
+  if (matchEmail) {
+    await db.contactSubmission.deleteMany({
+      where: { studioId: link.studioId, email: matchEmail, source: "BOOKING_REQUEST" },
+    }).catch(() => {});
+  }
+
   // Log activity
   if (contactId) {
     await db.activityLog.create({

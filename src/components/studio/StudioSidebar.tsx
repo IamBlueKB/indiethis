@@ -59,11 +59,23 @@ export default function StudioSidebar() {
   const pathname = usePathname();
   const { user } = useUserStore();
   const [studioSlug, setStudioSlug] = useState<string | null>(null);
+  const [pendingBookingsCount, setPendingBookingsCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/studio/my-slug")
       .then((r) => r.json())
       .then((d) => setStudioSlug(d.slug ?? null))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/studio/bookings")
+      .then((r) => r.json())
+      .then((d) => {
+        const requests = (d.requests ?? []).length;
+        const intakes = (d.intakeSubmissions ?? []).filter((s: { status: string }) => s.status === "PENDING").length;
+        setPendingBookingsCount(requests + intakes);
+      })
       .catch(() => {});
   }, []);
 
@@ -91,6 +103,7 @@ export default function StudioSidebar() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          const badge = item.href === "/studio/bookings" && pendingBookingsCount > 0 ? pendingBookingsCount : null;
           return (
             <Link
               key={item.href}
@@ -103,7 +116,12 @@ export default function StudioSidebar() {
               )}
             >
               <Icon size={17} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {badge && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                  {badge}
+                </span>
+              )}
             </Link>
           );
         })}

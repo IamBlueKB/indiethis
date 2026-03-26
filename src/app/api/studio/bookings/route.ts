@@ -11,7 +11,7 @@ export async function GET() {
   const studio = await db.studio.findFirst({ where: { ownerId: session.user.id } });
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
-  const [bookings, requests] = await Promise.all([
+  const [bookings, requests, intakeSubmissions] = await Promise.all([
     db.bookingSession.findMany({
       where: { studioId: studio.id },
       orderBy: { dateTime: "desc" },
@@ -24,7 +24,16 @@ export async function GET() {
       where: { studioId: studio.id, source: "BOOKING_REQUEST" },
       orderBy: { createdAt: "desc" },
     }),
+    db.intakeSubmission.findMany({
+      where: { studioId: studio.id, status: { not: "CANCELLED" } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        contact: { select: { name: true, email: true, phone: true } },
+        intakeLink: { select: { sessionDate: true, sessionTime: true, endTime: true } },
+      },
+    }),
   ]);
 
-  return NextResponse.json({ bookings, requests });
+  return NextResponse.json({ bookings, requests, intakeSubmissions });
 }
