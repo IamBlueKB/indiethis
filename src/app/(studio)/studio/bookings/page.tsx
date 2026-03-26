@@ -909,12 +909,19 @@ export default function StudioBookingsPage() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     fetch("/api/studio/bookings")
-      .then((r) => r.json())
-      .then((d) => {
-        setBookings(d.bookings ?? []);
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.bookings) return;
+        setBookings(d.bookings);
         setRequests(d.requests ?? []);
         setIntakeSubmissions(d.intakeSubmissions ?? []);
+        // Keep open drawer in sync with fresh data
+        setSelectedIntake((prev) =>
+          prev ? (d.intakeSubmissions ?? []).find((s: IntakeSubmissionItem) => s.id === prev.id) ?? prev : null
+        );
       })
+      .catch(() => {})
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
 
