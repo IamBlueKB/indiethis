@@ -768,7 +768,7 @@ function TrackAnalysisSection({
   const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
   const analyzedRef                 = useRef(false);
 
-  const hasAudio   = intake.fileUrls?.some((u) => /\.(mp3|wav|flac|aac|ogg|m4a)(\?|$)/i.test(u));
+  const hasAudio   = (intake.fileUrls?.length ?? 0) > 0;
   const hasResults = !!(intake.bpmDetected || intake.keyDetected);
 
   // Auto-analyze when drawer opens if audio exists but no results yet

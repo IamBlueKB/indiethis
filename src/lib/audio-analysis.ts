@@ -230,11 +230,27 @@ export async function detectAudioFeatures(fileUrl: string): Promise<AudioFeature
 
 /**
  * Detect features for the first audio URL in a list.
- * Skips non-audio URLs (images, PDFs, videos) by checking the extension.
+ * Checks Content-Type header first (handles extension-less UploadThing URLs),
+ * then falls back to extension matching.
  */
 export async function detectAudioFeaturesFromUrls(urls: string[]): Promise<AudioFeatures> {
+  if (!urls.length) return { bpm: null, musicalKey: null, energy: null };
+
   const audioExts = /\.(mp3|wav|flac|aac|ogg|m4a|aiff?|wma)(\?|$)/i;
-  const audioUrl  = urls.find((u) => audioExts.test(u));
-  if (!audioUrl) return { bpm: null, musicalKey: null, energy: null };
-  return detectAudioFeatures(audioUrl);
+
+  for (const url of urls) {
+    // Fast path: extension in URL
+    if (audioExts.test(url)) return detectAudioFeatures(url);
+
+    // Slow path: check Content-Type for extension-less CDN URLs (UploadThing v7)
+    try {
+      const head = await fetch(url, { method: "HEAD" });
+      const ct   = head.headers.get("content-type") ?? "";
+      if (ct.startsWith("audio/") || ct === "application/ogg") {
+        return detectAudioFeatures(url);
+      }
+    } catch { /* skip */ }
+  }
+
+  return { bpm: null, musicalKey: null, energy: null };
 }

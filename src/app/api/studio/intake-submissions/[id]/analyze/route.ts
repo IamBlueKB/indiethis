@@ -27,14 +27,11 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const audioExts = /\.(mp3|wav|flac|aac|ogg|m4a|aiff?|wma)(\?|$)/i;
-  const audioUrls = submission.fileUrls.filter((u) => audioExts.test(u));
-
-  if (audioUrls.length === 0) {
-    return NextResponse.json({ error: "No audio files found" }, { status: 400 });
+  if (submission.fileUrls.length === 0) {
+    return NextResponse.json({ error: "No files found" }, { status: 400 });
   }
 
-  const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(audioUrls);
+  const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(submission.fileUrls);
 
   const updated = await db.intakeSubmission.update({
     where: { id },
