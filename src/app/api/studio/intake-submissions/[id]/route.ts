@@ -7,7 +7,7 @@ import {
   sendIntakeCancelledEmail,
 } from "@/lib/brevo/email";
 
-const VALID_STATUSES = ["CONFIRMED", "COMPLETED", "CANCELLED"] as const;
+const VALID_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const;
 type IntakeStatus = (typeof VALID_STATUSES)[number];
 
 export async function PATCH(
