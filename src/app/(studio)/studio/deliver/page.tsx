@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Plus, Send, Download, Clock, CheckCircle2, AlertTriangle, Link2,
   ToggleLeft, ToggleRight, Mail, Eye, X, UploadCloud, FileAudio,
-  FileImage, FileVideo, File as FileIcon, Loader2,
+  FileImage, FileVideo, File as FileIcon, Loader2, Trash2,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
@@ -410,7 +410,9 @@ export default function DeliverPage() {
   const [loading, setLoading]   = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating]     = useState(false);
-  const [copied, setCopied]         = useState<string | null>(null);
+  const [copied, setCopied]               = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting]           = useState<string | null>(null);
   const [studioSettings, setStudioSettings] = useState<StudioSettings | null>(null);
 
   // Form state
@@ -561,6 +563,22 @@ export default function DeliverPage() {
     navigator.clipboard.writeText(`${window.location.origin}/dl/${token}`);
     setCopied(token);
     setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function handleDelete(id: string) {
+    if (confirmDelete !== id) {
+      setConfirmDelete(id);
+      setTimeout(() => setConfirmDelete((prev) => prev === id ? null : prev), 3000);
+      return;
+    }
+    setDeleting(id);
+    setConfirmDelete(null);
+    try {
+      await fetch(`/api/studio/quick-send/${id}`, { method: "DELETE" });
+      setSends((prev) => prev.filter((s) => s.id !== id));
+    } finally {
+      setDeleting(null);
+    }
   }
 
   function getStatus(s: QuickSend) {
@@ -840,13 +858,13 @@ export default function DeliverPage() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
-          className="grid grid-cols-[1fr_100px_120px_auto] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
+          className="grid grid-cols-[1fr_60px_110px_auto] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
           style={{ borderColor: "var(--border)" }}
         >
           <span>Recipient</span>
-          <span>Files</span>
+          <span className="text-center">Files</span>
           <span>Status</span>
-          <span>Actions</span>
+          <span className="text-right pr-1">Actions</span>
         </div>
 
         {loading ? (
@@ -865,12 +883,13 @@ export default function DeliverPage() {
             return (
               <div
                 key={s.id}
-                className="grid grid-cols-[1fr_100px_120px_auto] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors"
+                className="grid grid-cols-[1fr_60px_110px_auto] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors"
                 style={{ borderColor: "var(--border)" }}
               >
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{s.recipientEmail}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                {/* Recipient */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{s.recipientEmail}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <p className="text-xs text-muted-foreground">
                       {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       {!isExpired && ` · expires ${expires.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
@@ -887,30 +906,52 @@ export default function DeliverPage() {
                     )}
                   </div>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {s.fileUrls.length} file{s.fileUrls.length !== 1 ? "s" : ""}
+
+                {/* Files */}
+                <span className="text-sm text-muted-foreground text-center">
+                  {s.fileUrls.length}
                 </span>
-                <div className={`flex items-center gap-1.5 text-sm font-semibold ${st.color}`}>
-                  <StatusIcon size={13} />
+
+                {/* Status */}
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${st.color}`}>
+                  <StatusIcon size={12} className="shrink-0" />
                   {st.label}
                 </div>
-                <div className="flex items-center gap-1">
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 justify-end">
                   <button
                     onClick={() => copyLink(s.token)}
                     title="Copy download link"
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                   >
-                    <Link2 size={13} />
-                    {copied === s.token ? "Copied!" : "Copy Link"}
+                    <Link2 size={12} />
+                    {copied === s.token ? "Copied!" : "Link"}
                   </button>
                   <a
                     href={`/dl/${s.token}`}
                     target="_blank"
-                    title="Preview download page"
+                    title="Open download page"
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                   >
-                    <Download size={14} />
+                    <Eye size={14} />
                   </a>
+                  <button
+                    onClick={() => handleDelete(s.id)}
+                    disabled={deleting === s.id}
+                    title={confirmDelete === s.id ? "Click again to confirm" : "Delete"}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40"
+                    style={{
+                      color: confirmDelete === s.id ? "#ef4444" : "var(--muted-foreground)",
+                      backgroundColor: confirmDelete === s.id ? "rgba(239,68,68,0.08)" : "transparent",
+                    }}
+                  >
+                    {deleting === s.id
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Trash2 size={13} />
+                    }
+                    {confirmDelete === s.id && <span>Delete?</span>}
+                  </button>
                 </div>
               </div>
             );
