@@ -764,6 +764,7 @@ function TrackAnalysisSection({
   const [bpmVal, setBpmVal]   = useState(intake.bpmDetected?.toString() ?? "");
   const [keyVal, setKeyVal]   = useState(intake.keyDetected ?? "");
   const [saving, setSaving]   = useState(false);
+  const hasFiles              = (intake.fileUrls?.length ?? 0) > 0;
 
   // Sync edit fields when parent values update
   useEffect(() => {
@@ -842,7 +843,7 @@ function TrackAnalysisSection({
             </p>
           </div>
         </div>
-        {!intake.bpmDetected && !intake.keyDetected && (intake.fileUrls?.length ?? 0) > 0 && (
+        {!intake.bpmDetected && !intake.keyDetected && hasFiles && (
           <p className="text-[10px] text-muted-foreground mt-1">Auto-detected on new submissions — use Edit to enter manually</p>
         )}
       )}
