@@ -41,6 +41,8 @@ export async function GET() {
         youtubeLinks: true,
         fileUrls: true,
         photoUrl: true,
+        bpmDetected: true,
+        keyDetected: true,
         status: true,
         createdAt: true,
         contact: { select: { name: true, email: true, phone: true } },

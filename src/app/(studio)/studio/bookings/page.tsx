@@ -745,6 +745,8 @@ type IntakeSubmissionItem = {
   youtubeLinks: string[];
   fileUrls: string[];
   photoUrl: string | null;
+  bpmDetected: number | null;
+  keyDetected: string | null;
   status: string;
   createdAt: string;
   contact: { name: string; email: string; phone: string | null } | null;
@@ -1181,24 +1183,60 @@ export default function StudioBookingsPage() {
                 </div>
               )}
 
+              {/* Artist photo */}
+              {selectedIntake.photoUrl && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Artist Photo</p>
+                  <div className="relative rounded-xl overflow-hidden" style={{ maxHeight: 220 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedIntake.photoUrl} alt="Artist" className="w-full object-cover rounded-xl" style={{ maxHeight: 220 }} />
+                    <a href={selectedIntake.photoUrl} target="_blank" rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                      style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>
+                      <ExternalLink size={10} /> View full
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Uploaded files */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Uploaded Files</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Uploaded Files</p>
+                  {(selectedIntake.bpmDetected || selectedIntake.keyDetected) && (
+                    <div className="flex items-center gap-2">
+                      {selectedIntake.bpmDetected && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                          {selectedIntake.bpmDetected} BPM
+                        </span>
+                      )}
+                      {selectedIntake.keyDetected && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(96,165,250,0.15)", color: "#60a5fa" }}>
+                          {selectedIntake.keyDetected}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {(selectedIntake.fileUrls ?? []).filter(Boolean).length === 0 ? (
                   <p className="text-xs text-muted-foreground opacity-50">No files submitted.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {selectedIntake.fileUrls.filter(Boolean).map((url, i) => {
-                      const raw = url.split("/").pop() ?? "";
+                      const raw = url.split("?")[0].split("/").pop() ?? "";
                       const name = raw ? decodeURIComponent(raw) : `File ${i + 1}`;
+                      const isAudio = /\.(mp3|wav|flac|aac|m4a|ogg)$/i.test(name);
                       return (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-white/5 transition-colors"
+                          className="flex items-center gap-2 rounded-xl border px-3 py-2.5 hover:bg-white/5 transition-colors"
                           style={{ borderColor: "var(--border)" }}
                           onClick={(e) => e.stopPropagation()}>
-                          <Music2 size={13} className="text-accent shrink-0" />
-                          <span className="text-xs text-foreground truncate">{name}</span>
-                          <ExternalLink size={11} className="text-muted-foreground shrink-0 ml-auto" />
+                          <Music2 size={13} className={isAudio ? "text-accent shrink-0" : "text-muted-foreground shrink-0"} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-foreground truncate">{name}</p>
+                          </div>
+                          <ExternalLink size={11} className="text-muted-foreground shrink-0" />
                         </a>
                       );
                     })}
