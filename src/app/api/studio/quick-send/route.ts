@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { scheduleFollowUpSequence } from "@/lib/email-sequence";
+import { sendQuickSendEmail } from "@/lib/brevo/email";
 
 const APP_URL = () => process.env.NEXTAUTH_URL ?? "https://indiethis.com";
 
@@ -100,6 +101,16 @@ export async function POST(req: NextRequest) {
   }
 
   const downloadUrl = `${APP_URL()}/dl/${token}`;
+
+  // Send delivery email to recipient
+  sendQuickSendEmail({
+    recipientEmail: quickSend.recipientEmail,
+    senderName:     quickSend.senderName,
+    message:        quickSend.message ?? undefined,
+    downloadUrl,
+    fileCount:      fileUrls.length,
+  }).catch(() => {});
+
   return NextResponse.json({ send: quickSend, downloadUrl }, { status: 201 });
 }
 

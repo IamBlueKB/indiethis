@@ -326,7 +326,7 @@ export async function sendQuickSendEmail(params: {
       <h1>You Have Files Waiting</h1>
       <p>${params.senderName} has sent you ${params.fileCount} file${params.fileCount === 1 ? "" : "s"}.</p>
       ${params.message ? `<p><em>"${params.message}"</em></p>` : ""}
-      <p><a href="${params.downloadUrl}" style="background:#7B61FF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Download Files</a></p>
+      <p><a href="${params.downloadUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Download Files</a></p>
       <p>Or copy this link:<br><code>${params.downloadUrl}</code></p>
       <p style="color:#888;font-size:12px;">This link expires in 7 days.</p>
     `,
