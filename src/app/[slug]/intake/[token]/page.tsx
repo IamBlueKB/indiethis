@@ -115,6 +115,7 @@ export default function IntakeFormPage() {
   // ── Photo upload ─────────────────────────────────────────────────────────────
   const [photoUrl, setPhotoUrl]       = useState<string | null>(null);
   const [photoName, setPhotoName]     = useState<string | null>(null);
+  const [photoError, setPhotoError]   = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const { startUpload: uploadPhoto, isUploading: photoUploading } = useUploadThing("intakeFiles");
 
@@ -178,8 +179,17 @@ export default function IntakeFormPage() {
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const result = await uploadPhoto([file]);
-    if (result?.[0]) { setPhotoUrl(result[0].ufsUrl ?? result[0].url); setPhotoName(result[0].name); }
+    setPhotoError(null);
+    try {
+      const result = await uploadPhoto([file]);
+      if (result?.[0]) {
+        const url = result[0].ufsUrl ?? result[0].url ?? (result[0] as any).serverData?.url;
+        if (url) { setPhotoUrl(url); setPhotoName(result[0].name); }
+        else setPhotoError("Upload succeeded but URL was missing. Try again.");
+      }
+    } catch {
+      setPhotoError("Upload failed. Please try again.");
+    }
     e.target.value = "";
   }
 
@@ -357,12 +367,30 @@ export default function IntakeFormPage() {
             <h2 className="text-sm font-bold text-foreground">Social Handles <span className="text-muted-foreground font-normal">(optional)</span></h2>
 
             {[
-              { label: "Instagram", value: instagram, set: setInstagram, placeholder: "@yourhandle", icon: "📷" },
-              { label: "TikTok",    value: tiktok,    set: setTiktok,    placeholder: "@yourhandle", icon: "🎵" },
-              { label: "YouTube",   value: youtubeHandle, set: setYoutubeHandle, placeholder: "@channel", icon: "▶️" },
+              { label: "Instagram", value: instagram, set: setInstagram, placeholder: "@yourhandle", icon: (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <defs><linearGradient id="ig-g" x1="0" y1="20" x2="20" y2="0"><stop offset="0%" stopColor="#f09433"/><stop offset="40%" stopColor="#dc2743"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs>
+                  <rect width="20" height="20" rx="5" fill="url(#ig-g)"/>
+                  <rect x="5.5" y="5.5" width="9" height="9" rx="2" stroke="white" strokeWidth="1.4" fill="none"/>
+                  <circle cx="10" cy="10" r="2.3" stroke="white" strokeWidth="1.4" fill="none"/>
+                  <circle cx="14" cy="6" r="1" fill="white"/>
+                </svg>
+              )},
+              { label: "TikTok", value: tiktok, set: setTiktok, placeholder: "@yourhandle", icon: (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <rect width="20" height="20" rx="5" fill="#010101"/>
+                  <path d="M13 4h-1.6v8a1.6 1.6 0 1 1-1.6-1.6V8.8A3.2 3.2 0 1 0 13 12V7.5a4 4 0 0 0 2.2.7V6.6A2.2 2.2 0 0 1 13 4z" fill="white"/>
+                </svg>
+              )},
+              { label: "YouTube", value: youtubeHandle, set: setYoutubeHandle, placeholder: "@channel", icon: (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <rect width="20" height="20" rx="5" fill="#FF0000"/>
+                  <path d="M8 7l5 3-5 3V7z" fill="white"/>
+                </svg>
+              )},
             ].map(({ label, value, set, placeholder, icon }) => (
               <div key={label} className="flex items-center gap-3">
-                <span className="text-base w-7 text-center shrink-0">{icon}</span>
+                <span className="shrink-0">{icon}</span>
                 <input value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder}
                   className={INPUT + " flex-1"} style={{ borderColor: "var(--border)" }} />
               </div>
@@ -391,7 +419,7 @@ export default function IntakeFormPage() {
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Youtube size={14} className="text-red-400" /> Reference Tracks
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Paste YouTube links — thumbnails pull automatically</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Paste YouTube links one at a time — add as many as you want</p>
             </div>
 
             {refPreviews.length > 0 && (
@@ -425,7 +453,7 @@ export default function IntakeFormPage() {
               </div>
             </div>
             {refError && <p className="text-xs text-red-400">{refError}</p>}
-            <p className="text-[10px] text-muted-foreground">Paste one link at a time — auto-adds when recognized</p>
+            <p className="text-[10px] text-muted-foreground">Each link auto-adds when recognized — search on YouTube, copy the URL, paste here</p>
           </section>
 
           {/* ── File Uploads ── */}
@@ -458,9 +486,9 @@ export default function IntakeFormPage() {
             >
               {filesUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : <Upload size={22} className="text-muted-foreground" />}
               <p className="text-sm font-medium text-muted-foreground">{filesUploading ? "Uploading…" : "Drop files here or click to browse"}</p>
-              <p className="text-[10px] text-muted-foreground">Audio · Images · PDF · Video · up to 128 MB each</p>
+              <p className="text-[10px] text-muted-foreground">MP3 · WAV · FLAC · PDF · up to 128 MB each</p>
             </div>
-            <input ref={fileInputRef} type="file" multiple accept="audio/*,image/*,.pdf,video/*" className="hidden" onChange={handleFileSelect} />
+            <input ref={fileInputRef} type="file" multiple accept="audio/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" className="hidden" onChange={handleFileSelect} />
           </section>
 
           {/* ── Photo Upload ── */}
@@ -489,6 +517,7 @@ export default function IntakeFormPage() {
               </button>
             )}
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+            {photoError && <p className="text-xs text-red-400">{photoError}</p>}
 
             {photoUrl ? (
               <button
