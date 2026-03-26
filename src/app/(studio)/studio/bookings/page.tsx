@@ -89,6 +89,15 @@ function SendIntakeModal({
     ? (parseFloat(hourlyRate) * parseFloat(sessionHours))
     : null;
 
+  function autoEndTime(start: string, hrs: string) {
+    if (!start || !hrs || isNaN(parseFloat(hrs))) return;
+    const [h, m] = start.split(":").map(Number);
+    const totalMins = h * 60 + m + Math.round(parseFloat(hrs) * 60);
+    const endH = Math.floor(totalMins / 60) % 24;
+    const endM = totalMins % 60;
+    setEndTime(`${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`);
+  }
+
   async function handleSend() {
     if (!email.trim() && !phone.trim()) {
       setError("Enter an email or phone number.");
@@ -204,7 +213,7 @@ function SendIntakeModal({
                   <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !sessionTime ? "#D4A843" : "var(--muted-foreground)" }}>
                     Start Time *
                   </label>
-                  <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)}
+                  <input type="time" value={sessionTime} onChange={(e) => { setSessionTime(e.target.value); autoEndTime(e.target.value, sessionHours); }}
                     min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                     style={{ borderColor: !sessionTime ? "#D4A843" : "var(--border)" }} />
@@ -245,7 +254,7 @@ function SendIntakeModal({
                   <input
                     type="number" min="0" step="0.5"
                     value={sessionHours}
-                    onChange={(e) => setSessionHours(e.target.value)}
+                    onChange={(e) => { setSessionHours(e.target.value); autoEndTime(sessionTime, e.target.value); }}
                     placeholder="2"
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                     style={{ borderColor: "var(--border)" }}
