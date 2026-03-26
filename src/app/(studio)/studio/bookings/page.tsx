@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Calendar, Clock, CheckCircle2, XCircle, AlertCircle, DollarSign,
   X, Pencil, Check, Loader2, User, StickyNote, Send, Mail, Phone,
@@ -760,14 +760,27 @@ function TrackAnalysisSection({
   intake: IntakeSubmissionItem;
   onSave: (bpm: number | null, key: string | null) => void;
 }) {
-  const [editing, setEditing]     = useState(false);
-  const [bpmVal, setBpmVal]       = useState(intake.bpmDetected?.toString() ?? "");
-  const [keyVal, setKeyVal]       = useState(intake.keyDetected ?? "");
-  const [saving, setSaving]       = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [editing, setEditing]       = useState(false);
+  const [bpmVal, setBpmVal]         = useState(intake.bpmDetected?.toString() ?? "");
+  const [keyVal, setKeyVal]         = useState(intake.keyDetected ?? "");
+  const [saving, setSaving]         = useState(false);
+  const [analyzing, setAnalyzing]   = useState(false);
   const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
+  const analyzedRef                 = useRef(false);
 
-  // Sync edit fields whenever analysis or manual save updates the parent values
+  const hasAudio   = intake.fileUrls?.some((u) => /\.(mp3|wav|flac|aac|ogg|m4a)(\?|$)/i.test(u));
+  const hasResults = !!(intake.bpmDetected || intake.keyDetected);
+
+  // Auto-analyze when drawer opens if audio exists but no results yet
+  useEffect(() => {
+    if (hasAudio && !hasResults && !analyzedRef.current) {
+      analyzedRef.current = true;
+      runAnalyze();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync edit fields when parent values change (after auto-analyze completes)
   useEffect(() => {
     if (!editing) {
       setBpmVal(intake.bpmDetected?.toString() ?? "");
@@ -775,10 +788,7 @@ function TrackAnalysisSection({
     }
   }, [intake.bpmDetected, intake.keyDetected, editing]);
 
-  const hasAudio = intake.fileUrls?.some((u) => /\.(mp3|wav|flac|aac|ogg|m4a)(\?|$)/i.test(u));
-  const hasResults = intake.bpmDetected || intake.keyDetected;
-
-  async function handleAnalyze() {
+  async function runAnalyze() {
     setAnalyzing(true);
     setAnalyzeErr(null);
     try {
@@ -794,6 +804,8 @@ function TrackAnalysisSection({
     }
     setAnalyzing(false);
   }
+
+  function handleAnalyze() { analyzedRef.current = true; runAnalyze(); }
 
   async function handleSave() {
     setSaving(true);
@@ -864,15 +876,23 @@ function TrackAnalysisSection({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
-            <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
-              {intake.bpmDetected ?? "—"}
-            </p>
+            {analyzing ? (
+              <Loader2 size={14} className="animate-spin text-accent" />
+            ) : (
+              <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
+                {intake.bpmDetected ?? "—"}
+              </p>
+            )}
           </div>
           <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
-            <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
-              {intake.keyDetected ?? "—"}
-            </p>
+            {analyzing ? (
+              <Loader2 size={14} className="animate-spin text-accent" />
+            ) : (
+              <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
+                {intake.keyDetected ?? "—"}
+              </p>
+            )}
           </div>
         </div>
       )}
