@@ -940,12 +940,14 @@ model IntakeLink {
   name        String?
   email       String?
   phone       String?
-  sessionDate DateTime?
-  sessionTime String?
-  endTime     String?
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime  @default(now())
+  sessionDate  DateTime?
+  sessionTime  String?
+  endTime      String?
+  hourlyRate   Float?
+  sessionHours Float?
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
 
   studio     Studio           @relation(fields: [studioId], references: [id])
   submission IntakeSubmission?

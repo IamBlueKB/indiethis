@@ -28,6 +28,8 @@ type IntakeLinkData = {
   sessionDate: string | null;
   sessionTime: string | null;
   endTime: string | null;
+  hourlyRate: number | null;
+  sessionHours: number | null;
   studio: StudioData;
   expiresAt: string;
   usedAt: string | null;
@@ -346,6 +348,41 @@ export default function IntakeFormPage() {
             </div>
           </div>
         )}
+
+        {/* Pricing banner — only shown if studio set a rate */}
+        {link.hourlyRate && link.sessionHours && (() => {
+          const sessionTotal = link.hourlyRate * link.sessionHours;
+          const dep = depositPaid ? (parseFloat(depositAmount) || 0) : 0;
+          const balance = sessionTotal - dep;
+          return (
+            <div className="rounded-2xl border p-4 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Session Cost</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    {link.sessionHours} hr{link.sessionHours !== 1 ? "s" : ""} × ${link.hourlyRate}/hr
+                  </span>
+                  <span className="text-sm font-bold text-foreground">${sessionTotal.toFixed(2)}</span>
+                </div>
+                {dep > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Deposit paid</span>
+                    <span className="text-sm font-semibold text-emerald-400">−${dep.toFixed(2)}</span>
+                  </div>
+                )}
+                {dep > 0 && (
+                  <>
+                    <div className="border-t" style={{ borderColor: "var(--border)" }} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-foreground">Balance Due</span>
+                      <span className="text-base font-bold" style={{ color: "#D4A843" }}>${balance.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         <form onSubmit={handleSubmit} className="space-y-4">
 

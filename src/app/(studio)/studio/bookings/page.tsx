@@ -79,9 +79,15 @@ function SendIntakeModal({
   const [sessionDate, setSessionDate] = useState(defaultDate);
   const [sessionTime, setSessionTime] = useState(defaultTime);
   const [endTime, setEndTime]         = useState(defaultEndTime);
+  const [hourlyRate, setHourlyRate]   = useState("");
+  const [sessionHours, setSessionHours] = useState("");
   const [sending, setSending]         = useState(false);
   const [sent, setSent]               = useState(false);
   const [error, setError]             = useState<string | null>(null);
+
+  const totalCost = hourlyRate && sessionHours
+    ? (parseFloat(hourlyRate) * parseFloat(sessionHours))
+    : null;
 
   async function handleSend() {
     if (!email.trim() && !phone.trim()) {
@@ -115,11 +121,13 @@ function SendIntakeModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim() || undefined,
-          phone: phone.trim() || undefined,
-          sessionDate: sessionDate || undefined,
-          sessionTime: sessionTime || undefined,
-          endTime: endTime || undefined,
+          email:        email.trim() || undefined,
+          phone:        phone.trim() || undefined,
+          sessionDate:  sessionDate || undefined,
+          sessionTime:  sessionTime || undefined,
+          endTime:      endTime || undefined,
+          hourlyRate:   hourlyRate   ? parseFloat(hourlyRate)   : undefined,
+          sessionHours: sessionHours ? parseFloat(sessionHours) : undefined,
         }),
       });
       const data = await res.json();
@@ -211,6 +219,44 @@ function SendIntakeModal({
                     style={{ borderColor: !endTime ? "#D4A843" : "var(--border)" }} />
                 </div>
               </div>
+
+              {/* Pricing (optional) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Rate / hr (optional)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(e.target.value)}
+                      placeholder="100"
+                      className="w-full rounded-xl border pl-6 pr-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                      style={{ borderColor: "var(--border)" }}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Hours (optional)
+                  </label>
+                  <input
+                    type="number" min="0" step="0.5"
+                    value={sessionHours}
+                    onChange={(e) => setSessionHours(e.target.value)}
+                    placeholder="2"
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+              </div>
+              {totalCost !== null && !isNaN(totalCost) && (
+                <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>
+                  Session total: ${totalCost.toFixed(2)} — artist will see this on the form
+                </p>
+              )}
 
               {error && <p className="text-xs text-red-400">{error}</p>}
 
@@ -776,7 +822,7 @@ type IntakeSubmissionItem = {
   status: string;
   createdAt: string;
   contact: { name: string; email: string; phone: string | null } | null;
-  intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null } | null;
+  intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null; hourlyRate: number | null; sessionHours: number | null } | null;
 };
 
 function TrackAnalysisSection({
@@ -1338,16 +1384,53 @@ export default function StudioBookingsPage() {
                 </div>
               )}
 
-              {/* Payment */}
-              {selectedIntake.depositPaid && (
-                <div className="rounded-xl border p-3 space-y-1" style={{ backgroundColor: "rgba(34,197,94,0.07)", borderColor: "rgba(34,197,94,0.2)" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">Deposit Paid</p>
-                  <p className="text-sm font-semibold text-foreground">
-                    {selectedIntake.depositAmount ? `$${selectedIntake.depositAmount}` : "Deposit confirmed"}
-                    {selectedIntake.paymentMethod ? ` via ${selectedIntake.paymentMethod}` : ""}
-                  </p>
-                </div>
-              )}
+              {/* Payment / Pricing */}
+              {(() => {
+                const rate    = selectedIntake.intakeLink?.hourlyRate ?? null;
+                const hrs     = selectedIntake.intakeLink?.sessionHours ?? null;
+                const total   = rate && hrs ? rate * hrs : null;
+                const deposit = selectedIntake.depositPaid ? (selectedIntake.depositAmount ?? 0) : 0;
+                const balance = total !== null ? total - deposit : null;
+                const hasAny  = total !== null || selectedIntake.depositPaid;
+                if (!hasAny) return null;
+                return (
+                  <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: "rgba(212,168,67,0.25)", backgroundColor: "rgba(212,168,67,0.05)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#D4A843" }}>Session Pricing</p>
+                    {total !== null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Total ({hrs} hr{hrs !== 1 ? "s" : ""} × ${rate}/hr)</span>
+                        <span className="text-sm font-semibold text-foreground">${total.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {selectedIntake.depositPaid && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          Deposit paid{selectedIntake.paymentMethod ? ` via ${selectedIntake.paymentMethod}` : ""}
+                        </span>
+                        <span className="text-sm font-semibold text-emerald-400">
+                          −${deposit.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {balance !== null && (
+                      <>
+                        <div className="border-t" style={{ borderColor: "rgba(212,168,67,0.2)" }} />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground">Balance Due</span>
+                          <span className="text-sm font-bold" style={{ color: balance > 0 ? "#D4A843" : "#34C759" }}>
+                            ${balance.toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {!total && selectedIntake.depositPaid && (
+                      <p className="text-xs text-muted-foreground">
+                        Deposit: ${deposit.toFixed(2)}{selectedIntake.paymentMethod ? ` via ${selectedIntake.paymentMethod}` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               {selectedIntake.aiVideoRequested && (
                 <div className="rounded-xl border p-3" style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}>
                   <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#D4A843" }}>AI Music Video Requested</p>

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
   const body = await req.json();
-  const { name, email, phone, contactId, sessionDate, sessionTime, endTime } = body as {
+  const { name, email, phone, contactId, sessionDate, sessionTime, endTime, hourlyRate, sessionHours } = body as {
     name?: string;
     email?: string;
     phone?: string;
@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
     sessionDate?: string;
     sessionTime?: string;
     endTime?: string;
+    hourlyRate?: number;
+    sessionHours?: number;
   };
 
   // At least one contact method is required
@@ -60,9 +62,11 @@ export async function POST(req: NextRequest) {
       name: name?.trim() ?? null,
       email: email?.toLowerCase().trim() ?? null,
       phone: phone?.trim() ?? null,
-      sessionDate: sessionDate ? new Date(sessionDate) : null,
-      sessionTime: sessionTime ?? null,
-      endTime: endTime ?? null,
+      sessionDate:  sessionDate ? new Date(sessionDate) : null,
+      sessionTime:  sessionTime ?? null,
+      endTime:      endTime ?? null,
+      hourlyRate:   hourlyRate   ? Number(hourlyRate)   : null,
+      sessionHours: sessionHours ? Number(sessionHours) : null,
       expiresAt,
     },
   });

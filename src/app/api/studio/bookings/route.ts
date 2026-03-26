@@ -46,7 +46,7 @@ export async function GET() {
         status: true,
         createdAt: true,
         contact: { select: { name: true, email: true, phone: true } },
-        intakeLink: { select: { sessionDate: true, sessionTime: true, endTime: true } },
+        intakeLink: { select: { sessionDate: true, sessionTime: true, endTime: true, hourlyRate: true, sessionHours: true } },
       },
     }),
   ]);

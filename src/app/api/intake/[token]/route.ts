@@ -33,15 +33,17 @@ export async function GET(
   }
 
   return NextResponse.json({
-    name: link.name,
-    email: link.email,
-    phone: link.phone,
-    sessionDate: link.sessionDate,
-    sessionTime: link.sessionTime,
-    endTime: link.endTime,
-    studioName: link.studio.name,
-    studioLogo: link.studio.logo,
-    expiresAt: link.expiresAt,
+    name:         link.name,
+    email:        link.email,
+    phone:        link.phone,
+    sessionDate:  link.sessionDate,
+    sessionTime:  link.sessionTime,
+    endTime:      link.endTime,
+    hourlyRate:   link.hourlyRate,
+    sessionHours: link.sessionHours,
+    studioName:   link.studio.name,
+    studioLogo:   link.studio.logo,
+    expiresAt:    link.expiresAt,
     studio: {
       name: link.studio.name,
       instagram: link.studio.instagram,
@@ -236,6 +238,59 @@ export async function POST(
     void db.contactSubmission.deleteMany({
       where: { studioId: link.studioId, email: contactEmail, source: "BOOKING_REQUEST" },
     }).catch(() => {});
+  }
+
+  // Auto-create a draft invoice if pricing was set on the intake link and we have a contact
+  if (link.hourlyRate && link.sessionHours && contactId) {
+    void (async () => {
+      try {
+        const totalCost = link.hourlyRate! * link.sessionHours!;
+        const deposit   = (depositPaid && depositAmount) ? Number(depositAmount) : 0;
+
+        // Get next invoice number for this studio
+        const lastInvoice = await db.invoice.findFirst({
+          where:   { studioId: link.studioId },
+          orderBy: { invoiceNumber: "desc" },
+          select:  { invoiceNumber: true },
+        });
+        const invoiceNumber = (lastInvoice?.invoiceNumber ?? 0) + 1;
+
+        const lineItems = [
+          {
+            description: `Recording Session — ${link.sessionHours} hr${link.sessionHours !== 1 ? "s" : ""} × $${link.hourlyRate}/hr`,
+            quantity:    link.sessionHours,
+            unitPrice:   link.hourlyRate,
+            total:       totalCost,
+          },
+        ];
+
+        const notesArr: string[] = [];
+        if (deposit > 0) notesArr.push(`Deposit of $${deposit.toFixed(2)} received via ${depositAmount ?? "cash"}.`);
+        if (link.sessionDate) notesArr.push(`Session date: ${new Date(link.sessionDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`);
+
+        const dueDate = link.sessionDate
+          ? new Date(link.sessionDate)
+          : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+        await db.invoice.create({
+          data: {
+            studioId:      link.studioId,
+            contactId:     contactId,
+            invoiceNumber,
+            lineItems,
+            subtotal:      totalCost,
+            tax:           0,
+            taxRate:       0,
+            total:         totalCost,
+            dueDate,
+            status:        "DRAFT",
+            notes:         notesArr.join(" ") || null,
+          },
+        });
+      } catch {
+        // Don't fail the submission if invoice creation fails
+      }
+    })();
   }
 
   return NextResponse.json({ submission }, { status: 201 });
