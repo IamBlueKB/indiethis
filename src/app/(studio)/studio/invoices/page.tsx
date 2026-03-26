@@ -457,7 +457,7 @@ function EditModal({
 
 // ─── Invoice Row ─────────────────────────────────────────────────────────────
 
-function InvoiceRow({ invoice: initialInvoice, onUpdate }: { invoice: Invoice; onUpdate: (id: string, status: string) => void }) {
+function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: Invoice; onUpdate: (id: string, status: string) => void; onDelete: (id: string) => void }) {
   const [invoice, setInvoice] = useState(initialInvoice);
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -465,6 +465,7 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate }: { invoice: Invoice; o
   const [sentOk, setSentOk] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const cfg = STATUS_CONFIG[invoice.status] ?? STATUS_CONFIG.DRAFT;
   const StatusIcon = cfg.icon;
@@ -505,6 +506,15 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate }: { invoice: Invoice; o
     } finally {
       setSending(false);
     }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Delete this draft invoice? This cannot be undone.")) return;
+    setDeleting(true);
+    const res = await fetch(`/api/studio/invoices/${invoice.id}`, { method: "DELETE" });
+    if (res.ok) onDelete(invoice.id);
+    else setDeleting(false);
   }
 
   const canSend = invoice.status === "DRAFT";
@@ -633,13 +643,24 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate }: { invoice: Invoice; o
                 </button>
               )}
               {invoice.status === "DRAFT" && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
-                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                >
-                  Edit
-                </button>
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
+                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border disabled:opacity-50 text-red-400 hover:bg-red-400/10"
+                    style={{ borderColor: "rgba(232,93,74,0.3)" }}
+                  >
+                    {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    Delete
+                  </button>
+                </>
               )}
               {sendError && <p className="text-xs text-destructive">{sendError}</p>}
             </div>
@@ -694,6 +715,10 @@ export default function InvoicesPage() {
           : inv
       )
     );
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setInvoices((p) => p.filter((inv) => inv.id !== id));
   }, []);
 
   const totalDraft  = invoices.filter((i) => i.status === "DRAFT").reduce((s, i) => s + i.total, 0);
@@ -766,7 +791,7 @@ export default function InvoicesPage() {
           </div>
         ) : (
           invoices.map((inv) => (
-            <InvoiceRow key={inv.id} invoice={inv} onUpdate={handleUpdate} />
+            <InvoiceRow key={inv.id} invoice={inv} onUpdate={handleUpdate} onDelete={handleDelete} />
           ))
         )}
       </div>
