@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
-
-export const maxDuration = 60;
 
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
@@ -238,27 +236,6 @@ export async function POST(
     void db.contactSubmission.deleteMany({
       where: { studioId: link.studioId, email: contactEmail, source: "BOOKING_REQUEST" },
     }).catch(() => {});
-  }
-
-  // Analyze all submitted audio files after response is sent
-  const submissionId = submission.id;
-  const uploadedUrls: string[] = fileUrls ?? [];
-  if (uploadedUrls.length > 0) {
-    after(async () => {
-      try {
-        const { detectAudioFeaturesFromUrls } = await import("@/lib/audio-analysis");
-        const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(uploadedUrls);
-        if (bpm !== null || musicalKey !== null) {
-          await db.intakeSubmission.update({
-            where: { id: submissionId },
-            data: {
-              ...(bpm        !== null && { bpmDetected: bpm }),
-              ...(musicalKey !== null && { keyDetected: musicalKey }),
-            },
-          });
-        }
-      } catch { /* silent */ }
-    });
   }
 
   return NextResponse.json({ submission }, { status: 201 });
