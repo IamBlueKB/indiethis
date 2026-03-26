@@ -858,7 +858,7 @@ export default function DeliverPage() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
-          className="grid grid-cols-[1fr_60px_110px_auto] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
+          className="grid grid-cols-[1fr_60px_110px_130px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
           style={{ borderColor: "var(--border)" }}
         >
           <span>Recipient</span>
@@ -883,7 +883,7 @@ export default function DeliverPage() {
             return (
               <div
                 key={s.id}
-                className="grid grid-cols-[1fr_60px_110px_auto] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors"
+                className="grid grid-cols-[1fr_60px_110px_130px] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors"
                 style={{ borderColor: "var(--border)" }}
               >
                 {/* Recipient */}
