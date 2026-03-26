@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Calendar, Users, FolderOpen, DollarSign, ArrowRight } from "lucide-react";
+import { Calendar, Users, FolderOpen, DollarSign, ArrowRight, Inbox } from "lucide-react";
 import Link from "next/link";
 
 export default async function StudioDashboardPage() {
@@ -21,37 +21,92 @@ export default async function StudioDashboardPage() {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [bookingsThisMonth, artistCount, pendingDeliveries, paidInvoicesThisMonth, recentBookings] = await Promise.all([
-    db.bookingSession.count({
-      where: { studioId: studio.id, dateTime: { gte: startOfMonth } },
+  const [
+    intakesThisMonth,
+    totalContacts,
+    bookingRequests,
+    pendingDeliveries,
+    paidInvoicesThisMonth,
+    recentIntakes,
+  ] = await Promise.all([
+    // Intake forms submitted this month = sessions booked
+    db.intakeSubmission.count({
+      where: { studioId: studio.id, createdAt: { gte: startOfMonth } },
     }),
-    db.studioArtist.count({ where: { studioId: studio.id } }),
+    // Total contacts in CRM
+    db.contact.count({
+      where: { studioId: studio.id },
+    }),
+    // Open booking requests (unprocessed)
+    db.contactSubmission.count({
+      where: { studioId: studio.id, source: "BOOKING_REQUEST" },
+    }),
+    // Files sent but not yet downloaded by recipient
     db.quickSend.count({
       where: { studioId: studio.id, downloadedAt: null, expiresAt: { gt: now } },
     }),
+    // Revenue from paid invoices this month
     db.invoice.aggregate({
       where: { studioId: studio.id, status: "PAID", updatedAt: { gte: startOfMonth } },
       _sum: { total: true },
     }),
-    db.bookingSession.findMany({
+    // Recent intake submissions for activity feed
+    db.intakeSubmission.findMany({
       where: { studioId: studio.id },
-      orderBy: { dateTime: "desc" },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      include: { artist: { select: { name: true } } },
+      select: {
+        id: true,
+        artistName: true,
+        status: true,
+        createdAt: true,
+        intakeLink: { select: { sessionDate: true } },
+      },
     }),
   ]);
 
   const revenueThisMonth = paidInvoicesThisMonth._sum.total ?? 0;
 
   const stats = [
-    { label: "Bookings This Month", value: bookingsThisMonth, sub: bookingsThisMonth === 0 ? "No bookings yet" : "sessions scheduled", icon: Calendar, color: "#5AC8FA", href: "/studio/bookings" },
-    { label: "Managed Artists", value: artistCount, sub: artistCount === 0 ? "No artists yet" : "linked accounts", icon: Users, color: "#D4A843", href: "/studio/artists" },
-    { label: "Pending Deliveries", value: pendingDeliveries, sub: pendingDeliveries === 0 ? "All clear" : "awaiting download", icon: FolderOpen, color: "#34C759", href: "/studio/deliver" },
-    { label: "Revenue This Month", value: `$${revenueThisMonth.toFixed(2)}`, sub: "from paid invoices", icon: DollarSign, color: "#D4A843", href: "/studio/payments" },
+    {
+      label: "Sessions This Month",
+      value: intakesThisMonth,
+      sub: intakesThisMonth === 0 ? "No sessions yet" : `intake form${intakesThisMonth !== 1 ? "s" : ""} submitted`,
+      icon: Calendar,
+      color: "#5AC8FA",
+      href: "/studio/bookings",
+    },
+    {
+      label: "Total Contacts",
+      value: totalContacts,
+      sub: totalContacts === 0 ? "No contacts yet" : `client${totalContacts !== 1 ? "s" : ""} in your CRM`,
+      icon: Users,
+      color: "#D4A843",
+      href: "/studio/contacts",
+    },
+    {
+      label: "Booking Requests",
+      value: bookingRequests,
+      sub: bookingRequests === 0 ? "No pending requests" : `awaiting response`,
+      icon: Inbox,
+      color: bookingRequests > 0 ? "#D4A843" : "#34C759",
+      href: "/studio/bookings",
+    },
+    {
+      label: "Revenue This Month",
+      value: `$${revenueThisMonth.toFixed(2)}`,
+      sub: "from paid invoices",
+      icon: DollarSign,
+      color: "#34C759",
+      href: "/studio/payments",
+    },
   ];
 
-  const SESSION_STATUS_COLOR: Record<string, string> = {
-    PENDING: "#D4A843", CONFIRMED: "#5AC8FA", COMPLETED: "#34C759", CANCELLED: "#E85D4A",
+  const STATUS_COLOR: Record<string, string> = {
+    PENDING:   "#D4A843",
+    CONFIRMED: "#5AC8FA",
+    COMPLETED: "#34C759",
+    CANCELLED: "#E85D4A",
   };
 
   return (
@@ -77,8 +132,13 @@ export default async function StudioDashboardPage() {
               style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
             >
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${stat.color}18` }}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight">
+                  {stat.label}
+                </p>
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${stat.color}18` }}
+                >
                   <Icon size={15} style={{ color: stat.color }} strokeWidth={1.75} />
                 </div>
               </div>
@@ -89,28 +149,54 @@ export default async function StudioDashboardPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-[1fr_300px] gap-5">
-        {/* Recent bookings */}
-        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-          <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
-            <p className="text-sm font-semibold text-foreground">Recent Bookings</p>
-            <Link href="/studio/bookings" className="flex items-center gap-1 text-xs text-accent no-underline hover:opacity-80">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
+        {/* Recent intake submissions */}
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-3.5 border-b"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <p className="text-sm font-semibold text-foreground">Recent Sessions</p>
+            <Link
+              href="/studio/bookings"
+              className="flex items-center gap-1 text-xs no-underline hover:opacity-80"
+              style={{ color: "#D4A843" }}
+            >
               View all <ArrowRight size={11} />
             </Link>
           </div>
-          {recentBookings.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">No bookings yet.</p>
+          {recentIntakes.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted-foreground">
+              No sessions yet. Send an intake link to get started.
+            </p>
           ) : (
-            recentBookings.map((b) => (
-              <div key={b.id} className="flex items-center justify-between px-5 py-3.5 border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+            recentIntakes.map((intake) => (
+              <div
+                key={intake.id}
+                className="flex items-center justify-between px-5 py-3.5 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
                 <div>
-                  <p className="text-sm font-medium text-foreground">{b.artist.name}</p>
+                  <p className="text-sm font-medium text-foreground">{intake.artistName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(b.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {intake.intakeLink?.sessionDate
+                      ? new Date(intake.intakeLink.sessionDate).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", year: "numeric",
+                        })
+                      : `Submitted ${new Date(intake.createdAt).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric",
+                        })}`
+                    }
                   </p>
                 </div>
-                <span className="text-xs font-semibold" style={{ color: SESSION_STATUS_COLOR[b.status] ?? "#888" }}>
-                  {b.status}
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: STATUS_COLOR[intake.status] ?? "#888" }}
+                >
+                  {intake.status}
                 </span>
               </div>
             ))
@@ -120,10 +206,10 @@ export default async function StudioDashboardPage() {
         {/* Quick actions */}
         <div className="space-y-3">
           {[
-            { label: "Send Files", sub: "Quick deliver to an artist", href: "/studio/deliver", color: "#34C759" },
-            { label: "New Invoice", sub: "Bill a client", href: "/studio/payments", color: "#D4A843" },
-            { label: "Send Intake Link", sub: "Pre-session form", href: "/studio/quick-send", color: "#5AC8FA" },
-            { label: "Email Blast", sub: "Message all contacts", href: "/studio/email", color: "#D4A843" },
+            { label: "Send Files",       sub: "Quick deliver to an artist",  href: "/studio/deliver",    color: "#34C759" },
+            { label: "New Invoice",       sub: "Bill a client",               href: "/studio/payments",   color: "#D4A843" },
+            { label: "Send Intake Link",  sub: "Pre-session form",            href: "/studio/bookings",   color: "#5AC8FA" },
+            { label: "Email Blast",       sub: "Message all contacts",        href: "/studio/email",      color: "#D4A843" },
           ].map((action) => (
             <Link
               key={action.label}
@@ -140,6 +226,33 @@ export default async function StudioDashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Pending deliveries callout — only show if there are any */}
+      {pendingDeliveries > 0 && (
+        <Link
+          href="/studio/deliver"
+          className="flex items-center justify-between rounded-xl border px-5 py-3.5 no-underline hover:border-accent/40 transition-colors"
+          style={{ backgroundColor: "var(--card)", borderColor: "rgba(212,168,67,0.3)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: "rgba(212,168,67,0.12)" }}
+            >
+              <FolderOpen size={15} style={{ color: "#D4A843" }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {pendingDeliveries} pending deliver{pendingDeliveries !== 1 ? "ies" : "y"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                File{pendingDeliveries !== 1 ? "s" : ""} sent but not yet downloaded
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={14} className="text-muted-foreground" />
+        </Link>
+      )}
     </div>
   );
 }
