@@ -186,14 +186,6 @@ export async function POST(
     },
   });
 
-  // Remove matching booking request now that intake has been submitted
-  const matchEmail = link.email || contactEmail;
-  if (matchEmail) {
-    await db.contactSubmission.deleteMany({
-      where: { studioId: link.studioId, email: matchEmail, source: "BOOKING_REQUEST" },
-    }).catch(() => {});
-  }
-
   // Log activity
   if (contactId) {
     await db.activityLog.create({
@@ -231,6 +223,13 @@ export async function POST(
       title: "New intake form submitted",
       message: `${contactName}${artistName.trim() !== contactName ? ` (${artistName.trim()})` : ""} submitted an intake form`,
       link: "/studio/inbox",
+    }).catch(() => {});
+  }
+
+  // Remove the matching booking request so it disappears from the studio's requests list
+  if (contactEmail) {
+    void db.contactSubmission.deleteMany({
+      where: { studioId: link.studioId, email: contactEmail, source: "BOOKING_REQUEST" },
     }).catch(() => {});
   }
 
