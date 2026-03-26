@@ -5,7 +5,7 @@ import {
   Calendar, Clock, CheckCircle2, XCircle, AlertCircle, DollarSign,
   X, Pencil, Check, Loader2, User, StickyNote, Send, Mail, Phone,
   FileText, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Plus, MessageSquare,
-  Music2, ExternalLink, Youtube,
+  Music2, ExternalLink, Youtube, Download,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
@@ -753,6 +753,20 @@ type IntakeSubmissionItem = {
   intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null } | null;
 };
 
+async function downloadFile(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch {
+    window.open(url, "_blank");
+  }
+}
+
 export default function StudioBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [requests, setRequests] = useState<BookingRequest[]>([]);
@@ -1190,12 +1204,14 @@ export default function StudioBookingsPage() {
                   <div className="relative rounded-xl overflow-hidden" style={{ maxHeight: 220 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={selectedIntake.photoUrl} alt="Artist" className="w-full object-cover rounded-xl" style={{ maxHeight: 220 }} />
-                    <a href={selectedIntake.photoUrl} target="_blank" rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
-                      style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>
-                      <ExternalLink size={10} /> View full
-                    </a>
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); downloadFile(selectedIntake.photoUrl!, `${selectedIntake.artistName}-photo`); }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                        style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#fff" }}>
+                        <Download size={10} /> Download
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1228,16 +1244,17 @@ export default function StudioBookingsPage() {
                       const name = raw ? decodeURIComponent(raw) : `File ${i + 1}`;
                       const isAudio = /\.(mp3|wav|flac|aac|m4a|ogg)$/i.test(name);
                       return (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-2 rounded-xl border px-3 py-2.5 hover:bg-white/5 transition-colors"
-                          style={{ borderColor: "var(--border)" }}
-                          onClick={(e) => e.stopPropagation()}>
+                        <div key={i} className="flex items-center gap-2 rounded-xl border px-3 py-2.5"
+                          style={{ borderColor: "var(--border)" }}>
                           <Music2 size={13} className={isAudio ? "text-accent shrink-0" : "text-muted-foreground shrink-0"} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-foreground truncate">{name}</p>
-                          </div>
-                          <ExternalLink size={11} className="text-muted-foreground shrink-0" />
-                        </a>
+                          <p className="flex-1 text-xs text-foreground truncate min-w-0">{name}</p>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); downloadFile(url, name); }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold shrink-0 hover:bg-white/10 transition-colors"
+                            style={{ color: "var(--muted-foreground)" }}>
+                            <Download size={11} /> Download
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
