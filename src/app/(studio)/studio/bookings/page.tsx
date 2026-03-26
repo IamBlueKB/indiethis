@@ -756,17 +756,27 @@ export default function StudioBookingsPage() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [intakeSubmissions, setIntakeSubmissions] = useState<IntakeSubmissionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<Booking | null>(null);
   const [selectedIntake, setSelectedIntake] = useState<IntakeSubmissionItem | null>(null);
   const [sendIntakeOpen, setSendIntakeOpen] = useState(false);
   const [intakeRequest, setIntakeRequest] = useState<BookingRequest | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     fetch("/api/studio/bookings")
       .then((r) => r.json())
-      .then((d) => { setBookings(d.bookings ?? []); setRequests(d.requests ?? []); setIntakeSubmissions(d.intakeSubmissions ?? []); setLoading(false); });
+      .then((d) => {
+        setBookings(d.bookings ?? []);
+        setRequests(d.requests ?? []);
+        setIntakeSubmissions(d.intakeSubmissions ?? []);
+      })
+      .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleUpdate = useCallback((id: string, patch: Partial<Booking>) => {
     setBookings((prev) => prev.map((b) => b.id === id ? { ...b, ...patch } : b));
@@ -865,6 +875,15 @@ export default function StudioBookingsPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-foreground">Submitted Intake Forms</h2>
+          <button
+            onClick={() => loadData(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <Loader2 size={12} className={refreshing ? "animate-spin" : "hidden"} />
+            {!refreshing && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>}
+            Refresh
+          </button>
         </div>
 
         {/* Filter tabs */}
