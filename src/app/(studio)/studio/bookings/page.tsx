@@ -829,23 +829,25 @@ function TrackAnalysisSection({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
-            <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
-              {intake.bpmDetected ?? "—"}
-            </p>
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">BPM</p>
+              <p className="text-sm font-semibold" style={{ color: intake.bpmDetected ? "#D4A843" : "var(--muted-foreground)" }}>
+                {intake.bpmDetected ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
+              <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
+                {intake.keyDetected ?? "—"}
+              </p>
+            </div>
           </div>
-          <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Key</p>
-            <p className="text-sm font-semibold" style={{ color: intake.keyDetected ? "#60a5fa" : "var(--muted-foreground)" }}>
-              {intake.keyDetected ?? "—"}
-            </p>
-          </div>
-        </div>
-        {!intake.bpmDetected && !intake.keyDetected && hasFiles && (
-          <p className="text-[10px] text-muted-foreground mt-1">Auto-detected on new submissions — use Edit to enter manually</p>
-        )}
+          {!intake.bpmDetected && !intake.keyDetected && hasFiles && (
+            <p className="text-[10px] text-muted-foreground mt-1">Auto-detected on new submissions — use Edit to enter manually</p>
+          )}
+        </>
       )}
     </div>
   );
