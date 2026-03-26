@@ -109,13 +109,37 @@ export default function IntakeFormPage() {
   // ── File uploads ─────────────────────────────────────────────────────────────
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging]           = useState(false);
-  const { startUpload: uploadFiles, isUploading: filesUploading } = useUploadThing("intakeFiles");
+  const [filesError, setFilesError]       = useState<string | null>(null);
+  const { startUpload: uploadFiles, isUploading: filesUploading } = useUploadThing("intakeFiles", {
+    onClientUploadComplete: (res) => {
+      if (res?.length) {
+        setUploadedFiles((p) => [...p, ...res.map((f) => ({
+          name: f.name,
+          url: (f as any).serverData?.url ?? f.ufsUrl ?? (f as any).url ?? "",
+        }))]);
+      }
+    },
+    onUploadError: (err) => {
+      setFilesError(err.message ?? "Upload failed. Try again.");
+    },
+  });
 
   // ── Photo upload ─────────────────────────────────────────────────────────────
   const [photoUrl, setPhotoUrl]       = useState<string | null>(null);
   const [photoName, setPhotoName]     = useState<string | null>(null);
   const [photoError, setPhotoError]   = useState<string | null>(null);
-  const { startUpload: uploadPhoto, isUploading: photoUploading } = useUploadThing("intakeFiles");
+  const { startUpload: uploadPhoto, isUploading: photoUploading } = useUploadThing("intakeFiles", {
+    onClientUploadComplete: (res) => {
+      if (res?.[0]) {
+        const url = (res[0] as any).serverData?.url ?? res[0].ufsUrl ?? (res[0] as any).url ?? "";
+        if (url) { setPhotoUrl(url); setPhotoName(res[0].name); }
+        else setPhotoError("Upload succeeded but no URL returned. Try again.");
+      }
+    },
+    onUploadError: (err) => {
+      setPhotoError(err.message ?? "Photo upload failed. Try again.");
+    },
+  });
 
   // ── AI video upsell ──────────────────────────────────────────────────────────
   const [aiVideoRequested, setAiVideoRequested] = useState(false);
@@ -162,35 +186,23 @@ export default function IntakeFormPage() {
     setDragging(false);
     const files = Array.from(e.dataTransfer.files);
     if (!files.length) return;
-    const result = await uploadFiles(files);
-    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => ({ name: f.name, url: (f as any).serverData?.url ?? f.ufsUrl ?? (f as any).url ?? "" }))]);
+    setFilesError(null);
+    uploadFiles(files);
   }, [uploadFiles]);
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-    const result = await uploadFiles(files);
-    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => {
-      const url = (f as any).serverData?.url ?? f.ufsUrl ?? (f as any).url ?? "";
-      return { name: f.name, url };
-    })]);
+    setFilesError(null);
+    uploadFiles(files);
     e.target.value = "";
   }
 
-  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoError(null);
-    try {
-      const result = await uploadPhoto([file]);
-      if (result?.[0]) {
-        const url = (result[0] as any).serverData?.url ?? result[0].ufsUrl ?? (result[0] as any).url ?? "";
-        if (url) { setPhotoUrl(url); setPhotoName(result[0].name); }
-        else setPhotoError("Upload succeeded but URL was missing. Try again.");
-      }
-    } catch {
-      setPhotoError("Upload failed. Please try again.");
-    }
+    uploadPhoto([file]);
     e.target.value = "";
   }
 
@@ -489,8 +501,9 @@ export default function IntakeFormPage() {
                 {filesUploading ? "Uploading…" : uploadedFiles.length > 0 ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? "s" : ""} added — tap to add more` : "Tap to browse files"}
               </p>
               <p className="text-[10px] text-muted-foreground">MP3 · WAV · FLAC · PDF · up to 128 MB each</p>
-              <input type="file" multiple accept="audio/*,video/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" className="sr-only" onChange={handleFileSelect} disabled={filesUploading} />
+              <input type="file" multiple accept="audio/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" onChange={handleFileSelect} disabled={filesUploading} style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, overflow: "hidden" }} />
             </label>
+            {filesError && <p className="text-xs text-red-400">{filesError}</p>}
           </section>
 
           {/* ── Photo Upload ── */}
@@ -517,7 +530,7 @@ export default function IntakeFormPage() {
               >
                 {photoUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : <Camera size={22} className="text-muted-foreground" />}
                 <span className="text-sm text-muted-foreground">{photoUploading ? "Uploading…" : "Tap to upload a photo"}</span>
-                <input type="file" accept="image/*" className="sr-only" onChange={handlePhotoSelect} disabled={photoUploading} />
+                <input type="file" accept="image/*" onChange={handlePhotoSelect} disabled={photoUploading} style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, overflow: "hidden" }} />
               </label>
             )}
             {photoError && <p className="text-xs text-red-400">{photoError}</p>}
