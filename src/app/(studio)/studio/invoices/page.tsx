@@ -144,11 +144,11 @@ function CreateModal({
                 <select
                   value={contactId}
                   onChange={(e) => setContactId(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+                  className="w-full rounded-lg border px-3 py-2 text-sm text-foreground outline-none"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", colorScheme: "dark" }}
                 >
                   {contacts.map((c) => (
-                    <option key={c.id} value={c.id} style={{ backgroundColor: "var(--card)" }}>
+                    <option key={c.id} value={c.id} style={{ backgroundColor: "var(--card)", color: "var(--foreground)" }}>
                       {c.name}
                     </option>
                   ))}
