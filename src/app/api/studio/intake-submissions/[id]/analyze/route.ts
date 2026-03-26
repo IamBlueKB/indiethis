@@ -31,7 +31,16 @@ export async function POST(
     return NextResponse.json({ error: "No files found" }, { status: 400 });
   }
 
-  const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(submission.fileUrls);
+  let bpm: number | null = null;
+  let musicalKey: string | null = null;
+  try {
+    const features = await detectAudioFeaturesFromUrls(submission.fileUrls);
+    bpm        = features.bpm;
+    musicalKey = features.musicalKey;
+  } catch (err) {
+    console.error("[analyze] detectAudioFeaturesFromUrls failed:", err);
+    return NextResponse.json({ error: "Analysis failed", detail: String(err) }, { status: 500 });
+  }
 
   const updated = await db.intakeSubmission.update({
     where: { id },

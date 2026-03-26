@@ -792,15 +792,17 @@ function TrackAnalysisSection({
     setAnalyzing(true);
     setAnalyzeErr(null);
     try {
-      const res = await fetch(`/api/studio/intake-submissions/${intake.id}/analyze`, { method: "POST" });
-      const data = await res.json();
+      const res  = await fetch(`/api/studio/intake-submissions/${intake.id}/analyze`, { method: "POST" });
+      const text = await res.text();
+      let data: { bpmDetected?: number | null; keyDetected?: string | null; error?: string } = {};
+      try { data = JSON.parse(text); } catch { /* non-JSON response */ }
       if (res.ok) {
         onSave(data.bpmDetected ?? null, data.keyDetected ?? null);
       } else {
-        setAnalyzeErr(data.error ?? "Analysis failed.");
+        setAnalyzeErr(data.error ?? `Server error ${res.status}`);
       }
-    } catch {
-      setAnalyzeErr("Network error.");
+    } catch (e) {
+      setAnalyzeErr(`Error: ${e instanceof Error ? e.message : String(e)}`);
     }
     setAnalyzing(false);
   }
