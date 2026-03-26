@@ -88,6 +88,26 @@ function SendIntakeModal({
       setError("Enter an email or phone number.");
       return;
     }
+    if (!sessionDate) {
+      setError("Session date is required.");
+      return;
+    }
+    if (!sessionTime) {
+      setError("Start time is required.");
+      return;
+    }
+    if (!endTime) {
+      setError("End time is required.");
+      return;
+    }
+    if (new Date(`${sessionDate}T${sessionTime}`) < new Date()) {
+      setError("Session date and time cannot be in the past.");
+      return;
+    }
+    if (endTime <= sessionTime) {
+      setError("End time must be after start time.");
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -163,26 +183,32 @@ function SendIntakeModal({
               <p className="text-[10px] text-muted-foreground">Email, phone, or both. Client fills in their own name and info.</p>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</label>
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !sessionDate ? "#D4A843" : "var(--muted-foreground)" }}>
+                  Date *
+                </label>
                 <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}
                   min={new Date().toISOString().split("T")[0]}
                   className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                  style={{ borderColor: "var(--border)" }} />
+                  style={{ borderColor: !sessionDate ? "#D4A843" : "var(--border)" }} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start Time</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !sessionTime ? "#D4A843" : "var(--muted-foreground)" }}>
+                    Start Time *
+                  </label>
                   <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)}
                     min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }} />
+                    style={{ borderColor: !sessionTime ? "#D4A843" : "var(--border)" }} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">End Time</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !endTime ? "#D4A843" : "var(--muted-foreground)" }}>
+                    End Time *
+                  </label>
                   <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
                     min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }} />
+                    style={{ borderColor: !endTime ? "#D4A843" : "var(--border)" }} />
                 </div>
               </div>
 
