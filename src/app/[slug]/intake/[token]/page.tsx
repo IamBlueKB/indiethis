@@ -167,6 +167,8 @@ export default function IntakeFormPage() {
   const [depositAmount, setDepositAmount]   = useState("");
 
   // ── Load link data ───────────────────────────────────────────────────────────
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   useEffect(() => {
     fetch(`/api/intake/${token}`)
       .then((r) => r.json())
