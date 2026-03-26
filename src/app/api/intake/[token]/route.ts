@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 
@@ -233,22 +233,26 @@ export async function POST(
     }).catch(() => {});
   }
 
-  // Kick off audio analysis in the background — don't block the response
+  // Analyze all submitted audio files after response is sent
   const submissionId = submission.id;
   const uploadedUrls: string[] = fileUrls ?? [];
-  void import("@/lib/audio-analysis").then(({ detectAudioFeaturesFromUrls }) =>
-    detectAudioFeaturesFromUrls(uploadedUrls)
-  ).then(({ bpm, musicalKey }) => {
-    if (bpm !== null || musicalKey !== null) {
-      return db.intakeSubmission.update({
-        where: { id: submissionId },
-        data: {
-          ...(bpm        !== null && { bpmDetected: bpm }),
-          ...(musicalKey !== null && { keyDetected: musicalKey }),
-        },
-      });
-    }
-  }).catch(() => { /* silent — analysis is best-effort */ });
+  if (uploadedUrls.length > 0) {
+    after(async () => {
+      try {
+        const { detectAudioFeaturesFromUrls } = await import("@/lib/audio-analysis");
+        const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(uploadedUrls);
+        if (bpm !== null || musicalKey !== null) {
+          await db.intakeSubmission.update({
+            where: { id: submissionId },
+            data: {
+              ...(bpm        !== null && { bpmDetected: bpm }),
+              ...(musicalKey !== null && { keyDetected: musicalKey }),
+            },
+          });
+        }
+      } catch { /* silent */ }
+    });
+  }
 
   return NextResponse.json({ submission }, { status: 201 });
 }

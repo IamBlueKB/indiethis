@@ -760,10 +760,40 @@ function TrackAnalysisSection({
   intake: IntakeSubmissionItem;
   onSave: (bpm: number | null, key: string | null) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [bpmVal, setBpmVal]   = useState(intake.bpmDetected?.toString() ?? "");
-  const [keyVal, setKeyVal]   = useState(intake.keyDetected ?? "");
-  const [saving, setSaving]   = useState(false);
+  const [editing, setEditing]     = useState(false);
+  const [bpmVal, setBpmVal]       = useState(intake.bpmDetected?.toString() ?? "");
+  const [keyVal, setKeyVal]       = useState(intake.keyDetected ?? "");
+  const [saving, setSaving]       = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
+
+  // Sync edit fields whenever analysis or manual save updates the parent values
+  useEffect(() => {
+    if (!editing) {
+      setBpmVal(intake.bpmDetected?.toString() ?? "");
+      setKeyVal(intake.keyDetected ?? "");
+    }
+  }, [intake.bpmDetected, intake.keyDetected, editing]);
+
+  const hasAudio = intake.fileUrls?.some((u) => /\.(mp3|wav|flac|aac|ogg|m4a)(\?|$)/i.test(u));
+  const hasResults = intake.bpmDetected || intake.keyDetected;
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAnalyzeErr(null);
+    try {
+      const res = await fetch(`/api/studio/intake-submissions/${intake.id}/analyze`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        onSave(data.bpmDetected ?? null, data.keyDetected ?? null);
+      } else {
+        setAnalyzeErr(data.error ?? "Analysis failed.");
+      }
+    } catch {
+      setAnalyzeErr("Network error.");
+    }
+    setAnalyzing(false);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -784,12 +814,23 @@ function TrackAnalysisSection({
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Track Analysis</p>
         {!editing && (
-          <button onClick={() => { setBpmVal(intake.bpmDetected?.toString() ?? ""); setKeyVal(intake.keyDetected ?? ""); setEditing(true); }}
-            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            <Pencil size={10} /> Edit
-          </button>
+          <div className="flex items-center gap-2">
+            {hasAudio && (
+              <button onClick={handleAnalyze} disabled={analyzing}
+                className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg disabled:opacity-50 transition-colors"
+                style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                {analyzing ? <Loader2 size={10} className="animate-spin" /> : <Music2 size={10} />}
+                {analyzing ? "Analyzing…" : hasResults ? "Re-analyze" : "Analyze"}
+              </button>
+            )}
+            <button onClick={() => { setBpmVal(intake.bpmDetected?.toString() ?? ""); setKeyVal(intake.keyDetected ?? ""); setEditing(true); }}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              <Pencil size={10} /> Edit
+            </button>
+          </div>
         )}
       </div>
+      {analyzeErr && <p className="text-[10px] text-red-400 mb-2">{analyzeErr}</p>}
       {editing ? (
         <div className="rounded-xl border p-3 space-y-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
           <div className="grid grid-cols-2 gap-3">

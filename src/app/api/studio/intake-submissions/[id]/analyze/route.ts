@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { detectAudioFeaturesFromUrls } from "@/lib/audio-analysis";
+
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const studio = await db.studio.findFirst({ where: { ownerId: session.user.id }, select: { id: true } });
+  if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+
+  const { id } = await params;
+  const submission = await db.intakeSubmission.findUnique({
+    where: { id },
+    select: { id: true, studioId: true, fileUrls: true },
+  });
+
+  if (!submission || submission.studioId !== studio.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const audioExts = /\.(mp3|wav|flac|aac|ogg|m4a|aiff?|wma)(\?|$)/i;
+  const audioUrls = submission.fileUrls.filter((u) => audioExts.test(u));
+
+  if (audioUrls.length === 0) {
+    return NextResponse.json({ error: "No audio files found" }, { status: 400 });
+  }
+
+  const { bpm, musicalKey } = await detectAudioFeaturesFromUrls(audioUrls);
+
+  const updated = await db.intakeSubmission.update({
+    where: { id },
+    data: {
+      ...(bpm        !== null && { bpmDetected: bpm }),
+      ...(musicalKey !== null && { keyDetected: musicalKey }),
+    },
+    select: { bpmDetected: true, keyDetected: true },
+  });
+
+  return NextResponse.json({ bpmDetected: updated.bpmDetected, keyDetected: updated.keyDetected });
+}
