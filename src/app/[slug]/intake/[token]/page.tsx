@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { formatPhoneInput } from "@/lib/formatPhone";
+import { analyzeAudioFile } from "@/lib/audio-analysis-client";
 
 type StudioData = {
   name: string;
@@ -110,6 +111,9 @@ export default function IntakeFormPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging]           = useState(false);
   const [filesError, setFilesError]       = useState<string | null>(null);
+  const [detectedBpm, setDetectedBpm]     = useState<number | null>(null);
+  const [detectedKey, setDetectedKey]     = useState<string | null>(null);
+  const [analyzing, setAnalyzing]         = useState(false);
   const { startUpload: uploadFiles, isUploading: filesUploading } = useUploadThing("intakeFiles", {
     onClientUploadComplete: (res) => {
       if (res?.length) {
@@ -123,6 +127,17 @@ export default function IntakeFormPage() {
       setFilesError(err.message ?? "Upload failed. Try again.");
     },
   });
+
+  async function runClientAnalysis(files: File[]) {
+    const audioTypes = /^audio\//;
+    const audioFile  = files.find((f) => audioTypes.test(f.type) || /\.(mp3|wav|flac|aac|ogg|m4a)$/i.test(f.name));
+    if (!audioFile) return;
+    setAnalyzing(true);
+    const { bpm, key } = await analyzeAudioFile(audioFile);
+    if (bpm  !== null) setDetectedBpm(bpm);
+    if (key  !== null) setDetectedKey(key);
+    setAnalyzing(false);
+  }
 
   // ── Photo upload ─────────────────────────────────────────────────────────────
   const [photoUrl, setPhotoUrl]       = useState<string | null>(null);
@@ -188,6 +203,8 @@ export default function IntakeFormPage() {
     if (!files.length) return;
     setFilesError(null);
     uploadFiles(files);
+    runClientAnalysis(files);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadFiles]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -195,6 +212,7 @@ export default function IntakeFormPage() {
     if (!files.length) return;
     setFilesError(null);
     uploadFiles(files);
+    runClientAnalysis(files);
     e.target.value = "";
   }
 
@@ -238,6 +256,8 @@ export default function IntakeFormPage() {
           depositPaid,
           depositAmount: depositAmount ? parseFloat(depositAmount) : undefined,
           aiVideoRequested,
+          bpmDetected:  detectedBpm  ?? undefined,
+          keyDetected:  detectedKey  ?? undefined,
         }),
       });
       if (res.ok) setSubmitted(true);
@@ -504,6 +524,24 @@ export default function IntakeFormPage() {
               <input type="file" multiple accept="audio/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" onChange={handleFileSelect} disabled={filesUploading} style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, overflow: "hidden" }} />
             </label>
             {filesError && <p className="text-xs text-red-400">{filesError}</p>}
+
+            {/* BPM / Key detected client-side */}
+            {(analyzing || detectedBpm || detectedKey) && (
+              <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border)", backgroundColor: "rgba(212,168,67,0.07)" }}>
+                <Music2 size={14} style={{ color: "#D4A843" }} className="shrink-0" />
+                {analyzing ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 size={12} className="animate-spin" style={{ color: "#D4A843" }} />
+                    <span className="text-xs" style={{ color: "#D4A843" }}>Detecting BPM &amp; Key…</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    {detectedBpm && <span className="text-xs font-semibold" style={{ color: "#D4A843" }}>{detectedBpm} BPM</span>}
+                    {detectedKey && <span className="text-xs font-semibold text-blue-400">{detectedKey}</span>}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* ── Photo Upload ── */}

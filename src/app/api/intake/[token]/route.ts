@@ -82,6 +82,7 @@ export async function POST(
     firstName, lastName, fullName, artistName, email, phone,
     genre, projectDesc, youtubeLinks, fileUrls, photoUrl, notes,
     instagram, tiktok, youtubeHandle, paymentMethod, depositPaid, depositAmount, aiVideoRequested,
+    bpmDetected, keyDetected,
   } = body as {
     firstName?: string;
     lastName?: string;
@@ -102,6 +103,8 @@ export async function POST(
     depositPaid?: boolean;
     depositAmount?: number;
     aiVideoRequested?: boolean;
+    bpmDetected?: number;
+    keyDetected?: string;
   };
 
   if (!artistName?.trim()) {
@@ -185,6 +188,8 @@ export async function POST(
       depositPaid:       depositPaid === true,
       depositAmount:     depositAmount ? Number(depositAmount) : null,
       aiVideoRequested:  aiVideoRequested === true,
+      bpmDetected:       bpmDetected   ? Number(bpmDetected)   : null,
+      keyDetected:       keyDetected   || null,
     },
   });
 
