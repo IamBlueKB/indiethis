@@ -165,7 +165,7 @@ export default function IntakeFormPage() {
     const files = Array.from(e.dataTransfer.files);
     if (!files.length) return;
     const result = await uploadFiles(files);
-    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => ({ name: f.name, url: f.ufsUrl ?? f.url }))]);
+    if (result) setUploadedFiles((p) => [...p, ...result.map((f) => ({ name: f.name, url: (f as any).serverData?.url ?? f.ufsUrl ?? (f as any).url ?? "" }))]);
   }, [uploadFiles]);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {

@@ -82,14 +82,14 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
   const intakeUrl = `${appUrl}/${studio.slug}/intake/${token}`;
 
-  // Send intake link via email and/or SMS
+  // Send intake link via email and/or SMS — don't fail the request if delivery fails
   if (email?.trim()) {
     await sendIntakeLinkEmail({
       email: email.trim(),
       name: name?.trim() ?? "Artist",
       studioName: studio.name,
       intakeUrl,
-    });
+    }).catch(() => {});
   }
   if (phone?.trim()) {
     sendIntakeLinkSMS({

@@ -25,9 +25,9 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     }),
     db.intakeSubmission.findMany({
-      where: { studioId: studio.id, status: { not: "CANCELLED" } },
+      where: { studioId: studio.id },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100,
       select: {
         id: true,
         artistName: true,
@@ -40,6 +40,7 @@ export async function GET() {
         aiVideoRequested: true,
         youtubeLinks: true,
         fileUrls: true,
+        photoUrl: true,
         status: true,
         createdAt: true,
         contact: { select: { name: true, email: true, phone: true } },

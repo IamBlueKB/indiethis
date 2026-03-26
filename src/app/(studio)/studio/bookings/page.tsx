@@ -5,6 +5,7 @@ import {
   Calendar, Clock, CheckCircle2, XCircle, AlertCircle, DollarSign,
   X, Pencil, Check, Loader2, User, StickyNote, Send, Mail, Phone,
   FileText, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Plus, MessageSquare,
+  Music2, ExternalLink, Youtube,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 
@@ -22,6 +23,13 @@ type Booking = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  PENDING:   { label: "Pending",   color: "text-yellow-400", icon: AlertCircle },
+  CONFIRMED: { label: "Confirmed", color: "text-blue-400",   icon: Clock },
+  COMPLETED: { label: "Completed", color: "text-emerald-400",icon: CheckCircle2 },
+  CANCELLED: { label: "Cancelled", color: "text-red-400",    icon: XCircle },
+};
+
+const INTAKE_STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING:   { label: "Pending",   color: "text-yellow-400", icon: AlertCircle },
   CONFIRMED: { label: "Confirmed", color: "text-blue-400",   icon: Clock },
   COMPLETED: { label: "Completed", color: "text-emerald-400",icon: CheckCircle2 },
@@ -736,6 +744,7 @@ type IntakeSubmissionItem = {
   aiVideoRequested: boolean;
   youtubeLinks: string[];
   fileUrls: string[];
+  photoUrl: string | null;
   status: string;
   createdAt: string;
   contact: { name: string; email: string; phone: string | null } | null;
@@ -749,6 +758,7 @@ export default function StudioBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<Booking | null>(null);
+  const [selectedIntake, setSelectedIntake] = useState<IntakeSubmissionItem | null>(null);
   const [sendIntakeOpen, setSendIntakeOpen] = useState(false);
   const [intakeRequest, setIntakeRequest] = useState<BookingRequest | null>(null);
 
@@ -763,15 +773,21 @@ export default function StudioBookingsPage() {
     setSelected((prev) => prev?.id === id ? { ...prev, ...patch } : prev);
   }, []);
 
-  const filtered = filter === "ALL" ? bookings : bookings.filter((b) => b.status === filter);
+  const updateIntakeStatus = useCallback(async (id: string, newStatus: string) => {
+    const res = await fetch(`/api/studio/intake-submissions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      setIntakeSubmissions((prev) => prev.map((x) => x.id === id ? { ...x, status: newStatus } : x));
+      setSelectedIntake((prev) => prev?.id === id ? { ...prev, status: newStatus } : prev);
+    }
+  }, []);
 
-  const counts = {
-    ALL:       bookings.length,
-    PENDING:   bookings.filter((b) => b.status === "PENDING").length,
-    CONFIRMED: bookings.filter((b) => b.status === "CONFIRMED").length,
-    COMPLETED: bookings.filter((b) => b.status === "COMPLETED").length,
-    CANCELLED: bookings.filter((b) => b.status === "CANCELLED").length,
-  };
+  const filteredIntakes = filter === "ALL"
+    ? intakeSubmissions
+    : intakeSubmissions.filter((s) => s.status === filter);
 
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
@@ -845,158 +861,143 @@ export default function StudioBookingsPage() {
         </div>
       )}
 
-      {/* Intake Submissions — pending confirmation */}
-      {intakeSubmissions.length > 0 && (
-        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-          <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
-            <FileText size={14} className="text-emerald-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Intake Submitted ({intakeSubmissions.length})
-            </span>
-          </div>
-          {intakeSubmissions.map((s) => {
-            const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-              PENDING:   { label: "Pending",   color: "text-yellow-400",  bg: "bg-yellow-400/15" },
-              CONFIRMED: { label: "Confirmed", color: "text-emerald-400", bg: "bg-emerald-400/15" },
-              COMPLETED: { label: "Completed", color: "text-blue-400",    bg: "bg-blue-400/15" },
-            };
-            const sc = statusConfig[s.status] ?? statusConfig.PENDING;
+      {/* ── Intake Submissions Table ─────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-foreground">Submitted Intake Forms</h2>
+        </div>
 
-            const updateStatus = async (newStatus: string) => {
-              const res = await fetch(`/api/studio/intake-submissions/${s.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: newStatus }),
-              });
-              if (res.ok) {
-                if (newStatus === "CANCELLED") {
-                  setIntakeSubmissions((prev) => prev.filter((x) => x.id !== s.id));
-                } else {
-                  setIntakeSubmissions((prev) => prev.map((x) => x.id === s.id ? { ...x, status: newStatus } : x));
-                }
-              }
-            };
-
+        {/* Filter tabs */}
+        <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
+          {(["ALL", "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const).map((f) => {
+            const cnt = f === "ALL" ? intakeSubmissions.length : intakeSubmissions.filter((s) => s.status === f).length;
             return (
-              <div key={s.id} className="px-5 py-4 border-b last:border-b-0 flex items-start justify-between gap-4" style={{ borderColor: "var(--border)" }}>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={filter === f ? { backgroundColor: "var(--background)", color: "var(--foreground)" } : { color: "var(--muted-foreground)" }}
+              >
+                {f === "ALL" ? "All" : STATUS_CONFIG[f]?.label}
+                {cnt > 0 && <span className="ml-1.5 text-[10px] opacity-60">{cnt}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="grid grid-cols-[1fr_160px_120px_110px_130px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b" style={{ borderColor: "var(--border)" }}>
+            <span>Artist / Contact</span>
+            <span>Session Date</span>
+            <span>Genre</span>
+            <span>Status</span>
+            <span>Actions</span>
+          </div>
+
+          {loading ? (
+            <div className="py-12 flex justify-center">
+              <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            </div>
+          ) : filteredIntakes.length === 0 ? (
+            <div className="py-12 text-center space-y-2">
+              <FileText size={32} className="mx-auto text-muted-foreground opacity-40" />
+              <p className="text-sm text-muted-foreground">No intake submissions yet.</p>
+            </div>
+          ) : (
+            filteredIntakes.map((s) => {
+              const sc = INTAKE_STATUS_CONFIG[s.status] ?? INTAKE_STATUS_CONFIG.PENDING;
+              const StatusIcon = sc.icon;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedIntake(s)}
+                  className="grid grid-cols-[1fr_160px_120px_110px_130px] gap-4 px-5 py-4 items-center border-b last:border-b-0 hover:bg-white/3 transition-colors cursor-pointer"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <div>
                     <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${sc.bg} ${sc.color}`}>{sc.label}</span>
-                    {s.aiVideoRequested && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-400/15 text-purple-400">AI Video $49</span>
+                    <p className="text-xs text-muted-foreground">{s.contact?.email ?? "—"}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {s.depositPaid && (
+                        <span className="text-[10px] text-emerald-400 font-semibold">
+                          ✓ {s.depositAmount ? `$${s.depositAmount}` : "Deposit"}{s.paymentMethod ? ` via ${s.paymentMethod}` : ""}
+                        </span>
+                      )}
+                      {(s.fileUrls ?? []).length > 0 && (
+                        <span className="text-[10px] text-muted-foreground">🎵 {s.fileUrls.length} file{s.fileUrls.length !== 1 ? "s" : ""}</span>
+                      )}
+                      {(s.youtubeLinks ?? []).length > 0 && (
+                        <span className="text-[10px] text-muted-foreground">▶ {s.youtubeLinks.length} ref</span>
+                      )}
+                      {s.photoUrl && <span className="text-[10px] text-muted-foreground">📷 photo</span>}
+                      {s.aiVideoRequested && <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>AI Video</span>}
+                    </div>
+                  </div>
+                  <div>
+                    {s.intakeLink?.sessionDate ? (
+                      <>
+                        <p className="text-sm text-foreground">
+                          {new Date(s.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                        {s.intakeLink.sessionTime && (
+                          <p className="text-xs text-muted-foreground">
+                            {s.intakeLink.sessionTime}{s.intakeLink.endTime ? ` – ${s.intakeLink.endTime}` : ""}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {s.contact?.email ?? "—"}{s.contact?.phone ? ` · ${s.contact.phone}` : ""}
-                  </p>
-                  {s.intakeLink?.sessionDate && (
-                    <p className="text-xs text-muted-foreground">
-                      📅 {new Date(s.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      {s.intakeLink.sessionTime ? ` at ${s.intakeLink.sessionTime}` : ""}
-                      {s.intakeLink.endTime ? ` – ${s.intakeLink.endTime}` : ""}
-                    </p>
-                  )}
-                  {(s.genre || s.projectDesc) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[s.genre, s.projectDesc].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
-                  {s.notes && (
-                    <p className="text-xs text-muted-foreground italic">&ldquo;{s.notes}&rdquo;</p>
-                  )}
-                  <div className="flex items-center gap-3 pt-0.5 flex-wrap">
-                    {s.depositPaid && (
-                      <span className="text-[10px] text-emerald-400 font-semibold">
-                        ✓ Deposit{s.depositAmount ? ` $${s.depositAmount}` : ""}{s.paymentMethod ? ` via ${s.paymentMethod}` : ""}
-                      </span>
-                    )}
-                    {s.fileUrls.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground">🎵 {s.fileUrls.length} file{s.fileUrls.length !== 1 ? "s" : ""}</span>
-                    )}
-                    {s.youtubeLinks.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground">▶ {s.youtubeLinks.length} ref track{s.youtubeLinks.length !== 1 ? "s" : ""}</span>
-                    )}
+                  <span className="text-sm text-muted-foreground">{s.genre ?? "—"}</span>
+                  <div className={`flex items-center gap-1.5 text-sm font-semibold ${sc.color}`}>
+                    <StatusIcon size={13} />
+                    {sc.label}
                   </div>
-                </div>
-                <div className="shrink-0 text-right space-y-1.5">
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </p>
-                  <div className="flex flex-col gap-1 items-end">
+                  <div className="flex flex-col gap-1 items-start" onClick={(e) => e.stopPropagation()}>
                     {s.status === "PENDING" && (
-                      <button
-                        onClick={() => updateStatus("CONFIRMED")}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-400/15 text-emerald-400 hover:bg-emerald-400/25 transition-colors"
-                      >
+                      <button onClick={() => updateIntakeStatus(s.id, "CONFIRMED")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-emerald-400/15 text-emerald-400 hover:bg-emerald-400/25 transition-colors">
                         Confirm
                       </button>
                     )}
                     {(s.status === "PENDING" || s.status === "CONFIRMED") && (
-                      <button
-                        onClick={() => updateStatus("COMPLETED")}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-400/15 text-blue-400 hover:bg-blue-400/25 transition-colors"
-                      >
+                      <button onClick={() => updateIntakeStatus(s.id, "COMPLETED")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-blue-400/15 text-blue-400 hover:bg-blue-400/25 transition-colors">
                         Complete
                       </button>
                     )}
-                    <button
-                      onClick={() => updateStatus("CANCELLED")}
-                      className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                    {s.status !== "CANCELLED" && s.status !== "COMPLETED" && (
+                      <button onClick={() => updateIntakeStatus(s.id, "CANCELLED")}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
-      )}
-
-      {/* Filter tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
-        {(["ALL", "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-            style={
-              filter === f
-                ? { backgroundColor: "var(--background)", color: "var(--foreground)" }
-                : { color: "var(--muted-foreground)" }
-            }
-          >
-            {f === "ALL" ? "All" : STATUS_CONFIG[f]?.label}
-            {counts[f] > 0 && <span className="ml-1.5 text-[10px] opacity-60">{counts[f]}</span>}
-          </button>
-        ))}
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-        <div
-          className="grid grid-cols-[1fr_160px_120px_110px_110px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <span>Artist / Client</span>
-          <span>Date & Time</span>
-          <span>Type</span>
-          <span>Status</span>
-          <span>Payment</span>
-        </div>
-
-        {loading ? (
-          <div className="py-12 flex justify-center">
-            <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      {/* ── BookingSession table (confirmed sessions) ─────────────────────── */}
+      {bookings.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sessions</span>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-12 text-center space-y-2">
-            <Calendar size={32} className="mx-auto text-muted-foreground opacity-40" />
-            <p className="text-sm text-muted-foreground">No bookings found.</p>
+          <div
+            className="grid grid-cols-[1fr_160px_120px_110px_110px] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <span>Artist / Client</span>
+            <span>Date & Time</span>
+            <span>Type</span>
+            <span>Status</span>
+            <span>Payment</span>
           </div>
-        ) : (
-          filtered.map((b) => {
+          {bookings.map((b) => {
             const cfg = STATUS_CONFIG[b.status] ?? STATUS_CONFIG.PENDING;
             const StatusIcon = cfg.icon;
             const dt = new Date(b.dateTime);
@@ -1009,14 +1010,7 @@ export default function StudioBookingsPage() {
               >
                 <div>
                   <p className="text-sm font-semibold text-foreground">{b.artist.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {b.contact ? b.contact.name : b.artist.email}
-                  </p>
-                  {b.engineerNotes && (
-                    <p className="text-xs text-muted-foreground mt-0.5 italic truncate">
-                      &ldquo;{b.engineerNotes}&rdquo;
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">{b.contact ? b.contact.name : b.artist.email}</p>
                 </div>
                 <div>
                   <p className="text-sm text-foreground">
@@ -1038,17 +1032,182 @@ export default function StudioBookingsPage() {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Detail drawer */}
+      {/* BookingSession detail drawer */}
       {selected && (
         <BookingDrawer
           booking={selected}
           onClose={() => setSelected(null)}
           onUpdate={handleUpdate}
         />
+      )}
+
+      {/* Intake submission detail drawer */}
+      {selectedIntake && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setSelectedIntake(null)} />
+          <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md border-l overflow-y-auto flex flex-col"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+              <h2 className="text-base font-bold text-foreground">Intake Submission</h2>
+              <button onClick={() => setSelectedIntake(null)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 p-6 space-y-5 overflow-y-auto">
+              {/* Artist info */}
+              <div className="flex items-center gap-3">
+                {selectedIntake.photoUrl ? (
+                  <img src={selectedIntake.photoUrl} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 font-bold text-sm"
+                    style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                    {selectedIntake.artistName[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-bold text-foreground">{selectedIntake.artistName}</p>
+                  <p className="text-xs text-muted-foreground">{selectedIntake.contact?.email ?? "—"}</p>
+                  {selectedIntake.contact?.phone && <p className="text-xs text-muted-foreground">{selectedIntake.contact.phone}</p>}
+                </div>
+              </div>
+
+              {/* Status + actions */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(() => { const sc = INTAKE_STATUS_CONFIG[selectedIntake.status] ?? INTAKE_STATUS_CONFIG.PENDING; const Icon = sc.icon; return (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${sc.color}`} style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
+                      <Icon size={14} /> {sc.label}
+                    </div>
+                  ); })()}
+                  {selectedIntake.status === "PENDING" && (
+                    <button onClick={() => updateIntakeStatus(selectedIntake.id, "CONFIRMED")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                      <Check size={12} /> Confirm
+                    </button>
+                  )}
+                  {(selectedIntake.status === "PENDING" || selectedIntake.status === "CONFIRMED") && (
+                    <button onClick={() => updateIntakeStatus(selectedIntake.id, "COMPLETED")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+                      <CheckCircle2 size={12} /> Complete
+                    </button>
+                  )}
+                  {selectedIntake.status !== "CANCELLED" && selectedIntake.status !== "COMPLETED" && (
+                    <button onClick={() => updateIntakeStatus(selectedIntake.id, "CANCELLED")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#f87171" }}>
+                      <X size={12} /> Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Session date */}
+              {selectedIntake.intakeLink?.sessionDate && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Date</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {new Date(selectedIntake.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  </div>
+                  {selectedIntake.intakeLink.sessionTime && (
+                    <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {selectedIntake.intakeLink.sessionTime}{selectedIntake.intakeLink.endTime ? ` – ${selectedIntake.intakeLink.endTime}` : ""}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Genre / Project */}
+              {(selectedIntake.genre || selectedIntake.projectDesc) && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Project</p>
+                  {selectedIntake.genre && <p className="text-sm text-foreground">{selectedIntake.genre}</p>}
+                  {selectedIntake.projectDesc && <p className="text-sm text-muted-foreground mt-0.5">{selectedIntake.projectDesc}</p>}
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedIntake.notes && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Notes</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{selectedIntake.notes}</p>
+                </div>
+              )}
+
+              {/* Payment */}
+              {selectedIntake.depositPaid && (
+                <div className="rounded-xl border p-3 space-y-1" style={{ backgroundColor: "rgba(34,197,94,0.07)", borderColor: "rgba(34,197,94,0.2)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">Deposit Paid</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {selectedIntake.depositAmount ? `$${selectedIntake.depositAmount}` : "Deposit confirmed"}
+                    {selectedIntake.paymentMethod ? ` via ${selectedIntake.paymentMethod}` : ""}
+                  </p>
+                </div>
+              )}
+              {selectedIntake.aiVideoRequested && (
+                <div className="rounded-xl border p-3" style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#D4A843" }}>AI Music Video Requested</p>
+                  <p className="text-xs text-muted-foreground">$49 — will be added to invoice</p>
+                </div>
+              )}
+
+              {/* Uploaded files */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Uploaded Files</p>
+                {(selectedIntake.fileUrls ?? []).filter(Boolean).length === 0 ? (
+                  <p className="text-xs text-muted-foreground opacity-50">No files submitted.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {selectedIntake.fileUrls.filter(Boolean).map((url, i) => {
+                      const raw = url.split("/").pop() ?? "";
+                      const name = raw ? decodeURIComponent(raw) : `File ${i + 1}`;
+                      return (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-white/5 transition-colors"
+                          style={{ borderColor: "var(--border)" }}
+                          onClick={(e) => e.stopPropagation()}>
+                          <Music2 size={13} className="text-accent shrink-0" />
+                          <span className="text-xs text-foreground truncate">{name}</span>
+                          <ExternalLink size={11} className="text-muted-foreground shrink-0 ml-auto" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Reference tracks */}
+              {(selectedIntake.youtubeLinks ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Reference Tracks</p>
+                  <div className="space-y-1.5">
+                    {selectedIntake.youtubeLinks.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-white/5 transition-colors"
+                        style={{ borderColor: "var(--border)" }}
+                        onClick={(e) => e.stopPropagation()}>
+                        <Youtube size={13} className="text-red-400 shrink-0" />
+                        <span className="text-xs text-foreground truncate">{url}</span>
+                        <ExternalLink size={11} className="text-muted-foreground shrink-0 ml-auto" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
