@@ -163,7 +163,7 @@ export default function InvoicePage() {
             <span className="text-right">Total</span>
           </div>
 
-          {invoice.lineItems.map((item, i) => (
+          {(Array.isArray(invoice.lineItems) ? invoice.lineItems : []).map((item, i) => (
             <div
               key={i}
               className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-5 py-3.5 text-sm border-b last:border-b-0"
@@ -171,8 +171,8 @@ export default function InvoicePage() {
             >
               <span className="text-foreground">{item.description}</span>
               <span className="text-right text-muted-foreground">{item.quantity}</span>
-              <span className="text-right text-muted-foreground">${item.rate.toFixed(2)}</span>
-              <span className="text-right text-foreground font-semibold">${item.total.toFixed(2)}</span>
+              <span className="text-right text-muted-foreground">${(item.rate ?? 0).toFixed(2)}</span>
+              <span className="text-right text-foreground font-semibold">${(item.total ?? 0).toFixed(2)}</span>
             </div>
           ))}
 

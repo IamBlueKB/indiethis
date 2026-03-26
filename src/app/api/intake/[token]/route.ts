@@ -259,7 +259,7 @@ export async function POST(
           {
             description: `Recording Session — ${link.sessionHours} hr${link.sessionHours !== 1 ? "s" : ""} × $${link.hourlyRate}/hr`,
             quantity:    link.sessionHours,
-            unitPrice:   link.hourlyRate,
+            rate:        link.hourlyRate,
             total:       totalCost,
           },
         ];
