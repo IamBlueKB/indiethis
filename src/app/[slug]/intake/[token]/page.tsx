@@ -109,14 +109,12 @@ export default function IntakeFormPage() {
   // ── File uploads ─────────────────────────────────────────────────────────────
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging]           = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { startUpload: uploadFiles, isUploading: filesUploading } = useUploadThing("intakeFiles");
 
   // ── Photo upload ─────────────────────────────────────────────────────────────
   const [photoUrl, setPhotoUrl]       = useState<string | null>(null);
   const [photoName, setPhotoName]     = useState<string | null>(null);
   const [photoError, setPhotoError]   = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const { startUpload: uploadPhoto, isUploading: photoUploading } = useUploadThing("intakeFiles");
 
   // ── AI video upsell ──────────────────────────────────────────────────────────
@@ -479,21 +477,20 @@ export default function IntakeFormPage() {
               </div>
             )}
 
-            <div
+            <label
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
               className="rounded-xl border border-dashed p-6 flex flex-col items-center gap-2 cursor-pointer transition-colors"
-              style={{ borderColor: dragging ? "#D4A843" : "var(--border)", backgroundColor: dragging ? "#D4A84310" : "transparent" }}
+              style={{ borderColor: dragging ? "#D4A843" : "var(--border)", backgroundColor: dragging ? "#D4A84310" : "transparent", display: "flex" }}
             >
               {filesUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : uploadedFiles.length > 0 ? <CheckCircle2 size={22} className="text-emerald-400" /> : <Upload size={22} className="text-muted-foreground" />}
               <p className="text-sm font-medium" style={{ color: uploadedFiles.length > 0 && !filesUploading ? "var(--color-emerald-400, #34d399)" : "var(--muted-foreground)" }}>
-                {filesUploading ? "Uploading…" : uploadedFiles.length > 0 ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? "s" : ""} added — drop more or click to add` : "Drop files here or click to browse"}
+                {filesUploading ? "Uploading…" : uploadedFiles.length > 0 ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? "s" : ""} added — tap to add more` : "Tap to browse files"}
               </p>
               <p className="text-[10px] text-muted-foreground">MP3 · WAV · FLAC · PDF · up to 128 MB each</p>
-            </div>
-            <input ref={fileInputRef} type="file" multiple accept="audio/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" className="hidden" onChange={handleFileSelect} />
+              <input type="file" multiple accept="audio/*,video/*,.pdf,.mp3,.wav,.flac,.aac,.m4a" className="sr-only" onChange={handleFileSelect} disabled={filesUploading} />
+            </label>
           </section>
 
           {/* ── Photo Upload ── */}
@@ -514,14 +511,15 @@ export default function IntakeFormPage() {
                   className="p-1.5 text-muted-foreground hover:text-red-400 shrink-0"><X size={13} /></button>
               </div>
             ) : (
-              <button type="button" onClick={() => photoInputRef.current?.click()} disabled={photoUploading}
-                className="w-full rounded-xl border border-dashed p-5 flex flex-col items-center gap-2 cursor-pointer disabled:opacity-50"
-                style={{ borderColor: "var(--border)" }}>
+              <label
+                className="w-full rounded-xl border border-dashed p-5 flex flex-col items-center gap-2 cursor-pointer"
+                style={{ borderColor: "var(--border)", opacity: photoUploading ? 0.5 : 1, pointerEvents: photoUploading ? "none" : "auto" }}
+              >
                 {photoUploading ? <Loader2 size={22} className="text-accent animate-spin" /> : <Camera size={22} className="text-muted-foreground" />}
-                <span className="text-sm text-muted-foreground">{photoUploading ? "Uploading…" : "Upload a photo"}</span>
-              </button>
+                <span className="text-sm text-muted-foreground">{photoUploading ? "Uploading…" : "Tap to upload a photo"}</span>
+                <input type="file" accept="image/*" className="sr-only" onChange={handlePhotoSelect} disabled={photoUploading} />
+              </label>
             )}
-            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
             {photoError && <p className="text-xs text-red-400">{photoError}</p>}
 
             {photoUrl ? (
