@@ -728,6 +728,14 @@ type IntakeSubmissionItem = {
   id: string;
   artistName: string;
   genre: string | null;
+  projectDesc: string | null;
+  notes: string | null;
+  depositPaid: boolean;
+  depositAmount: number | null;
+  paymentMethod: string | null;
+  aiVideoRequested: boolean;
+  youtubeLinks: string[];
+  fileUrls: string[];
   status: string;
   createdAt: string;
   contact: { name: string; email: string; phone: string | null } | null;
@@ -871,10 +879,13 @@ export default function StudioBookingsPage() {
 
             return (
               <div key={s.id} className="px-5 py-4 border-b last:border-b-0 flex items-start justify-between gap-4" style={{ borderColor: "var(--border)" }}>
-                <div className="min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                    {s.aiVideoRequested && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-400/15 text-purple-400">AI Video $49</span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {s.contact?.email ?? "—"}{s.contact?.phone ? ` · ${s.contact.phone}` : ""}
@@ -886,7 +897,27 @@ export default function StudioBookingsPage() {
                       {s.intakeLink.endTime ? ` – ${s.intakeLink.endTime}` : ""}
                     </p>
                   )}
-                  {s.genre && <p className="text-xs text-muted-foreground">{s.genre}</p>}
+                  {(s.genre || s.projectDesc) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[s.genre, s.projectDesc].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  {s.notes && (
+                    <p className="text-xs text-muted-foreground italic">&ldquo;{s.notes}&rdquo;</p>
+                  )}
+                  <div className="flex items-center gap-3 pt-0.5 flex-wrap">
+                    {s.depositPaid && (
+                      <span className="text-[10px] text-emerald-400 font-semibold">
+                        ✓ Deposit{s.depositAmount ? ` $${s.depositAmount}` : ""}{s.paymentMethod ? ` via ${s.paymentMethod}` : ""}
+                      </span>
+                    )}
+                    {s.fileUrls.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground">🎵 {s.fileUrls.length} file{s.fileUrls.length !== 1 ? "s" : ""}</span>
+                    )}
+                    {s.youtubeLinks.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground">▶ {s.youtubeLinks.length} ref track{s.youtubeLinks.length !== 1 ? "s" : ""}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="shrink-0 text-right space-y-1.5">
                   <p className="text-xs text-muted-foreground">
