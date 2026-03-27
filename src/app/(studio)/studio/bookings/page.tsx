@@ -1408,14 +1408,25 @@ export default function StudioBookingsPage() {
                 </div>
               )}
 
-              {/* Payment claimed banner */}
-              {selectedIntake.depositPaid && selectedIntake.paymentMethod && selectedIntake.paymentMethod !== "stripe" && !["CONFIRMED", "COMPLETED"].includes(selectedIntake.status) && (() => {
+              {/* Payment banner */}
+              {selectedIntake.depositPaid && selectedIntake.paymentMethod && selectedIntake.paymentMethod !== "stripe" && (() => {
                 const rate  = selectedIntake.intakeLink?.hourlyRate ?? null;
                 const hrs   = selectedIntake.intakeLink?.sessionHours ?? null;
                 const total = rate && hrs ? rate * hrs : null;
                 const dep   = selectedIntake.depositAmount ?? 0;
                 const isFull = total !== null && dep >= total;
-                return (
+                const confirmed = ["CONFIRMED", "COMPLETED"].includes(selectedIntake.status);
+                return confirmed ? (
+                  <div className="rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)" }}>
+                    <span className="text-base leading-none mt-0.5">✓</span>
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-400">
+                        {isFull ? "Full payment" : "Deposit"} received via {selectedIntake.paymentMethod}
+                      </p>
+                      {dep > 0 && <p className="text-xs text-muted-foreground mt-0.5">${dep.toFixed(2)} confirmed.</p>}
+                    </div>
+                  </div>
+                ) : (
                   <div className="rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.35)" }}>
                     <span className="text-base leading-none mt-0.5">⏳</span>
                     <div>
@@ -1423,7 +1434,7 @@ export default function StudioBookingsPage() {
                         {isFull ? "Full payment" : "Deposit"} claimed via {selectedIntake.paymentMethod}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {dep > 0 ? `$${dep.toFixed(2)} ` : ""}Check your {selectedIntake.paymentMethod} account to confirm receipt, then update the deposit status below.
+                        {dep > 0 ? `$${dep.toFixed(2)} — ` : ""}Check your {selectedIntake.paymentMethod} to confirm receipt, then press Confirm above.
                       </p>
                     </div>
                   </div>

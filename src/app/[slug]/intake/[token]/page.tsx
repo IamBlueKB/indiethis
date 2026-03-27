@@ -680,6 +680,7 @@ export default function IntakeFormPage() {
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
                     onMouseDown={(e) => e.preventDefault()}
+                    onTouchStart={(e) => e.preventDefault()}
                     onClick={(e) => {
                       e.preventDefault();
                       const selecting = method !== paymentMethod;
@@ -712,8 +713,8 @@ export default function IntakeFormPage() {
                     <div className="relative">
                       <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00" inputMode="decimal"
-                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
+                        placeholder="0.00" inputMode="decimal" tabIndex={-1}
+                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)", scrollMarginTop: 0 }} />
                     </div>
                   </Field>
                   <div className="rounded-xl px-3 py-3 space-y-0.5" style={{ backgroundColor: "#10b98118", border: "1px solid rgba(16,185,129,0.2)" }}>
