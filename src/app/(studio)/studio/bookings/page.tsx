@@ -62,27 +62,23 @@ function TimePicker({ value, onChange, label, required, highlight }: {
   value: string; onChange: (v: string) => void;
   label: string; required?: boolean; highlight?: boolean;
 }) {
-  const curH = value ? value.split(":")[0] : "";
+  // Parse 24h value into h12, min, ampm
+  const h24 = value ? parseInt(value.split(":")[0], 10) : NaN;
   const curM = value ? value.split(":")[1] : "00";
+  const curAmpm = isNaN(h24) ? "" : h24 < 12 ? "AM" : "PM";
+  const curH12 = isNaN(h24) ? "" : String(h24 % 12 || 12);
 
-  const SELECT = "rounded-lg border px-2 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
+  const SEL = "rounded-lg border px-1.5 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50";
+  const selStyle = (bc: string) => ({ borderColor: bc, backgroundColor: "var(--card)", color: "var(--foreground)" });
 
-  function hours() {
-    const opts = [];
-    for (let h = 0; h < 24; h++) {
-      const ampm = h < 12 ? "AM" : "PM";
-      const h12 = h % 12 || 12;
-      opts.push({ val: String(h).padStart(2, "0"), label: `${h12} ${ampm}` });
-    }
-    return opts;
+  function emit(h12: string, m: string, ampm: string) {
+    if (!h12 || !ampm) return;
+    let h = parseInt(h12, 10) % 12;
+    if (ampm === "PM") h += 12;
+    onChange(`${String(h).padStart(2, "0")}:${m}`);
   }
 
-  function handleHour(h: string) {
-    onChange(`${h}:${curM || "00"}`);
-  }
-  function handleMin(m: string) {
-    onChange(`${curH || "00"}:${m}`);
-  }
+  const bc = highlight ? "#D4A843" : "var(--border)";
 
   return (
     <div className="space-y-1.5">
@@ -90,17 +86,23 @@ function TimePicker({ value, onChange, label, required, highlight }: {
         style={{ color: highlight ? "#D4A843" : "var(--muted-foreground)" }}>
         {label}{required ? " *" : ""}
       </label>
-      <div className="flex gap-1.5">
-        <select value={curH} onChange={(e) => handleHour(e.target.value)}
-          className={SELECT}
-          style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}>
+      <div className="flex gap-1">
+        <select value={curH12} onChange={(e) => emit(e.target.value, curM, curAmpm)}
+          className={SEL + " flex-1"} style={selStyle(bc)}>
           <option value="">Hr</option>
-          {hours().map(({ val, label: lbl }) => <option key={val} value={val}>{lbl}</option>)}
+          {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
+            <option key={h} value={String(h)}>{h}</option>
+          ))}
         </select>
-        <select value={curM} onChange={(e) => handleMin(e.target.value)}
-          className={SELECT}
-          style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}>
-          {["00", "15", "30", "45"].map(m => <option key={m} value={m}>{m}</option>)}
+        <select value={curM} onChange={(e) => emit(curH12, e.target.value, curAmpm)}
+          className={SEL + " flex-1"} style={selStyle(bc)}>
+          {["00","15","30","45"].map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={curAmpm} onChange={(e) => emit(curH12, curM, e.target.value)}
+          className={SEL} style={selStyle(bc)}>
+          <option value="">—</option>
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
         </select>
       </div>
     </div>
