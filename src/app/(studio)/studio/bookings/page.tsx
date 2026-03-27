@@ -1393,6 +1393,28 @@ export default function StudioBookingsPage() {
                 </div>
               )}
 
+              {/* Payment claimed banner */}
+              {selectedIntake.depositPaid && selectedIntake.paymentMethod && selectedIntake.paymentMethod !== "stripe" && (() => {
+                const rate  = selectedIntake.intakeLink?.hourlyRate ?? null;
+                const hrs   = selectedIntake.intakeLink?.sessionHours ?? null;
+                const total = rate && hrs ? rate * hrs : null;
+                const dep   = selectedIntake.depositAmount ?? 0;
+                const isFull = total !== null && dep >= total;
+                return (
+                  <div className="rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.35)" }}>
+                    <span className="text-base leading-none mt-0.5">⏳</span>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>
+                        {isFull ? "Full payment" : "Deposit"} claimed via {selectedIntake.paymentMethod}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {dep > 0 ? `$${dep.toFixed(2)} ` : ""}Check your {selectedIntake.paymentMethod} account to confirm receipt, then update the deposit status below.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Payment / Pricing */}
               {(() => {
                 const rate    = selectedIntake.intakeLink?.hourlyRate ?? null;
