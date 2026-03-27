@@ -232,8 +232,7 @@ export default function IntakeFormPage() {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!firstName.trim() || !artistName.trim()) return;
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
     setSubmitting(true);
@@ -403,7 +402,7 @@ export default function IntakeFormPage() {
           );
         })()}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
 
           {/* ── Your Info ── */}
           <section className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
@@ -679,15 +678,10 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
-                    tabIndex={-1}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const scrollY = window.scrollY;
+                    onClick={() => {
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
-                      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, scrollY)));
                     }}
                     className="w-full flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-all"
                     style={{
@@ -715,8 +709,8 @@ export default function IntakeFormPage() {
                     <div className="relative">
                       <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00" inputMode="decimal" tabIndex={-1}
-                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)", scrollMarginTop: 0 }} />
+                        placeholder="0.00" inputMode="decimal"
+                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
                     </div>
                   </Field>
                   <div className="rounded-xl px-3 py-3 space-y-0.5" style={{ backgroundColor: "#10b98118", border: "1px solid rgba(16,185,129,0.2)" }}>
@@ -791,12 +785,13 @@ export default function IntakeFormPage() {
 
           {submitError && <p className="text-sm text-red-400 text-center">{submitError}</p>}
 
-          <button type="submit" disabled={submitting || !firstName.trim() || !artistName.trim() || filesUploading || photoUploading}
+          <button type="button" disabled={submitting || !firstName.trim() || !artistName.trim() || filesUploading || photoUploading}
+            onClick={handleSubmit}
             className="w-full py-4 rounded-2xl text-sm font-bold transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
             {submitting ? "Submitting…" : "Submit Intake Form"}
           </button>
-        </form>
+        </div>
 
         {/* ── Studio Follow Section ── */}
         <section className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
