@@ -54,7 +54,7 @@ export async function PATCH(
   // ── Status-only advance (Mark Sent / Mark Paid) ──────────────────────────
   if (body.status && !body.lineItems && !body.taxRate && !body.dueDate && body.notes === undefined) {
     const VALID_TRANSITIONS: Record<string, string[]> = {
-      DRAFT:   ["SENT"],
+      DRAFT:   ["SENT", "PAID"],
       SENT:    ["PAID"],
       VIEWED:  ["PAID"],
       OVERDUE: ["PAID"],

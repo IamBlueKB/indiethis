@@ -482,23 +482,32 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
   const effectiveCfg = STATUS_CONFIG[effectiveStatus] ?? cfg;
   const EffectiveStatusIcon = effectiveCfg.icon;
 
-  async function advance() {
-    if (!nextStatus) return;
+  async function advance(targetStatus: string) {
     setUpdating(true);
     try {
       // PAID uses the pay route so receipt + activity log are created
-      const url = nextStatus === "PAID"
+      const url = targetStatus === "PAID"
         ? `/api/studio/invoices/${invoice.id}/pay`
         : `/api/studio/invoices/${invoice.id}`;
-      const body = nextStatus === "PAID"
+      const body = targetStatus === "PAID"
         ? { paymentMethod: "MANUAL" }
-        : { status: nextStatus };
+        : { status: targetStatus };
       const res = await fetch(url, {
-        method: nextStatus === "PAID" ? "POST" : "PATCH",
+        method: targetStatus === "PAID" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.ok) onUpdate(invoice.id, nextStatus);
+      if (res.ok) {
+        // Update local row state immediately so buttons + badge react
+        setInvoice((prev) => ({
+          ...prev,
+          status: targetStatus as Invoice["status"],
+          ...(targetStatus === "PAID"
+            ? { paidAt: new Date().toISOString(), paymentMethod: "MANUAL" }
+            : {}),
+        }));
+        onUpdate(invoice.id, targetStatus);
+      }
     } finally {
       setUpdating(false);
     }
@@ -642,15 +651,28 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
 
             {/* Actions */}
             <div className="mt-4 flex flex-wrap gap-2 items-center">
-              {nextStatus && (
+              {/* Mark Sent — only for DRAFT */}
+              {invoice.status === "DRAFT" && (
                 <button
-                  onClick={advance}
+                  onClick={() => advance("SENT")}
+                  disabled={updating}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border disabled:opacity-50"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  {updating ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Mark Sent
+                </button>
+              )}
+              {/* Mark Paid — for any unpaid invoice */}
+              {!["PAID"].includes(invoice.status) && (
+                <button
+                  onClick={() => advance("PAID")}
                   disabled={updating}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
                   style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
                 >
                   {updating ? <Loader2 size={13} className="animate-spin" /> : <DollarSign size={13} />}
-                  {NEXT_LABEL[invoice.status] ?? "Advance"}
+                  Mark Paid
                 </button>
               )}
               {(canSend || canResend) && (
