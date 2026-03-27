@@ -9,7 +9,7 @@ import InvoicePDF from "@/components/pdf/InvoicePDF";
 
 // POST /api/studio/invoices/[id]/send — email + SMS invoice to contact
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -36,8 +36,9 @@ export async function POST(
     return NextResponse.json({ error: "Invoice already paid." }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://indiethis.com");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "indiethis.vercel.app";
+  const proto = req.headers.get("x-forwarded-proto") ?? "https";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${proto}://${host}`;
   const paymentUrl = `${appUrl}/invoice/${invoice.id}`;
   const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
