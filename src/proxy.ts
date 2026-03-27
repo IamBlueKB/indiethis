@@ -22,6 +22,10 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/admin")) return true;
   if (pathname.startsWith("/api/uploadthing")) return true;
   if (pathname.startsWith("/api/public")) return true;
+  // Public invoice pages — no auth required (artists paying invoices)
+  if (pathname.startsWith("/api/invoice")) return true;
+  // Invoice pay route — called from public invoice page
+  if (pathname.match(/^\/api\/studio\/invoices\/[^/]+\/pay$/)) return true;
   if (pathname.startsWith("/api/explore")) return true;
   if (pathname.startsWith("/api/artists")) return true;
   if (pathname.startsWith("/api/studios")) return true;
