@@ -62,59 +62,45 @@ function TimePicker({ value, onChange, label, required, highlight }: {
   value: string; onChange: (v: string) => void;
   label: string; required?: boolean; highlight?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const curH = value ? value.split(":")[0] : "";
+  const curM = value ? value.split(":")[1] : "00";
 
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  const SELECT = "rounded-lg border px-2 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
 
-  // Generate 30-min slots 12:00 AM – 11:30 PM
-  const slots: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (const m of [0, 30]) {
-      slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  function hours() {
+    const opts = [];
+    for (let h = 0; h < 24; h++) {
+      const ampm = h < 12 ? "AM" : "PM";
+      const h12 = h % 12 || 12;
+      opts.push({ val: String(h).padStart(2, "0"), label: `${h12} ${ampm}` });
     }
+    return opts;
   }
 
-  function fmt(v: string) {
-    if (!v) return "";
-    const [h, m] = v.split(":").map(Number);
-    const ampm = h < 12 ? "AM" : "PM";
-    const h12 = h % 12 || 12;
-    return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  function handleHour(h: string) {
+    onChange(`${h}:${curM || "00"}`);
+  }
+  function handleMin(m: string) {
+    onChange(`${curH || "00"}:${m}`);
   }
 
   return (
-    <div className="space-y-1.5" ref={ref}>
+    <div className="space-y-1.5">
       <label className="text-xs font-semibold uppercase tracking-wider"
         style={{ color: highlight ? "#D4A843" : "var(--muted-foreground)" }}>
         {label}{required ? " *" : ""}
       </label>
-      <button type="button" onClick={() => setOpen(o => !o)}
-        className="w-full rounded-xl border px-3 py-2.5 text-sm text-left flex items-center justify-between"
-        style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "transparent", color: value ? "var(--foreground)" : "var(--muted-foreground)" }}>
-        <span>{value ? fmt(value) : "Select time"}</span>
-        <Clock size={13} className="shrink-0 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 rounded-xl border shadow-xl overflow-y-auto"
-          style={{ maxHeight: 220, backgroundColor: "var(--card)", borderColor: "var(--border)", width: 160 }}>
-          {slots.map(slot => (
-            <button key={slot} type="button"
-              onClick={() => { onChange(slot); setOpen(false); }}
-              className="w-full text-left px-4 py-2 text-sm hover:bg-accent/10 transition-colors"
-              style={{ color: value === slot ? "#D4A843" : "var(--foreground)", fontWeight: value === slot ? 700 : 400 }}>
-              {fmt(slot)}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex gap-1.5">
+        <select value={curH} onChange={(e) => handleHour(e.target.value)}
+          className={SELECT} style={{ borderColor: highlight ? "#D4A843" : "var(--border)" }}>
+          <option value="">Hr</option>
+          {hours().map(({ val, label: lbl }) => <option key={val} value={val}>{lbl}</option>)}
+        </select>
+        <select value={curM} onChange={(e) => handleMin(e.target.value)}
+          className={SELECT} style={{ borderColor: highlight ? "#D4A843" : "var(--border)" }}>
+          {["00", "15", "30", "45"].map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      </div>
     </div>
   );
 }
@@ -308,7 +294,7 @@ function SendIntakeModal({
                   className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                   style={{ borderColor: !sessionDate ? "#D4A843" : "var(--border)" }} />
               </div>
-              <div className="grid grid-cols-2 gap-3 relative">
+              <div className="grid grid-cols-2 gap-3">
                 <TimePicker label="Start Time" required value={sessionTime} highlight={!sessionTime}
                   onChange={(v) => { setSessionTime(v); autoEndTime(v, sessionHours); }} />
                 <TimePicker label="End Time" required value={endTime} highlight={!endTime}
