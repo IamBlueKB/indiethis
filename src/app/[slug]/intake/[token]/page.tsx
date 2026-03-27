@@ -169,6 +169,24 @@ export default function IntakeFormPage() {
   const [paymentMethod, setPaymentMethod]   = useState<string | null>(null);
   const [depositAmount, setDepositAmount]   = useState("");
 
+  // ── Prevent Android keyboard-dismiss scroll ──────────────────────────────────
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let prevHeight = vv.height;
+    let savedY = 0;
+    const onResize = () => {
+      if (vv.height < prevHeight) {
+        savedY = window.scrollY;           // keyboard opened — save position
+      } else if (vv.height > prevHeight) {
+        requestAnimationFrame(() => window.scrollTo(0, savedY)); // keyboard closed — restore
+      }
+      prevHeight = vv.height;
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
+
   // ── Load link data ───────────────────────────────────────────────────────────
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
