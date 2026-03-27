@@ -174,12 +174,11 @@ export default function IntakeFormPage() {
     const vv = window.visualViewport;
     if (!vv) return;
     let prevHeight = vv.height;
-    let savedY = 0;
     const onResize = () => {
-      if (vv.height < prevHeight) {
-        savedY = window.scrollY;           // keyboard opened — save position
-      } else if (vv.height > prevHeight) {
-        requestAnimationFrame(() => window.scrollTo(0, savedY)); // keyboard closed — restore
+      if (vv.height > prevHeight) {
+        // Keyboard just closed — capture scroll NOW before Android moves it
+        const y = window.scrollY;
+        requestAnimationFrame(() => window.scrollTo(0, y));
       }
       prevHeight = vv.height;
     };
