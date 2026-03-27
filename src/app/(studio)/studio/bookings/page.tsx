@@ -1153,10 +1153,18 @@ export default function StudioBookingsPage() {
                     <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
                     <p className="text-xs text-muted-foreground">{s.contact?.email ?? "—"}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {s.depositPaid && (
-                        <span className="text-[10px] text-emerald-400 font-semibold">
-                          ✓ {s.depositAmount ? `$${s.depositAmount}` : "Deposit"}{s.paymentMethod ? ` via ${s.paymentMethod}` : ""}
+                      {s.depositPaid && s.paymentMethod && s.paymentMethod !== "stripe" && (
+                        <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>
+                          ⏳ Check {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
                         </span>
+                      )}
+                      {s.depositPaid && s.paymentMethod === "stripe" && (
+                        <span className="text-[10px] text-emerald-400 font-semibold">
+                          ✓ Deposit paid{s.depositAmount ? ` $${s.depositAmount}` : ""}
+                        </span>
+                      )}
+                      {s.depositPaid && !s.paymentMethod && (
+                        <span className="text-[10px] text-emerald-400 font-semibold">✓ Deposit</span>
                       )}
                       {(s.fileUrls ?? []).length > 0 && (
                         <span className="text-[10px] text-muted-foreground">🎵 {s.fileUrls.length} file{s.fileUrls.length !== 1 ? "s" : ""}</span>

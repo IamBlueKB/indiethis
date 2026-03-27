@@ -679,7 +679,8 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
@@ -714,12 +715,15 @@ export default function IntakeFormPage() {
                         className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
                     </div>
                   </Field>
-                  <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ backgroundColor: "#10b98118" }}>
-                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
-                    <p className="text-xs text-emerald-400 font-medium">
-                      {depositAmount
-                        ? `$${parseFloat(depositAmount).toFixed(2)} deposit confirmed via ${paymentHandles.find(p => p.method === paymentMethod)?.label} — thanks!`
-                        : `Deposit confirmed via ${paymentHandles.find(p => p.method === paymentMethod)?.label} — thanks!`}
+                  <div className="rounded-xl px-3 py-3 space-y-0.5" style={{ backgroundColor: "#10b98118", border: "1px solid rgba(16,185,129,0.2)" }}>
+                    <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="shrink-0" />
+                      {depositAmount && parseFloat(depositAmount) > 0
+                        ? `$${parseFloat(depositAmount).toFixed(2)} sent via ${paymentHandles.find(p => p.method === paymentMethod)?.label}`
+                        : `Payment sent via ${paymentHandles.find(p => p.method === paymentMethod)?.label}`}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground pl-5">
+                      {studio.name} will be notified when you submit and will verify receipt.
                     </p>
                   </div>
                 </>
