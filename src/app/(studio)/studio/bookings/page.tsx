@@ -69,7 +69,7 @@ function TimePicker({ value, onChange, label, required, highlight }: {
 
   function hours() {
     const opts = [];
-    for (let h = 6; h < 24; h++) {  // 6 AM – 11 PM
+    for (let h = 0; h < 24; h++) {
       const ampm = h < 12 ? "AM" : "PM";
       const h12 = h % 12 || 12;
       opts.push({ val: String(h).padStart(2, "0"), label: `${h12} ${ampm}` });
