@@ -679,13 +679,15 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
+                    tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
-                    onTouchStart={(e) => e.preventDefault()}
                     onClick={(e) => {
                       e.preventDefault();
+                      const scrollY = window.scrollY;
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
+                      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, scrollY)));
                     }}
                     className="w-full flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-all"
                     style={{
