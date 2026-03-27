@@ -72,9 +72,10 @@ function TimePicker({ value, onChange, label, required, highlight }: {
   const selStyle = (bc: string) => ({ borderColor: bc, backgroundColor: "var(--card)", color: "var(--foreground)" });
 
   function emit(h12: string, m: string, ampm: string) {
-    if (!h12 || !ampm) return;
-    let h = parseInt(h12, 10) % 12;
-    if (ampm === "PM") h += 12;
+    const h12v = h12 || "12";
+    const ampmv = ampm || "AM";
+    let h = parseInt(h12v, 10) % 12;
+    if (ampmv === "PM") h += 12;
     onChange(`${String(h).padStart(2, "0")}:${m}`);
   }
 
