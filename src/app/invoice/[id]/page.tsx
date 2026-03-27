@@ -41,12 +41,12 @@ export default function InvoicePage() {
 
   useEffect(() => {
     fetch(`/api/invoice/${id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) setError(d.error);
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || d.error) setError(d.error ?? "Failed to load invoice.");
         else setInvoice(d);
       })
-      .catch(() => setError("Failed to load invoice."));
+      .catch(() => setError("Could not reach the server. Please check the link and try again."));
   }, [id]);
 
   async function handleMarkPaid(method: string) {
