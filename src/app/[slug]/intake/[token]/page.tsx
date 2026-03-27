@@ -713,14 +713,14 @@ export default function IntakeFormPage() {
                 ))}
               </div>
 
-              {/* Manual methods — self-report amount */}
-              {depositPaid && paymentMethod !== "stripe" && (
-                <>
+              {/* Manual methods — always in DOM, hidden until selected (prevents Android scroll-to-new-input) */}
+              <div style={{ maxHeight: depositPaid && paymentMethod !== "stripe" ? "200px" : "0px", overflow: "hidden" }}>
+                <div className="space-y-3 pt-1">
                   <Field label="How much did you send?">
                     <div className="relative">
                       <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00" inputMode="decimal"
+                        placeholder="0.00" inputMode="decimal" tabIndex={depositPaid && paymentMethod !== "stripe" ? 0 : -1}
                         className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
                     </div>
                   </Field>
@@ -735,20 +735,22 @@ export default function IntakeFormPage() {
                       {studio.name} will be notified when you submit and will verify receipt.
                     </p>
                   </div>
-                </>
-              )}
+                </div>
+              </div>
 
-              {/* Stripe — enter amount, paid on checkout */}
-              {paymentMethod === "stripe" && (
-                <Field label="Deposit amount">
-                  <div className="relative">
-                    <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                      placeholder="0.00" inputMode="decimal"
-                      className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
-                  </div>
-                </Field>
-              )}
+              {/* Stripe — always in DOM, hidden until selected */}
+              <div style={{ maxHeight: paymentMethod === "stripe" ? "100px" : "0px", overflow: "hidden" }}>
+                <div className="pt-1">
+                  <Field label="Deposit amount">
+                    <div className="relative">
+                      <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
+                        placeholder="0.00" inputMode="decimal" tabIndex={paymentMethod === "stripe" ? 0 : -1}
+                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
+                    </div>
+                  </Field>
+                </div>
+              </div>
             </section>
           )}
 
