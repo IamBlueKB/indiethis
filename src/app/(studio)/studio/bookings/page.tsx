@@ -1153,11 +1153,18 @@ export default function StudioBookingsPage() {
                     <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
                     <p className="text-xs text-muted-foreground">{s.contact?.email ?? "—"}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {s.depositPaid && s.paymentMethod && s.paymentMethod !== "stripe" && (
-                        <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>
-                          ⏳ Check {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
-                        </span>
-                      )}
+                      {s.depositPaid && s.paymentMethod && s.paymentMethod !== "stripe" && (() => {
+                        const verified = ["CONFIRMED", "COMPLETED"].includes(s.status);
+                        return verified ? (
+                          <span className="text-[10px] text-emerald-400 font-semibold">
+                            ✓ Payment received via {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>
+                            ⏳ Check {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
+                          </span>
+                        );
+                      })()}
                       {s.depositPaid && s.paymentMethod === "stripe" && (
                         <span className="text-[10px] text-emerald-400 font-semibold">
                           ✓ Deposit paid{s.depositAmount ? ` $${s.depositAmount}` : ""}
@@ -1402,7 +1409,7 @@ export default function StudioBookingsPage() {
               )}
 
               {/* Payment claimed banner */}
-              {selectedIntake.depositPaid && selectedIntake.paymentMethod && selectedIntake.paymentMethod !== "stripe" && (() => {
+              {selectedIntake.depositPaid && selectedIntake.paymentMethod && selectedIntake.paymentMethod !== "stripe" && !["CONFIRMED", "COMPLETED"].includes(selectedIntake.status) && (() => {
                 const rate  = selectedIntake.intakeLink?.hourlyRate ?? null;
                 const hrs   = selectedIntake.intakeLink?.sessionHours ?? null;
                 const total = rate && hrs ? rate * hrs : null;

@@ -679,6 +679,7 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
                       e.preventDefault();
                       const selecting = method !== paymentMethod;
