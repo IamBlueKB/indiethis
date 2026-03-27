@@ -36,7 +36,8 @@ export async function POST(
     return NextResponse.json({ error: "Invoice already paid." }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://indiethis.com");
   const paymentUrl = `${appUrl}/invoice/${invoice.id}`;
   const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",

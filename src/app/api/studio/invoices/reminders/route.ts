@@ -20,7 +20,8 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://indiethis.com");
 
   // Find all unpaid invoices that are past due
   const overdueInvoices = await db.invoice.findMany({
