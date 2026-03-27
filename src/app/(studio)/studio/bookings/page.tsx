@@ -65,7 +65,7 @@ function TimePicker({ value, onChange, label, required, highlight }: {
   const curH = value ? value.split(":")[0] : "";
   const curM = value ? value.split(":")[1] : "00";
 
-  const SELECT = "rounded-lg border px-2 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
+  const SELECT = "rounded-lg border px-2 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
 
   function hours() {
     const opts = [];
