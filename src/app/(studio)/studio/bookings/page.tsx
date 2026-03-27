@@ -65,7 +65,7 @@ function TimePicker({ value, onChange, label, required, highlight }: {
   const curH = value ? value.split(":")[0] : "";
   const curM = value ? value.split(":")[1] : "00";
 
-  const SELECT = "rounded-lg border px-2 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
+  const SELECT = "rounded-lg border px-2 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 flex-1";
 
   function hours() {
     const opts = [];
@@ -92,12 +92,14 @@ function TimePicker({ value, onChange, label, required, highlight }: {
       </label>
       <div className="flex gap-1.5">
         <select value={curH} onChange={(e) => handleHour(e.target.value)}
-          className={SELECT} style={{ borderColor: highlight ? "#D4A843" : "var(--border)" }}>
+          className={SELECT}
+          style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}>
           <option value="">Hr</option>
           {hours().map(({ val, label: lbl }) => <option key={val} value={val}>{lbl}</option>)}
         </select>
         <select value={curM} onChange={(e) => handleMin(e.target.value)}
-          className={SELECT} style={{ borderColor: highlight ? "#D4A843" : "var(--border)" }}>
+          className={SELECT}
+          style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}>
           {["00", "15", "30", "45"].map(m => <option key={m} value={m}>{m}</option>)}
         </select>
       </div>
