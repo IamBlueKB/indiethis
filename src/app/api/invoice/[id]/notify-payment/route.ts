@@ -24,12 +24,25 @@ export async function POST(
 
   const method = body.method ?? "manual";
   const invoiceNum = `#${String(invoice.invoiceNumber).padStart(4, "0")}`;
+  const claimedAt = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  // Stamp a claim marker on the invoice notes so the studio dashboard can surface it
+  const claimTag = `[PAYMENT_CLAIMED:${method}:${claimedAt}]`;
+  const existingNotes = invoice.notes ?? "";
+  const updatedNotes = existingNotes.startsWith("[PAYMENT_CLAIMED:")
+    ? existingNotes.replace(/^\[PAYMENT_CLAIMED:[^\]]*\]\s*/, claimTag + " ")
+    : claimTag + (existingNotes ? " " + existingNotes : "");
+
+  await db.invoice.update({
+    where: { id },
+    data: { notes: updatedNotes },
+  });
 
   await createNotification({
     userId: invoice.studio.ownerId,
     type: "PAYMENT_RECEIVED",
     title: `Payment claimed — Invoice ${invoiceNum}`,
-    message: `${invoice.contact.name} says they sent $${invoice.total.toFixed(2)} via ${method}. Verify and mark as paid.`,
+    message: `${invoice.contact.name} says they sent $${invoice.total.toFixed(2)} via ${method}. Verify in your ${method} app and mark as paid.`,
     link: `/studio/invoices`,
   });
 

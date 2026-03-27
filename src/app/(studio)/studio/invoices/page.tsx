@@ -482,6 +482,12 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
   const effectiveCfg = STATUS_CONFIG[effectiveStatus] ?? cfg;
   const EffectiveStatusIcon = effectiveCfg.icon;
 
+  // Parse payment claim tag from notes
+  const claimMatch = invoice.status !== "PAID" ? invoice.notes?.match(/^\[PAYMENT_CLAIMED:([^:]+):([^\]]+)\]/) : null;
+  const claimMethod = claimMatch?.[1] ?? null;
+  const claimDate   = claimMatch?.[2] ?? null;
+  const displayNotes = invoice.notes?.replace(/^\[PAYMENT_CLAIMED:[^\]]*\]\s*/, "") || null;
+
   async function advance(targetStatus: string) {
     setUpdating(true);
     try {
@@ -639,8 +645,19 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
               </div>
             </div>
 
-            {invoice.notes && (
-              <p className="mt-3 text-xs text-muted-foreground italic">Note: {invoice.notes}</p>
+            {claimMethod && (
+              <div className="mt-3 rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.35)" }}>
+                <span className="text-base leading-none mt-0.5">⏳</span>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>Payment claimed via {claimMethod}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {claimDate ? `Claimed on ${claimDate}. ` : ""}Check your {claimMethod} account to confirm you received ${invoice.total.toFixed(2)}, then mark this invoice as paid.
+                  </p>
+                </div>
+              </div>
+            )}
+            {displayNotes && (
+              <p className="mt-3 text-xs text-muted-foreground italic">Note: {displayNotes}</p>
             )}
             {invoice.paidAt && (
               <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
