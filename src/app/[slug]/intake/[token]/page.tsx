@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   Music2, AlertTriangle, CheckCircle2, X, Loader2, Youtube, Plus,
@@ -168,15 +168,6 @@ export default function IntakeFormPage() {
   const [depositPaid, setDepositPaid]       = useState(false);
   const [paymentMethod, setPaymentMethod]   = useState<string | null>(null);
   const [depositAmount, setDepositAmount]   = useState("");
-  const savedScrollY = useRef<number | null>(null);
-
-  // Restore scroll position after payment method state update causes layout shift
-  useLayoutEffect(() => {
-    if (savedScrollY.current !== null) {
-      window.scrollTo(0, savedScrollY.current);
-      savedScrollY.current = null;
-    }
-  }, [paymentMethod, depositPaid]);
 
   // ── Load link data ───────────────────────────────────────────────────────────
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -687,9 +678,7 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
-                    onTouchStart={() => { savedScrollY.current = window.scrollY; }}
                     onClick={() => {
-                      if (savedScrollY.current === null) savedScrollY.current = window.scrollY;
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
