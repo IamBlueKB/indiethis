@@ -69,7 +69,7 @@ function TimePicker({ value, onChange, label, required, highlight }: {
 
   function hours() {
     const opts = [];
-    for (let h = 0; h < 24; h++) {
+    for (let h = 6; h < 24; h++) {  // 6 AM – 11 PM
       const ampm = h < 12 ? "AM" : "PM";
       const h12 = h % 12 || 12;
       opts.push({ val: String(h).padStart(2, "0"), label: `${h12} ${ampm}` });
@@ -1035,6 +1035,15 @@ export default function StudioBookingsPage() {
     }
   }, []);
 
+  const deleteIntake = useCallback(async (id: string) => {
+    if (!confirm("Delete this intake submission? This cannot be undone.")) return;
+    const res = await fetch(`/api/studio/intake-submissions/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setIntakeSubmissions((prev) => prev.filter((x) => x.id !== id));
+      setSelectedIntake(null);
+    }
+  }, []);
+
   const filteredIntakes = filter === "ALL"
     ? intakeSubmissions
     : intakeSubmissions.filter((s) => s.status === filter);
@@ -1404,6 +1413,11 @@ export default function StudioBookingsPage() {
                       <RotateCcw size={12} /> Restore
                     </button>
                   )}
+                  <button onClick={() => deleteIntake(selectedIntake.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ml-auto"
+                    style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171" }}>
+                    <Trash2 size={12} /> Delete
+                  </button>
                 </div>
               </div>
 

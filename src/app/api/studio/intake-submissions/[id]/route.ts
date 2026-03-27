@@ -98,3 +98,28 @@ export async function PATCH(
 
   return NextResponse.json({ submission: updated });
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const studio = await db.studio.findFirst({
+    where: { ownerId: session.user.id },
+    select: { id: true },
+  });
+  if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+
+  const { id } = await params;
+  const submission = await db.intakeSubmission.findUnique({ where: { id } });
+  if (!submission || submission.studioId !== studio.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await db.intakeSubmission.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}
