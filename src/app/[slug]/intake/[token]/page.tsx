@@ -414,8 +414,8 @@ export default function IntakeFormPage() {
                   placeholder="First Name"
                   className={INPUT} style={{ borderColor: "var(--border)" }} />
               </Field>
-              <Field label="Last Name">
-                <input value={lastName} onChange={(e) => setLastName(e.target.value)}
+              <Field label="Last Name *">
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)} required
                   placeholder="Last Name"
                   className={INPUT} style={{ borderColor: "var(--border)" }} />
               </Field>
@@ -678,8 +678,8 @@ export default function IntakeFormPage() {
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
+                    onTouchStart={() => { (document.activeElement as HTMLElement)?.blur(); }}
                     onClick={() => {
-                      (document.activeElement as HTMLElement)?.blur();
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
@@ -788,7 +788,7 @@ export default function IntakeFormPage() {
 
           {submitError && <p className="text-sm text-red-400 text-center">{submitError}</p>}
 
-          <button type="button" disabled={submitting || !firstName.trim() || !artistName.trim() || filesUploading || photoUploading}
+          <button type="button" disabled={submitting || !firstName.trim() || !lastName.trim() || !artistName.trim() || filesUploading || photoUploading}
             onClick={handleSubmit}
             className="w-full py-4 rounded-2xl text-sm font-bold transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
