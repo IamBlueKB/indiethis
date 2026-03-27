@@ -120,10 +120,6 @@ export async function DELETE(
   const existing = await getStudioInvoice(id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-  if (existing.status !== "DRAFT") {
-    return NextResponse.json({ error: "Only DRAFT invoices can be deleted." }, { status: 400 });
-  }
-
   await db.invoice.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

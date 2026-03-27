@@ -686,26 +686,26 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
                   {sending ? "Sending…" : sentOk ? "Sent!" : canSend ? "Send Invoice" : "Resend"}
                 </button>
               )}
+              {/* Edit — only for DRAFT (line items can't change after sent) */}
               {invoice.status === "DRAFT" && (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border disabled:opacity-50 text-red-400 hover:bg-red-400/10"
-                    style={{ borderColor: "rgba(232,93,74,0.3)" }}
-                  >
-                    {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                    Delete
-                  </button>
-                </>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  Edit
+                </button>
               )}
+              {/* Delete — always available */}
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border disabled:opacity-50 text-red-400 hover:bg-red-400/10"
+                style={{ borderColor: "rgba(232,93,74,0.3)" }}
+              >
+                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                Delete
+              </button>
               {sendError && <p className="text-xs text-destructive">{sendError}</p>}
             </div>
           </div>
