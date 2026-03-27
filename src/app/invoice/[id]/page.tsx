@@ -110,24 +110,22 @@ export default function InvoicePage() {
           className="rounded-2xl border p-6"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
         >
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+          <div className="mb-6">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1 w-full">
                 Invoice from
               </p>
               <h1 className="text-2xl font-bold text-foreground">{invoice.studio.name}</h1>
-              {invoice.studio.email && (
-                <p className="text-sm text-muted-foreground">{invoice.studio.email}</p>
-              )}
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground self-center">
                 #{String(invoice.invoiceNumber).padStart(4, "0")}
               </p>
-              <div className={`flex items-center gap-1.5 justify-end mt-1 ${status.color}`}>
-                <StatusIcon size={14} />
-                <span className="text-sm font-semibold">{status.label}</span>
-              </div>
+            </div>
+            {invoice.studio.email && (
+              <p className="text-sm text-muted-foreground mt-0.5">{invoice.studio.email}</p>
+            )}
+            <div className={`flex items-center gap-1.5 mt-2 ${status.color}`}>
+              <StatusIcon size={14} />
+              <span className="text-sm font-semibold">{status.label}</span>
             </div>
           </div>
 
