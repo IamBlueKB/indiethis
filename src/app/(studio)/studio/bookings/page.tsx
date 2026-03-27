@@ -57,6 +57,68 @@ const NEXT_PAYMENT: Record<string, string | null> = {
   WAIVED:  null,
 };
 
+// ─── Time Picker ─────────────────────────────────────────────────────────────
+function TimePicker({ value, onChange, label, required, highlight }: {
+  value: string; onChange: (v: string) => void;
+  label: string; required?: boolean; highlight?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Generate 30-min slots 12:00 AM – 11:30 PM
+  const slots: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+
+  function fmt(v: string) {
+    if (!v) return "";
+    const [h, m] = v.split(":").map(Number);
+    const ampm = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  }
+
+  return (
+    <div className="space-y-1.5" ref={ref}>
+      <label className="text-xs font-semibold uppercase tracking-wider"
+        style={{ color: highlight ? "#D4A843" : "var(--muted-foreground)" }}>
+        {label}{required ? " *" : ""}
+      </label>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full rounded-xl border px-3 py-2.5 text-sm text-left flex items-center justify-between"
+        style={{ borderColor: highlight ? "#D4A843" : "var(--border)", backgroundColor: "transparent", color: value ? "var(--foreground)" : "var(--muted-foreground)" }}>
+        <span>{value ? fmt(value) : "Select time"}</span>
+        <Clock size={13} className="shrink-0 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 rounded-xl border shadow-xl overflow-y-auto"
+          style={{ maxHeight: 220, backgroundColor: "var(--card)", borderColor: "var(--border)", width: 160 }}>
+          {slots.map(slot => (
+            <button key={slot} type="button"
+              onClick={() => { onChange(slot); setOpen(false); }}
+              className="w-full text-left px-4 py-2 text-sm hover:bg-accent/10 transition-colors"
+              style={{ color: value === slot ? "#D4A843" : "var(--foreground)", fontWeight: value === slot ? 700 : 400 }}>
+              {fmt(slot)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Send Intake Form Modal ───────────────────────────────────────────────────
 
 function SendIntakeModal({
@@ -211,7 +273,7 @@ function SendIntakeModal({
                       type="number" min="0" step="0.01"
                       value={hourlyRate}
                       onChange={(e) => setHourlyRate(e.target.value)}
-                      placeholder="100"
+                      placeholder="e.g. 75"
                       className="w-full rounded-xl border pl-6 pr-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                       style={{ borderColor: "var(--border)" }}
                     />
@@ -225,7 +287,7 @@ function SendIntakeModal({
                     type="number" min="0" step="0.5"
                     value={sessionHours}
                     onChange={(e) => { setSessionHours(e.target.value); autoEndTime(sessionTime, e.target.value); }}
-                    placeholder="2"
+                    placeholder="e.g. 2"
                     className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                     style={{ borderColor: "var(--border)" }}
                   />
@@ -246,25 +308,11 @@ function SendIntakeModal({
                   className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
                   style={{ borderColor: !sessionDate ? "#D4A843" : "var(--border)" }} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !sessionTime ? "#D4A843" : "var(--muted-foreground)" }}>
-                    Start Time *
-                  </label>
-                  <input type="time" value={sessionTime} onChange={(e) => { setSessionTime(e.target.value); autoEndTime(e.target.value, sessionHours); }}
-                    min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: !sessionTime ? "#D4A843" : "var(--border)" }} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !endTime ? "#D4A843" : "var(--muted-foreground)" }}>
-                    End Time *
-                  </label>
-                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                    min={sessionDate === new Date().toISOString().split("T")[0] ? new Date().toTimeString().slice(0, 5) : undefined}
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: !endTime ? "#D4A843" : "var(--border)" }} />
-                </div>
+              <div className="grid grid-cols-2 gap-3 relative">
+                <TimePicker label="Start Time" required value={sessionTime} highlight={!sessionTime}
+                  onChange={(v) => { setSessionTime(v); autoEndTime(v, sessionHours); }} />
+                <TimePicker label="End Time" required value={endTime} highlight={!endTime}
+                  onChange={setEndTime} />
               </div>
 
               {error && <p className="text-xs text-red-400">{error}</p>}
