@@ -679,6 +679,7 @@ export default function IntakeFormPage() {
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
                     onClick={() => {
+                      (document.activeElement as HTMLElement)?.blur();
                       const selecting = method !== paymentMethod;
                       setPaymentMethod(selecting ? method : null);
                       setDepositPaid(selecting && method !== "stripe");
