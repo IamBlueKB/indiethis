@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { CheckCircle2, Clock, AlertTriangle, Download, CreditCard } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
+import { CheckCircle2, Clock, AlertTriangle, Download, CreditCard, Send } from "lucide-react";
 
 type LineItem = { description: string; quantity: number; rate: number; total: number };
 
@@ -18,7 +18,17 @@ type InvoiceData = {
   status: string;
   notes: string | null;
   createdAt: string;
-  studio: { name: string; email: string | null; phone: string | null; logo: string | null };
+  studio: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    logo: string | null;
+    cashAppHandle: string | null;
+    zelleHandle: string | null;
+    paypalHandle: string | null;
+    venmoHandle: string | null;
+    stripePaymentsEnabled: boolean;
+  };
   contact: { name: string; email: string | null; phone: string | null };
 };
 
@@ -32,12 +42,16 @@ const STATUS_CONFIG = {
 
 export default function InvoicePage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  const [paid, setPaid] = useState(false);
+  const [notified, setNotified] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<string>("STRIPE");
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+
+  // If returning from Stripe success, show confirmed state
+  const stripeSuccess = searchParams.get("paid") === "stripe";
 
   useEffect(() => {
     fetch(`/api/invoice/${id}`)
@@ -49,24 +63,41 @@ export default function InvoicePage() {
       .catch(() => setError("Could not reach the server. Please check the link and try again."));
   }, [id]);
 
-  async function handleMarkPaid(method: string) {
+  async function handleStripeCheckout() {
     setPaying(true);
     setPayError(null);
     try {
-      const res = await fetch(`/api/studio/invoices/${id}/pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethod: method }),
-      });
+      const res = await fetch(`/api/invoice/${id}/stripe-checkout`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPaid(true);
-        setInvoice((prev) => prev ? { ...prev, status: "PAID" } : prev);
+      if (res.ok && data.url) {
+        window.location.href = data.url;
       } else {
-        setPayError(data.error ?? "Payment could not be processed. Please try again.");
+        setPayError(data.error ?? "Could not start checkout. Please try again.");
       }
     } catch {
-      setPayError("Network error. Please check your connection and try again.");
+      setPayError("Network error. Please try again.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function handleNotifyPayment(method: string) {
+    setPaying(true);
+    setPayError(null);
+    try {
+      const res = await fetch(`/api/invoice/${id}/notify-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method }),
+      });
+      if (res.ok) {
+        setNotified(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setPayError(data.error ?? "Could not send notification. Please try again.");
+      }
+    } catch {
+      setPayError("Network error. Please try again.");
     } finally {
       setPaying(false);
     }
@@ -99,8 +130,15 @@ export default function InvoicePage() {
   const issueDate = new Date(invoice.createdAt).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
   });
-  const isPaid = invoice.status === "PAID";
-  const isOverdue = invoice.status === "OVERDUE";
+  const isPaid = invoice.status === "PAID" || stripeSuccess;
+
+  // Build available payment handles
+  const handles = [
+    invoice.studio.cashAppHandle && { label: "Cash App", handle: invoice.studio.cashAppHandle, method: "Cash App" },
+    invoice.studio.zelleHandle   && { label: "Zelle",    handle: invoice.studio.zelleHandle,   method: "Zelle" },
+    invoice.studio.paypalHandle  && { label: "PayPal",   handle: invoice.studio.paypalHandle,  method: "PayPal" },
+    invoice.studio.venmoHandle   && { label: "Venmo",    handle: invoice.studio.venmoHandle,   method: "Venmo" },
+  ].filter(Boolean) as { label: string; handle: string; method: string }[];
 
   return (
     <div className="min-h-screen py-10 px-4" style={{ backgroundColor: "var(--background)" }}>
@@ -129,27 +167,17 @@ export default function InvoicePage() {
             </div>
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+          <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground text-xs mb-0.5">Issued</p>
-              <p className="text-foreground">{issueDate}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Bill To</p>
+              <p className="text-foreground font-medium">{invoice.contact.name}</p>
+              {invoice.contact.email && <p className="text-muted-foreground text-xs">{invoice.contact.email}</p>}
             </div>
-            <div>
-              <p className="text-muted-foreground text-xs mb-0.5">Due Date</p>
-              <p className={`font-semibold ${isOverdue ? "text-red-400" : "text-foreground"}`}>
-                {dueDate}
-              </p>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Due Date</p>
+              <p className="text-foreground font-medium">{dueDate}</p>
+              <p className="text-muted-foreground text-xs">Issued {issueDate}</p>
             </div>
-          </div>
-
-          {/* Billed to */}
-          <div className="text-sm">
-            <p className="text-xs text-muted-foreground mb-0.5">Billed To</p>
-            <p className="text-foreground font-semibold">{invoice.contact.name}</p>
-            {invoice.contact.email && (
-              <p className="text-muted-foreground">{invoice.contact.email}</p>
-            )}
           </div>
         </div>
 
@@ -159,45 +187,41 @@ export default function InvoicePage() {
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
         >
           <div
-            className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b"
-            style={{ borderColor: "var(--border)" }}
+            className="grid text-xs font-semibold uppercase tracking-wider text-muted-foreground px-6 py-3"
+            style={{ gridTemplateColumns: "1fr auto auto", borderBottom: "1px solid var(--border)" }}
           >
             <span>Description</span>
-            <span className="text-right">Qty</span>
-            <span className="text-right">Rate</span>
-            <span className="text-right">Total</span>
+            <span className="text-right pr-6">Qty</span>
+            <span className="text-right">Amount</span>
           </div>
-
-          {(Array.isArray(invoice.lineItems) ? invoice.lineItems : []).map((item, i) => (
+          {(invoice.lineItems as LineItem[]).map((item, i) => (
             <div
               key={i}
-              className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-5 py-3.5 text-sm border-b last:border-b-0"
-              style={{ borderColor: "var(--border)" }}
+              className="grid px-6 py-4 text-sm"
+              style={{
+                gridTemplateColumns: "1fr auto auto",
+                borderBottom: i < invoice.lineItems.length - 1 ? "1px solid var(--border)" : "none",
+              }}
             >
               <span className="text-foreground">{item.description}</span>
-              <span className="text-right text-muted-foreground">{item.quantity}</span>
-              <span className="text-right text-muted-foreground">${(item.rate ?? 0).toFixed(2)}</span>
-              <span className="text-right text-foreground font-semibold">${(item.total ?? 0).toFixed(2)}</span>
+              <span className="text-muted-foreground text-right pr-6">{item.quantity}</span>
+              <span className="text-foreground font-medium text-right">${item.total.toFixed(2)}</span>
             </div>
           ))}
-
-          <div className="px-5 py-4 space-y-2">
+          <div className="px-6 py-4 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Subtotal</span>
               <span>${invoice.subtotal.toFixed(2)}</span>
             </div>
-            {invoice.tax > 0 && (
+            {invoice.taxRate > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Tax ({invoice.taxRate}%)</span>
                 <span>${invoice.tax.toFixed(2)}</span>
               </div>
             )}
-            <div
-              className="flex justify-between text-base font-bold text-foreground pt-2 border-t"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <span>Total Due</span>
-              <span>${invoice.total.toFixed(2)} USD</span>
+            <div className="flex justify-between text-base font-bold text-foreground pt-1" style={{ borderTop: "1px solid var(--border)" }}>
+              <span>Total</span>
+              <span>${invoice.total.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -205,7 +229,7 @@ export default function InvoicePage() {
         {/* Notes */}
         {invoice.notes && (
           <div
-            className="rounded-2xl border p-5 text-sm text-muted-foreground"
+            className="rounded-2xl border p-6"
             style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -216,7 +240,7 @@ export default function InvoicePage() {
         )}
 
         {/* Payment section */}
-        {!isPaid ? (
+        {!isPaid && !notified ? (
           <div
             className="rounded-2xl border p-6 space-y-5"
             style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
@@ -228,38 +252,68 @@ export default function InvoicePage() {
               </p>
             </div>
 
-            {/* Stripe CTA */}
-            <button
-              onClick={() => handleMarkPaid("STRIPE")}
-              disabled={paying}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-            >
-              <CreditCard size={16} />
-              {paying ? "Processing…" : `Pay $${invoice.total.toFixed(2)} with Card`}
-            </button>
+            {/* Stripe card payment */}
+            {invoice.studio.stripePaymentsEnabled && (
+              <button
+                onClick={handleStripeCheckout}
+                disabled={paying}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                <CreditCard size={16} />
+                {paying && selectedMethod === null ? "Redirecting…" : `Pay $${invoice.total.toFixed(2)} with Card`}
+              </button>
+            )}
 
-            {/* Alternative methods */}
-            <div>
-              <p className="text-xs text-muted-foreground mb-3">Or pay via:</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(["ZELLE", "CASHAPP", "PAYPAL"] as const).map((method) => (
-                  <button
-                    key={method}
-                    onClick={() => handleMarkPaid(method)}
-                    disabled={paying}
-                    className="py-2.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-white/5 disabled:opacity-50 text-foreground"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    {method}
-                  </button>
-                ))}
+            {/* Manual payment handles */}
+            {handles.length > 0 && (
+              <div className="space-y-3">
+                {invoice.studio.stripePaymentsEnabled && (
+                  <p className="text-xs text-muted-foreground">Or pay via:</p>
+                )}
+                <div className="space-y-2">
+                  {handles.map((h) => (
+                    <button
+                      key={h.method}
+                      onClick={() => setSelectedMethod(selectedMethod === h.method ? null : h.method)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium border transition-colors"
+                      style={{
+                        borderColor: selectedMethod === h.method ? "#D4A843" : "var(--border)",
+                        backgroundColor: selectedMethod === h.method ? "#D4A84318" : "transparent",
+                        color: "var(--foreground)",
+                      }}
+                    >
+                      <span>{h.label}</span>
+                      <span className="text-muted-foreground font-mono text-xs">{h.handle}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedMethod && (
+                  <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.25)" }}>
+                    <p className="text-sm text-foreground">
+                      Send <strong>${invoice.total.toFixed(2)}</strong> to{" "}
+                      <strong>{handles.find(h => h.method === selectedMethod)?.handle}</strong> via {selectedMethod}, then tap below.
+                    </p>
+                    <button
+                      onClick={() => handleNotifyPayment(selectedMethod)}
+                      disabled={paying}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    >
+                      <Send size={15} />
+                      {paying ? "Sending…" : `I've sent the payment`}
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                After sending payment via one of the above, click the button to notify{" "}
-                {invoice.studio.name} and mark the invoice as paid.
+            )}
+
+            {!invoice.studio.stripePaymentsEnabled && handles.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center">
+                Contact {invoice.studio.name} directly to arrange payment.
               </p>
-            </div>
+            )}
 
             {payError && (
               <div className="rounded-xl p-3 flex items-start gap-2 text-sm text-red-400" style={{ backgroundColor: "rgba(232,93,74,0.1)", border: "1px solid rgba(232,93,74,0.3)" }}>
@@ -267,6 +321,16 @@ export default function InvoicePage() {
                 {payError}
               </div>
             )}
+          </div>
+        ) : notified ? (
+          <div className="rounded-2xl border p-6 flex items-center gap-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <CheckCircle2 size={24} className="text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-foreground font-semibold">Payment Notification Sent</p>
+              <p className="text-sm text-muted-foreground">
+                {invoice.studio.name} has been notified and will confirm your payment.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border p-6 flex items-center gap-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>

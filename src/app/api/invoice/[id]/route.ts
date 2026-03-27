@@ -13,7 +13,7 @@ export async function GET(
       where: { id },
       include: {
         contact: { select: { name: true, email: true, phone: true } },
-        studio: { select: { name: true, email: true, phone: true, logo: true } },
+        studio: { select: { name: true, email: true, phone: true, logo: true, cashAppHandle: true, zelleHandle: true, paypalHandle: true, venmoHandle: true, stripePaymentsEnabled: true, ownerId: true } },
       },
     });
 
@@ -36,7 +36,17 @@ export async function GET(
       status: invoice.status,
       notes: invoice.notes,
       createdAt: invoice.createdAt,
-      studio: invoice.studio,
+      studio: {
+        name: invoice.studio.name,
+        email: invoice.studio.email,
+        phone: invoice.studio.phone,
+        logo: invoice.studio.logo,
+        cashAppHandle: invoice.studio.cashAppHandle,
+        zelleHandle: invoice.studio.zelleHandle,
+        paypalHandle: invoice.studio.paypalHandle,
+        venmoHandle: invoice.studio.venmoHandle,
+        stripePaymentsEnabled: invoice.studio.stripePaymentsEnabled,
+      },
       contact: invoice.contact,
     });
   } catch (err) {

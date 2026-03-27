@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   Music2, AlertTriangle, CheckCircle2, X, Loader2, Youtube, Plus,
   Upload, Camera, DollarSign, ExternalLink, Phone, Mail,
@@ -19,6 +19,7 @@ type StudioData = {
   zelleHandle: string | null;
   paypalHandle: string | null;
   venmoHandle: string | null;
+  stripePaymentsEnabled: boolean;
 };
 
 type IntakeLinkData = {
@@ -83,6 +84,8 @@ const INPUT = "w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-
 
 export default function IntakeFormPage() {
   const { token } = useParams<{ token: string }>();
+  const searchParams = useSearchParams();
+  const stripeDepositPaid = searchParams.get("depositPaid") === "stripe";
   const [link, setLink] = useState<IntakeLinkData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -264,8 +267,14 @@ export default function IntakeFormPage() {
           keyDetected:  detectedKey  ?? undefined,
         }),
       });
-      if (res.ok) setSubmitted(true);
-      else { const d = await res.json(); setSubmitError(d.error ?? "Failed to submit."); }
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (d.checkoutUrl) {
+          window.location.href = d.checkoutUrl;
+        } else {
+          setSubmitted(true);
+        }
+      } else { const d = await res.json(); setSubmitError(d.error ?? "Failed to submit."); }
     } finally { setSubmitting(false); }
   }
 
@@ -293,6 +302,11 @@ export default function IntakeFormPage() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           Your info has been sent to <span className="text-foreground font-semibold">{link.studio.name}</span>. They&apos;ll be in touch soon.
         </p>
+        {stripeDepositPaid && (
+          <p className="text-sm text-emerald-400 font-medium">
+            ✓ Deposit payment confirmed
+          </p>
+        )}
       </div>
     </div>
   );
@@ -300,6 +314,9 @@ export default function IntakeFormPage() {
   const { studio } = link;
 
   const paymentHandles = [
+    studio.stripePaymentsEnabled && { label: "Card", handle: "Secure card payment", method: "stripe", color: "#D4A843", logo: (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#D4A843"/><text x="11" y="16" textAnchor="middle" fill="#0A0A0A" fontSize="12" fontWeight="bold" fontFamily="Arial">$</text></svg>
+    )},
     studio.cashAppHandle && { label: "Cash App", handle: studio.cashAppHandle, method: "cashapp", color: "#00D54B", logo: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#00D54B"/><text x="11" y="16" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="Arial">$</text></svg>
     )},
@@ -652,13 +669,21 @@ export default function IntakeFormPage() {
             <section className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
               <div>
                 <h2 className="text-sm font-bold text-foreground">Session Deposit</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Send your deposit to {studio.name}, then tap to confirm below.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {paymentMethod === "stripe"
+                    ? "Pay your deposit securely by card after submitting."
+                    : "Send your deposit to " + studio.name + ", then confirm below."}
+                </p>
               </div>
 
               <div className="space-y-2">
                 {paymentHandles.map(({ label, handle, method, logo }) => (
                   <button key={method} type="button"
-                    onClick={() => { setPaymentMethod(method === paymentMethod ? null : method); setDepositPaid(method !== paymentMethod); }}
+                    onClick={() => {
+                      const selecting = method !== paymentMethod;
+                      setPaymentMethod(selecting ? method : null);
+                      setDepositPaid(selecting && method !== "stripe");
+                    }}
                     className="w-full flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-all"
                     style={{
                       borderColor: paymentMethod === method ? "#D4A843" : "var(--border)",
@@ -678,7 +703,8 @@ export default function IntakeFormPage() {
                 ))}
               </div>
 
-              {depositPaid && (
+              {/* Manual methods — self-report amount */}
+              {depositPaid && paymentMethod !== "stripe" && (
                 <>
                   <Field label="How much did you send?">
                     <div className="relative">
@@ -697,6 +723,18 @@ export default function IntakeFormPage() {
                     </p>
                   </div>
                 </>
+              )}
+
+              {/* Stripe — enter amount, paid on checkout */}
+              {paymentMethod === "stripe" && (
+                <Field label="Deposit amount">
+                  <div className="relative">
+                    <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
+                      placeholder="0.00" inputMode="decimal"
+                      className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
+                  </div>
+                </Field>
               )}
             </section>
           )}

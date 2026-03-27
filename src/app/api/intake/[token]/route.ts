@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { stripe } from "@/lib/stripe";
 
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
@@ -16,7 +17,7 @@ export async function GET(
         select: {
           name: true, slug: true, logo: true,
           instagram: true, tiktok: true, youtube: true,
-          cashAppHandle: true, zelleHandle: true, paypalHandle: true, venmoHandle: true,
+          cashAppHandle: true, zelleHandle: true, paypalHandle: true, venmoHandle: true, stripePaymentsEnabled: true,
         },
       },
     },
@@ -53,6 +54,7 @@ export async function GET(
       zelleHandle: link.studio.zelleHandle,
       paypalHandle: link.studio.paypalHandle,
       venmoHandle: link.studio.venmoHandle,
+      stripePaymentsEnabled: link.studio.stripePaymentsEnabled,
     },
   });
 }
@@ -291,6 +293,40 @@ export async function POST(
         // Don't fail the submission if invoice creation fails
       }
     })();
+  }
+
+  // If Stripe deposit selected, create checkout session and return URL
+  if (paymentMethod === "stripe" && depositAmount && Number(depositAmount) > 0 && stripe && link.studio.stripePaymentsEnabled) {
+    try {
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3456");
+      const studioSlug = link.studio.slug;
+      const checkoutSession = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: Math.round(Number(depositAmount) * 100),
+              product_data: {
+                name: `Session Deposit — ${link.studio.name}`,
+                description: link.sessionDate
+                  ? `Session on ${new Date(link.sessionDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+                  : "Recording Session Deposit",
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${appUrl}/${studioSlug}/intake/${token}?depositPaid=stripe`,
+        cancel_url:  `${appUrl}/${studioSlug}/intake/${token}`,
+        metadata: { type: "intake_deposit", submissionId: submission.id, studioId: link.studioId },
+      });
+      return NextResponse.json({ submission, checkoutUrl: checkoutSession.url }, { status: 201 });
+    } catch {
+      // Fall through if Stripe fails — still a successful submission
+    }
   }
 
   return NextResponse.json({ submission }, { status: 201 });

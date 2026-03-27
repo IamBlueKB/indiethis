@@ -62,6 +62,77 @@ export async function POST(req: NextRequest) {
       const checkSession = event.data.object as Stripe.Checkout.Session;
       const userId = checkSession.metadata?.userId;
 
+      // --- Invoice payment ---
+      if (checkSession.metadata?.type === "invoice_payment") {
+        const invoiceId = checkSession.metadata.invoiceId;
+        if (invoiceId) {
+          const inv = await db.invoice.findUnique({
+            where: { id: invoiceId },
+            include: {
+              studio: { select: { ownerId: true, name: true } },
+              contact: { select: { name: true, email: true } },
+            },
+          });
+          if (inv && inv.status !== "PAID") {
+            const paidAmount = checkSession.amount_total ? checkSession.amount_total / 100 : inv.total;
+            await db.invoice.update({
+              where: { id: invoiceId },
+              data: { status: "PAID", paidAt: new Date(), paymentMethod: "STRIPE" },
+            });
+            await db.contact.update({
+              where: { id: inv.contactId },
+              data: { totalSpent: { increment: paidAmount } },
+            });
+            await db.activityLog.create({
+              data: {
+                contactId: inv.contactId,
+                studioId: inv.studioId,
+                type: "PAYMENT_RECEIVED",
+                description: `Invoice #${String(inv.invoiceNumber).padStart(4, "0")} paid via Stripe — $${paidAmount.toFixed(2)}`,
+                metadata: { invoiceId, amount: paidAmount },
+              },
+            });
+            await createNotification({
+              userId: inv.studio.ownerId,
+              type: "PAYMENT_RECEIVED",
+              title: `Invoice #${String(inv.invoiceNumber).padStart(4, "0")} paid`,
+              message: `${inv.contact.name} paid $${paidAmount.toFixed(2)} via card.`,
+              link: `/studio/invoices`,
+            });
+          }
+        }
+        break;
+      }
+
+      // --- Intake deposit payment ---
+      if (checkSession.metadata?.type === "intake_deposit") {
+        const { submissionId, studioId } = checkSession.metadata;
+        if (submissionId) {
+          const paidAmount = checkSession.amount_total ? checkSession.amount_total / 100 : 0;
+          await db.intakeSubmission.update({
+            where: { id: submissionId },
+            data: { depositPaid: true, depositAmount: paidAmount, paymentMethod: "stripe" },
+          }).catch(() => {});
+          if (studioId) {
+            const sub = await db.intakeSubmission.findUnique({
+              where: { id: submissionId },
+              select: { artistName: true },
+            });
+            const owner = await db.studio.findUnique({ where: { id: studioId }, select: { ownerId: true } });
+            if (owner?.ownerId) {
+              await createNotification({
+                userId: owner.ownerId,
+                type: "PAYMENT_RECEIVED",
+                title: "Deposit received",
+                message: `${sub?.artistName ?? "Artist"} paid a $${paidAmount.toFixed(2)} session deposit via card.`,
+                link: "/studio/inbox",
+              });
+            }
+          }
+        }
+        break;
+      }
+
       // --- Beat license purchase ---
       if (checkSession.metadata?.type === "BEAT_LICENSE") {
         const { userId: buyerId, trackId, producerId, licenseType, previewId } = checkSession.metadata;
