@@ -36,6 +36,7 @@ export default function InvoicePage() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string>("STRIPE");
 
   useEffect(() => {
@@ -50,16 +51,22 @@ export default function InvoicePage() {
 
   async function handleMarkPaid(method: string) {
     setPaying(true);
+    setPayError(null);
     try {
       const res = await fetch(`/api/studio/invoices/${id}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentMethod: method }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setPaid(true);
         setInvoice((prev) => prev ? { ...prev, status: "PAID" } : prev);
+      } else {
+        setPayError(data.error ?? "Payment could not be processed. Please try again.");
       }
+    } catch {
+      setPayError("Network error. Please check your connection and try again.");
     } finally {
       setPaying(false);
     }
@@ -255,6 +262,13 @@ export default function InvoicePage() {
                 {invoice.studio.name} and mark the invoice as paid.
               </p>
             </div>
+
+            {payError && (
+              <div className="rounded-xl p-3 flex items-start gap-2 text-sm text-red-400" style={{ backgroundColor: "rgba(232,93,74,0.1)", border: "1px solid rgba(232,93,74,0.3)" }}>
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                {payError}
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border p-6 flex items-center gap-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>

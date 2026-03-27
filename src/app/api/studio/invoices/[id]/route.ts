@@ -35,7 +35,7 @@ export async function GET(
   return NextResponse.json({ invoice });
 }
 
-// PATCH /api/studio/invoices/[id] — update draft invoice
+// PATCH /api/studio/invoices/[id] — update or advance invoice status
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,11 +49,35 @@ export async function PATCH(
   const existing = await getStudioInvoice(id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
+  const body = await req.json();
+
+  // ── Status-only advance (Mark Sent / Mark Paid) ──────────────────────────
+  if (body.status && !body.lineItems && !body.taxRate && !body.dueDate && body.notes === undefined) {
+    const VALID_TRANSITIONS: Record<string, string[]> = {
+      DRAFT:   ["SENT"],
+      SENT:    ["PAID"],
+      VIEWED:  ["PAID"],
+      OVERDUE: ["PAID"],
+    };
+    const allowed = VALID_TRANSITIONS[existing.status] ?? [];
+    if (!allowed.includes(body.status)) {
+      return NextResponse.json({ error: "Invalid status transition." }, { status: 400 });
+    }
+    const invoice = await db.invoice.update({
+      where: { id },
+      data: {
+        status: body.status,
+        ...(body.status === "PAID" ? { paidAt: new Date(), paymentMethod: body.paymentMethod ?? "MANUAL" } : {}),
+      },
+    });
+    return NextResponse.json({ invoice });
+  }
+
+  // ── Line-item / field edit (DRAFT only) ──────────────────────────────────
   if (existing.status !== "DRAFT") {
     return NextResponse.json({ error: "Only DRAFT invoices can be edited." }, { status: 400 });
   }
 
-  const body = await req.json();
   type LineItem = { description: string; quantity: number; rate: number; total: number };
   const lineItems: LineItem[] | undefined = body.lineItems;
   const taxRate: number | undefined = body.taxRate;

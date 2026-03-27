@@ -485,13 +485,23 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
   async function advance() {
     if (!nextStatus) return;
     setUpdating(true);
-    await fetch(`/api/studio/invoices/${invoice.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    onUpdate(invoice.id, nextStatus);
-    setUpdating(false);
+    try {
+      // PAID uses the pay route so receipt + activity log are created
+      const url = nextStatus === "PAID"
+        ? `/api/studio/invoices/${invoice.id}/pay`
+        : `/api/studio/invoices/${invoice.id}`;
+      const body = nextStatus === "PAID"
+        ? { paymentMethod: "MANUAL" }
+        : { status: nextStatus };
+      const res = await fetch(url, {
+        method: nextStatus === "PAID" ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) onUpdate(invoice.id, nextStatus);
+    } finally {
+      setUpdating(false);
+    }
   }
 
   async function handleSend() {
