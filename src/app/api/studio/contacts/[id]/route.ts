@@ -104,6 +104,7 @@ export async function PATCH(
       instagramHandle: body.instagramHandle?.trim() ?? existing.instagramHandle,
       genre: body.genre?.trim() ?? existing.genre,
       notes: body.notes?.trim() ?? existing.notes,
+      ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
     },
   });
 

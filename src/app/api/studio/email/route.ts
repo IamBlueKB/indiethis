@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// GET /api/studio/email — list email campaigns
+// GET /api/studio/email — list email campaigns + recipient counts per segment
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "STUDIO_ADMIN") {
@@ -15,27 +15,47 @@ export async function GET() {
   });
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
+  const studioId = studio.id;
+
   const campaigns = await db.emailCampaign.findMany({
-    where: { studioId: studio.id },
+    where: { studioId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 
-  // Count contacts per source for segmentation UI
-  const [totalContacts, sourceCounts] = await Promise.all([
-    db.contact.count({ where: { studioId: studio.id } }),
-    db.contact.groupBy({
-      by: ["source"],
-      where: { studioId: studio.id },
-      _count: { id: true },
-    }),
-  ]);
+  const [totalContacts, artistCount, producerCount, bookedCount, allContacts] =
+    await Promise.all([
+      db.contact.count({ where: { studioId } }),
+      db.contact.count({ where: { studioId, tags: { has: "artist" } } }),
+      db.contact.count({ where: { studioId, tags: { has: "producer" } } }),
+      db.contact.count({ where: { studioId, sessions: { some: {} } } }),
+      db.contact.findMany({ where: { studioId }, select: { tags: true } }),
+    ]);
 
-  const countBySource = Object.fromEntries(
-    sourceCounts.map((r) => [r.source, r._count.id])
-  );
+  const leadsCount = totalContacts - bookedCount;
 
-  return NextResponse.json({ campaigns, totalContacts, countBySource });
+  // Collect unique custom tags (excluding built-ins)
+  const builtIn = new Set(["artist", "producer"]);
+  const customTagCounts: Record<string, number> = {};
+  for (const c of allContacts) {
+    for (const t of c.tags) {
+      if (!builtIn.has(t)) {
+        customTagCounts[t] = (customTagCounts[t] ?? 0) + 1;
+      }
+    }
+  }
+
+  return NextResponse.json({
+    campaigns,
+    totalContacts,
+    segmentCounts: {
+      artist: artistCount,
+      producer: producerCount,
+      booked: bookedCount,
+      leads: leadsCount,
+    },
+    customTagCounts,
+  });
 }
 
 // POST /api/studio/email — create (and optionally send) campaign
@@ -51,25 +71,38 @@ export async function POST(req: NextRequest) {
   });
   if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
 
+  const studioId = studio.id;
   const body = await req.json();
-  const { subject, body: emailBody, sendNow, attachmentUrls, sourceFilter } = body;
+  const { subject, body: emailBody, sendNow, attachmentUrls, segment, customTag } = body;
 
   if (!subject?.trim() || !emailBody?.trim()) {
     return NextResponse.json({ error: "Subject and body are required" }, { status: 400 });
   }
 
-  const recipientWhere = {
-    studioId: studio.id,
-    ...(sourceFilter ? { source: sourceFilter as import("@prisma/client").ContactSource } : {}),
-  };
+  // Build where clause based on segment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let recipientWhere: any = { studioId };
+
+  if (segment === "artist") {
+    recipientWhere = { studioId, tags: { has: "artist" } };
+  } else if (segment === "producer") {
+    recipientWhere = { studioId, tags: { has: "producer" } };
+  } else if (segment === "booked") {
+    recipientWhere = { studioId, sessions: { some: {} } };
+  } else if (segment === "leads") {
+    recipientWhere = { studioId, sessions: { none: {} } };
+  } else if (segment === "custom" && customTag?.trim()) {
+    recipientWhere = { studioId, tags: { has: customTag.trim().toLowerCase() } };
+  }
+
   const recipientCount = await db.contact.count({ where: recipientWhere });
 
   const campaign = await db.emailCampaign.create({
     data: {
-      studioId: studio.id,
+      studioId,
       subject: subject.trim(),
       body: emailBody.trim(),
-      recipientFilter: sourceFilter ? { source: sourceFilter } : undefined,
+      recipientFilter: segment ? { segment, customTag: customTag ?? null } : undefined,
       recipientCount,
       attachmentUrls: attachmentUrls ?? [],
       sentAt: sendNow ? new Date() : null,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Mail, Send, Users, CheckCircle2, Clock, Plus, X, Paperclip, Loader2, ChevronDown } from "lucide-react";
+import { Mail, Send, Users, CheckCircle2, Clock, Plus, X, Paperclip, Loader2, Tag } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 
 type Campaign = {
@@ -14,23 +14,33 @@ type Campaign = {
   createdAt: string;
 };
 
-const SOURCE_LABEL: Record<string, string> = {
-  BOOKING:  "Booking",
-  INQUIRY:  "Inquiry",
-  MANUAL:   "Manual",
-  WALK_IN:  "Walk-In",
-  REFERRAL: "Referral",
+type SegmentCounts = {
+  artist: number;
+  producer: number;
+  booked: number;
+  leads: number;
 };
+
+const SEGMENTS = [
+  { value: "",         label: "All contacts",      desc: "Everyone in your contacts list" },
+  { value: "artist",   label: "Artists",            desc: "Contacts tagged as Artist" },
+  { value: "producer", label: "Producers",          desc: "Contacts tagged as Producer" },
+  { value: "booked",   label: "Clients (booked)",   desc: "Contacts with at least one booking" },
+  { value: "leads",    label: "Leads",              desc: "Contacts who have never booked" },
+  { value: "custom",   label: "Custom tag…",        desc: "Filter by a specific tag" },
+];
 
 export default function EmailPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [totalContacts, setTotalContacts] = useState(0);
-  const [countBySource, setCountBySource] = useState<Record<string, number>>({});
+  const [segmentCounts, setSegmentCounts] = useState<SegmentCounts>({ artist: 0, producer: 0, booked: 0, leads: 0 });
+  const [customTagCounts, setCustomTagCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
+  const [segment, setSegment] = useState("");
+  const [customTag, setCustomTag] = useState("");
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
@@ -43,11 +53,22 @@ export default function EmailPage() {
       .then((d) => {
         setCampaigns(d.campaigns ?? []);
         setTotalContacts(d.totalContacts ?? 0);
-        setCountBySource(d.countBySource ?? {});
+        setSegmentCounts(d.segmentCounts ?? { artist: 0, producer: 0, booked: 0, leads: 0 });
+        setCustomTagCounts(d.customTagCounts ?? {});
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  function recipientCount() {
+    if (!segment) return totalContacts;
+    if (segment === "artist") return segmentCounts.artist;
+    if (segment === "producer") return segmentCounts.producer;
+    if (segment === "booked") return segmentCounts.booked;
+    if (segment === "leads") return segmentCounts.leads;
+    if (segment === "custom") return customTagCounts[customTag.trim().toLowerCase()] ?? 0;
+    return totalContacts;
+  }
 
   async function handleSend(sendNow: boolean) {
     if (!subject.trim() || !body.trim()) return;
@@ -56,12 +77,12 @@ export default function EmailPage() {
       const res = await fetch("/api/studio/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, body, sendNow, attachmentUrls, sourceFilter: sourceFilter || undefined }),
+        body: JSON.stringify({ subject, body, sendNow, attachmentUrls, segment: segment || undefined, customTag: customTag || undefined }),
       });
       if (res.ok) {
         const data = await res.json();
         setCampaigns((prev) => [data.campaign, ...prev]);
-        setSubject(""); setBody(""); setSourceFilter(""); setAttachmentUrls([]); setAttachmentNames([]); setComposing(false);
+        setSubject(""); setBody(""); setSegment(""); setCustomTag(""); setAttachmentUrls([]); setAttachmentNames([]); setComposing(false);
       }
     } finally {
       setSending(false);
@@ -124,27 +145,52 @@ export default function EmailPage() {
           </div>
 
           {/* Recipient segmentation */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Send To</label>
-            <div className="relative">
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-accent/50 pr-8"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-              >
-                <option value="">All contacts ({totalContacts})</option>
-                {Object.entries(countBySource).map(([val, cnt]) => {
-                  const lbl = SOURCE_LABEL[val] ?? val.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-                  return (
-                    <option key={val} value={val}>
-                      {lbl} only ({cnt})
-                    </option>
-                  );
-                })}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <div className="flex flex-wrap gap-2">
+              {SEGMENTS.map((s) => {
+                const cnt =
+                  s.value === "" ? totalContacts
+                  : s.value === "artist" ? segmentCounts.artist
+                  : s.value === "producer" ? segmentCounts.producer
+                  : s.value === "booked" ? segmentCounts.booked
+                  : s.value === "leads" ? segmentCounts.leads
+                  : null;
+                const active = segment === s.value;
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => { setSegment(s.value); if (s.value !== "custom") setCustomTag(""); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all"
+                    style={active
+                      ? { backgroundColor: "#D4A843", color: "#0A0A0A", borderColor: "#D4A843" }
+                      : { borderColor: "var(--border)", color: "var(--muted-foreground)", backgroundColor: "transparent" }
+                    }
+                  >
+                    {s.value === "custom" && <Tag size={11} />}
+                    {s.label}
+                    {cnt !== null && <span className="opacity-70">({cnt})</span>}
+                  </button>
+                );
+              })}
             </div>
+            {segment === "custom" && (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  value={customTag}
+                  onChange={(e) => setCustomTag(e.target.value)}
+                  placeholder="Enter tag name…"
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }}
+                />
+                {customTag.trim() && (
+                  <span className="text-xs text-muted-foreground">
+                    {customTagCounts[customTag.trim().toLowerCase()] ?? 0} contacts
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -215,7 +261,7 @@ export default function EmailPage() {
               style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
             >
               <Send size={14} />
-              {sending ? "Sending…" : `Send to ${sourceFilter ? (countBySource[sourceFilter] ?? 0) : totalContacts} contacts`}
+              {sending ? "Sending…" : `Send to ${recipientCount()} contacts`}
             </button>
             <button
               onClick={() => handleSend(false)}

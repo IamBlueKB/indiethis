@@ -901,6 +901,7 @@ model Contact {
   genre           String?
   notes           String?
   source               ContactSource @default(MANUAL)
+  tags                 String[]      @default([])
   totalSpent           Float         @default(0)
   lastSessionDate      DateTime?
   referredToIndieThis  Boolean       @default(false)

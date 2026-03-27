@@ -49,6 +49,7 @@ type Contact = {
   genre: string | null;
   notes: string | null;
   source: string;
+  tags: string[];
   totalSpent: number;
   lastSessionDate: string | null;
   createdAt: string;
@@ -133,6 +134,9 @@ export default function ContactDetailPage() {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [savingTags, setSavingTags] = useState(false);
   const [pendingEmailCount, setPendingEmailCount] = useState(0);
   const [cancellingSequence, setCancellingSequence] = useState(false);
   // Session notes indexed by bookingSessionId
@@ -151,6 +155,7 @@ fetch(`/api/studio/contacts/${id}`)
         const contactData = { ...d.contact, aiVideoRequested };
         setContact(contactData);
         setNotes(d.contact?.notes ?? "");
+        setTags(d.contact?.tags ?? []);
         setYoutubeRefs(d.youtubeReferences ?? []);
         setScheduledEmails(d.scheduledEmails ?? []);
         setPendingEmailCount(d.pendingEmailCount ?? 0);
@@ -235,6 +240,40 @@ fetch(`/api/studio/contacts/${id}`)
     }
   }
 
+  async function saveTags(nextTags: string[]) {
+    setSavingTags(true);
+    try {
+      const res = await fetch(`/api/studio/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: nextTags }),
+      });
+      if (res.ok) {
+        setTags(nextTags);
+        setContact((prev) => prev ? { ...prev, tags: nextTags } : prev);
+      }
+    } finally {
+      setSavingTags(false);
+    }
+  }
+
+  function toggleBuiltInTag(tag: string) {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    saveTags(next);
+  }
+
+  function addCustomTag() {
+    const t = newTag.trim().toLowerCase();
+    if (!t || tags.includes(t)) { setNewTag(""); return; }
+    const next = [...tags, t];
+    saveTags(next);
+    setNewTag("");
+  }
+
+  function removeTag(tag: string) {
+    saveTags(tags.filter((t) => t !== tag));
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -297,6 +336,47 @@ fetch(`/api/studio/contacts/${id}`)
               </span>
             )}
           </div>
+          {/* Tags */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {["artist", "producer"].map((t) => (
+              <button
+                key={t}
+                type="button"
+                disabled={savingTags}
+                onClick={() => toggleBuiltInTag(t)}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border transition-all disabled:opacity-50"
+                style={tags.includes(t)
+                  ? { backgroundColor: "#D4A843", color: "#0A0A0A", borderColor: "#D4A843" }
+                  : { backgroundColor: "transparent", color: "var(--muted-foreground)", borderColor: "var(--border)" }
+                }
+              >
+                {t === "artist" ? "🎤" : "🎛️"} {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+            {tags.filter((t) => t !== "artist" && t !== "producer").map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border"
+                style={{ backgroundColor: "var(--accent)18", color: "var(--accent)", borderColor: "var(--accent)33" }}
+              >
+                <Tag size={9} /> {t}
+                <button type="button" onClick={() => removeTag(t)} className="ml-0.5 hover:opacity-70"><X size={9} /></button>
+              </span>
+            ))}
+            <form
+              onSubmit={(e) => { e.preventDefault(); addCustomTag(); }}
+              className="flex items-center gap-1"
+            >
+              <input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="+ tag"
+                className="w-16 rounded-full border px-2 py-0.5 text-xs bg-transparent text-foreground outline-none focus:w-24 transition-all"
+                style={{ borderColor: "var(--border)" }}
+              />
+            </form>
+          </div>
+
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {contact.email && (
               <a href={`mailto:${contact.email}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground no-underline">
