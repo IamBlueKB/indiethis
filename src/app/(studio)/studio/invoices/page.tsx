@@ -291,7 +291,14 @@ function EditModal({
   onSaved: (updated: Invoice) => void;
 }) {
   const [lineItems, setLineItems] = useState<LineItem[]>(
-    Array.isArray(invoice.lineItems) ? (invoice.lineItems as LineItem[]) : [{ description: "", quantity: 1, rate: 0, total: 0 }]
+    Array.isArray(invoice.lineItems)
+      ? (invoice.lineItems as Array<Record<string, unknown>>).map((item) => ({
+          description: String(item.description ?? ""),
+          quantity: Number(item.quantity ?? 1),
+          rate: Number(item.rate ?? (item as Record<string, unknown>).unitPrice ?? 0),
+          total: Number(item.total ?? 0),
+        }))
+      : [{ description: "", quantity: 1, rate: 0, total: 0 }]
   );
   const [taxRate, setTaxRate] = useState(invoice.taxRate);
   const [dueDate, setDueDate] = useState(invoice.dueDate.slice(0, 10));
@@ -521,7 +528,12 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
   const canResend = ["SENT", "VIEWED", "OVERDUE"].includes(invoice.status) && !invoice.paidAt;
 
   const lineItems = Array.isArray(invoice.lineItems)
-    ? (invoice.lineItems as LineItem[])
+    ? (invoice.lineItems as Array<Record<string, unknown>>).map((item) => ({
+        description: String(item.description ?? ""),
+        quantity: Number(item.quantity ?? 1),
+        rate: Number(item.rate ?? item.unitPrice ?? 0),
+        total: Number(item.total ?? 0),
+      }))
     : [];
 
   return (
@@ -595,8 +607,8 @@ function InvoiceRow({ invoice: initialInvoice, onUpdate, onDelete }: { invoice: 
                 >
                   <span className="text-foreground">{item.description}</span>
                   <span className="text-muted-foreground text-right">{item.quantity}</span>
-                  <span className="text-muted-foreground text-right">${item.rate.toFixed(2)}</span>
-                  <span className="text-foreground font-semibold text-right">${item.total.toFixed(2)}</span>
+                  <span className="text-muted-foreground text-right">${(item.rate ?? 0).toFixed(2)}</span>
+                  <span className="text-foreground font-semibold text-right">${(item.total ?? 0).toFixed(2)}</span>
                 </div>
               ))}
               <div className="px-4 py-3 space-y-1 text-right" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
