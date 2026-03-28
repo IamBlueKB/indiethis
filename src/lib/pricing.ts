@@ -74,6 +74,7 @@ export const PRICING_DEFAULTS = {
   AI_VIDEO_SHORT:   { value: 19,    display: "$19"     },
   AI_VIDEO_MEDIUM:  { value: 29,    display: "$29"     },
   AI_VIDEO_LONG:    { value: 49,    display: "$49"     },
+  AI_VOCAL_REMOVER: { value: 1.99,  display: "$1.99"   },
   CUT_MUSIC_SALES:  { value: 10,    display: "10%"     },
   CUT_MERCH_PUSH:   { value: 15,    display: "15%"     },
   CUT_MERCH_REIGN:  { value: 10,    display: "10%"     },
