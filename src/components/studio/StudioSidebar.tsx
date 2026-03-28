@@ -24,6 +24,7 @@ import {
   Music,
   UserCheck,
   Cpu,
+  Scissors,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -45,8 +46,9 @@ const navItems: NavItem[] = [
   { label: "Email Blasts", href: "/studio/email", icon: Mail },
   { label: "Invoices", href: "/studio/invoices", icon: FileText },
   { label: "Payments", href: "/studio/payments", icon: CreditCard },
-  { label: "AI Tools", href: "/studio/ai-tools", icon: Wand2 },
-  { label: "Credits", href: "/studio/credits", icon: Gift },
+  { label: "AI Tools",       href: "/studio/ai-tools",                icon: Wand2 },
+  { label: "Vocal Remover",  href: "/studio/ai-tools/vocal-remover",  icon: Scissors },
+  { label: "Credits",        href: "/studio/credits",                  icon: Gift },
   { label: "Settings", href: "/studio/settings", icon: Settings },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
   { label: "Portfolio", href: "/studio/settings/portfolio", icon: Music },
