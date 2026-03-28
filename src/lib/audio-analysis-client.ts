@@ -21,7 +21,7 @@ function detectBpm(channelData: Float32Array, sampleRate: number): number | null
 
   let maxAmp = 0;
   for (let i = 0; i < n; i++) if (filtered[i] > maxAmp) maxAmp = filtered[i];
-  if (maxAmp <= 0.25) return null;
+  if (maxAmp <= 0.05) return null;
 
   const minThreshold = 0.3 * maxAmp;
   let peaks: number[] = [];
@@ -148,8 +148,10 @@ export async function analyzeAudioFile(file: File): Promise<ClientAudioFeatures>
       return { bpm: null, key: null };
     }
 
-    const channelData = audioBuffer.getChannelData(0);
     const sampleRate  = audioBuffer.sampleRate;
+    // Limit to first 30 s to keep analysis fast on long tracks
+    const maxSamples  = Math.min(audioBuffer.length, sampleRate * 30);
+    const channelData = audioBuffer.getChannelData(0).slice(0, maxSamples);
 
     const bpm = detectBpm(channelData, sampleRate);
     const key = detectKey(channelData, sampleRate);
