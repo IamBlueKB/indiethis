@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { replicate } from "@/lib/replicate";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
+import { getMonthlyStudioSeparations } from "@/lib/stem-separation-usage";
 
 export const maxDuration = 30;
 
@@ -35,17 +36,43 @@ export async function POST(req: NextRequest) {
 
   const userId = session.user.id;
 
-  // ── Step 2: Start Replicate job after payment confirmed ───────────────────
+  // ── Determine if this is a studio user (free) or artist (paid) ───────────
+  const isStudio = session?.user?.role === "STUDIO_ADMIN";
+
+  // ── Step 2: Start Replicate job after Stripe payment confirmed ────────────
+  // (artist-only path — studios never go through this step)
   if (body.stripeSessionId && body.separationId) {
     return startReplicateJob(userId, body.separationId, body.stripeSessionId);
   }
 
-  // ── Step 1: Validate input + create Stripe checkout ──────────────────────
+  // ── Validate input ────────────────────────────────────────────────────────
   if (!body.fileUrl?.trim() || !body.fileName?.trim()) {
     return NextResponse.json({ error: "fileUrl and fileName are required" }, { status: 400 });
   }
 
-  // Require active subscription
+  // ── Studio path: free, skip Stripe ───────────────────────────────────────
+  if (isStudio) {
+    // Soft ceiling: 200 completed separations per calendar month
+    const monthlyUsage = await getMonthlyStudioSeparations(userId);
+    if (monthlyUsage >= 200) {
+      // TODO: send admin alert when admin notification system is available
+      console.warn(`[stem-separation] Studio ${userId} has ${monthlyUsage} completed separations this month (soft ceiling: 200)`);
+    }
+
+    // Create separation record and kick off Replicate immediately
+    const separation = await db.stemSeparation.create({
+      data: {
+        userId,
+        originalFileUrl:  body.fileUrl.trim(),
+        originalFileName: body.fileName.trim(),
+        status: "pending",
+      },
+    });
+
+    return startReplicateJobDirect(userId, separation.id);
+  }
+
+  // ── Artist path: require active subscription + $1.99 Stripe checkout ─────
   const user = await db.user.findUnique({
     where: { id: userId },
     select: {
@@ -178,6 +205,59 @@ async function startReplicateJob(userId: string, separationId: string, stripeSes
   }
 }
 
+// ── Internal: start Replicate prediction for studio (no payment) ─────────────
+
+async function startReplicateJobDirect(userId: string, separationId: string) {
+  const separation = await db.stemSeparation.findFirst({
+    where: { id: separationId, userId },
+  });
+  if (!separation) {
+    return NextResponse.json({ error: "Separation not found" }, { status: 404 });
+  }
+  if (separation.status !== "pending") {
+    return NextResponse.json({ separationId: separation.id, status: separation.status });
+  }
+
+  if (!replicate) {
+    await db.stemSeparation.update({
+      where: { id: separationId },
+      data: { status: "failed", errorMessage: "Replicate not configured" },
+    });
+    return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
+  }
+
+  try {
+    const prediction = await replicate.predictions.create({
+      model: "cjwbw/demucs",
+      input: {
+        audio:      separation.originalFileUrl,
+        model_name: "htdemucs_ft",
+        stem:       "no_stem",
+        clip_mode:  "rescale",
+        shifts:     1,
+        overlap:    0.25,
+      },
+    });
+
+    await db.stemSeparation.update({
+      where: { id: separationId },
+      data: {
+        status:      "processing",
+        replicateId: prediction.id,
+        // stripePaymentId intentionally null — free studio separation
+      },
+    });
+
+    return NextResponse.json({ separationId, status: "processing", replicateId: prediction.id });
+  } catch (err) {
+    await db.stemSeparation.update({
+      where: { id: separationId },
+      data: { status: "failed", errorMessage: String(err) },
+    });
+    return NextResponse.json({ error: "Failed to start separation", detail: String(err) }, { status: 500 });
+  }
+}
+
 // ── GET: list history ────────────────────────────────────────────────────────
 
 export async function GET() {
@@ -186,16 +266,25 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [separations, pricing] = await Promise.all([
+  const isStudio = session.user.role === "STUDIO_ADMIN";
+
+  const [separations, pricing, monthlyUsage] = await Promise.all([
     db.stemSeparation.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
     getPricing(),
+    isStudio ? getMonthlyStudioSeparations(session.user.id) : Promise.resolve(0),
   ]);
 
   const price = pricing["AI_VOCAL_REMOVER"] ?? PRICING_DEFAULTS.AI_VOCAL_REMOVER;
 
-  return NextResponse.json({ separations, priceDisplay: price.display, priceValue: price.value });
+  return NextResponse.json({
+    separations,
+    priceDisplay:  price.display,
+    priceValue:    price.value,
+    isStudio,
+    monthlyUsage,
+  });
 }
