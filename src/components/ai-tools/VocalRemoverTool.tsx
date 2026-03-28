@@ -99,10 +99,12 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
   const [submitting,   setSubmitting]   = useState(false);
   const [submitError,  setSubmitError]  = useState<string | null>(null);
 
-  // History + pricing
+  // History + pricing + studio state
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [priceDisplay,   setPriceDisplay]   = useState(PRICING_DEFAULTS.AI_VOCAL_REMOVER.display);
+  const [isStudio,       setIsStudio]       = useState(false);
+  const [monthlyUsage,   setMonthlyUsage]   = useState(0);
 
   // UploadThing — artist track router (256MB audio)
   const { startUpload, isUploading } = useUploadThing("artistTrack", {
@@ -123,6 +125,8 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
       .then(d => {
         setHistory(d.separations ?? []);
         if (d.priceDisplay) setPriceDisplay(d.priceDisplay);
+        if (d.isStudio) setIsStudio(true);
+        if (typeof d.monthlyUsage === "number") setMonthlyUsage(d.monthlyUsage);
       })
       .finally(() => setHistoryLoading(false));
 
@@ -193,7 +197,7 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
     e.target.value = "";
   }
 
-  // ── Submit (create Stripe checkout) ──────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!uploadedUrl || !uploadedName) return;
     setSubmitting(true);
@@ -209,8 +213,15 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
         window.location.href = "/dashboard/upgrade";
         return;
       }
-      if (!res.ok) { setSubmitError(data.error ?? "Failed to start payment"); return; }
-      if (data.checkoutUrl) window.location.href = data.checkoutUrl;
+      if (!res.ok) { setSubmitError(data.error ?? "Failed to start separation"); return; }
+
+      if (data.separationId) {
+        // Studio path: job already started, begin polling
+        setSeparationId(data.separationId);
+      } else if (data.checkoutUrl) {
+        // Artist path: redirect to Stripe
+        window.location.href = data.checkoutUrl;
+      }
     } finally {
       setSubmitting(false);
     }
@@ -244,7 +255,7 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
           className="shrink-0 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold"
           style={{ backgroundColor: "#D4A84322", color: "#D4A843", border: "1px solid #D4A84355" }}
         >
-          {priceDisplay} per track
+          {isStudio ? "Included with your Studio plan" : `${priceDisplay} per track`}
         </span>
       </div>
 
@@ -321,12 +332,20 @@ export default function VocalRemoverTool({ mode }: VocalRemoverToolProps) {
           >
             {submitting
               ? <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Starting…</span>
-              : `Separate Stems — ${priceDisplay}`
+              : isStudio
+                ? "Separate Stems"
+                : `Separate Stems — ${priceDisplay}`
             }
           </button>
-          <p className="text-xs text-center text-muted-foreground">
-            You'll be taken to a secure checkout. Separation begins immediately after payment.
-          </p>
+          {isStudio ? (
+            <p className="text-xs text-center text-muted-foreground">
+              {monthlyUsage} of 200 separations used this month
+            </p>
+          ) : (
+            <p className="text-xs text-center text-muted-foreground">
+              You&apos;ll be taken to a secure checkout. Separation begins immediately after payment.
+            </p>
+          )}
         </div>
       ) : null}
 
