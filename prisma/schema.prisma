@@ -186,6 +186,10 @@ enum NotificationType {
   TRIAL_EXPIRING
   ACCOUNT_COMPED
 
+  // Stem Separation
+  STEM_SEPARATION_COMPLETE
+  STEM_SEPARATION_FAILED
+
   // Admin
   CONTENT_FLAGGED
   NEW_USER_SIGNUP
@@ -532,6 +536,7 @@ model User {
   featuredCards         ExploreFeatureCard[] @relation("FeaturedArtist")
   onboardingEmails      OnboardingEmailLog[]
   reEngagementEmails    ReEngagementEmailLog[]
+  stemSeparations       StemSeparation[]
 }
 
 model Studio {
@@ -2257,4 +2262,26 @@ model PendingSignup {
   tier            String?
   createdAt       DateTime  @default(now())
   expiresAt       DateTime
+}
+
+// ─── Stem Separation ──────────────────────────────────────────────────────────
+
+model StemSeparation {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  originalFileUrl   String
+  originalFileName  String
+  vocalsUrl         String?
+  drumsUrl          String?
+  bassUrl           String?
+  otherUrl          String?
+  status            String   @default("pending") // pending, processing, completed, failed
+  replicateId       String?  // Replicate prediction ID for polling
+  stripePaymentId   String?
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
 }
