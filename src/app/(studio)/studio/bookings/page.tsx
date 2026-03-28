@@ -18,7 +18,7 @@ type Booking = {
   paymentStatus: string;
   notes: string | null;
   engineerNotes: string | null;
-  artist: { name: string; email: string };
+  artist: { name: string; email: string } | null;
   contact: { id: string; name: string } | null;
 };
 
@@ -326,6 +326,158 @@ function SendIntakeModal({
   );
 }
 
+// ─── Add Booking Modal ────────────────────────────────────────────────────────
+
+function AddBookingModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (booking: Booking) => void;
+}) {
+  const [name, setName]           = useState("");
+  const [email, setEmail]         = useState("");
+  const [phone, setPhone]         = useState("");
+  const [sessionDate, setDate]    = useState("");
+  const [sessionTime, setTime]    = useState("");
+  const [endTime, setEndTime]     = useState("");
+  const [sessionType, setType]    = useState("");
+  const [notes, setNotes]         = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
+  function calcDuration(start: string, end: string) {
+    if (!start || !end) return undefined;
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    return mins > 0 ? Math.round(mins / 60 * 10) / 10 : undefined;
+  }
+
+  async function handleSave() {
+    if (!sessionDate || !sessionTime) {
+      setError("Date and start time are required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const dateTime = `${sessionDate}T${sessionTime}`;
+      const duration = calcDuration(sessionTime, endTime);
+      const res = await fetch("/api/studio/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:        name.trim() || undefined,
+          email:       email.trim() || undefined,
+          phone:       phone.trim() || undefined,
+          dateTime,
+          duration,
+          sessionType: sessionType.trim() || undefined,
+          notes:       notes.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onCreated(data.booking);
+        onClose();
+      } else {
+        setError(data.error ?? "Failed to create booking.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-60 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 z-70 flex items-center justify-center p-4" style={{ pointerEvents: "none" }}>
+        <div
+          className="w-full max-w-sm rounded-2xl border p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", pointerEvents: "auto" }}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-foreground">Add Booking</h3>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5">
+              <X size={15} />
+            </button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">Walk-in or manual booking — no IndieThis account needed.</p>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Artist or client name"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Mail size={11} /> Email
+                </label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optional"
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Phone size={11} /> Phone
+                </label>
+                <input value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="optional" inputMode="tel"
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                  style={{ borderColor: "var(--border)" }} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: !sessionDate ? "#D4A843" : "var(--muted-foreground)" }}>Date *</label>
+              <input type="date" value={sessionDate} onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: !sessionDate ? "#D4A843" : "var(--border)" }} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TimePicker label="Start Time" required value={sessionTime} highlight={!sessionTime} onChange={setTime} />
+              <TimePicker label="End Time" value={endTime} onChange={setEndTime} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Session Type</label>
+              <input value={sessionType} onChange={(e) => setType(e.target.value)} placeholder="e.g. Recording, Mix, Mastering"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional notes"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none resize-none focus:ring-2 focus:ring-accent/50"
+                style={{ borderColor: "var(--border)" }} />
+            </div>
+
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border"
+                style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>Cancel</button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {saving ? "Adding…" : "Add Booking"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Session Notes Section ────────────────────────────────────────────────────
 
 type SessionNoteAttachment = { id: string; fileUrl: string; fileName: string; fileSize: number | null };
@@ -592,6 +744,181 @@ function SessionNotesSection({ bookingId }: { bookingId: string }) {
   );
 }
 
+// ─── Complete + Invoice Modal ─────────────────────────────────────────────────
+
+type LineItem = { description: string; quantity: number; rate: number; total: number };
+
+function CompleteInvoiceModal({
+  booking,
+  defaultRate,
+  onClose,
+  onComplete,
+}: {
+  booking: Booking;
+  defaultRate: number;
+  onClose: () => void;
+  onComplete: (invoiceId: string | null) => void;
+}) {
+  const [items, setItems] = useState<LineItem[]>([
+    { description: "Recording Session", quantity: 1, rate: defaultRate, total: defaultRate },
+  ]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  const ADD_ONS = [
+    { description: "Mixing", rate: 75 },
+    { description: "Mastering", rate: 50 },
+    { description: "AI Music Video", rate: 49 },
+  ];
+
+  function updateItem(i: number, field: keyof LineItem, val: string) {
+    setItems((prev) => {
+      const next = [...prev];
+      const item = { ...next[i], [field]: field === "description" ? val : parseFloat(val) || 0 };
+      item.total = item.quantity * item.rate;
+      next[i] = item;
+      return next;
+    });
+  }
+
+  function toggleAddOn(addon: { description: string; rate: number }) {
+    setItems((prev) => {
+      const exists = prev.findIndex((it) => it.description === addon.description);
+      if (exists >= 0) return prev.filter((_, i) => i !== exists);
+      return [...prev, { description: addon.description, quantity: 1, rate: addon.rate, total: addon.rate }];
+    });
+  }
+
+  const subtotal = items.reduce((s, it) => s + it.total, 0);
+
+  async function handleComplete(withInvoice: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/studio/bookings/${booking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "COMPLETED",
+          ...(withInvoice && booking.contact ? { invoiceItems: items } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onComplete(data.invoiceId ?? null);
+      } else {
+        setError(data.error ?? "Failed to complete booking.");
+      }
+    } catch {
+      setError("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasContact = !!booking.contact;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-60 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 z-70 flex items-center justify-center p-4" style={{ pointerEvents: "none" }}>
+        <div
+          className="w-full max-w-sm rounded-2xl border p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", pointerEvents: "auto" }}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-foreground">Complete Session</h3>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5">
+              <X size={15} />
+            </button>
+          </div>
+
+          {hasContact ? (
+            <>
+              <p className="text-xs text-muted-foreground">Review line items below, then complete and create a draft invoice.</p>
+
+              <div className="space-y-2">
+                {items.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)}
+                      className="flex-1 rounded-lg border px-2.5 py-1.5 text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50"
+                      style={{ borderColor: "var(--border)" }} />
+                    <div className="relative w-20">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                      <input type="number" min="0" value={item.rate} onChange={(e) => updateItem(i, "rate", e.target.value)}
+                        className="w-full rounded-lg border pl-5 pr-2 py-1.5 text-sm bg-transparent text-foreground outline-none focus:ring-1 focus:ring-accent/50"
+                        style={{ borderColor: "var(--border)" }} />
+                    </div>
+                    {items.length > 1 && (
+                      <button onClick={() => setItems((p) => p.filter((_, j) => j !== i))}
+                        className="p-1 rounded text-muted-foreground hover:text-red-400 transition-colors">
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {ADD_ONS.map((ao) => {
+                  const active = items.some((it) => it.description === ao.description);
+                  return (
+                    <button key={ao.description} onClick={() => toggleAddOn(ao)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors"
+                      style={{
+                        borderColor: active ? "#D4A843" : "var(--border)",
+                        color: active ? "#D4A843" : "var(--muted-foreground)",
+                        backgroundColor: active ? "rgba(212,168,67,0.1)" : "transparent",
+                      }}>
+                      {active ? <X size={10} /> : <Plus size={10} />}
+                      {ao.description} (${ao.rate})
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: "var(--border)" }}>
+                <span className="text-xs font-semibold text-muted-foreground">Total</span>
+                <span className="text-sm font-bold" style={{ color: "#D4A843" }}>${subtotal.toFixed(2)}</span>
+              </div>
+
+              {error && <p className="text-xs text-red-400">{error}</p>}
+
+              <div className="flex flex-col gap-2 pt-1">
+                <button onClick={() => handleComplete(true)} disabled={saving}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  Complete & Create Invoice
+                </button>
+                <button onClick={() => handleComplete(false)} disabled={saving}
+                  className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                  Skip — just mark complete
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">No contact linked to this booking. Invoice creation requires a contact.</p>
+              {error && <p className="text-xs text-red-400">{error}</p>}
+              <div className="flex gap-3 pt-1">
+                <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>Cancel</button>
+                <button onClick={() => handleComplete(false)} disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  Mark Complete
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
 
 function BookingDrawer({
@@ -609,6 +936,8 @@ function BookingDrawer({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPayment, setUpdatingPayment] = useState(false);
   const [sendIntakeOpen, setSendIntakeOpen] = useState(false);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [completedInvoiceId, setCompletedInvoiceId] = useState<string | null>(null);
 
   const dt = new Date(booking.dateTime);
   const nextStatus = NEXT_STATUS[booking.status];
@@ -624,6 +953,11 @@ function BookingDrawer({
 
   async function advanceStatus() {
     if (!nextStatus) return;
+    // Intercept COMPLETED to show invoice modal
+    if (nextStatus === "COMPLETED") {
+      setCompleteModalOpen(true);
+      return;
+    }
     setUpdatingStatus(true);
     await patch({ status: nextStatus });
     onUpdate(booking.id, { status: nextStatus });
@@ -670,19 +1004,23 @@ function BookingDrawer({
         </div>
 
         <div className="flex-1 p-6 space-y-5">
-          {/* Artist */}
+          {/* Artist / Contact */}
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm"
               style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}
             >
-              {booking.artist.name[0].toUpperCase()}
+              {(booking.artist?.name ?? booking.contact?.name ?? "?")[0].toUpperCase()}
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground">{booking.artist.name}</p>
-              <p className="text-xs text-muted-foreground">{booking.artist.email}</p>
+              <p className="text-sm font-bold text-foreground">
+                {booking.artist?.name ?? booking.contact?.name ?? "Walk-in"}
+              </p>
+              {booking.artist?.email && (
+                <p className="text-xs text-muted-foreground">{booking.artist.email}</p>
+              )}
               {booking.contact && (
-                <p className="text-xs text-muted-foreground">CRM: {booking.contact.name}</p>
+                <p className="text-xs text-muted-foreground">Contact: {booking.contact.name}</p>
               )}
             </div>
           </div>
@@ -831,11 +1169,38 @@ function BookingDrawer({
       {/* Send intake modal */}
       {sendIntakeOpen && (
         <SendIntakeModal
-          defaultEmail={booking.artist.email ?? ""}
+          defaultEmail={booking.artist?.email ?? ""}
           defaultDate={new Date(booking.dateTime).toISOString().split("T")[0]}
           defaultTime={new Date(booking.dateTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}
           onClose={() => setSendIntakeOpen(false)}
         />
+      )}
+
+      {/* Complete + Invoice modal */}
+      {completeModalOpen && (
+        <CompleteInvoiceModal
+          booking={booking}
+          defaultRate={150}
+          onClose={() => setCompleteModalOpen(false)}
+          onComplete={(invId) => {
+            setCompleteModalOpen(false);
+            setCompletedInvoiceId(invId);
+            onUpdate(booking.id, { status: "COMPLETED" });
+          }}
+        />
+      )}
+
+      {/* Invoice created banner */}
+      {completedInvoiceId && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-xl text-sm font-semibold"
+          style={{ backgroundColor: "var(--card)", borderColor: "#D4A843", color: "#D4A843" }}>
+          <CheckCircle2 size={16} />
+          Draft invoice created!
+          <a href={`/studio/invoices`} className="underline text-xs" style={{ color: "#D4A843" }}>View →</a>
+          <button onClick={() => setCompletedInvoiceId(null)} className="ml-1 text-muted-foreground hover:text-foreground">
+            <X size={13} />
+          </button>
+        </div>
       )}
     </>
   );
@@ -997,6 +1362,7 @@ export default function StudioBookingsPage() {
   const [selected, setSelected] = useState<Booking | null>(null);
   const [selectedIntake, setSelectedIntake] = useState<IntakeSubmissionItem | null>(null);
   const [sendIntakeOpen, setSendIntakeOpen] = useState(false);
+  const [addBookingOpen, setAddBookingOpen] = useState(false);
   const [intakeRequest, setIntakeRequest] = useState<BookingRequest | null>(null);
 
   const loadData = useCallback((silent = false) => {
@@ -1058,16 +1424,31 @@ export default function StudioBookingsPage() {
           <h1 className="text-2xl font-bold text-foreground">Bookings</h1>
           <p className="text-sm text-muted-foreground mt-0.5">All studio sessions</p>
         </div>
-        <button
-          onClick={() => setSendIntakeOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Send size={14} /> Send Intake Form
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAddBookingOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border"
+            style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+          >
+            <Plus size={14} /> Add Booking
+          </button>
+          <button
+            onClick={() => setSendIntakeOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          >
+            <Send size={14} /> Send Intake Form
+          </button>
+        </div>
       </div>
 
       {sendIntakeOpen && <SendIntakeModal onClose={() => setSendIntakeOpen(false)} />}
+      {addBookingOpen && (
+        <AddBookingModal
+          onClose={() => setAddBookingOpen(false)}
+          onCreated={(booking) => setBookings((prev) => [booking, ...prev])}
+        />
+      )}
       {intakeRequest && (
         <SendIntakeModal
           defaultEmail={intakeRequest.email}
@@ -1313,8 +1694,8 @@ export default function StudioBookingsPage() {
                 style={{ borderColor: "var(--border)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{b.artist.name}</p>
-                  <p className="text-xs text-muted-foreground">{b.contact ? b.contact.name : b.artist.email}</p>
+                  <p className="text-sm font-semibold text-foreground">{b.artist?.name ?? b.contact?.name ?? "Walk-in"}</p>
+                  <p className="text-xs text-muted-foreground">{b.contact?.name ?? b.artist?.email ?? ""}</p>
                 </div>
                 <div>
                   <p className="text-sm text-foreground">

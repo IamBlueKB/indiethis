@@ -667,7 +667,7 @@ model Subscription {
 model BookingSession {
   id            String        @id @default(cuid())
   studioId      String
-  artistId      String
+  artistId      String?
   contactId     String?
   dateTime      DateTime
   duration      Int?
@@ -682,7 +682,7 @@ model BookingSession {
   updatedAt     DateTime      @updatedAt
 
   studio         Studio          @relation(fields: [studioId], references: [id])
-  artist         User            @relation(fields: [artistId], references: [id])
+  artist         User?           @relation(fields: [artistId], references: [id])
   contact        Contact?        @relation(fields: [contactId], references: [id])
   deliveredFiles DeliveredFile[]
   sessionNotes   SessionNote[]

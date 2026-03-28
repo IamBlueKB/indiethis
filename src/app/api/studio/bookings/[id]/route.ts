@@ -23,11 +23,12 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { status, paymentStatus, engineerNotes, notes } = body as {
+  const { status, paymentStatus, engineerNotes, notes, invoiceItems } = body as {
     status?: string;
     paymentStatus?: string;
     engineerNotes?: string;
     notes?: string;
+    invoiceItems?: { description: string; quantity: number; rate: number; total: number }[];
   };
 
   const updated = await db.bookingSession.updateMany({
@@ -91,5 +92,38 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ success: true });
+  // Create draft invoice when completing a booking with line items and a contact
+  let invoiceId: string | null = null;
+  if (status === "COMPLETED" && invoiceItems?.length && booking?.contactId) {
+    try {
+      const subtotal = invoiceItems.reduce((sum, li) => sum + li.total, 0);
+      const lastInvoice = await db.invoice.findFirst({
+        where: { studioId: studio.id },
+        orderBy: { invoiceNumber: "desc" },
+        select: { invoiceNumber: true },
+      });
+      const invoiceNumber = (lastInvoice?.invoiceNumber ?? 0) + 1;
+      const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const invoice = await db.invoice.create({
+        data: {
+          studioId:      studio.id,
+          contactId:     booking.contactId,
+          invoiceNumber,
+          lineItems:     invoiceItems,
+          subtotal,
+          tax:           0,
+          taxRate:       0,
+          total:         subtotal,
+          dueDate,
+          status:        "DRAFT",
+        },
+      });
+      invoiceId = invoice.id;
+    } catch {
+      // non-fatal — booking is still completed
+    }
+  }
+
+  return NextResponse.json({ success: true, invoiceId });
 }

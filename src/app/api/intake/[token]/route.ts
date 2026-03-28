@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { stripe } from "@/lib/stripe";
+import { sendEmail } from "@/lib/brevo/email";
+import { sendSMS } from "@/lib/brevo/sms";
+import { toE164 } from "@/lib/formatPhone";
 
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
@@ -223,7 +226,7 @@ export async function POST(
   // Notify studio owner of new intake submission
   const studioOwner = await db.studio.findUnique({
     where: { id: link.studioId },
-    select: { ownerId: true, name: true },
+    select: { ownerId: true, name: true, email: true, phone: true },
   });
   if (studioOwner?.ownerId) {
     void createNotification({
@@ -233,6 +236,39 @@ export async function POST(
       message: `${contactName}${artistName.trim() !== contactName ? ` (${artistName.trim()})` : ""} submitted an intake form`,
       link: "/studio/inbox",
     }).catch(() => {});
+
+    // Email studio owner
+    const ownerUser = await db.user.findUnique({
+      where: { id: studioOwner.ownerId },
+      select: { email: true, name: true },
+    }).catch(() => null);
+    const ownerEmail = studioOwner.email || ownerUser?.email;
+    if (ownerEmail) {
+      const sessionLine = link.sessionDate
+        ? `Session: ${new Date(link.sessionDate).toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })}${link.sessionTime ? ` at ${link.sessionTime}` : ""}`
+        : null;
+      void sendEmail({
+        to: { email: ownerEmail, name: ownerUser?.name ?? studioOwner.name },
+        subject: `New intake — ${artistName.trim()} @ ${studioOwner.name}`,
+        htmlContent: [
+          `<p><strong>${contactName}</strong>${artistName.trim() !== contactName ? ` (${artistName.trim()})` : ""} just submitted an intake form.</p>`,
+          contactEmail ? `<p>Email: ${contactEmail}</p>` : "",
+          contactPhone ? `<p>Phone: ${contactPhone}</p>` : "",
+          genre ? `<p>Genre: ${genre}</p>` : "",
+          sessionLine ? `<p>${sessionLine}</p>` : "",
+          `<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/studio/inbox">View in your dashboard →</a></p>`,
+        ].filter(Boolean).join(""),
+      }).catch(() => {});
+    }
+
+    // SMS studio owner via studio phone
+    const smsPhone = studioOwner.phone;
+    if (smsPhone) {
+      void sendSMS({
+        to: toE164(smsPhone),
+        content: `New intake from ${artistName.trim()}. Check your IndieThis dashboard.`,
+      }).catch(() => {});
+    }
   }
 
   // Remove the matching booking request so it disappears from the studio's requests list

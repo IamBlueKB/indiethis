@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Provide a name, email, or phone number." }, { status: 400 });
   }
 
+  // Server-side: reject past session date/time
+  if (sessionDate && sessionTime) {
+    if (new Date(`${sessionDate}T${sessionTime}`) < new Date()) {
+      return NextResponse.json({ error: "Session date and time cannot be in the past." }, { status: 400 });
+    }
+  }
+
   const token = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 hours
 

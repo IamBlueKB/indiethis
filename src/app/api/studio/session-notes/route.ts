@@ -84,6 +84,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
+  if (!booking.artistId) {
+    return NextResponse.json({ error: "Session notes require a linked artist account." }, { status: 400 });
+  }
+
   const note = await db.sessionNote.create({
     data: {
       bookingSessionId: body.bookingSessionId,
