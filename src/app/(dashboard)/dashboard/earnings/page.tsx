@@ -6,6 +6,7 @@ import {
   Radio, Music2, DollarSign, FileText, Zap, ExternalLink, Loader2,
 } from "lucide-react";
 import { useEarnings } from "@/hooks/queries";
+import EarningsProjector from "@/components/dashboard/EarningsProjector";
 
 // ─── Shared types (artist side) ───────────────────────────────────────────────
 
@@ -520,6 +521,9 @@ export default function EarningsPage() {
         <h1 className="text-2xl font-bold text-foreground">Earnings & Receipts</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Your payment history and producer income</p>
       </div>
+
+      {/* ── Earnings Projector ── */}
+      <EarningsProjector />
 
       {/* Combined header — always visible */}
       {!loadingProducer && hasProducerBeats && (

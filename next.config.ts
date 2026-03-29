@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
     "fluent-ffmpeg",
     "node-web-audio-api",
     "essentia.js",
+    "pdf-parse",
+    "pdfjs-dist",
   ],
 };
 

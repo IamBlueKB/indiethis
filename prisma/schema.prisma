@@ -294,6 +294,8 @@ enum AIJobType {
   LYRIC_VIDEO
   AR_REPORT
   PRESS_KIT
+  BIO_GENERATOR
+  CONTRACT_SCANNER
 }
 
 enum AIJobStatus {

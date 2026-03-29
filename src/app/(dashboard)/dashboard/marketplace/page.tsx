@@ -9,6 +9,7 @@ import { useUploadThing } from "@/lib/uploadthing-client";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import BeatLicenseModal, { LICENSE_OPTIONS, type StreamLeaseTarget } from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+import SimilarTracks from "@/components/audio/SimilarTracks";
 
 type BeatPreview = {
   id: string;
@@ -1139,6 +1140,9 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                   />
                   <div className="mt-3 flex justify-center">
                     <LazyAudioRadar trackId={t.id} size="sm" animated={false} />
+                  </div>
+                  <div className="mt-2">
+                    <SimilarTracks sourceId={t.id} sourceType="beat" limit={4} />
                   </div>
                 </div>
                 {t.price && !t.isOwned && (

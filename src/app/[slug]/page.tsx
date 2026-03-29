@@ -35,6 +35,7 @@ import type { PageConfig } from "@/types/page-config";
 import PageViewTracker from "@/components/studio/PageViewTracker";
 import { calculateAverageFeatures } from "@/lib/audio-features";
 import type { AudioFeatureScores } from "@/lib/audio-features";
+import SimilarArtists from "@/components/audio/SimilarArtists";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -419,6 +420,13 @@ async function ArtistSite({ slug }: { slug: string }) {
               studioSlug={studioSlug ?? null}
               soundDNA={soundDNA}
             />
+          </div>
+        )}
+
+        {/* 12b. Similar Artists */}
+        {allPublishedFeatures.length >= 3 && (
+          <div>
+            <SimilarArtists artistId={artist.id} limit={8} />
           </div>
         )}
 

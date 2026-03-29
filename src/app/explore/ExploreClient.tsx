@@ -8,10 +8,14 @@ import { useAudioStore } from "@/store";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+import SimilarTracks from "@/components/audio/SimilarTracks";
+import SimilarArtists from "@/components/audio/SimilarArtists";
+import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
+import RadarFilterResults from "@/components/explore/RadarFilterResults";
 import PublicNav from "@/components/layout/PublicNav";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
-  Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X,
+  Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -385,6 +389,7 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
       <div className="flex justify-center my-2">
         <LazyAudioRadar trackId={beat.id} size="sm" animated={false} />
       </div>
+      <SimilarTracks sourceId={beat.id} sourceType="beat" limit={3} />
       <button
         onClick={() => onLicense(beat)}
         className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors"
@@ -485,6 +490,7 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
           More from {artist.name} →
         </Link>
       )}
+      <SimilarArtists artistId={artist.id} limit={4} />
     </div>
   );
 }
@@ -596,16 +602,17 @@ function SearchBar({ onFilter }: { onFilter: (tab: FilterTab) => void }) {
 
 // ── Filter Pills ───────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai";
+type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound";
 
 type FilterTabDef = { key: FilterTab; label: string; icon?: React.ElementType };
 
 const FILTER_TABS: FilterTabDef[] = [
   { key: "all",     label: "All" },
-  { key: "artists", label: "Artists", icon: Users },
-  { key: "music",   label: "Music",   icon: Music2 },
-  { key: "beats",   label: "Beats",   icon: Headphones },
-  { key: "studios", label: "Studios", icon: Building2 },
+  { key: "sound",   label: "Find Your Sound", icon: Radar },
+  { key: "artists", label: "Artists",  icon: Users },
+  { key: "music",   label: "Music",    icon: Music2 },
+  { key: "beats",   label: "Beats",    icon: Headphones },
+  { key: "studios", label: "Studios",  icon: Building2 },
   { key: "ai",      label: "AI Tools", icon: Wand2 },
 ];
 
@@ -695,6 +702,14 @@ export default function ExploreClient() {
   const [studioQuery, setStudioQuery] = useState("");
   const [studioSearching, setStudioSearching] = useState(false);
 
+  // ── Radar filter state ─────────────────────────────────────────────────────
+  const [radarQueryKey, setRadarQueryKey] = useState(0);
+  const [radarProfile, setRadarProfile]   = useState<RadarFilterState | null>(null);
+  const [radarType, setRadarType]         = useState<"track" | "beat" | "both">("both");
+  const [radarGenre, setRadarGenre]       = useState<string | null>(null);
+  const [radarMood, setRadarMood]         = useState<string | null>(null);
+  const [radarVocal, setRadarVocal]       = useState<boolean | null>(null);
+
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [loadingNew, setLoadingNew] = useState(true);
   const [loadingBeats, setLoadingBeats] = useState(true);
@@ -708,6 +723,7 @@ export default function ExploreClient() {
     studios: useRef<HTMLElement>(null),
     artists: useRef<HTMLElement>(null),
     ai:      useRef<HTMLElement>(null),
+    sound:   useRef<HTMLElement>(null),
   };
 
   useEffect(() => {
@@ -803,7 +819,7 @@ export default function ExploreClient() {
     setStudioSearching(false);
   }
 
-  const showSection = (key: string) => activeFilter === "all" || activeFilter === key || key === "featured";
+  const showSection = (key: string) => activeFilter !== "sound" && (activeFilter === "all" || activeFilter === key || key === "featured");
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
@@ -836,6 +852,153 @@ export default function ExploreClient() {
 
       {/* ── Page Content ── */}
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-14">
+
+        {/* ── Find Your Sound ── */}
+        {activeFilter === "sound" && (
+          <section ref={sectionRefs.sound as React.RefObject<HTMLElement>}>
+            <div className="rounded-2xl border p-6 md:p-8" style={{ background: "#111111", borderColor: "#1A1A1A" }}>
+              <div className="flex flex-col lg:flex-row gap-8 items-start">
+
+                {/* Left: interactive radar */}
+                <div className="w-full lg:w-auto flex-shrink-0 flex justify-center">
+                  <InteractiveRadarFilter
+                    onChange={(s) => setRadarProfile(s)}
+                    onCommit={(s) => {
+                      setRadarProfile(s);
+                      setRadarQueryKey(k => k + 1);
+                    }}
+                  />
+                </div>
+
+                {/* Right: filters */}
+                <div className="flex-1 min-w-0 space-y-5">
+                  {/* Content type */}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-2" style={{ color: "#D4A843" }}>Content Type</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {(["both", "track", "beat"] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => { setRadarType(t); setRadarQueryKey(k => k + 1); }}
+                          className="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all capitalize"
+                          style={{
+                            background:  radarType === t ? "rgba(212,168,67,0.15)" : "#1a1a1a",
+                            color:       radarType === t ? "#D4A843" : "#888",
+                            border:      `1px solid ${radarType === t ? "#D4A843" : "#2a2a2a"}`,
+                          }}
+                        >
+                          {t === "both" ? "Tracks & Beats" : t === "track" ? "Tracks" : "Beats"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Genre */}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-2" style={{ color: "#D4A843" }}>Genre</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {radarGenre && (
+                        <button
+                          onClick={() => { setRadarGenre(null); setRadarQueryKey(k => k + 1); }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
+                          style={{ background: "#1a1a1a", color: "#aaa", border: "1px solid #2a2a2a" }}
+                        >
+                          <X size={9} /> Clear
+                        </button>
+                      )}
+                      {["Hip-Hop","R&B","Pop","Electronic","Country","Afrobeats","Gospel","Jazz"].map(g => (
+                        <button
+                          key={g}
+                          onClick={() => { setRadarGenre(radarGenre === g ? null : g); setRadarQueryKey(k => k + 1); }}
+                          className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                          style={{
+                            background: radarGenre === g ? "rgba(212,168,67,0.12)" : "#1a1a1a",
+                            color:      radarGenre === g ? "#D4A843" : "#888",
+                            border:     `1px solid ${radarGenre === g ? "rgba(212,168,67,0.4)" : "#2a2a2a"}`,
+                          }}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Mood */}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-2" style={{ color: "#D4A843" }}>Mood</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {radarMood && (
+                        <button
+                          onClick={() => { setRadarMood(null); setRadarQueryKey(k => k + 1); }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
+                          style={{ background: "#1a1a1a", color: "#aaa", border: "1px solid #2a2a2a" }}
+                        >
+                          <X size={9} /> Clear
+                        </button>
+                      )}
+                      {["Energetic","Melancholic","Upbeat","Dark","Peaceful","Angry","Romantic","Euphoric"].map(m => (
+                        <button
+                          key={m}
+                          onClick={() => { setRadarMood(radarMood === m ? null : m); setRadarQueryKey(k => k + 1); }}
+                          className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                          style={{
+                            background: radarMood === m ? "rgba(212,168,67,0.12)" : "#1a1a1a",
+                            color:      radarMood === m ? "#D4A843" : "#888",
+                            border:     `1px solid ${radarMood === m ? "rgba(212,168,67,0.4)" : "#2a2a2a"}`,
+                          }}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Has Vocals */}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-2" style={{ color: "#D4A843" }}>Vocals</p>
+                    <div className="flex gap-2">
+                      {([
+                        { label: "Either",       value: null },
+                        { label: "Vocal",        value: true },
+                        { label: "Instrumental", value: false },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.label}
+                          onClick={() => { setRadarVocal(opt.value); setRadarQueryKey(k => k + 1); }}
+                          className="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all"
+                          style={{
+                            background: radarVocal === opt.value ? "rgba(212,168,67,0.15)" : "#1a1a1a",
+                            color:      radarVocal === opt.value ? "#D4A843" : "#888",
+                            border:     `1px solid ${radarVocal === opt.value ? "#D4A843" : "#2a2a2a"}`,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Results (only show after user has interacted / commit fired) */}
+              {radarProfile && radarQueryKey > 0 && (
+                <div className="mt-8 border-t pt-6" style={{ borderColor: "#1A1A1A" }}>
+                  <RadarFilterResults
+                    profile={radarProfile}
+                    typeFilter={radarType}
+                    genre={radarGenre}
+                    mood={radarMood}
+                    isVocal={radarVocal}
+                    queryKey={radarQueryKey}
+                    onPlay={(id, title, artist, src, coverArt) =>
+                      play({ id, title, artist, src, coverArt })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Section 2: Featured Carousel */}
         {showSection("featured") && (

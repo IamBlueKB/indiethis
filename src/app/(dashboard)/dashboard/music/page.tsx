@@ -13,6 +13,7 @@ import InlinePlayer from "@/components/audio/InlinePlayer";
 import SplitSheetModal from "./SplitSheetModal";
 import { triggerAudioAnalysis } from "@/lib/trigger-audio-analysis";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+import SimilarTracks from "@/components/audio/SimilarTracks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -404,9 +405,9 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
         />
       )}
 
-      {/* Audio Features Radar — expandable */}
+      {/* Audio Features Radar + Similar Tracks — expandable */}
       {showAnalysis && (
-        <div className="absolute left-0 right-0 top-full z-10 mt-1 px-4 pb-4"
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 px-4 pb-6 space-y-6"
           style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
           <LazyAudioRadar
             trackId={track.id}
@@ -415,6 +416,7 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
             subtitle="Audio feature analysis"
             animated
           />
+          <SimilarTracks sourceId={track.id} sourceType="track" limit={6} />
         </div>
       )}
     </div>

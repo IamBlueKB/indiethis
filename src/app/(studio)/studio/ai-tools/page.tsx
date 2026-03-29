@@ -77,6 +77,7 @@ interface RecentJob {
 const TOOLS: Array<{
   type: AIJobType; label: string; desc: string;
   icon: React.ElementType; price: string; color: string;
+  external?: string;
 }> = [
   {
     type: "VIDEO",      label: "AI Music Video",
@@ -104,9 +105,15 @@ const TOOLS: Array<{
     icon: FileText, price: PRICING_DEFAULTS.AI_AAR_REPORT.display,           color: "#3B82F6",
   },
   {
-    type: "PRESS_KIT",  label: "EPK / Press Kit",
+    type: "PRESS_KIT",    label: "EPK / Press Kit",
     desc: "Professional bio, press quotes, tech rider & socials",
     icon: Sparkles, price: PRICING_DEFAULTS.AI_PRESS_KIT.display,            color: "#8B5CF6",
+  },
+  {
+    type: "BIO_GENERATOR", label: "Bio Generator",
+    desc: "3 professional bio versions — short, medium & full — tailored to your studio",
+    icon: Sparkles, price: "Free",                                            color: "#D4A843",
+    external: "/studio/ai-tools/bio-generator",
   },
 ];
 
@@ -1194,7 +1201,13 @@ export default function StudioAIToolsPage() {
                 return (
                   <button
                     key={tool.type}
-                    onClick={() => setActiveTool(tool.type)}
+                    onClick={() => {
+                      if (tool.external) {
+                        window.location.href = tool.external;
+                      } else {
+                        setActiveTool(tool.type);
+                      }
+                    }}
                     className="text-left rounded-2xl border p-5 transition-all hover:scale-[1.02]"
                     style={{ borderColor: "var(--border)", background: "var(--card)" }}
                   >

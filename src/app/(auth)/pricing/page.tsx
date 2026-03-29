@@ -129,11 +129,16 @@ const PATH_META: Record<string, { icon: React.ReactNode; label: string }> = {
 
 function PricingContent() {
   const searchParams = useSearchParams();
-  const path         = searchParams.get("path") ?? "artist";
+  const initialPath  = searchParams.get("path") ?? "artist";
   const pendingId    = searchParams.get("pending") ?? undefined;
-  const isStudio     = path === "studio";
-  const plans        = isStudio ? STUDIO_PLANS : ARTIST_PLANS;
-  const pathMeta     = PATH_META[path] ?? PATH_META.artist;
+
+  const [activeTab, setActiveTab] = useState<"artist" | "studio">(
+    initialPath === "studio" ? "studio" : "artist"
+  );
+
+  const isStudio = activeTab === "studio";
+  const plans    = isStudio ? STUDIO_PLANS : ARTIST_PLANS;
+  const pathMeta = PATH_META[activeTab] ?? PATH_META.artist;
 
   const [loading, setLoading] = useState<string | null>(null);
   const [error,   setError]   = useState("");
@@ -162,6 +167,33 @@ function PricingContent() {
 
   return (
     <div className="w-full max-w-4xl">
+
+      {/* Tab switcher */}
+      <div className="flex justify-center mb-8">
+        <div
+          className="inline-flex rounded-xl p-1 gap-1"
+          style={{ backgroundColor: "#1a1a1a", border: "1px solid #2a2a2a" }}
+        >
+          {(["artist", "studio"] as const).map((tab) => {
+            const meta   = tab === "artist" ? PATH_META.artist : PATH_META.studio;
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setError(""); setLoading(null); }}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-semibold transition-all"
+                style={{
+                  backgroundColor: active ? "#D4A843" : "transparent",
+                  color:           active ? "#0A0A0A" : "#888",
+                }}
+              >
+                {meta.icon}
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Header */}
       <div className="text-center mb-8">

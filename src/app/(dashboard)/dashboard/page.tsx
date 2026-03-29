@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import ReleaseTimingCard from "@/components/dashboard/ReleaseTimingCard";
 import {
   ArrowRight,
   AlertCircle,
@@ -563,6 +564,9 @@ export default async function DashboardPage(
           </div>
         </div>
       </div>
+
+      {/* ── Best Time to Drop ── */}
+      <ReleaseTimingCard />
 
       {/* ── Upcoming sessions ── */}
       <div

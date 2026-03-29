@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   BarChart2,
   Eye,
@@ -15,6 +16,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import SimilarArtists from "@/components/audio/SimilarArtists";
+import CollabMatches from "@/components/audio/CollabMatches";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import AdminLineChart, { type LineConfig } from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
@@ -188,6 +191,7 @@ function Card({ title, sub, children, className = "" }: {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  const { data: session } = useSession();
   const [data,      setData]      = useState<AnalyticsData | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState("");
@@ -537,6 +541,20 @@ export default function AnalyticsPage() {
               animated
             />
           </div>
+        </div>
+      )}
+
+      {/* ── Artists Like You ── */}
+      {session?.user?.id && (
+        <div className="rounded-2xl border p-6" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+          <SimilarArtists artistId={session.user.id} limit={8} />
+        </div>
+      )}
+
+      {/* ── Collab Matches ── */}
+      {session?.user?.id && (
+        <div className="rounded-2xl border p-6" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+          <CollabMatches limit={8} />
         </div>
       )}
 
