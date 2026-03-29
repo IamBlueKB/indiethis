@@ -18,6 +18,7 @@ import {
   Gift,
   Zap,
   Share2,
+  Compass,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -29,8 +30,9 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Music", href: "/dashboard/music", icon: Music },
+  { label: "Dashboard", href: "/dashboard",       icon: LayoutDashboard },
+  { label: "Explore",   href: "/explore",          icon: Compass },
+  { label: "Music",     href: "/dashboard/music",  icon: Music },
   { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },

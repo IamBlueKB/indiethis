@@ -25,6 +25,7 @@ import {
   UserCheck,
   Cpu,
   Scissors,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -36,8 +37,9 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/studio", icon: LayoutDashboard },
-  { label: "Analytics", href: "/studio/analytics", icon: BarChart2 },
+  { label: "Dashboard", href: "/studio",            icon: LayoutDashboard },
+  { label: "Explore",   href: "/explore",           icon: Compass },
+  { label: "Analytics", href: "/studio/analytics",  icon: BarChart2 },
   { label: "Bookings", href: "/studio/bookings", icon: Calendar },
   { label: "Artists", href: "/studio/artists", icon: Users },
   { label: "Contacts", href: "/studio/contacts", icon: BookUser },

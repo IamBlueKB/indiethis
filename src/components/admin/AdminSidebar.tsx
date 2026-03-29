@@ -38,6 +38,7 @@ type NavItem = {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Dashboard",   href: "/admin",             icon: LayoutDashboard, page: "dashboard"    },
+  { label: "Explore",     href: "/explore",            icon: Compass,         page: "explore-public" },
   { label: "Users",       href: "/admin/users",        icon: Users,           page: "users"        },
   { label: "Studios",     href: "/admin/studios",      icon: Building2,       page: "studios"      },
   { label: "Revenue",     href: "/admin/revenue",      icon: BarChart3,       page: "revenue"      },

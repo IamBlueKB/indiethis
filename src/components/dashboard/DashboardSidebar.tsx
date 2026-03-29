@@ -33,6 +33,7 @@ import {
   Bell,
   Building2,
   Upload,
+  Compass,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard",     href: "/dashboard",              icon: LayoutDashboard },
+  { label: "Explore",       href: "/explore",                icon: Compass },
   { label: "Music",         href: "/dashboard/music",        icon: Music },
   { label: "Videos",        href: "/dashboard/videos",       icon: Video },
   { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
