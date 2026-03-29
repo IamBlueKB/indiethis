@@ -12,6 +12,17 @@ import { sendPromoWelcomeEmail } from "@/lib/brevo/email";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import type { SubscriptionTier } from "@prisma/client";
 
+// Zero-credit limits for comp / free-trial users.
+// They keep full platform access but cannot generate AI for free — PPU still available.
+const COMP_CREDITS = {
+  aiVideoCreditsLimit:    0,
+  aiArtCreditsLimit:      0,
+  aiMasterCreditsLimit:   0,
+  lyricVideoCreditsLimit: 0,
+  aarReportCreditsLimit:  0,
+  pressKitCreditsLimit:   0,
+} as const;
+
 // AI_BUNDLE metadata keys → Subscription field names
 const CREDIT_FIELD_MAP: Record<string, "aiVideoCreditsLimit" | "aiArtCreditsLimit" | "aiMasterCreditsLimit" | "lyricVideoCreditsLimit" | "aarReportCreditsLimit" | "pressKitCreditsLimit"> = {
   video:  "aiVideoCreditsLimit",
@@ -141,7 +152,7 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
           data: { isComped: true, compExpiresAt: redemptionExpiresAt },
         });
 
-        // Upsert Subscription with trial tier
+        // Upsert Subscription — zero AI credits: comp/trial users use PPU if they want AI
         await db.subscription.upsert({
           where: { userId },
           create: {
@@ -150,13 +161,13 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
             status: "ACTIVE",
             currentPeriodStart: new Date(),
             currentPeriodEnd: redemptionExpiresAt,
-            ...TIER_DEFAULTS[tier],
+            ...COMP_CREDITS,
           },
           update: {
             tier,
             status: "ACTIVE",
             currentPeriodEnd: redemptionExpiresAt,
-            ...TIER_DEFAULTS[tier],
+            ...COMP_CREDITS,
           },
         });
         break;
@@ -171,6 +182,7 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
         });
 
         const farFuture = new Date("2099-01-01");
+        // Upsert Subscription — zero AI credits: comp users use PPU if they want AI
         await db.subscription.upsert({
           where: { userId },
           create: {
@@ -179,13 +191,13 @@ export async function redeemPromoCode(userId: string, code: string): Promise<Red
             status: "ACTIVE",
             currentPeriodStart: new Date(),
             currentPeriodEnd: farFuture,
-            ...TIER_DEFAULTS[tier],
+            ...COMP_CREDITS,
           },
           update: {
             tier,
             status: "ACTIVE",
             currentPeriodEnd: farFuture,
-            ...TIER_DEFAULTS[tier],
+            ...COMP_CREDITS,
           },
         });
         break;

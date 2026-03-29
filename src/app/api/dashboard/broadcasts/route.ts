@@ -29,7 +29,7 @@ export async function GET() {
     }
     const artistId = session.user.id;
 
-    const [logs, sub] = await Promise.all([
+    const [logs, sub, user] = await Promise.all([
       db.broadcastLog.findMany({
         where:   { artistId },
         orderBy: { sentAt: "desc" },
@@ -47,10 +47,15 @@ export async function GET() {
         where:  { userId: artistId },
         select: { tier: true, status: true, smsBroadcastsUsed: true },
       }),
+      db.user.findUnique({
+        where:  { id: artistId },
+        select: { isComped: true },
+      }),
     ]);
 
     const tier          = sub?.tier ?? "LAUNCH";
-    const limit         = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
+    // Comp/free-trial users have SMS limit of 0 — PPU only
+    const limit         = user?.isComped ? 0 : (SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH);
     const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
 
     return NextResponse.json({ logs, usedThisMonth, limit, tier });
@@ -82,13 +87,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Message too long (max 918 chars)." }, { status: 400 });
     }
 
-    // Check tier limit
-    const sub = await db.subscription.findUnique({
-      where:  { userId: artistId },
-      select: { tier: true, smsBroadcastsUsed: true },
-    });
+    // Check tier limit — comp/free-trial users have limit 0
+    const [sub, user] = await Promise.all([
+      db.subscription.findUnique({
+        where:  { userId: artistId },
+        select: { tier: true, smsBroadcastsUsed: true },
+      }),
+      db.user.findUnique({
+        where:  { id: artistId },
+        select: { isComped: true },
+      }),
+    ]);
     const tier          = sub?.tier ?? "LAUNCH";
-    const limit         = SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH;
+    const limit         = user?.isComped ? 0 : (SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH);
     const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
     const remaining     = limit - usedThisMonth;
 

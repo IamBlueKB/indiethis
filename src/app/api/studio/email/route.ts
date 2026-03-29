@@ -65,6 +65,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Comp/free-trial accounts cannot send email blasts
+  const owner = await db.user.findUnique({
+    where:  { id: session.user.id },
+    select: { isComped: true },
+  });
+  if (owner?.isComped) {
+    return NextResponse.json(
+      { error: "Email blasts are not included in comp or free-trial access. Upgrade to a paid plan to send campaigns." },
+      { status: 403 },
+    );
+  }
+
   const studio = await db.studio.findFirst({
     where: { ownerId: session.user.id },
     select: { id: true },
