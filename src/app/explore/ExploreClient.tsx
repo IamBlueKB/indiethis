@@ -17,6 +17,7 @@ import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar,
 } from "lucide-react";
+import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -497,13 +498,34 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
 
 // ── Search Bar + Dropdown ──────────────────────────────────────────────────
 
-function SearchBar({ onFilter }: { onFilter: (tab: FilterTab) => void }) {
+type SearchBarProps = {
+  onFilter: (tab: FilterTab) => void;
+  onNLPParsed: (profile: SearchFeatureProfile) => void;
+  onClearNLP: () => void;
+  nlpPills: NLPPill[];
+  onRemovePill: (key: string) => void;
+};
+
+function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemovePill }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nlpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleChange(value: string) {
+    setQuery(value);
+
+    // NLP parse on debounce (separate from text search debounce)
+    if (nlpTimerRef.current) clearTimeout(nlpTimerRef.current);
+    if (!value.trim()) { onClearNLP(); return; }
+    nlpTimerRef.current = setTimeout(() => {
+      const profile = parseNaturalLanguageSearch(value);
+      onNLPParsed(profile);
+    }, 250);
+  }
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -520,6 +542,13 @@ function SearchBar({ onFilter }: { onFilter: (tab: FilterTab) => void }) {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [query]);
 
+  function handleClear() {
+    setQuery("");
+    setResults(null);
+    setOpen(false);
+    onClearNLP();
+  }
+
   const hasResults = results && (results.artists.length > 0 || results.tracks.length > 0 || results.studios.length > 0);
 
   return (
@@ -529,29 +558,53 @@ function SearchBar({ onFilter }: { onFilter: (tab: FilterTab) => void }) {
         <input
           ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onFocus={() => results && setOpen(true)}
-          placeholder="Search artists, tracks, studios…"
+          placeholder="Search artists, tracks, or describe a vibe…"
           className="w-full rounded-xl border pl-10 pr-10 py-3 text-sm bg-transparent text-white outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30"
           style={{ borderColor: "#2a2a2a", backgroundColor: "#111" }}
         />
         {query && (
-          <button onClick={() => { setQuery(""); setResults(null); setOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2">
+          <button onClick={handleClear} className="absolute right-3 top-1/2 -translate-y-1/2">
             <X size={13} style={{ color: "#666" }} />
           </button>
         )}
         {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin" style={{ color: "#D4A843" }} />}
       </div>
 
+      {/* NLP pills */}
+      {nlpPills.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2 px-0.5">
+          {nlpPills.map((pill) => (
+            <span
+              key={pill.key}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold"
+              style={{ backgroundColor: "#1A1A1A", border: "1px solid #333", color: "#D4A843" }}
+            >
+              {pill.label}
+              <button
+                onClick={() => onRemovePill(pill.key)}
+                className="ml-0.5 transition-colors"
+                style={{ color: "#666" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#E85D4A")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#666")}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Dropdown */}
       {open && (
         <div
           className="absolute top-full left-0 right-0 mt-1.5 rounded-xl border shadow-2xl z-50 overflow-hidden"
-          style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+          style={{ backgroundColor: "#141414", borderColor: "#2a2a2a", marginTop: nlpPills.length > 0 ? "0.25rem" : "0.375rem" }}
           onMouseDown={(e) => e.preventDefault()}
         >
           {!hasResults ? (
-            <p className="px-4 py-3 text-sm" style={{ color: "#666" }}>No results for "{query}"</p>
+            <p className="px-4 py-3 text-sm" style={{ color: "#666" }}>No results for &quot;{query}&quot;</p>
           ) : (
             <div className="p-2 space-y-1">
               {results!.artists.map((a) => (
@@ -710,6 +763,10 @@ export default function ExploreClient() {
   const [radarMood, setRadarMood]         = useState<string | null>(null);
   const [radarVocal, setRadarVocal]       = useState<boolean | null>(null);
 
+  // ── NLP search state ────────────────────────────────────────────────────────
+  const [nlpPills, setNlpPills]           = useState<NLPPill[]>([]);
+  const [nlpProfile, setNlpProfile]       = useState<SearchFeatureProfile | null>(null);
+
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [loadingNew, setLoadingNew] = useState(true);
   const [loadingBeats, setLoadingBeats] = useState(true);
@@ -797,6 +854,62 @@ export default function ExploreClient() {
     });
   }
 
+  function handleNLPParsed(profile: SearchFeatureProfile) {
+    setNlpProfile(profile);
+    setNlpPills(profile.pills);
+
+    if (!hasNLPSignals(profile)) return;
+
+    // Build a RadarFilterState from NLP features (default 0.5 for unspecified)
+    const DEFAULT_RADAR = { loudness: 0.5, energy: 0.5, danceability: 0.5, acousticness: 0.5, instrumentalness: 0.5, speechiness: 0.5, liveness: 0.5, valence: 0.5 };
+    const merged: RadarFilterState = { ...DEFAULT_RADAR, ...profile.features };
+
+    setRadarProfile(merged);
+    if (profile.genre)        setRadarGenre(profile.genre);
+    if (profile.mood)         setRadarMood(profile.mood);
+    if (profile.isVocal !== null) setRadarVocal(profile.isVocal);
+    setRadarQueryKey(k => k + 1);
+    setActiveFilter("sound");
+    setTimeout(() => scrollToSection(sectionRefs.sound), 20);
+  }
+
+  function handleClearNLP() {
+    setNlpPills([]);
+    setNlpProfile(null);
+  }
+
+  function handleRemovePill(key: string) {
+    if (!nlpProfile) return;
+
+    const updatedPills = nlpPills.filter(p => p.key !== key);
+    setNlpPills(updatedPills);
+
+    // Reset the corresponding filter
+    const updated = { ...nlpProfile };
+    if (key === "energy")        { delete updated.features.energy; }
+    if (key === "danceability")  { delete updated.features.danceability; }
+    if (key === "valence")       { delete updated.features.valence; }
+    if (key === "acousticness")  { delete updated.features.acousticness; }
+    if (key === "speechiness")   { delete updated.features.speechiness; }
+    if (key === "isVocal")       { updated.isVocal = null; delete updated.features.instrumentalness; }
+    if (key === "genre")         { updated.genre = null; setRadarGenre(null); }
+    if (key === "mood")          { updated.mood = null; setRadarMood(null); }
+    updated.pills = updatedPills;
+    setNlpProfile(updated);
+
+    if (key === "isVocal") setRadarVocal(null);
+
+    if (!hasNLPSignals(updated)) {
+      setRadarProfile(null);
+      setActiveFilter("all");
+      return;
+    }
+
+    const DEFAULT_RADAR = { loudness: 0.5, energy: 0.5, danceability: 0.5, acousticness: 0.5, instrumentalness: 0.5, speechiness: 0.5, liveness: 0.5, valence: 0.5 };
+    setRadarProfile({ ...DEFAULT_RADAR, ...updated.features });
+    setRadarQueryKey(k => k + 1);
+  }
+
   function handleFilterTab(tab: FilterTab) {
     setActiveFilter(tab);
 
@@ -824,7 +937,15 @@ export default function ExploreClient() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
       {/* ── Nav ── */}
-      <PublicNav center={<SearchBar onFilter={handleFilterTab} />} />
+      <PublicNav center={
+        <SearchBar
+          onFilter={handleFilterTab}
+          onNLPParsed={handleNLPParsed}
+          onClearNLP={handleClearNLP}
+          nlpPills={nlpPills}
+          onRemovePill={handleRemovePill}
+        />
+      } />
 
       {/* Filter pills */}
       <div
