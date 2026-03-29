@@ -18,7 +18,7 @@ const NAV_LINKS = [
  * Shared top navigation for all public-facing pages.
  * Pass `center` to render custom content (e.g. search bar) in the middle slot.
  */
-export default function PublicNav({ center }: { center?: React.ReactNode }) {
+export default function PublicNav({ center, onLogoClick }: { center?: React.ReactNode; onLogoClick?: () => void }) {
   const { data: session } = useSession();
   const pathname          = usePathname();
   const loggedIn          = !!session?.user;
@@ -50,7 +50,7 @@ export default function PublicNav({ center }: { center?: React.ReactNode }) {
       <div className="max-w-6xl mx-auto px-4 md:px-6 h-14 flex items-center gap-3">
 
         {/* Logo */}
-        <Link href="/explore" className="shrink-0">
+        <Link href="/explore" className="shrink-0" onClick={onLogoClick}>
           <img
             src="/images/brand/indiethis-logo-dark-bg.svg"
             alt="IndieThis"

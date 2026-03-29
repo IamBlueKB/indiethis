@@ -937,15 +937,18 @@ export default function ExploreClient() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
       {/* ── Nav ── */}
-      <PublicNav center={
-        <SearchBar
-          onFilter={handleFilterTab}
-          onNLPParsed={handleNLPParsed}
-          onClearNLP={handleClearNLP}
-          nlpPills={nlpPills}
-          onRemovePill={handleRemovePill}
-        />
-      } />
+      <PublicNav
+        onLogoClick={() => { setActiveFilter("all"); setNlpPills([]); setNlpProfile(null); setRadarProfile(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        center={
+          <SearchBar
+            onFilter={handleFilterTab}
+            onNLPParsed={handleNLPParsed}
+            onClearNLP={handleClearNLP}
+            nlpPills={nlpPills}
+            onRemovePill={handleRemovePill}
+          />
+        }
+      />
 
       {/* Filter pills */}
       <div
