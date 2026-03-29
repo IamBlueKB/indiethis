@@ -32,6 +32,8 @@ import {
   CalendarDays,
   Bell,
   Building2,
+  Upload,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -47,7 +49,8 @@ const navItems: NavItem[] = [
   { label: "Music",         href: "/dashboard/music",        icon: Music },
   { label: "Videos",        href: "/dashboard/videos",       icon: Video },
   { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
-  { label: "Fans",          href: "/dashboard/fans",         icon: Users },
+  { label: "Fans",          href: "/dashboard/fans",              icon: Users },
+  { label: "Automations",   href: "/dashboard/fans/automations", icon: Zap },
   { label: "Analytics",     href: "/dashboard/analytics",    icon: BarChart2 },
   { label: "Broadcasts",    href: "/dashboard/broadcasts",   icon: MessageSquare },
   { label: "QR Code",       href: "/dashboard/qr",           icon: QrCode },
@@ -56,12 +59,14 @@ const navItems: NavItem[] = [
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
   { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },
   { label: "License Vault", href: "/dashboard/vault",        icon: Archive },
+  { label: "Samples",       href: "/dashboard/samples",     icon: Upload },
   { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },
   { label: "Sessions",        href: "/dashboard/sessions",          icon: Calendar },
   { label: "Book a Studio",   href: "/studios",                     icon: Building2 },
   { label: "Splits",          href: "/dashboard/splits",            icon: Users },
   { label: "Release Planner", href: "/dashboard/release-planner",  icon: CalendarDays },
   { label: "Earnings",        href: "/dashboard/earnings",          icon: TrendingUp },
+  { label: "Year in Review",  href: "/dashboard/year-in-review",   icon: Sparkles },
   { label: "Notifications",   href: "/dashboard/notifications",     icon: Bell },
   { label: "Referrals",     href: "/dashboard/referrals",    icon: Gift },
   { label: "Affiliate",     href: "/dashboard/affiliate",    icon: Share2 },

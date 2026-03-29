@@ -16,6 +16,7 @@ import {
   deactivateAffiliateReferral,
 } from "@/lib/affiliate-commissions";
 import { upsertFanScore } from "@/lib/fan-scores";
+import { triggerMerchAutomations, triggerTipAutomations } from "@/lib/fan-automation-triggers";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import { sendEmail, sendOnboardingWelcomeEmail } from "@/lib/brevo/email";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
@@ -226,6 +227,9 @@ export async function POST(req: NextRequest) {
           // Update fan spend ranking
           void upsertFanScore(artistId, supporterEmail, { tip: paidAmount });
 
+          // Fan automation triggers
+          void triggerTipAutomations(artistId, supporterEmail, paidAmount);
+
           // Notify artist of tip received
           void createNotification({
             userId: artistId,
@@ -271,6 +275,9 @@ export async function POST(req: NextRequest) {
 
           // Update fan spend ranking
           if (buyerEmail) void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
+
+          // Fan automation triggers
+          if (buyerEmail) void triggerMerchAutomations(artistId, buyerEmail);
 
           // Notify artist of merch order
           const soldProduct = await db.merchProduct.findUnique({

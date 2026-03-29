@@ -539,6 +539,8 @@ model User {
   onboardingEmails      OnboardingEmailLog[]
   reEngagementEmails    ReEngagementEmailLog[]
   stemSeparations       StemSeparation[]
+  sampleLogs            SampleLog[]
+  fanAutomations        FanAutomation[]
 }
 
 model Studio {
@@ -729,6 +731,7 @@ model Track {
   videoTrackLinks       ArtistVideo[]  @relation("VideoTrackLink")
   videoBeatLinks        ArtistVideo[]  @relation("VideoBeatLink")
   audioFeatures         AudioFeatures?
+  sampleLogs            SampleLog[]
 }
 
 model DeliveredFile {
@@ -2308,5 +2311,43 @@ model StemSeparation {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@index([userId])
+}
+
+// ─── Sample Clearance Tracker ─────────────────────────────────────────────────
+
+model SampleLog {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  trackId          String?
+  track            Track?   @relation(fields: [trackId], references: [id])
+  sampleSource     String
+  sampleType       String           // INTERPOLATION, DIRECT_SAMPLE, LOOP, PRESET, REPLAY
+  isCleared        Boolean  @default(false)
+  clearanceMethod  String?          // LICENSE, ROYALTY_FREE, ORIGINAL_OWNER_PERMISSION, FAIR_USE, PENDING
+  clearanceNotes   String?
+  clearanceDocUrl  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@index([trackId])
+}
+
+// ─── Fan Thank-You Automations ────────────────────────────────────────────────
+
+model FanAutomation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  triggerType String   // FIRST_PURCHASE, FIRST_TIP, REPEAT_BUYER, BIG_TIPPER, ANNIVERSARY
+  isActive    Boolean  @default(true)
+  subject     String
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, triggerType])
   @@index([userId])
 }
