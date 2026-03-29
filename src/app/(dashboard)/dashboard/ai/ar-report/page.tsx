@@ -361,7 +361,7 @@ export default function ARReportPage() {
               ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_AAR_REPORT.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
               nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
-              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$149/mo"}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$99/mo"}
               isMaxTier={creditInfo.tier === "reign"}
             />
           )}

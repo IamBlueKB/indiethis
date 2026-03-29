@@ -351,7 +351,7 @@ export default function BroadcastsPage() {
             ppuPrice="—"
             nextTierName={tier === "LAUNCH" ? "Push" : "Reign"}
             nextTierCredits={tier === "LAUNCH" ? 500 : 2000}
-            nextTierPrice={tier === "LAUNCH" ? "$49/mo" : "$149/mo"}
+            nextTierPrice={tier === "LAUNCH" ? "$49/mo" : "$99/mo"}
             isMaxTier={tier === "REIGN"}
           />
         ) : (

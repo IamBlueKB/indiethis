@@ -136,7 +136,7 @@ function MasteringAB() {
       <WaveRow label="After — AI Mastered" track="after" color="#D4A843" />
       <div style={{ fontSize: 11, color: "#666", textAlign: "center" }}>
         3 master profiles ·{" "}
-        <span style={{ color: "#D4A843", fontWeight: 700 }}>$9.99</span>
+        <span style={{ color: "#D4A843", fontWeight: 700 }}>$7.99</span>
       </div>
     </div>
   );

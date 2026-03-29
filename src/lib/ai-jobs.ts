@@ -24,10 +24,10 @@ import { PRICING_DEFAULTS } from "@/lib/pricing";
 export const PPU_PRICES: Partial<Record<AIJobType, number>> = {
   VIDEO:       Math.round(PRICING_DEFAULTS.AI_VIDEO_SHORT.value  * 100), // $19 (30s default)
   COVER_ART:   Math.round(PRICING_DEFAULTS.AI_COVER_ART.value    * 100), // $4.99
-  MASTERING:   Math.round(PRICING_DEFAULTS.AI_MASTERING.value    * 100), // $9.99
-  LYRIC_VIDEO: Math.round(PRICING_DEFAULTS.AI_LYRIC_VIDEO.value  * 100), // $24.99
+  MASTERING:   Math.round(PRICING_DEFAULTS.AI_MASTERING.value    * 100), // $7.99
+  LYRIC_VIDEO: Math.round(PRICING_DEFAULTS.AI_LYRIC_VIDEO.value  * 100), // $14.99
   AR_REPORT:   Math.round(PRICING_DEFAULTS.AI_AAR_REPORT.value   * 100), // $14.99
-  PRESS_KIT:   Math.round(PRICING_DEFAULTS.AI_PRESS_KIT.value    * 100), // $19.99
+  PRESS_KIT:   Math.round(PRICING_DEFAULTS.AI_PRESS_KIT.value    * 100), // $9.99
   BIO_GENERATOR:   0,   // free
   CONTRACT_SCANNER: Math.round(PRICING_DEFAULTS.AI_CONTRACT_SCANNER.value * 100), // $4.99
 };

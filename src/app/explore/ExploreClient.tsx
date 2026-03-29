@@ -698,7 +698,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
       title: "AI Mastering",
       desc: "Pro-quality mastering powered by AI. Upload your mix, download a release-ready master.",
       cta: "Master your track",
-      price: "$9.99",
+      price: "$7.99",
       link: cta("/dashboard/ai/mastering"),
       gradient: "linear-gradient(135deg, #1a0a00, #0a0a0a)",
     },
