@@ -8,10 +8,11 @@ import type { AudioFeatureScores }  from "@/lib/audio-features";
 // Public — no auth required.
 export async function GET(
   _req: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
+  const { slug } = await params;
   const studio = await db.studio.findUnique({
-    where:  { slug: params.slug },
+    where:  { slug },
     select: { id: true, artists: { select: { artistId: true } } },
   });
 

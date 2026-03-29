@@ -43,8 +43,8 @@ export async function GET(req: Request) {
 
   // ── Type filter: beats have BeatLeaseSettings, tracks don't ───────────────
   const beatFilter =
-    type === "track" ? { none: {} } :
-    type === "beat"  ? { some: {} } :
+    type === "track" ? { is: null } :
+    type === "beat"  ? { isNot: null } :
     undefined;
 
   // ── Fetch tracks with AudioFeatures ───────────────────────────────────────
@@ -101,7 +101,7 @@ export async function GET(req: Request) {
         artistSlug: row.artist.artistSlug,
         artworkUrl: row.coverArtUrl,
         fileUrl:    row.fileUrl,
-        type:       row.beatLeaseSettings.length > 0 ? "beat" : "track",
+        type:       row.beatLeaseSettings != null ? "beat" : "track",
         bpm:        row.bpm,
         key:        row.musicalKey,
         genre:      row.audioFeatures.genre,

@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import YearInReviewPage from "@/components/dashboard/YearInReview";
 
-export function generateMetadata({ params }: { params: { year: string } }) {
-  return { title: `${params.year} Year in Review – IndieThis` };
+export async function generateMetadata({ params }: { params: Promise<{ year: string }> }) {
+  const { year } = await params;
+  return { title: `${year} Year in Review – IndieThis` };
 }
 
-export default function YearInReviewYearPage({ params }: { params: { year: string } }) {
-  const year = parseInt(params.year, 10);
+export default async function YearInReviewYearPage({ params }: { params: Promise<{ year: string }> }) {
+  const { year: yearStr } = await params;
+  const year = parseInt(yearStr, 10);
   if (isNaN(year) || year < 2020 || year > 2100) notFound();
   return <YearInReviewPage year={year} />;
 }

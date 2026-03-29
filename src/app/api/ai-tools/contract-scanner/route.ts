@@ -11,7 +11,8 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { claude, SONNET } from "@/lib/claude";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
-import pdfParse from "pdf-parse";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 
 export const maxDuration = 60;
 

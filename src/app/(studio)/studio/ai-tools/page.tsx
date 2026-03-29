@@ -13,7 +13,8 @@ import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 type AIJobType =
   | "VIDEO" | "COVER_ART" | "MASTERING"
-  | "LYRIC_VIDEO" | "AR_REPORT" | "PRESS_KIT";
+  | "LYRIC_VIDEO" | "AR_REPORT" | "PRESS_KIT"
+  | "BIO_GENERATOR" | "CONTRACT_SCANNER";
 
 type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
 

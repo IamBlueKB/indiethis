@@ -93,7 +93,7 @@ function labelOffset(angle: number, labelRadius: number) {
   // Nudge label away from center based on angle quadrant
   const x = Math.cos(angle) * labelRadius;
   const y = Math.sin(angle) * labelRadius;
-  const anchor = Math.abs(Math.cos(angle)) < 0.3 ? "middle" : Math.cos(angle) > 0 ? "start" : "end";
+  const anchor = (Math.abs(Math.cos(angle)) < 0.3 ? "middle" : Math.cos(angle) > 0 ? "start" : "end") as "middle" | "start" | "end";
   return { x, y, anchor };
 }
 

@@ -187,7 +187,7 @@ function validatePressKit(body: any): ValidationResult {
   };
 }
 
-const VALIDATORS: Record<AIJobType, (body: unknown) => ValidationResult> = {
+const VALIDATORS: Partial<Record<AIJobType, (body: unknown) => ValidationResult>> = {
   VIDEO:       validateVideo,
   COVER_ART:   validateCoverArt,
   MASTERING:   validateMastering,
@@ -236,7 +236,11 @@ export async function POST(
   }
 
   // ── Per-tool validation ───────────────────────────────────────────────────
-  const validation = VALIDATORS[type](body);
+  const validator = VALIDATORS[type];
+  if (!validator) {
+    return NextResponse.json({ error: `No validator for tool type: ${type}` }, { status: 400 });
+  }
+  const validation = validator(body);
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }

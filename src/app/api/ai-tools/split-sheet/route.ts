@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const dateStr   = new Date().toISOString().slice(0, 10);
   const fileName  = `Split Sheet - ${safeTitle} - ${dateStr}.pdf`;
 
-  const file   = new File([pdfBuffer], fileName, { type: "application/pdf" });
+  const file   = new File([new Uint8Array(pdfBuffer)], fileName, { type: "application/pdf" });
   const upload = await utapi.uploadFiles(file);
 
   if (upload.error || !upload.data?.url) {

@@ -6,9 +6,9 @@ import { db }           from "@/lib/db";
 // Public — no auth required (used on public artist pages, explore, marketplace)
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
 
   const record = await db.audioFeatures.findUnique({
     where: { trackId: id },

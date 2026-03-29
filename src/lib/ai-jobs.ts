@@ -21,33 +21,39 @@ import { PRICING_DEFAULTS } from "@/lib/pricing";
 // These are static fallbacks used at job-creation time.
 // Actual checkout amounts always re-fetch from getPricing() in route handlers.
 
-export const PPU_PRICES: Record<AIJobType, number> = {
+export const PPU_PRICES: Partial<Record<AIJobType, number>> = {
   VIDEO:       Math.round(PRICING_DEFAULTS.AI_VIDEO_SHORT.value  * 100), // $19 (30s default)
   COVER_ART:   Math.round(PRICING_DEFAULTS.AI_COVER_ART.value    * 100), // $4.99
   MASTERING:   Math.round(PRICING_DEFAULTS.AI_MASTERING.value    * 100), // $9.99
   LYRIC_VIDEO: Math.round(PRICING_DEFAULTS.AI_LYRIC_VIDEO.value  * 100), // $24.99
   AR_REPORT:   Math.round(PRICING_DEFAULTS.AI_AAR_REPORT.value   * 100), // $14.99
   PRESS_KIT:   Math.round(PRICING_DEFAULTS.AI_PRESS_KIT.value    * 100), // $19.99
+  BIO_GENERATOR:   0,   // free
+  CONTRACT_SCANNER: Math.round(PRICING_DEFAULTS.AI_CONTRACT_SCANNER.value * 100), // $4.99
 };
 
-export const PPU_LABELS: Record<AIJobType, string> = {
-  VIDEO:       "AI Music Video – IndieThis",
-  COVER_ART:   "AI Cover Art – IndieThis",
-  MASTERING:   "AI Mastering – IndieThis",
-  LYRIC_VIDEO: "Lyric Video – IndieThis",
-  AR_REPORT:   "A&R Report – IndieThis",
-  PRESS_KIT:   "Press Kit – IndieThis",
+export const PPU_LABELS: Partial<Record<AIJobType, string>> = {
+  VIDEO:            "AI Music Video – IndieThis",
+  COVER_ART:        "AI Cover Art – IndieThis",
+  MASTERING:        "AI Mastering – IndieThis",
+  LYRIC_VIDEO:      "Lyric Video – IndieThis",
+  AR_REPORT:        "A&R Report – IndieThis",
+  PRESS_KIT:        "Press Kit – IndieThis",
+  BIO_GENERATOR:    "Bio Generator – IndieThis",
+  CONTRACT_SCANNER: "Contract Scanner – IndieThis",
 };
 
 // ─── Provider names (informational — caller sets the actual provider string) ──
 
-export const DEFAULT_PROVIDERS: Record<AIJobType, string> = {
-  VIDEO:       "kling",      // Kling 1.6 Pro via fal.ai (Runway fallback)
-  COVER_ART:   "replicate",
-  MASTERING:   "dolby",
-  LYRIC_VIDEO: "remotion",
-  AR_REPORT:   "claude",
-  PRESS_KIT:   "claude",
+export const DEFAULT_PROVIDERS: Partial<Record<AIJobType, string>> = {
+  VIDEO:            "kling",      // Kling 1.6 Pro via fal.ai (Runway fallback)
+  COVER_ART:        "replicate",
+  MASTERING:        "dolby",
+  LYRIC_VIDEO:      "remotion",
+  AR_REPORT:        "claude",
+  PRESS_KIT:        "claude",
+  BIO_GENERATOR:    "claude",
+  CONTRACT_SCANNER: "claude",
 };
 
 // ─── Credit field mapping ──────────────────────────────────────────────────────
@@ -59,7 +65,7 @@ type CreditFields = {
          "lyricVideoCreditsLimit" | "aarReportCreditsLimit" | "pressKitCreditsLimit";
 };
 
-const CREDIT_MAP: Record<AIJobType, CreditFields> = {
+const CREDIT_MAP: Partial<Record<AIJobType, CreditFields>> = {
   VIDEO:       { used: "aiVideoCreditsUsed",    limit: "aiVideoCreditsLimit" },
   COVER_ART:   { used: "aiArtCreditsUsed",      limit: "aiArtCreditsLimit" },
   MASTERING:   { used: "aiMasterCreditsUsed",   limit: "aiMasterCreditsLimit" },
@@ -100,7 +106,7 @@ export async function createAIJob(params: CreateAIJobParams): Promise<CreateAIJo
     artistId,
     studioId,
     inputData,
-    provider = DEFAULT_PROVIDERS[type],
+    provider = DEFAULT_PROVIDERS[type] ?? "unknown",
     priceAlreadyCharged = false,
     chargedAmount,
     stripePaymentId,
@@ -129,11 +135,12 @@ export async function createAIJob(params: CreateAIJobParams): Promise<CreateAIJo
 
   const sub = user.subscription;
   const hasCredits =
+    creditFields != null &&
     sub &&
     sub.status === "ACTIVE" &&
     sub[creditFields.used] < sub[creditFields.limit];
 
-  if (hasCredits) {
+  if (hasCredits && creditFields) {
     // ── 2a. Use subscription credit ─────────────────────────────────────────
     await db.subscription.update({
       where: { userId: triggeredById },
@@ -143,11 +150,11 @@ export async function createAIJob(params: CreateAIJobParams): Promise<CreateAIJo
 
   } else if (priceAlreadyCharged) {
     // ── 2b. Payment already collected externally (PPU Stripe Checkout redirect)
-    priceCharged = chargedAmount ?? PPU_PRICES[type];
+    priceCharged = chargedAmount ?? PPU_PRICES[type] ?? 0;
 
   } else {
     // ── 2c. No credits — attempt direct Stripe charge via saved payment method
-    const ppuAmount = PPU_PRICES[type];
+    const ppuAmount = PPU_PRICES[type] ?? 0;
 
     if (!stripe) {
       return {
@@ -253,12 +260,15 @@ export async function getCreditsRemaining(
   userId: string,
   type: AIJobType,
 ): Promise<{ hasCredits: boolean; used: number; limit: number }> {
+  const fields = CREDIT_MAP[type];
+  if (!fields) return { hasCredits: false, used: 0, limit: 0 };
+
   const sub = await db.subscription.findUnique({
     where: { userId },
     select: {
       status: true,
-      [CREDIT_MAP[type].used]: true,
-      [CREDIT_MAP[type].limit]: true,
+      [fields.used]: true,
+      [fields.limit]: true,
     } as Record<string, boolean>,
   });
 
@@ -266,8 +276,8 @@ export async function getCreditsRemaining(
     return { hasCredits: false, used: 0, limit: 0 };
   }
 
-  const used  = (sub as Record<string, number>)[CREDIT_MAP[type].used]  ?? 0;
-  const limit = (sub as Record<string, number>)[CREDIT_MAP[type].limit] ?? 0;
+  const used  = (sub as Record<string, number>)[fields.used]  ?? 0;
+  const limit = (sub as Record<string, number>)[fields.limit] ?? 0;
 
   return { hasCredits: used < limit, used, limit };
 }
