@@ -4,6 +4,7 @@ import { stripe, PLAN_PRICES } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+  try {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
 
   const session = await auth();
@@ -153,4 +154,9 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ url: checkoutSession.url });
+  } catch (err) {
+    console.error("[stripe/checkout] unexpected error:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
