@@ -21,5 +21,5 @@ if (process.env.NODE_ENV !== "production" && stripe) globalThis.stripe = stripe;
 export const PLAN_PRICES: Record<string, { priceId: string; tier: string; amount: number }> = {
   launch: { priceId: process.env.STRIPE_PRICE_LAUNCH ?? "", tier: "LAUNCH", amount: 1900 },
   push:   { priceId: process.env.STRIPE_PRICE_PUSH   ?? "", tier: "PUSH",   amount: 4900 },
-  reign:  { priceId: process.env.STRIPE_PRICE_REIGN  ?? "", tier: "REIGN",  amount: 14900 },
+  reign:  { priceId: process.env.STRIPE_PRICE_REIGN  ?? "", tier: "REIGN",  amount: 9900 },
 };
