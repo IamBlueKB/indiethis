@@ -467,6 +467,7 @@ export default function PressKitPage() {
           {creditExhausted && creditInfo && (
             <CreditExhaustedBanner
               toolLabel="press kit"
+              toolType="PRESS_KIT"
               creditsLimit={creditInfo.limit}
               ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_PRESS_KIT.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}

@@ -357,6 +357,7 @@ export default function ARReportPage() {
           {creditExhausted && creditInfo && (
             <CreditExhaustedBanner
               toolLabel="AR report"
+              toolType="AAR_REPORT"
               creditsLimit={creditInfo.limit}
               ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_AAR_REPORT.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}

@@ -355,6 +355,7 @@ export default function AIVideoPage() {
             {creditExhausted && creditInfo && (
               <CreditExhaustedBanner
                 toolLabel="video"
+                toolType="AI_VIDEO"
                 creditsLimit={creditInfo.limit}
                 ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_VIDEO_MEDIUM.display}
                 nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}

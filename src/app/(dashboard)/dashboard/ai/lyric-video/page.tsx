@@ -487,6 +487,7 @@ function LyricVideoContent() {
             {creditExhausted && creditInfo && (
               <CreditExhaustedBanner
                 toolLabel="lyric video"
+                toolType="LYRIC_VIDEO"
                 creditsLimit={creditInfo.limit}
                 ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_LYRIC_VIDEO.display}
                 nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}

@@ -288,6 +288,7 @@ export default function MasteringPage() {
           {creditExhausted && creditInfo && (
             <CreditExhaustedBanner
               toolLabel="mastering"
+              toolType="MASTERING"
               creditsLimit={creditInfo.limit}
               ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_MASTERING.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}

@@ -238,6 +238,7 @@ export default function CoverArtPage() {
           {creditExhausted && creditInfo && (
             <CreditExhaustedBanner
               toolLabel="cover art"
+              toolType="COVER_ART"
               creditsLimit={creditInfo.limit}
               ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
