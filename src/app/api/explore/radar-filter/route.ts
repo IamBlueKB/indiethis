@@ -51,7 +51,9 @@ export async function GET(req: Request) {
   const rows = await db.track.findMany({
     where: {
       status:        "PUBLISHED",
-      audioFeatures: { isNot: null, ...featuresWhere },
+      audioFeatures: Object.keys(featuresWhere).length > 0
+          ? { is: featuresWhere }
+          : { isNot: null },
       ...(beatFilter !== undefined && { beatLeaseSettings: beatFilter }),
     },
     select: {
