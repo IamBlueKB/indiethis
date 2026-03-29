@@ -456,7 +456,7 @@ YoutubeReference
 ### Studio
 | Feature | Status |
 |---------|--------|
-| Studio public page (3 templates) | ✅ DONE |
+| Studio public page (6 templates + Custom) | ✅ DONE — Classic, Bold, Editorial, Clean, Cinematic, Grid, Custom all wired in [slug]/page.tsx |
 | Booking request management | ✅ DONE |
 | CRM contacts + activity log | ✅ DONE |
 | Intake forms with e-signature | ✅ DONE |
