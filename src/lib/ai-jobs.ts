@@ -23,7 +23,7 @@ import { PRICING_DEFAULTS } from "@/lib/pricing";
 
 export const PPU_PRICES: Partial<Record<AIJobType, number>> = {
   VIDEO:       Math.round(PRICING_DEFAULTS.AI_VIDEO_SHORT.value  * 100), // $19 (30s default)
-  COVER_ART:   Math.round(PRICING_DEFAULTS.AI_COVER_ART.value    * 100), // $4.99
+  COVER_ART:   Math.round(PRICING_DEFAULTS.AI_COVER_ART_STANDARD.value * 100), // $4.99
   MASTERING:   Math.round(PRICING_DEFAULTS.AI_MASTERING.value    * 100), // $7.99
   LYRIC_VIDEO: Math.round(PRICING_DEFAULTS.AI_LYRIC_VIDEO.value  * 100), // $14.99
   AR_REPORT:   Math.round(PRICING_DEFAULTS.AI_AAR_REPORT.value   * 100), // $14.99
@@ -47,7 +47,7 @@ export const PPU_LABELS: Partial<Record<AIJobType, string>> = {
 
 export const DEFAULT_PROVIDERS: Partial<Record<AIJobType, string>> = {
   VIDEO:            "kling",      // Kling 1.6 Pro via fal.ai (Runway fallback)
-  COVER_ART:        "replicate",
+  COVER_ART:        "fal",
   MASTERING:        "dolby",
   LYRIC_VIDEO:      "remotion",
   AR_REPORT:        "claude",

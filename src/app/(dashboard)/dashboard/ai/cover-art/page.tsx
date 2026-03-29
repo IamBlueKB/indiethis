@@ -2,6 +2,7 @@
 
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
@@ -54,6 +55,7 @@ export default function CoverArtPage() {
   const [artistPrompt, setArtistPrompt] = useState("");
   const [style,        setStyle]        = useState("Photorealistic");
   const [mood,         setMood]         = useState("");
+  const [quality,      setQuality]      = useState<"standard" | "premium">("standard");
 
   // Job state
   const [submitting,  setSubmitting]  = useState(false);
@@ -64,10 +66,13 @@ export default function CoverArtPage() {
   // Credits
   const [creditExhausted, setCreditExhausted] = useState(false);
   const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+  const [premiumPriceDisplay, setPremiumPriceDisplay] = useState<string>("");
 
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+
+  const searchParams = useSearchParams();
 
   // ── Load history on mount ───────────────────────────────────────────────────
   useEffect(() => {
@@ -79,9 +84,42 @@ export default function CoverArtPage() {
           setCreditInfo({ used: d.credits.used, limit: d.credits.limit, tier: d.credits.tier, priceDisplay: d.priceDisplay ?? "" });
           if (d.credits?.limit === 0) setCreditExhausted(true);
         }
+        if (d.premiumPriceDisplay) setPremiumPriceDisplay(d.premiumPriceDisplay);
       })
       .finally(() => setHistoryLoading(false));
   }, []);
+
+  // ── Handle ?paid=1 return from Stripe Checkout ──────────────────────────────
+  useEffect(() => {
+    const paid = searchParams.get("paid");
+    if (paid !== "1") return;
+    const pending = sessionStorage.getItem("pendingCoverArt");
+    if (!pending) return;
+    sessionStorage.removeItem("pendingCoverArt");
+    try {
+      const saved = JSON.parse(pending) as { artistPrompt: string; style: string; mood: string; quality: string };
+      const autoSubmit = async () => {
+        const res = await fetch("/api/dashboard/ai/cover-art", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            artistPrompt: saved.artistPrompt,
+            style: saved.style,
+            mood: saved.mood,
+            quality: saved.quality,
+            priceAlreadyCharged: true,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.jobId) {
+          setActiveJobId(data.jobId);
+          setJobData({ jobId: data.jobId, status: "QUEUED", priceCharged: null, createdAt: new Date().toISOString(), completedAt: null, errorMessage: null });
+          setQuality(saved.quality as "standard" | "premium");
+        }
+      };
+      void autoSubmit();
+    } catch { /* invalid stored data */ }
+  }, [searchParams]);
 
   // ── Poll active job every 4 s ───────────────────────────────────────────────
   useEffect(() => {
@@ -117,10 +155,28 @@ export default function CoverArtPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      // Premium: always PPU via Stripe Checkout
+      if (quality === "premium") {
+        sessionStorage.setItem("pendingCoverArt", JSON.stringify({ artistPrompt: artistPrompt.trim(), style, mood, quality: "premium" }));
+        const res = await fetch("/api/stripe/pay-per-use", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tool: "COVER_ART_PREMIUM" }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+        setSubmitError(data.error ?? "Failed to start checkout");
+        return;
+      }
+
+      // Standard: credit or PPU flow
       const res = await fetch("/api/dashboard/ai/cover-art", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ artistPrompt: artistPrompt.trim(), style, mood }),
+        body:    JSON.stringify({ artistPrompt: artistPrompt.trim(), style, mood, quality: "standard" }),
       });
 
       if (res.status === 402) {
@@ -163,6 +219,36 @@ export default function CoverArtPage() {
       {/* Form */}
       <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Quality selector */}
+          <div className="grid grid-cols-2 gap-3">
+            {(["standard", "premium"] as const).map((q) => {
+              const isSelected = quality === q;
+              const label = q === "standard" ? "Standard" : "Premium";
+              const price = q === "standard"
+                ? (creditInfo?.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART_STANDARD.display)
+                : (premiumPriceDisplay || PRICING_DEFAULTS.AI_COVER_ART_PREMIUM.display);
+              const desc = q === "standard" ? "4 cover options" : "Higher detail & text rendering";
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setQuality(q)}
+                  disabled={!!isActive}
+                  className="flex flex-col items-start p-4 rounded-xl border text-left transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: isSelected ? "#D4A843" : "var(--border)",
+                    backgroundColor: isSelected ? "rgba(212,168,67,0.08)" : "transparent",
+                  }}
+                >
+                  <span className="text-sm font-semibold" style={{ color: isSelected ? "#D4A843" : "var(--foreground)" }}>
+                    {label}
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5">{price} — {desc}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Prompt */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -240,7 +326,7 @@ export default function CoverArtPage() {
               toolLabel="cover art"
               toolType="COVER_ART"
               creditsLimit={creditInfo.limit}
-              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART.display}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART_STANDARD.display}
               nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
               nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
               nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$99/mo"}
@@ -249,7 +335,12 @@ export default function CoverArtPage() {
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">4 variations · {PRICING_DEFAULTS.AI_COVER_ART.display} or 1 credit</p>
+            <p className="text-xs text-muted-foreground">
+              4 variations · {quality === "premium"
+                ? `${premiumPriceDisplay || PRICING_DEFAULTS.AI_COVER_ART_PREMIUM.display} (pay per use)`
+                : `${creditInfo?.priceDisplay || PRICING_DEFAULTS.AI_COVER_ART_STANDARD.display} or 1 credit`
+              }
+            </p>
             <button
               type="submit"
               disabled={submitting || !!isActive || !artistPrompt.trim()}
@@ -275,7 +366,7 @@ export default function CoverArtPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {jobData.status === "PROCESSING"
-                    ? "Optimizing your prompt with Claude, then generating 4 images via SDXL. Takes ~45 seconds."
+                    ? "Optimizing your prompt with Claude, then generating 4 images. Takes ~45 seconds."
                     : "Job is waiting to start…"}
                 </p>
               </div>

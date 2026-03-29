@@ -5,13 +5,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
 
 const PPU_META: Record<string, { name: string; pricingKey: string; successPath: string }> = {
-  LYRIC_VIDEO: { name: "Lyric Video – IndieThis",  pricingKey: "AI_LYRIC_VIDEO",  successPath: "/dashboard/ai/lyric-video" },
-  COVER_ART:   { name: "AI Cover Art – IndieThis", pricingKey: "AI_COVER_ART",    successPath: "/dashboard/ai/cover-art" },
-  AI_VIDEO:    { name: "AI Video – IndieThis",     pricingKey: "AI_VIDEO_SHORT",  successPath: "/dashboard/ai/video" },
-  MASTERING:   { name: "AI Mastering – IndieThis", pricingKey: "AI_MASTERING",    successPath: "/dashboard/ai/mastering" },
-  AAR_REPORT:  { name: "A&R Report – IndieThis",   pricingKey: "AI_AAR_REPORT",   successPath: "/dashboard/ai/ar-report" },
-  PRESS_KIT:        { name: "Press Kit – IndieThis",         pricingKey: "AI_PRESS_KIT",         successPath: "/dashboard/ai/press-kit" },
-  CONTRACT_SCANNER: { name: "Contract Scanner – IndieThis", pricingKey: "AI_CONTRACT_SCANNER",  successPath: "/dashboard/ai/contract-scanner" },
+  LYRIC_VIDEO:      { name: "Lyric Video – IndieThis",          pricingKey: "AI_LYRIC_VIDEO",        successPath: "/dashboard/ai/lyric-video" },
+  COVER_ART:        { name: "AI Cover Art – IndieThis",         pricingKey: "AI_COVER_ART_STANDARD", successPath: "/dashboard/ai/cover-art" },
+  COVER_ART_PREMIUM:{ name: "AI Cover Art Premium – IndieThis", pricingKey: "AI_COVER_ART_PREMIUM",  successPath: "/dashboard/ai/cover-art" },
+  AI_VIDEO:         { name: "AI Video – IndieThis",             pricingKey: "AI_VIDEO_SHORT",        successPath: "/dashboard/ai/video" },
+  MASTERING:        { name: "AI Mastering – IndieThis",         pricingKey: "AI_MASTERING",          successPath: "/dashboard/ai/mastering" },
+  AAR_REPORT:       { name: "A&R Report – IndieThis",           pricingKey: "AI_AAR_REPORT",         successPath: "/dashboard/ai/ar-report" },
+  PRESS_KIT:        { name: "Press Kit – IndieThis",            pricingKey: "AI_PRESS_KIT",          successPath: "/dashboard/ai/press-kit" },
+  CONTRACT_SCANNER: { name: "Contract Scanner – IndieThis",     pricingKey: "AI_CONTRACT_SCANNER",   successPath: "/dashboard/ai/contract-scanner" },
 };
 
 export async function POST(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       },
       quantity: 1,
     }],
-    success_url: `${appUrl}${meta.successPath}?paid=1`,
+    success_url: `${appUrl}${meta.successPath}?paid=1${tool === "COVER_ART_PREMIUM" ? "&quality=premium" : ""}`,
     cancel_url:  `${appUrl}${meta.successPath}`,
     metadata: { userId: session.user.id, tool },
   });

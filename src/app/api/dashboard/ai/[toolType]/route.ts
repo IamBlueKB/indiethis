@@ -95,12 +95,15 @@ function validateCoverArt(body: any): ValidationResult {
   if (!body.artistPrompt?.trim())
     return { ok: false, error: "artistPrompt is required for COVER_ART generation" };
 
+  const quality = body.quality === "premium" ? "premium" : "standard";
+
   return {
     ok: true,
     inputData: {
       artistPrompt: body.artistPrompt.trim(),
-      style:        body.style  ?? "Photorealistic",
-      mood:         body.mood   ?? "",
+      style:        body.style   ?? "Photorealistic",
+      mood:         body.mood    ?? "",
+      quality,
     },
   };
 }
@@ -326,7 +329,7 @@ export async function GET(
     pricingKey: string;
   };
   const TOOL_CREDIT_FIELDS: Partial<Record<AIJobType, ToolCreditFields>> = {
-    COVER_ART:   { usedField: "aiArtCreditsUsed",      limitField: "aiArtCreditsLimit",      pricingKey: "AI_COVER_ART"    },
+    COVER_ART:   { usedField: "aiArtCreditsUsed",      limitField: "aiArtCreditsLimit",      pricingKey: "AI_COVER_ART_STANDARD" },
     MASTERING:   { usedField: "aiMasterCreditsUsed",   limitField: "aiMasterCreditsLimit",   pricingKey: "AI_MASTERING"    },
     LYRIC_VIDEO: { usedField: "lyricVideoCreditsUsed", limitField: "lyricVideoCreditsLimit", pricingKey: "AI_LYRIC_VIDEO"  },
     AR_REPORT:   { usedField: "aarReportCreditsUsed",  limitField: "aarReportCreditsLimit",  pricingKey: "AI_AAR_REPORT"   },
@@ -361,7 +364,10 @@ export async function GET(
       : null;
     const fallbackPrice = PRICING_DEFAULTS[pricingKey as keyof typeof PRICING_DEFAULTS];
     const priceDisplay = pricing[pricingKey]?.display ?? (fallbackPrice ? fallbackPrice.display : "");
-    return NextResponse.json({ jobs, credits, priceDisplay });
+    const premiumPriceDisplay = type === "COVER_ART"
+      ? (pricing["AI_COVER_ART_PREMIUM"]?.display ?? PRICING_DEFAULTS.AI_COVER_ART_PREMIUM.display)
+      : undefined;
+    return NextResponse.json({ jobs, credits, priceDisplay, ...(premiumPriceDisplay !== undefined ? { premiumPriceDisplay } : {}) });
   }
 
   // Tools without per-tool credit tracking (shouldn't happen with current tools, but safe fallback)

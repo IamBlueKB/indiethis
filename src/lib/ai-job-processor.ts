@@ -393,14 +393,19 @@ async function handleCoverArt(job: AIJob): Promise<HandlerResult> {
 
   // ── Extract inputs ────────────────────────────────────────────────────────
   const input = (job.inputData ?? {}) as Record<string, string>;
-  const { artistPrompt, style, mood } = input;
+  const { artistPrompt, style, mood, quality } = input;
 
   if (!artistPrompt?.trim())
     throw new Error("COVER_ART job missing required input: artistPrompt");
 
+  const FAL_MODEL = quality === "premium"
+    ? "fal-ai/nano-banana-2"
+    : "fal-ai/bytedance/seedream/v4/text-to-image";
+  const costPerImage = quality === "premium" ? 0.075 : 0.03;
+
   let totalCost = 0;
 
-  // ── Step 1: Claude — optimize the prompt for SDXL ────────────────────────
+  // ── Step 1: Claude — optimize the prompt for image generation ────────────
   console.log(`[cover-art] optimizing prompt via Claude`);
 
   const claudeResponse = await claude.messages.create({
@@ -433,13 +438,11 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
 
   console.log(`[cover-art] optimized prompt (${optimizedPrompt.length} chars): ${optimizedPrompt.slice(0, 120)}…`);
 
-  // ── Step 2: fal.ai — run Seedream V4 ×4 with varied seeds ───────────────
-  // Model: fal-ai/bytedance/seedream/v4/text-to-image — $0.03/image at 1024×1024
-  const FAL_MODEL  = "fal-ai/bytedance/seedream/v4/text-to-image";
+  // ── Step 2: fal.ai — run image model ×4 with varied seeds ───────────────
   const NUM_IMAGES = 4;
   const BASE_SEED  = Math.floor(Math.random() * 100_000);
 
-  console.log(`[cover-art] running Seedream V4 ×${NUM_IMAGES} on fal.ai (base seed ${BASE_SEED})`);
+  console.log(`[cover-art] running ${quality === "premium" ? "Nano Banana 2" : "Seedream V4"} ×${NUM_IMAGES} on fal.ai (base seed ${BASE_SEED})`);
 
   fal.config({ credentials: falKey });
 
@@ -469,14 +472,13 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
   }
 
   if (imageUrls.length === 0)
-    throw new Error("All fal.ai Seedream predictions failed — no images generated.");
+    throw new Error("All fal.ai image predictions failed — no images generated.");
 
-  // Cost: $0.03 per image
-  const falCost = imageUrls.length * 0.03;
+  const falCost = imageUrls.length * costPerImage;
   totalCost += falCost;
 
   console.log(
-    `[cover-art] Seedream V4 complete — ${imageUrls.length}/${NUM_IMAGES} images. ` +
+    `[cover-art] ${quality === "premium" ? "Nano Banana 2" : "Seedream V4"} complete — ${imageUrls.length}/${NUM_IMAGES} images. ` +
     `Total cost: $${totalCost.toFixed(4)}`,
   );
 
@@ -504,6 +506,7 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
       originalPrompt: artistPrompt,
       style:          style ?? null,
       mood:           mood  ?? null,
+      quality:        quality ?? "standard",
       model:          FAL_MODEL,
       seeds:          Array.from({ length: NUM_IMAGES }, (_, i) => BASE_SEED + i),
     },
