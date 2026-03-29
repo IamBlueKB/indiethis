@@ -510,7 +510,7 @@ YoutubeReference
 |---|------|-------|
 | 1 | ~~`src/lib/stripe.ts:24`~~ | ~~`PLAN_PRICES.reign.amount` still set to `14900` (old $149 price)~~ **FIXED** — updated to `9900` |
 | 2 | `AudioFeatures` table | Sparse data — radar filter works but most tracks/beats have no AudioFeatures record; similarity matching returns few results |
-| 3 | Stripe everywhere | No `STRIPE_SECRET_KEY` in env → all subscription, PPU, invoice, beat purchase flows return 503 in dev |
+| 3 | ~~Stripe everywhere~~ | ~~No `STRIPE_SECRET_KEY` in env → all subscription, PPU, invoice, beat purchase flows return 503 in dev~~ **FIXED** — all 6 Stripe env vars set; products + prices created in test mode |
 | 4 | ~~`CRON_SECRET` not set~~ | ~~Cron routes have no auth protection in dev~~ **FIXED** — all 5 cron routes validated; `CRON_SECRET` set in `.env` |
 | 5 | `YOUTUBE_API_KEY` not set | YouTube sync (`/lib/youtube-sync.ts`) will fail silently |
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
@@ -552,11 +552,12 @@ YoutubeReference
 | `AWS_ACCESS_KEY_ID` | S3 stem/audio storage | ✅ SET |
 | `AWS_SECRET_ACCESS_KEY` | S3 stem/audio storage | ✅ SET |
 | `AWS_REGION` | S3 region | ✅ SET |
-| `STRIPE_SECRET_KEY` | All Stripe operations | ❌ MISSING |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | ❌ MISSING |
-| `STRIPE_PRICE_LAUNCH` | Launch plan Stripe price ID | ❌ MISSING |
-| `STRIPE_PRICE_PUSH` | Push plan Stripe price ID | ❌ MISSING |
-| `STRIPE_PRICE_REIGN` | Reign plan Stripe price ID | ❌ MISSING |
+| `STRIPE_SECRET_KEY` | All Stripe operations | ✅ SET |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe.js client | ✅ SET |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | ✅ SET |
+| `STRIPE_PRICE_LAUNCH` | Launch plan Stripe price ID | ✅ SET |
+| `STRIPE_PRICE_PUSH` | Push plan Stripe price ID | ✅ SET |
+| `STRIPE_PRICE_REIGN` | Reign plan Stripe price ID | ✅ SET |
 | `STRIPE_PRICE_ID_PUSH_LIFETIME` | Lifetime Push price (if applicable) | ❌ MISSING |
 | `STRIPE_PRICE_ID_REIGN_LIFETIME` | Lifetime Reign price (if applicable) | ❌ MISSING |
 | `CRON_SECRET` | Cron route authentication | ✅ SET |
@@ -569,13 +570,13 @@ YoutubeReference
 
 ## STRIPE SETUP CHECKLIST (when connecting account)
 
-- [ ] Add `STRIPE_SECRET_KEY` to env
-- [ ] Add `STRIPE_WEBHOOK_SECRET` to env
-- [ ] Create products + prices for Launch ($19), Push ($49), Reign ($99) → add price IDs to env
+- [x] Add `STRIPE_SECRET_KEY` to env
+- [x] Add `STRIPE_WEBHOOK_SECRET` to env
+- [x] Create products + prices for Launch ($19), Push ($49), Reign ($99) → add price IDs to env
 - [ ] Create products + prices for Studio Pro ($49), Studio Elite ($99) → add to `PLAN_PRICES` in `stripe.ts`
-- [ ] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
+- [x] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
 - [ ] Add `invoice.created` to webhook subscribed events (required for stream lease billing)
 - [ ] Configure Stripe Connect for producer direct payouts
-- [ ] Set webhook endpoint to `https://indiethis.com/api/stripe/webhook`
+- [ ] Set webhook endpoint to `https://indiethis.com/api/stripe/webhook` (production)
 - [ ] Test: new signup → `checkout.session.completed` → user created + credits set
 - [ ] Test: monthly renewal → `invoice.paid` (billing_reason=subscription_cycle) → credits reset
