@@ -508,12 +508,12 @@ YoutubeReference
 
 | # | File | Issue |
 |---|------|-------|
-| 1 | `src/lib/stripe.ts:24` | `PLAN_PRICES.reign.amount` still set to `14900` (old $149 price); should be `9900` — cosmetic, not passed to Stripe |
+| 1 | ~~`src/lib/stripe.ts:24`~~ | ~~`PLAN_PRICES.reign.amount` still set to `14900` (old $149 price)~~ **FIXED** — updated to `9900` |
 | 2 | `AudioFeatures` table | Sparse data — radar filter works but most tracks/beats have no AudioFeatures record; similarity matching returns few results |
 | 3 | Stripe everywhere | No `STRIPE_SECRET_KEY` in env → all subscription, PPU, invoice, beat purchase flows return 503 in dev |
-| 4 | `CRON_SECRET` not set | Cron routes (`/api/cron/*`) have no auth protection in dev — any request can trigger them |
+| 4 | ~~`CRON_SECRET` not set~~ | ~~Cron routes have no auth protection in dev~~ **FIXED** — all 5 cron routes validated; `CRON_SECRET` set in `.env` |
 | 5 | `YOUTUBE_API_KEY` not set | YouTube sync (`/lib/youtube-sync.ts`) will fail silently |
-| 6 | `smsBroadcastsUsed` resets on renewal | SMS counter reset is tied to AI tool renewal — correct behaviour, but SMS limit values are hardcoded per tier, not in PlatformPricing |
+| 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
 
 ---
 
@@ -559,7 +559,7 @@ YoutubeReference
 | `STRIPE_PRICE_REIGN` | Reign plan Stripe price ID | ❌ MISSING |
 | `STRIPE_PRICE_ID_PUSH_LIFETIME` | Lifetime Push price (if applicable) | ❌ MISSING |
 | `STRIPE_PRICE_ID_REIGN_LIFETIME` | Lifetime Reign price (if applicable) | ❌ MISSING |
-| `CRON_SECRET` | Cron route authentication | ❌ MISSING |
+| `CRON_SECRET` | Cron route authentication | ✅ SET |
 | `YOUTUBE_API_KEY` | YouTube video sync | ❌ MISSING |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
