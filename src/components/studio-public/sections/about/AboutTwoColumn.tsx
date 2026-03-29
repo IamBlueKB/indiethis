@@ -1,5 +1,6 @@
 import { HoursBlock, PhotoStack } from "./_helpers";
 import type { SectionSharedProps } from "../../ConfigRenderer";
+import StudioSoundProfileRadar from "@/components/audio/StudioSoundProfileRadar";
 
 export function AboutTwoColumn({ content, studio, accent, galleryImages }: SectionSharedProps) {
   const { eyebrow = "Our Story", headline = "About the Studio", bio, showHours = true } = content;
@@ -18,6 +19,7 @@ export function AboutTwoColumn({ content, studio, accent, galleryImages }: Secti
             </p>
           )}
           {showHours && <HoursBlock studio={studio} accent={accent} />}
+          {studio.slug && <StudioSoundProfileRadar studioSlug={studio.slug} />}
         </div>
         <PhotoStack images={galleryImages} />
       </div>

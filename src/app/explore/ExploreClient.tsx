@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAudioStore } from "@/store";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
+import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import PublicNav from "@/components/layout/PublicNav";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
@@ -381,6 +382,9 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
       {totalUses > 0 && (
         <p className="text-[9px] mb-2" style={{ color: "#555" }}>{totalUses} artist{totalUses !== 1 ? "s" : ""} on this beat</p>
       )}
+      <div className="flex justify-center my-2">
+        <LazyAudioRadar trackId={beat.id} size="sm" animated={false} />
+      </div>
       <button
         onClick={() => onLicense(beat)}
         className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors"

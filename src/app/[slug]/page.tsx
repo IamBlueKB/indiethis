@@ -33,6 +33,8 @@ import type { EquipmentItem } from "@/components/studio-public/sections/Equipmen
 import { ConfigRenderer } from "@/components/studio-public/ConfigRenderer";
 import type { PageConfig } from "@/types/page-config";
 import PageViewTracker from "@/components/studio/PageViewTracker";
+import { calculateAverageFeatures } from "@/lib/audio-features";
+import type { AudioFeatureScores } from "@/lib/audio-features";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -66,7 +68,7 @@ async function ArtistSite({ slug }: { slug: string }) {
             where:   { status: "PUBLISHED" },
             orderBy: { createdAt: "asc" },
             take:    10,
-            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true },
+            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
           },
         },
       },
@@ -75,7 +77,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         where:   { status: "PUBLISHED", releaseId: null },
         orderBy: { createdAt: "desc" },
         take:    10,
-        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true },
+        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
       },
       merchProducts: {
         where:   { isActive: true },
@@ -105,6 +107,15 @@ async function ArtistSite({ slug }: { slug: string }) {
 
   // Filter releases that actually have tracks
   const releases = artist.artistReleases.filter((r) => r.tracks.length > 0);
+
+  // Compute sound DNA — average audio features across all published tracks (need 3+)
+  const allPublishedFeatures = [
+    ...artist.tracks.map(t => t.audioFeatures).filter(Boolean),
+    ...artist.artistReleases.flatMap(r => r.tracks.map(t => t.audioFeatures).filter(Boolean)),
+  ] as AudioFeatureScores[];
+  const soundDNA = allPublishedFeatures.length >= 3
+    ? calculateAverageFeatures(allPublishedFeatures)
+    : null;
 
   // Artist videos — uploads and embeds, with linked product data for CTAs
   const artistVideos = site.showVideos !== false
@@ -406,6 +417,7 @@ async function ArtistSite({ slug }: { slug: string }) {
               displayName={displayName}
               credentials={site.credentials ?? []}
               studioSlug={studioSlug ?? null}
+              soundDNA={soundDNA}
             />
           </div>
         )}
@@ -535,9 +547,28 @@ export default async function SlugPage({
       name: e.name,
     }));
 
+    // Fetch averaged audio features of artist tracks linked to this studio
+    const studioSoundRes = await db.audioFeatures.findMany({
+      where: {
+        track: {
+          artistId: { in: studio.artists.map(a => a.artistId) },
+          status:   "PUBLISHED",
+        },
+      },
+      select: {
+        loudness: true, energy: true, danceability: true, acousticness: true,
+        instrumentalness: true, speechiness: true, liveness: true, valence: true,
+        genre: true, mood: true, isVocal: true,
+      },
+      take: 50,
+    });
+    const studioSoundProfile = studioSoundRes.length >= 3
+      ? calculateAverageFeatures(studioSoundRes as AudioFeatureScores[])
+      : null;
+
     const templateProps = {
       studio, slug, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages,
-      portfolioTracks, credits, engineers, equipment,
+      portfolioTracks, credits, engineers, equipment, studioSoundProfile,
     };
 
     const template = studio.template ?? "CLASSIC";

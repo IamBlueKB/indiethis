@@ -9,6 +9,8 @@ import {
   ListMusic, Radio, FileText, DollarSign, BarChart2,
   Music, Loader2, Zap, ShoppingBag,
 } from "lucide-react";
+import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import type { AudioFeatureScores } from "@/lib/audio-features";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,9 +143,17 @@ function ChartCard({ title, children, range, onRange }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProducerAnalyticsPage() {
-  const [data,    setData]    = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [range,   setRange]   = useState<DateRange>("30d");
+  const [data,     setData]     = useState<AnalyticsData | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [range,    setRange]    = useState<DateRange>("30d");
+  const [soundDNA, setSoundDNA] = useState<{ features: AudioFeatureScores | null; count: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/audio-features/my-average")
+      .then(r => r.json())
+      .then(d => setSoundDNA(d))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -373,6 +383,23 @@ export default function ProducerAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Sound DNA ── */}
+      {soundDNA?.features && soundDNA.count >= 1 && (
+        <div className="rounded-2xl border p-6 mt-6" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+          <div className="mb-5">
+            <p style={{ fontFamily: "Playfair Display, serif", fontSize: "18px", color: "#FFFFFF", fontWeight: 700 }}>
+              Your Sound DNA
+            </p>
+            <p className="text-xs mt-1" style={{ color: "#666666", fontFamily: "DM Sans, sans-serif" }}>
+              Average across {soundDNA.count} analyzed {soundDNA.count === 1 ? "beat" : "beats"}
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <AudioFeaturesRadar features={soundDNA.features} size="lg" animated />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

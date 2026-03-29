@@ -14,6 +14,8 @@ import {
   Users,
   RefreshCw,
 } from "lucide-react";
+import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import type { AudioFeatureScores } from "@/lib/audio-features";
 import AdminLineChart, { type LineConfig } from "@/components/admin/charts/AdminLineChart";
 import AdminBarChart from "@/components/admin/charts/AdminBarChart";
 
@@ -190,6 +192,14 @@ export default function AnalyticsPage() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState("");
   const [refreshing,setRefreshing]= useState(false);
+  const [soundDNA,  setSoundDNA]  = useState<{ features: AudioFeatureScores | null; count: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/audio-features/my-average")
+      .then(r => r.json())
+      .then(d => setSoundDNA(d))
+      .catch(() => {});
+  }, []);
 
   function load(refresh = false) {
     if (refresh) setRefreshing(true);
@@ -506,6 +516,29 @@ export default function AnalyticsPage() {
           )}
         </Card>
       </div>
+
+      {/* ── Sound DNA ── */}
+      {soundDNA?.features && soundDNA.count >= 1 && (
+        <div className="rounded-2xl border p-6" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+          <div className="flex items-start justify-between mb-5">
+            <div>
+              <p style={{ fontFamily: "Playfair Display, serif", fontSize: "18px", color: "#FFFFFF", fontWeight: 700 }}>
+                Your Sound DNA
+              </p>
+              <p className="text-xs mt-1" style={{ color: "#666666", fontFamily: "DM Sans, sans-serif" }}>
+                Average across {soundDNA.count} analyzed {soundDNA.count === 1 ? "track" : "tracks"}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-center">
+            <AudioFeaturesRadar
+              features={soundDNA.features}
+              size="lg"
+              animated
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Empty state (all zeros) ── */}
       {stats.views.total === 0 &&

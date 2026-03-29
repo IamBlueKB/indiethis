@@ -9,6 +9,7 @@ import {
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import { useUserStore } from "@/store";
 import UpgradeGate from "@/components/dashboard/UpgradeGate";
+import { triggerAudioAnalysis } from "@/lib/trigger-audio-analysis";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,8 @@ function BeatModal({
         onSaved();
       } else {
         setSavedBeatId(beatId!);
+        // Fire audio analysis silently — never blocks upload
+        if (beatId && fileUrl) triggerAudioAnalysis(beatId, fileUrl);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");

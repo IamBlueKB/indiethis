@@ -726,6 +726,7 @@ model Track {
   recentPlays           RecentPlay[]
   videoTrackLinks       ArtistVideo[]  @relation("VideoTrackLink")
   videoBeatLinks        ArtistVideo[]  @relation("VideoBeatLink")
+  audioFeatures         AudioFeatures?
 }
 
 model DeliveredFile {
@@ -2265,6 +2266,28 @@ model PendingSignup {
 }
 
 // ─── Stem Separation ──────────────────────────────────────────────────────────
+
+model AudioFeatures {
+  id               String   @id @default(cuid())
+  trackId          String?  @unique
+  track            Track?   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  loudness         Float    @default(0.5)
+  energy           Float    @default(0.5)
+  danceability     Float    @default(0.5)
+  acousticness     Float    @default(0.5)
+  instrumentalness Float    @default(0.5)
+  speechiness      Float    @default(0.5)
+  liveness         Float    @default(0.5)
+  valence          Float    @default(0.5)
+  genre            String?
+  mood             String?
+  isVocal          Boolean  @default(true)
+  analyzedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([trackId])
+}
 
 model StemSeparation {
   id                String   @id @default(cuid())

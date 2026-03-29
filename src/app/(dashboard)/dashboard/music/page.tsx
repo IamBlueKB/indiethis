@@ -11,6 +11,8 @@ import { useUploadThing } from "@/lib/uploadthing-client";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import InlinePlayer from "@/components/audio/InlinePlayer";
 import SplitSheetModal from "./SplitSheetModal";
+import { triggerAudioAnalysis } from "@/lib/trigger-audio-analysis";
+import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +94,7 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showSplits, setShowSplits] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [editTitle, setEditTitle] = useState(track.title);
   const [editProject, setEditProject] = useState(track.projectName ?? "");
   const [editPrice, setEditPrice] = useState(track.price != null ? String(track.price) : "");
@@ -271,7 +274,7 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
   /* ── Normal view ── */
   return (
     <div
-      className="rounded-2xl border overflow-hidden flex items-center gap-4 px-5 py-4 group"
+      className="relative rounded-2xl border overflow-hidden flex items-center gap-4 px-5 py-4 group"
       style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
     >
       {/* Cover art / placeholder */}
@@ -379,6 +382,16 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
         {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
       </button>
 
+      {/* Analysis toggle */}
+      <button
+        onClick={() => setShowAnalysis(v => !v)}
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-all"
+        style={{ backgroundColor: showAnalysis ? "rgba(212,168,67,0.2)" : "rgba(212,168,67,0.08)", color: "#D4A843" }}
+        title="Audio Analysis"
+      >
+        <Zap size={12} />
+      </button>
+
       {/* Split Sheet Modal */}
       {showSplits && (
         <SplitSheetModal
@@ -389,6 +402,20 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
           currentUserEmail={currentUserEmail}
           onClose={() => setShowSplits(false)}
         />
+      )}
+
+      {/* Audio Features Radar — expandable */}
+      {showAnalysis && (
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 px-4 pb-4"
+          style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
+          <LazyAudioRadar
+            trackId={track.id}
+            size="md"
+            title={track.title}
+            subtitle="Audio feature analysis"
+            animated
+          />
+        </div>
       )}
     </div>
   );
@@ -469,6 +496,8 @@ function MyTracksTab({ currentUserId, currentUserName, currentUserEmail }: {
         const data = await res.json() as { track: Track };
         setTracks(prev => [data.track, ...prev]);
         setSavedTrackId(data.track.id); // show license attachment step before clearing form
+        // Fire audio analysis silently — never blocks upload
+        triggerAudioAnalysis(data.track.id, data.track.fileUrl);
       }
     } finally {
       setSaving(false);

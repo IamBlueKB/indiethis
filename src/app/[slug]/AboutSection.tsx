@@ -1,5 +1,7 @@
 // Server component — no "use client" needed
 import Link from "next/link";
+import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import type { AudioFeatureScores } from "@/lib/audio-features";
 
 type AboutSectionProps = {
   bio:         string;
@@ -7,6 +9,7 @@ type AboutSectionProps = {
   displayName: string;
   credentials: string[];
   studioSlug:  string | null;
+  soundDNA?:   AudioFeatureScores | null;
 };
 
 export default function AboutSection({
@@ -15,6 +18,7 @@ export default function AboutSection({
   displayName,
   credentials,
   studioSlug,
+  soundDNA,
 }: AboutSectionProps) {
   const sentences = bio.match(/[^.!?]+[.!?]+/g) ?? [bio];
   const shortBio  = sentences.slice(0, 5).join(" ").trim();
@@ -85,6 +89,25 @@ export default function AboutSection({
               {badge}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Sound DNA radar — only when 3+ tracks have features */}
+      {soundDNA && (
+        <div className="mt-6">
+          <p
+            className="text-[10px] font-bold uppercase mb-3"
+            style={{ color: "#D4A843", letterSpacing: "1.5px" }}
+          >
+            SOUND DNA
+          </p>
+          <AudioFeaturesRadar
+            features={soundDNA}
+            size="md"
+            title={`${displayName}'s Sound`}
+            subtitle="Based on published tracks"
+            animated
+          />
         </div>
       )}
     </section>
