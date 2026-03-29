@@ -858,6 +858,11 @@ export default function StudioAIToolsPage() {
   const [recentJobs,      setRecentJobs]      = useState<RecentJob[]>([]);
   const [historyLoading,  setHistoryLoading]  = useState(true);
 
+  // Client selector dropdown
+  const [contactSearch,   setContactSearch]   = useState("");
+  const [contactDropOpen, setContactDropOpen] = useState(false);
+  const contactDropRef = useRef<HTMLDivElement>(null);
+
   // ── Load roster + history ────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/studio/ai-tools/roster")
@@ -871,6 +876,17 @@ export default function StudioAIToolsPage() {
       .then(d => setRecentJobs(d.jobs ?? []))
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
+  }, []);
+
+  // ── Close contact dropdown on outside click ──────────────────────────────────
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (contactDropRef.current && !contactDropRef.current.contains(e.target as Node)) {
+        setContactDropOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
   // ── Poll active job ──────────────────────────────────────────────────────────
@@ -975,7 +991,7 @@ export default function StudioAIToolsPage() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   const activeCfg = TOOLS.find(t => t.type === activeTool);
-  const contactName = selectedContact?.name ?? "Quick Generate (no client)";
+  const contactName = selectedContact?.name ?? "no client";
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "var(--background)" }}>
@@ -999,68 +1015,162 @@ export default function StudioAIToolsPage() {
       <div className="flex-1 p-8 space-y-8 max-w-5xl">
         {/* ── Client Selector ───────────────────────────────────────────────── */}
         <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Users size={16} style={{ color: "var(--muted-foreground)" }} />
-            <h2 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-              Select Client
-            </h2>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Users size={16} style={{ color: "var(--muted-foreground)" }} />
+              <h2 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Client</h2>
+            </div>
+            {selectedContact && (
+              <button
+                onClick={() => { setSelectedContact(null); setContactSearch(""); }}
+                className="text-xs transition-colors"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                Clear
+              </button>
+            )}
           </div>
 
           {rosterLoading ? (
             <div className="flex items-center gap-2" style={{ color: "var(--muted-foreground)" }}>
               <Loader2 size={14} className="animate-spin" />
-              <span className="text-sm">Loading roster…</span>
+              <span className="text-sm">Loading…</span>
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Quick generate option */}
+            <div className="relative" ref={contactDropRef}>
+              {/* Trigger button */}
               <button
-                onClick={() => setSelectedContact(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors border"
+                onClick={() => { setContactDropOpen(o => !o); setContactSearch(""); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm text-left transition-colors"
                 style={{
-                  borderColor: selectedContact === null ? "#D4A843" : "var(--border)",
-                  color: selectedContact === null ? "#D4A843" : "var(--muted-foreground)",
-                  background: selectedContact === null ? "rgba(212,168,67,0.08)" : "transparent",
+                  borderColor: contactDropOpen ? "#D4A843" : "var(--border)",
+                  background: "var(--background)",
+                  color: "var(--foreground)",
                 }}
               >
-                Quick Generate
+                {selectedContact ? (
+                  <>
+                    {selectedContact.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={selectedContact.photoUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ background: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                        {selectedContact.name[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="flex-1 font-medium">{selectedContact.name}</span>
+                    {selectedContact.genre && (
+                      <span className="text-xs shrink-0" style={{ color: "var(--muted-foreground)" }}>
+                        {selectedContact.genre}
+                      </span>
+                    )}
+                    {selectedContact.isLinked && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                        linked
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: "var(--border)" }}>
+                      <Users size={13} style={{ color: "var(--muted-foreground)" }} />
+                    </div>
+                    <span style={{ color: "var(--muted-foreground)" }}>No client selected</span>
+                  </>
+                )}
+                <ChevronLeft size={14} className={`shrink-0 ml-auto transition-transform ${contactDropOpen ? "-rotate-90" : "rotate-180"}`}
+                  style={{ color: "var(--muted-foreground)" }} />
               </button>
 
-              {/* Roster contacts */}
-              {roster.map(contact => (
-                <button
-                  key={contact.id}
-                  onClick={() => setSelectedContact(contact)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border"
-                  style={{
-                    borderColor: selectedContact?.id === contact.id ? "#D4A843" : "var(--border)",
-                    color: selectedContact?.id === contact.id ? "#D4A843" : "var(--foreground)",
-                    background: selectedContact?.id === contact.id ? "rgba(212,168,67,0.08)" : "transparent",
-                  }}
-                >
-                  {contact.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={contact.photoUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                      style={{ background: "var(--border)", color: "var(--foreground)" }}>
-                      {contact.name[0].toUpperCase()}
-                    </div>
-                  )}
-                  {contact.name}
-                  {contact.isLinked && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full"
-                      style={{ background: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
-                      linked
-                    </span>
-                  )}
-                </button>
-              ))}
+              {/* Dropdown */}
+              {contactDropOpen && (
+                <div className="absolute z-50 mt-1.5 w-full rounded-xl border shadow-lg overflow-hidden"
+                  style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+                  {/* Search */}
+                  <div className="p-2 border-b" style={{ borderColor: "var(--border)" }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={contactSearch}
+                      onChange={e => setContactSearch(e.target.value)}
+                      placeholder="Search contacts…"
+                      className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                      style={{ background: "var(--background)", color: "var(--foreground)", border: "none" }}
+                    />
+                  </div>
 
-              {roster.length === 0 && (
-                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                  No contacts in your CRM yet — add contacts to link output to artist profiles.
-                </p>
+                  <div className="max-h-64 overflow-y-auto">
+                    {/* No client option */}
+                    <button
+                      onClick={() => { setSelectedContact(null); setContactDropOpen(false); setContactSearch(""); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left transition-colors hover:bg-white/5"
+                      style={{ color: selectedContact === null ? "#D4A843" : "var(--muted-foreground)" }}
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: "var(--border)" }}>
+                        <Users size={13} style={{ color: "var(--muted-foreground)" }} />
+                      </div>
+                      No client — generate without linking
+                    </button>
+
+                    {/* Filtered contacts */}
+                    {roster
+                      .filter(c => c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+                                   (c.genre ?? "").toLowerCase().includes(contactSearch.toLowerCase()))
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(contact => (
+                        <button
+                          key={contact.id}
+                          onClick={() => { setSelectedContact(contact); setContactDropOpen(false); setContactSearch(""); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left transition-colors hover:bg-white/5"
+                          style={{
+                            background: selectedContact?.id === contact.id ? "rgba(212,168,67,0.07)" : "transparent",
+                            color: selectedContact?.id === contact.id ? "#D4A843" : "var(--foreground)",
+                          }}
+                        >
+                          {contact.photoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={contact.photoUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                              style={{ background: "var(--border)", color: "var(--foreground)" }}>
+                              {contact.name[0].toUpperCase()}
+                            </div>
+                          )}
+                          <span className="flex-1">{contact.name}</span>
+                          {contact.genre && (
+                            <span className="text-xs shrink-0" style={{ color: "var(--muted-foreground)" }}>
+                              {contact.genre}
+                            </span>
+                          )}
+                          {contact.isLinked && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                              style={{ background: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                              linked
+                            </span>
+                          )}
+                        </button>
+                      ))}
+
+                    {roster.filter(c =>
+                      c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+                      (c.genre ?? "").toLowerCase().includes(contactSearch.toLowerCase())
+                    ).length === 0 && contactSearch && (
+                      <p className="px-4 py-3 text-sm" style={{ color: "var(--muted-foreground)" }}>
+                        No contacts match &quot;{contactSearch}&quot;
+                      </p>
+                    )}
+
+                    {roster.length === 0 && (
+                      <p className="px-4 py-3 text-sm" style={{ color: "var(--muted-foreground)" }}>
+                        No contacts yet — add clients in your CRM first.
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}
