@@ -20,7 +20,6 @@ import sharp from "sharp";
 import { db } from "@/lib/db";
 import { AIJobStatus, type AIJob, type Prisma } from "@prisma/client";
 import OpenAI, { toFile } from "openai";
-import Replicate from "replicate";
 import { fal } from "@fal-ai/client";
 import type { QueueStatus } from "@fal-ai/client";
 import ffmpegFluent from "fluent-ffmpeg";
@@ -384,11 +383,11 @@ async function handleCoverArt(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing COVER_ART job ${job.id} via ${job.provider}`);
 
   // ── Env checks ───────────────────────────────────────────────────────────
-  const replicateToken = process.env.REPLICATE_API_TOKEN;
-  const anthropicKey   = process.env.ANTHROPIC_API_KEY;
+  const falKey       = process.env.FAL_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!replicateToken || replicateToken.startsWith("your_"))
-    throw new Error("REPLICATE_API_TOKEN is not configured — add it to .env.local to use Cover Art generation.");
+  if (!falKey || falKey.startsWith("your_"))
+    throw new Error("FAL_KEY is not configured — add it to .env.local to use Cover Art generation.");
   if (!anthropicKey || anthropicKey === "sk-ant-...")
     throw new Error("ANTHROPIC_API_KEY is not configured — add it to .env.local to use Cover Art generation.");
 
@@ -434,38 +433,24 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
 
   console.log(`[cover-art] optimized prompt (${optimizedPrompt.length} chars): ${optimizedPrompt.slice(0, 120)}…`);
 
-  // ── Step 2: Replicate — run SDXL ×4 with varied seeds ───────────────────
-  // Model: stability-ai/sdxl — latest public version
-  // Cost: ~$0.0023 per image at 1024×1024
-  const SDXL_MODEL = "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37ec2475f07bb2f1d00be8ee";
+  // ── Step 2: fal.ai — run Seedream V4 ×4 with varied seeds ───────────────
+  // Model: fal-ai/bytedance/seedream/v4/text-to-image — $0.03/image at 1024×1024
+  const FAL_MODEL  = "fal-ai/bytedance/seedream/v4/text-to-image";
   const NUM_IMAGES = 4;
   const BASE_SEED  = Math.floor(Math.random() * 100_000);
 
-  console.log(`[cover-art] running SDXL ×${NUM_IMAGES} on Replicate (base seed ${BASE_SEED})`);
+  console.log(`[cover-art] running Seedream V4 ×${NUM_IMAGES} on fal.ai (base seed ${BASE_SEED})`);
 
-  const replicate = new Replicate({ auth: replicateToken });
-
-  // Build negative prompt from style/mood to avoid common cover-art pitfalls
-  const negativePrompt =
-    "text, watermark, logo, signature, blurry, low quality, disfigured, ugly, " +
-    "oversaturated, amateur, generic stock photo, multiple panels, collage";
+  fal.config({ credentials: falKey });
 
   // Fire all 4 runs in parallel with seeds BASE_SEED + 0,1,2,3
   const predictions = await Promise.allSettled(
     Array.from({ length: NUM_IMAGES }, (_, i) =>
-      replicate.run(SDXL_MODEL, {
+      fal.subscribe(FAL_MODEL, {
         input: {
-          prompt:          optimizedPrompt,
-          negative_prompt: negativePrompt,
-          width:           1024,
-          height:          1024,
-          num_outputs:     1,
-          scheduler:       "K_EULER",
-          num_inference_steps: 40,
-          guidance_scale:  7.5,
-          seed:            BASE_SEED + i,
-          refine:          "expert_ensemble_refiner",
-          high_noise_frac: 0.8,
+          prompt:     optimizedPrompt,
+          image_size: "square_hd",
+          seed:       BASE_SEED + i,
         },
       })
     ),
@@ -475,24 +460,23 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
   const imageUrls: string[] = [];
   for (const result of predictions) {
     if (result.status === "fulfilled") {
-      const output = result.value;
-      // Replicate returns string[] for num_outputs:1
-      const url = Array.isArray(output) ? (output[0] as string) : (output as unknown as string);
+      const images = (result.value.data as { images?: { url: string }[] }).images;
+      const url = images?.[0]?.url;
       if (url) imageUrls.push(url);
     } else {
-      console.warn(`[cover-art] one SDXL prediction failed: ${result.reason}`);
+      console.warn(`[cover-art] one Seedream prediction failed: ${result.reason}`);
     }
   }
 
   if (imageUrls.length === 0)
-    throw new Error("All Replicate SDXL predictions failed — no images generated.");
+    throw new Error("All fal.ai Seedream predictions failed — no images generated.");
 
-  // Cost: $0.0023 per 1024×1024 image
-  const replicateCost = imageUrls.length * 0.0023;
-  totalCost += replicateCost;
+  // Cost: $0.03 per image
+  const falCost = imageUrls.length * 0.03;
+  totalCost += falCost;
 
   console.log(
-    `[cover-art] SDXL complete — ${imageUrls.length}/${NUM_IMAGES} images. ` +
+    `[cover-art] Seedream V4 complete — ${imageUrls.length}/${NUM_IMAGES} images. ` +
     `Total cost: $${totalCost.toFixed(4)}`,
   );
 
@@ -520,7 +504,7 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
       originalPrompt: artistPrompt,
       style:          style ?? null,
       mood:           mood  ?? null,
-      model:          SDXL_MODEL,
+      model:          FAL_MODEL,
       seeds:          Array.from({ length: NUM_IMAGES }, (_, i) => BASE_SEED + i),
     },
     costToUs: totalCost,

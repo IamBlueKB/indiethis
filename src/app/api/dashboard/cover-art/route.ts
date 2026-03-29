@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
 import { embedIndieThisMetadata } from "@/lib/image-metadata";
 import { createNotification } from "@/lib/notifications";
+import { fal } from "@fal-ai/client";
 
 const utapi = new UTApi();
 
@@ -62,8 +63,10 @@ async function generateCoverArt(
   try {
     await db.aIGeneration.update({ where: { id: jobId }, data: { status: "PROCESSING" } });
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) throw new Error("FAL_KEY not configured");
+
+    fal.config({ credentials: falKey });
 
     const enhancedPrompt = [
       `Album cover art in ${style} style`,
@@ -72,33 +75,21 @@ async function generateCoverArt(
       "High quality, professional music artwork, square format",
     ].filter(Boolean).join(". ");
 
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+    const result = await fal.subscribe("fal-ai/bytedance/seedream/v4/text-to-image", {
+      input: {
+        prompt:     enhancedPrompt,
+        image_size: "square_hd",
+        seed:       Math.floor(Math.random() * 100_000),
       },
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: enhancedPrompt,
-        n: 1,
-        size: "1024x1024",
-        quality: "standard",
-      }),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(err?.error?.message ?? `OpenAI error ${res.status}`);
-    }
+    const images = (result.data as { images?: { url: string }[] }).images;
+    const imageUrl = images?.[0]?.url;
 
-    const data = await res.json() as { data: { url: string; revised_prompt?: string }[] };
-    const imageUrl = data.data[0]?.url;
-
-    if (!imageUrl) throw new Error("No image returned from OpenAI");
+    if (!imageUrl) throw new Error("No image returned from fal.ai");
 
     // Embed IndieThis EXIF metadata and upload to permanent storage.
-    // Falls back to the original OpenAI URL if processing fails.
+    // Falls back to the original fal.ai URL if processing fails.
     let storedUrl = imageUrl;
     try {
       const buffer = await embedIndieThisMetadata(imageUrl);
@@ -114,7 +105,7 @@ async function generateCoverArt(
       data: {
         status: "COMPLETED",
         outputUrl: storedUrl,
-        outputData: { revisedPrompt: data.data[0]?.revised_prompt },
+        outputData: { model: "fal-ai/bytedance/seedream/v4/text-to-image" },
       },
     });
 
