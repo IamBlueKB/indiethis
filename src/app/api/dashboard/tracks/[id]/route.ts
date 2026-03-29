@@ -25,6 +25,8 @@ export async function PATCH(
     tags?: string[];
   };
 
+  const fileUrlChanged = body.fileUrl !== undefined;
+
   const track = await db.track.updateMany({
     where: { id, artistId: session.user.id },
     data: {
@@ -40,6 +42,13 @@ export async function PATCH(
       ...(body.audioHash    !== undefined && { audioHash:   body.audioHash }),
     },
   });
+
+  // If the file URL changed, delete the stale AudioFeatures record so it
+  // gets re-analyzed on the next client visit via triggerAudioAnalysis.
+  if (fileUrlChanged && track.count > 0) {
+    void db.audioFeatures.deleteMany({ where: { trackId: id } })
+      .catch(() => { /* silent — non-critical */ });
+  }
 
   return NextResponse.json({ updated: track.count });
 }

@@ -24,6 +24,7 @@ import {
   Compass,
   Megaphone,
   Filter,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -42,8 +43,9 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Users",       href: "/admin/users",        icon: Users,           page: "users"        },
   { label: "Studios",     href: "/admin/studios",      icon: Building2,       page: "studios"      },
   { label: "Revenue",     href: "/admin/revenue",      icon: BarChart3,       page: "revenue"      },
-  { label: "AI Usage",    href: "/admin/ai-usage",     icon: Cpu,             page: "ai-usage"     },
-  { label: "Moderation",  href: "/admin/moderation",   icon: ShieldAlert,     page: "moderation"   },
+  { label: "AI Usage",    href: "/admin/ai-usage",        icon: Cpu,      page: "ai-usage"        },
+  { label: "AF Backfill", href: "/admin/audio-features",  icon: Activity, page: "audio-features"  },
+  { label: "Moderation",  href: "/admin/moderation",      icon: ShieldAlert, page: "moderation"   },
   { label: "Content",     href: "/admin/content",      icon: Archive,         page: "content"      },
   { label: "AI Learning", href: "/admin/ai-learning",  icon: Brain,           page: "ai-usage"     },
   { label: "Support",     href: "/admin/support-chat", icon: MessageSquare,   page: "support-chat" },

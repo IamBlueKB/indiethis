@@ -125,6 +125,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     OPS_ADMIN:     "full",
     SUPPORT_ADMIN: "none",
   },
+  "audio-features": {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
 };
 
 // ---------------------------------------------------------------------------
