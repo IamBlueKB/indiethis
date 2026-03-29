@@ -14,6 +14,7 @@ type UserSettings = {
   artistName: string | null;
   email: string;
   phone: string | null;
+  smsOptIn: boolean;
   bio: string | null;
   photo: string | null;
   instagramHandle: string | null;
@@ -81,6 +82,7 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [artistName, setArtistName] = useState("");
   const [phone, setPhone] = useState("");
+  const [smsOptIn, setSmsOptIn] = useState(false);
   const [bio, setBio] = useState("");
   const [instagram, setInstagram] = useState("");
   const [tiktok, setTiktok] = useState("");
@@ -173,6 +175,7 @@ export default function SettingsPage() {
         setName(u.name ?? "");
         setArtistName(u.artistName ?? "");
         setPhone(u.phone ?? "");
+        setSmsOptIn(u.smsOptIn ?? false);
         setBio(u.bio ?? "");
         setInstagram(u.instagramHandle ?? "");
         setTiktok(u.tiktokHandle ?? "");
@@ -277,7 +280,7 @@ export default function SettingsPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name, artistName, phone, bio,
+          name, artistName, phone, smsOptIn, bio,
           instagramHandle: instagram, tiktokHandle: tiktok,
           youtubeChannel: youtube, spotifyUrl: spotify,
           appleMusicUrl: appleMusic, artistSlug: slug,
@@ -406,6 +409,17 @@ export default function SettingsPage() {
         <Field label="Phone">
           <input value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="(404) 555-0100"
             className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50" style={{ borderColor: "var(--border)" }} />
+          <label className="flex items-start gap-2.5 mt-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={smsOptIn}
+              onChange={(e) => setSmsOptIn(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border accent-[#D4A843] cursor-pointer shrink-0"
+            />
+            <span className="text-xs text-muted-foreground leading-relaxed">
+              I agree to receive booking confirmations, intake form links, and session reminders from IndieThis via SMS. Message frequency may vary. Standard message and data rates may apply. Reply STOP to opt out. Reply HELP for assistance. Your mobile information will not be sold or shared with third parties for promotional or marketing purposes.
+            </span>
+          </label>
         </Field>
         <Field label="Bio">
           <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
