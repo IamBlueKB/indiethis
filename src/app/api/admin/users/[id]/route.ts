@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
+import { getPricing, getSmsLimit } from "@/lib/pricing";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -158,9 +159,9 @@ export async function GET(
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const SMS_LIMITS: Record<string, number> = { LAUNCH: 100, PUSH: 500, REIGN: 2000 };
   const tier = user.subscription?.tier ?? "LAUNCH";
-  const smsLimit = SMS_LIMITS[tier] ?? 100;
+  const pricing = await getPricing();
+  const smsLimit = getSmsLimit(tier, pricing);
 
   return NextResponse.json({
     ...user,

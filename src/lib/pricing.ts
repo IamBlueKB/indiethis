@@ -79,8 +79,24 @@ export const PRICING_DEFAULTS = {
   AI_BIO_GENERATOR:      { value: 0,     display: "Free"    },
   AI_SPLIT_SHEET:        { value: 0,     display: "Free"    },
   CUT_MUSIC_SALES:       { value: 10,    display: "10%"     },
-  CUT_MERCH_PUSH:   { value: 15,    display: "15%"     },
-  CUT_MERCH_REIGN:  { value: 10,    display: "10%"     },
+  CUT_MERCH_PUSH:        { value: 15,    display: "15%"     },
+  CUT_MERCH_REIGN:       { value: 10,    display: "10%"     },
+  // SMS broadcast limits per tier (monthly)
+  SMS_LIMIT_LAUNCH:       { value: 100,  display: "100/mo"  },
+  SMS_LIMIT_PUSH:         { value: 500,  display: "500/mo"  },
+  SMS_LIMIT_REIGN:        { value: 2000, display: "2000/mo" },
+  SMS_LIMIT_STUDIO_PRO:   { value: 500,  display: "500/mo"  },
+  SMS_LIMIT_STUDIO_ELITE: { value: 2000, display: "2000/mo" },
 } as const;
 
 export type PricingKey = keyof typeof PRICING_DEFAULTS;
+
+/** Returns the monthly SMS broadcast limit for a subscription tier, from a live PricingMap */
+export function getSmsLimit(tier: string, pricing: PricingMap): number {
+  const key = `SMS_LIMIT_${tier}`;
+  return (
+    pricing[key]?.value ??
+    (PRICING_DEFAULTS as Record<string, { value: number }>)[key]?.value ??
+    100
+  );
+}

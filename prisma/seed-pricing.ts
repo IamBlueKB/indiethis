@@ -41,6 +41,13 @@ const PRICING_SEED = [
   { key: "STREAM_LEASE_MONTHLY",        label: "Stream Lease Monthly Fee",    value: 1.00, display: "$1/mo", category: "stream_leases", sortOrder: 30 },
   { key: "STREAM_LEASE_PRODUCER_SHARE", label: "Stream Lease Producer Share", value: 0.70, display: "70%",   category: "stream_leases", sortOrder: 31 },
   { key: "STREAM_LEASE_PLATFORM_SHARE", label: "Stream Lease Platform Share", value: 0.30, display: "30%",   category: "stream_leases", sortOrder: 32 },
+
+  // ─── SMS Broadcast Limits (per tier, per month) ───────────────────────────
+  { key: "SMS_LIMIT_LAUNCH",       label: "SMS Limit (Launch)",       value: 100,  display: "100/mo",  category: "sms_limits", sortOrder: 40 },
+  { key: "SMS_LIMIT_PUSH",         label: "SMS Limit (Push)",         value: 500,  display: "500/mo",  category: "sms_limits", sortOrder: 41 },
+  { key: "SMS_LIMIT_REIGN",        label: "SMS Limit (Reign)",        value: 2000, display: "2000/mo", category: "sms_limits", sortOrder: 42 },
+  { key: "SMS_LIMIT_STUDIO_PRO",   label: "SMS Limit (Studio Pro)",   value: 500,  display: "500/mo",  category: "sms_limits", sortOrder: 43 },
+  { key: "SMS_LIMIT_STUDIO_ELITE", label: "SMS Limit (Studio Elite)", value: 2000, display: "2000/mo", category: "sms_limits", sortOrder: 44 },
 ];
 
 async function main() {

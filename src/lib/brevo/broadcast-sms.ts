@@ -20,12 +20,6 @@ import { sendSMS } from "./sms";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export const SMS_LIMITS: Record<string, number> = {
-  LAUNCH: 100,
-  PUSH:   500,
-  REIGN:  2000,
-};
-
 /** Approximate Brevo transactional SMS cost (USD per segment per recipient) */
 export const SMS_COST_PER_SEGMENT = 0.009;
 

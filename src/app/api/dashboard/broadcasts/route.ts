@@ -13,11 +13,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
-  SMS_LIMITS,
   SMS_COST_PER_SEGMENT,
   resolveBroadcastRecipients,
   sendBroadcast,
 } from "@/lib/brevo/broadcast-sms";
+import { getPricing, getSmsLimit } from "@/lib/pricing";
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
@@ -55,7 +55,8 @@ export async function GET() {
 
     const tier          = sub?.tier ?? "LAUNCH";
     // Comp/free-trial users have SMS limit of 0 — PPU only
-    const limit         = user?.isComped ? 0 : (SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH);
+    const pricing       = await getPricing();
+    const limit         = user?.isComped ? 0 : getSmsLimit(tier, pricing);
     const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
 
     return NextResponse.json({ logs, usedThisMonth, limit, tier });
@@ -99,7 +100,8 @@ export async function POST(req: NextRequest) {
       }),
     ]);
     const tier          = sub?.tier ?? "LAUNCH";
-    const limit         = user?.isComped ? 0 : (SMS_LIMITS[tier] ?? SMS_LIMITS.LAUNCH);
+    const pricing       = await getPricing();
+    const limit         = user?.isComped ? 0 : getSmsLimit(tier, pricing);
     const usedThisMonth = sub?.smsBroadcastsUsed ?? 0;
     const remaining     = limit - usedThisMonth;
 
