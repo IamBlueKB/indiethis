@@ -11,6 +11,17 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as { productId?: string; buyerEmail?: string };
 
+  // Read DJ attribution cookie — format: dj_attribution_{djProfileId}
+  let djAttributionId: string | null = null;
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  const attrMatch = cookieHeader.match(/dj_attribution_([^=;]+)=([^;]+)/);
+  if (attrMatch) {
+    const djProfileId = attrMatch[2].trim();
+    // Verify the profile exists
+    const djProfile = await db.dJProfile.findUnique({ where: { id: djProfileId }, select: { id: true } });
+    if (djProfile) djAttributionId = djProfile.id;
+  }
+
   if (!body.productId) return NextResponse.json({ error: "productId is required" }, { status: 400 });
   if (!body.buyerEmail?.includes("@")) {
     return NextResponse.json({ error: "A valid buyer email is required" }, { status: 400 });
@@ -61,6 +72,7 @@ export async function POST(req: NextRequest) {
       platformFee: String(platformFee),
       artistEarnings: String(artistEarnings),
       artistId: product.userId,
+      ...(djAttributionId ? { djAttributionId } : {}),
     },
   });
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -105,6 +106,15 @@ type Props = {
 export default function DashboardSidebar({ hasProducerActivity, hasProducerStreamLeases, djMode }: Props) {
   const pathname = usePathname();
   const { user } = useUserStore();
+  const [djPendingInvites, setDjPendingInvites] = useState(0);
+
+  useEffect(() => {
+    if (!djMode) return;
+    fetch("/api/dashboard/dj/invites")
+      .then(r => r.json())
+      .then((d: { invites?: unknown[] }) => setDjPendingInvites(d.invites?.length ?? 0))
+      .catch(() => {});
+  }, [djMode]);
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -192,6 +202,7 @@ export default function DashboardSidebar({ hasProducerActivity, hasProducerStrea
             {djNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const isCrates = item.href === "/dashboard/dj/crates";
               return (
                 <Link
                   key={item.href}
@@ -205,6 +216,14 @@ export default function DashboardSidebar({ hasProducerActivity, hasProducerStrea
                 >
                   <Icon size={17} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
                   {item.label}
+                  {isCrates && djPendingInvites > 0 && (
+                    <span
+                      className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    >
+                      {djPendingInvites}
+                    </span>
+                  )}
                 </Link>
               );
             })}

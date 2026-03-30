@@ -26,6 +26,7 @@ export async function GET() {
       spotifyUrl: true,
       appleMusicUrl: true,
       artistSlug: true,
+      djMode: true,
     },
   });
 

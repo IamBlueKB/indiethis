@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff, AlertTriangle, X,
-  Mic2, DollarSign, Radio, CreditCard, ChevronDown, RefreshCw, Unlink,
+  Mic2, DollarSign, Radio, CreditCard, ChevronDown, RefreshCw, Unlink, Disc3,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -23,6 +23,7 @@ type UserSettings = {
   spotifyUrl: string | null;
   appleMusicUrl: string | null;
   artistSlug: string | null;
+  djMode: boolean;
 };
 
 type YtStatus = {
@@ -78,6 +79,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [slugError, setSlugError] = useState<string | null>(null);
+
+  // DJ Mode state
+  const [djMode, setDjMode] = useState(false);
+  const [djToggling, setDjToggling] = useState(false);
+  const [djMsg, setDjMsg] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [artistName, setArtistName] = useState("");
@@ -184,6 +190,7 @@ export default function SettingsPage() {
         setAppleMusic(u.appleMusicUrl ?? "");
         setSlug(u.artistSlug ?? "");
         setPhoto(u.photo ?? null);
+        setDjMode(u.djMode ?? false);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -332,6 +339,25 @@ export default function SettingsPage() {
     setProdRestrictions((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
     );
+  }
+
+  async function handleDjToggle() {
+    setDjToggling(true);
+    setDjMsg(null);
+    try {
+      const endpoint = djMode ? "/api/dashboard/dj/deactivate" : "/api/dashboard/dj/activate";
+      const res = await fetch(endpoint, { method: "POST" });
+      if (!res.ok) return;
+      const next = !djMode;
+      setDjMode(next);
+      setDjMsg(next
+        ? "DJ Mode activated. DJ features are now available in your sidebar."
+        : "DJ Mode deactivated."
+      );
+      setTimeout(() => setDjMsg(null), 4000);
+    } finally {
+      setDjToggling(false);
+    }
   }
 
   if (loading) {
@@ -867,6 +893,35 @@ export default function SettingsPage() {
           <div className="h-px" style={{ backgroundColor: "var(--border)" }} />
         </>
       )}
+
+      {/* DJ Mode */}
+      <Section title="DJ Mode" icon={<Disc3 size={15} className="text-accent" />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Enable DJ Mode</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Unlock crates, track notes, and shareable DJ pages.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleDjToggle}
+            disabled={djToggling}
+            className="relative w-10 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50"
+            style={{ backgroundColor: djMode ? "#D4A843" : "var(--border)" }}
+          >
+            <span
+              className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+              style={{ transform: djMode ? "translateX(16px)" : "translateX(0)" }}
+            />
+          </button>
+        </div>
+        {djMsg && (
+          <div className="flex items-center gap-2 text-sm rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+            <Check size={13} /> {djMsg}
+          </div>
+        )}
+      </Section>
 
       {userData && (
         <p className="text-xs text-muted-foreground">Account email: <span className="text-foreground">{userData.email}</span></p>

@@ -7,6 +7,7 @@ import InlinePlayer from "@/components/audio/InlinePlayer";
 import type { AudioTrack } from "@/store";
 import { detectDevice, buildStreamingLinks } from "@/lib/smart-links";
 import type { DeviceType } from "@/lib/smart-links";
+import AddToCrateButton from "@/components/dj/AddToCrateButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -214,6 +215,11 @@ function TrackRow({
           <Download size={10} />
         </button>
       )}
+
+      {/* Add to Crate (DJ Mode only) */}
+      <div className="shrink-0">
+        <AddToCrateButton trackId={track.id} />
+      </div>
     </div>
   );
 }
