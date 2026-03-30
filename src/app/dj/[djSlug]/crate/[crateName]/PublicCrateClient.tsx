@@ -72,23 +72,21 @@ export default function PublicCrateClient({
   const djDisplayName = djProfile.user.artistName ?? djProfile.user.name;
   const djPhoto = djProfile.profilePhotoUrl ?? djProfile.user.photo;
 
-  // Set attribution cookie when visitor arrives from external referrer
+  // Set attribution cookie when fan visits this crate
   useEffect(() => {
     if (didSetCookie.current) return;
     didSetCookie.current = true;
 
-    try {
-      const ref = document.referrer;
-      const isExternal = !ref || (!ref.includes("indiethis.com") && !ref.includes("localhost"));
-      if (isExternal) {
-        const expires = new Date();
-        expires.setDate(expires.getDate() + 30);
-        document.cookie = `dj_attribution_${djProfile.id}=${djProfile.id}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-      }
-    } catch {
-      // Ignore cookie errors
-    }
-  }, [djProfile.id]);
+    fetch("/api/dj/attribute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        djProfileId: djProfile.id,
+        sourceType: "CRATE",
+        sourceId: crate.id,
+      }),
+    }).catch(() => {}); // fire and forget
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>

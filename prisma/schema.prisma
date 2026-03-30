@@ -314,6 +314,7 @@ model Track {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   genre                String?
+  isrc                 String?
   videoBeatLinks       ArtistVideo[]         @relation("VideoBeatLink")
   videoTrackLinks      ArtistVideo[]         @relation("VideoTrackLink")
   audioFeatures        AudioFeatures?
@@ -2155,6 +2156,13 @@ model DigitalProduct {
   price         Int
   description   String?
   coverArtUrl   String?
+  genre         String?
+  releaseYear   Int?
+  copyright     String?
+  explicit      Boolean             @default(false)
+  songwriter    String?
+  producer      String?
+  isrc          String?
   tracks        Track[]             @relation("DigitalProductTracks")
   published     Boolean             @default(false)
   createdAt     DateTime            @default(now())
@@ -2187,6 +2195,7 @@ model DigitalPurchase {
 
 enum DigitalProductType {
   SINGLE
+  EP
   ALBUM
 }
 

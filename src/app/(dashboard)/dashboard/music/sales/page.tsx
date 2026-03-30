@@ -11,7 +11,7 @@ import { useUploadThing } from "@/lib/uploadthing-client";
 
 type DigitalProduct = {
   id: string;
-  type: "SINGLE" | "ALBUM";
+  type: "SINGLE" | "EP" | "ALBUM";
   title: string;
   price: number; // cents
   description: string | null;
@@ -41,7 +41,7 @@ function CreateProductModal({
   onClose,
   onCreate,
 }: {
-  type: "SINGLE" | "ALBUM";
+  type: "SINGLE" | "EP" | "ALBUM";
   tracks: Track[];
   onClose: () => void;
   onCreate: (product: DigitalProduct) => void;
@@ -54,6 +54,14 @@ function CreateProductModal({
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  // Metadata fields
+  const [genre, setGenre]           = useState("");
+  const [releaseYear, setReleaseYear] = useState("");
+  const [explicit, setExplicit]     = useState(false);
+  const [isrc, setIsrc]             = useState("");
+  const [songwriter, setSongwriter] = useState("");
+  const [producer, setProducer]     = useState("");
+  const [copyright, setCopyright]   = useState("");
 
   const { startUpload } = useUploadThing("albumArt");
 
@@ -79,6 +87,7 @@ function CreateProductModal({
 
     setSaving(true);
     try {
+      const parsedYear = releaseYear ? parseInt(releaseYear, 10) : undefined;
       const res = await fetch("/api/dashboard/digital-products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,6 +98,13 @@ function CreateProductModal({
           description: description.trim() || undefined,
           coverArtUrl: coverArtUrl || undefined,
           trackIds: selectedTracks,
+          genre: genre.trim() || undefined,
+          releaseYear: parsedYear && !isNaN(parsedYear) ? parsedYear : undefined,
+          copyright: copyright.trim() || undefined,
+          explicit,
+          songwriter: songwriter.trim() || undefined,
+          producer: producer.trim() || undefined,
+          isrc: isrc.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -106,6 +122,7 @@ function CreateProductModal({
     if (type === "SINGLE") {
       setSel([id]);
     } else {
+      // EP and ALBUM allow multiple tracks
       setSel((prev) =>
         prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
       );
@@ -120,7 +137,7 @@ function CreateProductModal({
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold">
-            Create {type === "SINGLE" ? "Single" : "Album"}
+            Create {type === "SINGLE" ? "Single" : type === "EP" ? "EP" : "Album"}
           </h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X size={20} />
@@ -136,7 +153,7 @@ function CreateProductModal({
               onChange={(e) => setTitle(e.target.value)}
               className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
               style={{ borderColor: "var(--border)" }}
-              placeholder={type === "SINGLE" ? "Track name" : "Album title"}
+              placeholder={type === "SINGLE" ? "Track name" : type === "EP" ? "EP title" : "Album title"}
               required
             />
           </div>
@@ -144,7 +161,7 @@ function CreateProductModal({
           {/* Price */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Price {type === "SINGLE" ? "($0.99–$99.99)" : "($4.99–$99.99)"}
+              Price {type === "SINGLE" ? "($0.99–$49.99)" : "($4.99–$99.99)"}
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
@@ -156,7 +173,7 @@ function CreateProductModal({
                 type="number"
                 step="0.01"
                 min={type === "SINGLE" ? "0.99" : "4.99"}
-                max="99.99"
+                max={type === "SINGLE" ? "49.99" : "99.99"}
                 required
               />
             </div>
@@ -257,6 +274,103 @@ function CreateProductModal({
             )}
           </div>
 
+          {/* Metadata */}
+          <div className="border-t pt-4 space-y-3" style={{ borderColor: "var(--border)" }}>
+            <p className="text-sm font-medium" style={{ color: "#D4A843" }}>Metadata</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Genre */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Genre</label>
+                <input
+                  value={genre}
+                  onChange={(e) => setGenre(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  style={{ borderColor: "var(--border)" }}
+                  placeholder="e.g. Hip-Hop, R&B"
+                />
+              </div>
+
+              {/* Release Year */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Release Year</label>
+                <input
+                  value={releaseYear}
+                  onChange={(e) => setReleaseYear(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  style={{ borderColor: "var(--border)" }}
+                  type="number"
+                  placeholder={new Date().getFullYear().toString()}
+                  min={1900}
+                  max={2030}
+                />
+              </div>
+            </div>
+
+            {/* Songwriter */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Songwriter</label>
+              <input
+                value={songwriter}
+                onChange={(e) => setSongwriter(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                style={{ borderColor: "var(--border)" }}
+                placeholder="Songwriter name(s)"
+              />
+            </div>
+
+            {/* Producer */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Producer</label>
+              <input
+                value={producer}
+                onChange={(e) => setProducer(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                style={{ borderColor: "var(--border)" }}
+                placeholder="Producer name(s)"
+              />
+            </div>
+
+            {/* Copyright */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Copyright</label>
+              <input
+                value={copyright}
+                onChange={(e) => setCopyright(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                style={{ borderColor: "var(--border)" }}
+                placeholder={`© ${new Date().getFullYear()} Artist Name`}
+              />
+            </div>
+
+            {/* ISRC — singles only */}
+            {type === "SINGLE" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">ISRC</label>
+                <input
+                  value={isrc}
+                  onChange={(e) => setIsrc(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  style={{ borderColor: "var(--border)" }}
+                  placeholder="e.g. USRC12345678"
+                />
+                <p className="text-xs text-muted-foreground mt-1">International Standard Recording Code</p>
+              </div>
+            )}
+
+            {/* Explicit */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={explicit}
+                onChange={(e) => setExplicit(e.target.checked)}
+                className="rounded"
+                style={{ accentColor: "#D4A843" }}
+              />
+              <span className="text-sm">Contains explicit content</span>
+            </label>
+          </div>
+
           {error && <p className="text-sm text-red-400">{error}</p>}
 
           <div className="flex justify-end gap-3 pt-2">
@@ -275,7 +389,7 @@ function CreateProductModal({
               style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
             >
               {saving ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
-              Create {type === "SINGLE" ? "Single" : "Album"}
+              Create {type === "SINGLE" ? "Single" : type === "EP" ? "EP" : "Album"}
             </button>
           </div>
         </form>
@@ -352,8 +466,14 @@ function ProductCard({
                 <span
                   className="text-xs px-2 py-0.5 rounded-full font-medium"
                   style={{
-                    backgroundColor: product.type === "SINGLE" ? "rgba(212,168,67,0.15)" : "rgba(96,165,250,0.15)",
-                    color: product.type === "SINGLE" ? "#D4A843" : "#60a5fa",
+                    backgroundColor:
+                      product.type === "SINGLE" ? "rgba(212,168,67,0.15)" :
+                      product.type === "EP"     ? "rgba(167,139,250,0.15)" :
+                                                  "rgba(96,165,250,0.15)",
+                    color:
+                      product.type === "SINGLE" ? "#D4A843" :
+                      product.type === "EP"     ? "#a78bfa" :
+                                                  "#60a5fa",
                   }}
                 >
                   {product.type}
@@ -429,8 +549,8 @@ export default function DigitalSalesPage() {
   const [products, setProducts]           = useState<DigitalProduct[]>([]);
   const [tracks, setTracks]               = useState<Track[]>([]);
   const [loading, setLoading]             = useState(true);
-  const [tab, setTab]                     = useState<"SINGLE" | "ALBUM">("SINGLE");
-  const [showCreate, setShowCreate]       = useState<"SINGLE" | "ALBUM" | null>(null);
+  const [tab, setTab]                     = useState<"SINGLE" | "EP" | "ALBUM">("SINGLE");
+  const [showCreate, setShowCreate]       = useState<"SINGLE" | "EP" | "ALBUM" | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -463,6 +583,7 @@ export default function DigitalSalesPage() {
 
   const filtered = products.filter((p) => p.type === tab);
   const singles = products.filter((p) => p.type === "SINGLE");
+  const eps     = products.filter((p) => p.type === "EP");
   const albums  = products.filter((p) => p.type === "ALBUM");
 
   return (
@@ -470,14 +591,14 @@ export default function DigitalSalesPage() {
       <div>
         <h1 className="text-2xl font-bold">Digital Sales</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Sell singles and albums directly to your fans. You keep 90%.
+          Sell singles, EPs, and albums directly to your fans. You keep 90%.
         </p>
       </div>
 
       {/* Tabs + Create Button */}
       <div className="flex items-center justify-between">
         <div className="flex gap-1 p-1 rounded-lg" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}>
-          {(["SINGLE", "ALBUM"] as const).map((t) => (
+          {(["SINGLE", "EP", "ALBUM"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -488,9 +609,9 @@ export default function DigitalSalesPage() {
                   : { color: "var(--muted-foreground)" }
               }
             >
-              {t === "SINGLE" ? "Singles" : "Albums"}{" "}
+              {t === "SINGLE" ? "Singles" : t === "EP" ? "EPs" : "Albums"}{" "}
               <span className="ml-1 opacity-60 text-xs">
-                ({t === "SINGLE" ? singles.length : albums.length})
+                ({t === "SINGLE" ? singles.length : t === "EP" ? eps.length : albums.length})
               </span>
             </button>
           ))}
@@ -502,7 +623,7 @@ export default function DigitalSalesPage() {
           style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
         >
           <Plus size={15} />
-          Create {tab === "SINGLE" ? "Single" : "Album"}
+          Create {tab === "SINGLE" ? "Single" : tab === "EP" ? "EP" : "Album"}
         </button>
       </div>
 
@@ -518,10 +639,10 @@ export default function DigitalSalesPage() {
         >
           <Package size={32} className="mx-auto mb-3 text-muted-foreground" />
           <p className="text-sm font-medium mb-1">
-            No {tab === "SINGLE" ? "singles" : "albums"} yet
+            No {tab === "SINGLE" ? "singles" : tab === "EP" ? "EPs" : "albums"} yet
           </p>
           <p className="text-xs text-muted-foreground mb-4">
-            Create your first {tab === "SINGLE" ? "single" : "album"} to start selling music directly to your fans.
+            Create your first {tab === "SINGLE" ? "single" : tab === "EP" ? "EP" : "album"} to start selling music directly to your fans.
           </p>
           <button
             onClick={() => setShowCreate(tab)}
@@ -529,7 +650,7 @@ export default function DigitalSalesPage() {
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
           >
             <Plus size={13} className="inline mr-1" />
-            Create {tab === "SINGLE" ? "Single" : "Album"}
+            Create {tab === "SINGLE" ? "Single" : tab === "EP" ? "EP" : "Album"}
           </button>
         </div>
       ) : (

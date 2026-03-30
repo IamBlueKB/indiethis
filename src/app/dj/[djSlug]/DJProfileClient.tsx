@@ -168,11 +168,33 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
   const [activeMixId, setActiveMixId] = useState<string | null>(null);
 
-  // Set attribution cookie so digital purchases from this visit are credited to the DJ
+  // Set attribution cookie when fan visits this DJ's profile
   useEffect(() => {
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    document.cookie = `dj_attribution_${djProfile.id}=${djProfile.id}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-  }, [djProfile.id]);
+    if (!djProfile?.id) return;
+    fetch("/api/dj/attribute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        djProfileId: djProfile.id,
+        sourceType: "PROFILE",
+        sourceId: djProfile.id,
+      }),
+    }).catch(() => {}); // fire and forget
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Track mix attribution when a fan opens/plays a mix
+  useEffect(() => {
+    if (!activeMixId || !djProfile?.id) return;
+    fetch("/api/dj/attribute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        djProfileId: djProfile.id,
+        sourceType: "MIX",
+        sourceId: activeMixId,
+      }),
+    }).catch(() => {});
+  }, [activeMixId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const displayName = djProfile.user.artistName ?? djProfile.user.name;
   const photo = djProfile.profilePhotoUrl ?? djProfile.user.photo;

@@ -6,7 +6,7 @@ import { ShoppingCart, Package, X, Loader2, Music2 } from "lucide-react";
 export type DigitalProductPublic = {
   id: string;
   title: string;
-  type: "SINGLE" | "ALBUM";
+  type: "SINGLE" | "EP" | "ALBUM";
   price: number; // cents
   coverArtUrl: string | null;
   description: string | null;

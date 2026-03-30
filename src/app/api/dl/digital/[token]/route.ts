@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import NodeID3 from "node-id3";
 
 // GET /api/dl/digital/[token]?trackId=X
 // Returns a signed download redirect for a specific track in a digital purchase
@@ -15,8 +16,9 @@ export async function GET(
     include: {
       digitalProduct: {
         include: {
+          user: { select: { name: true, artistName: true } },
           tracks: {
-            select: { id: true, title: true, fileUrl: true },
+            select: { id: true, title: true, fileUrl: true, isrc: true, bpm: true, musicalKey: true },
           },
         },
       },
@@ -36,7 +38,8 @@ export async function GET(
 
   // If a specific trackId is requested, validate it belongs to the product
   if (trackId) {
-    const track = purchase.digitalProduct.tracks.find((t) => t.id === trackId);
+    const product = purchase.digitalProduct;
+    const track = product.tracks.find((t) => t.id === trackId);
     if (!track) {
       return NextResponse.json({ error: "Track not found in this purchase" }, { status: 404 });
     }
@@ -47,7 +50,77 @@ export async function GET(
       data: { downloadCount: { increment: 1 } },
     });
 
-    // Redirect to the file URL
+    // Determine if this is an MP3
+    const isMp3 =
+      track.fileUrl.toLowerCase().includes(".mp3") ||
+      track.fileUrl.toLowerCase().includes("audio/mpeg");
+
+    // Only attempt ID3 tagging for MP3 files
+    if (isMp3) {
+      try {
+        const fileRes = await fetch(track.fileUrl);
+        if (!fileRes.ok) throw new Error(`CDN returned ${fileRes.status}`);
+
+        const contentType = fileRes.headers.get("content-type") ?? "audio/mpeg";
+        const rawBuffer = Buffer.from(await fileRes.arrayBuffer() as ArrayBuffer);
+
+        // Determine track position (1-indexed)
+        const trackPosition = product.tracks.findIndex((t) => t.id === trackId) + 1;
+        const totalTracks = product.tracks.length;
+        const trackNumberStr =
+          totalTracks > 1
+            ? `${trackPosition}/${totalTracks}`
+            : trackPosition.toString();
+
+        const artistName =
+          product.user.artistName ?? product.user.name ?? undefined;
+
+        const isrcValue = track.isrc ?? product.isrc ?? undefined;
+
+        const tags: NodeID3.Tags = {
+          title: track.title,
+          artist: artistName,
+          album: product.title,
+          genre: product.genre ?? undefined,
+          year: product.releaseYear?.toString() ?? undefined,
+          trackNumber: trackNumberStr,
+          composer: product.songwriter ?? undefined,
+          encodedBy: product.producer ?? undefined,
+          copyright: product.copyright ?? undefined,
+          comment: {
+            language: "eng",
+            text: "Downloaded from IndieThis \u2022 indiethis.com",
+          },
+          bpm: track.bpm ? track.bpm.toString() : undefined,
+          initialKey: track.musicalKey ?? undefined,
+          ...(isrcValue ? { ISRC: isrcValue } : {}),
+        };
+
+        const tagged = NodeID3.write(tags, rawBuffer);
+        const outputBuffer = tagged ? Buffer.from(tagged) : rawBuffer;
+
+        const safeName = track.title
+          .replace(/[^a-zA-Z0-9 \-_]/g, "")
+          .trim()
+          .replace(/\s+/g, "-");
+        const filename = `${safeName}.mp3`;
+
+        return new NextResponse(new Uint8Array(outputBuffer), {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Content-Length": String(outputBuffer.length),
+            "Cache-Control": "no-store",
+          },
+        });
+      } catch (err) {
+        console.error("[digital-download] ID3 tagging failed, falling back to redirect:", err);
+        // Fall through to redirect below
+      }
+    }
+
+    // Fallback: redirect to the file URL (non-MP3 or tagging failure)
     return NextResponse.redirect(track.fileUrl);
   }
 

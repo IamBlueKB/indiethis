@@ -26,6 +26,13 @@ export async function PATCH(
     coverArtUrl?: string;
     published?: boolean;
     trackIds?: string[];
+    genre?: string;
+    releaseYear?: number;
+    copyright?: string;
+    explicit?: boolean;
+    songwriter?: string;
+    producer?: string;
+    isrc?: string;
   };
 
   // Price validation if price is being changed
@@ -44,12 +51,19 @@ export async function PATCH(
   const updated = await db.digitalProduct.update({
     where: { id },
     data: {
-      ...(body.title      !== undefined && { title: body.title.trim() }),
-      ...(body.price      !== undefined && { price: body.price }),
+      ...(body.title       !== undefined && { title: body.title.trim() }),
+      ...(body.price       !== undefined && { price: body.price }),
       ...(body.description !== undefined && { description: body.description?.trim() ?? null }),
       ...(body.coverArtUrl !== undefined && { coverArtUrl: body.coverArtUrl ?? null }),
-      ...(body.published  !== undefined && { published: body.published }),
-      ...(body.trackIds   !== undefined && {
+      ...(body.published   !== undefined && { published: body.published }),
+      ...(body.genre       !== undefined && { genre: body.genre?.trim() ?? null }),
+      ...(body.releaseYear !== undefined && { releaseYear: body.releaseYear ?? null }),
+      ...(body.copyright   !== undefined && { copyright: body.copyright?.trim() ?? null }),
+      ...(body.explicit    !== undefined && { explicit: body.explicit }),
+      ...(body.songwriter  !== undefined && { songwriter: body.songwriter?.trim() ?? null }),
+      ...(body.producer    !== undefined && { producer: body.producer?.trim() ?? null }),
+      ...(body.isrc        !== undefined && { isrc: body.isrc?.trim() ?? null }),
+      ...(body.trackIds    !== undefined && {
         tracks: {
           set: body.trackIds.map((tid) => ({ id: tid })),
         },

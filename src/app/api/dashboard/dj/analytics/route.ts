@@ -29,11 +29,11 @@ export async function GET() {
   const uniqueTrackIds = [...new Set(crateItems.map(i => i.trackId))];
 
   // Fans attributed (unique fanSessionIds)
-  const fanSessions = await db.dJAttribution.findMany({
+  const allSessions = await db.dJAttribution.findMany({
     where: { djProfileId: djProfile.id },
     select: { fanSessionId: true },
-    distinct: ["fanSessionId"],
   });
+  const fanSessions = [...new Set(allSessions.map(s => s.fanSessionId))];
 
   // Revenue driven (sum of DigitalPurchase.amount where djAttributionId in DJ's attributions)
   const myAttributionIds = await db.dJAttribution.findMany({
@@ -110,7 +110,7 @@ export async function GET() {
     totalEarnings: djProfile.totalEarnings,
     thisMonth: thisMonthAgg._sum.amount ?? 0,
     tracksInCrates: uniqueTrackIds.length,
-    fansAttributed: fanSessions.length,
+    fansAttributed: fanSessions.length, // now a deduplicated string[]
     revenueDriven,
     tracksBroken,
     chartData,
