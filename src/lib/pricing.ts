@@ -76,6 +76,7 @@ export const PRICING_DEFAULTS = {
   AI_VIDEO_SHORT:   { value: 19,    display: "$19"     },
   AI_VIDEO_MEDIUM:  { value: 29,    display: "$29"     },
   AI_VIDEO_LONG:    { value: 49,    display: "$49"     },
+  LYRIC_VIDEO_AI_BG:     { value: 5.00,  display: "$5.00"   },
   AI_VOCAL_REMOVER:      { value: 1.99,  display: "$1.99"   },
   AI_CONTRACT_SCANNER:   { value: 4.99,  display: "$4.99"   },
   AI_BIO_GENERATOR:      { value: 0,     display: "Free"    },

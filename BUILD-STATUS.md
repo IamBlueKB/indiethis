@@ -348,12 +348,12 @@ YoutubeReference
 |---------|---------|--------|
 | **Stripe** | Subscriptions, PPU, payouts, webhooks | ⚠️ KEYS MISSING — all payment flows fail |
 | **Anthropic Claude** | Contract Scanner, Bio Generator, A&R Report, Press Kit | ✅ Key set |
-| **OpenAI** | Cover art prompt enhancement, misc AI | ✅ Key set |
-| **Replicate** | Vocal Remover (Demucs model) | ✅ Key set |
+| **OpenAI** | A&R Report Whisper transcription | ✅ Key set |
+| **Replicate** | Vocal Remover (Demucs) + Lyric Video Whisper transcription | ✅ Key set |
 | **FAL.ai / Kling** | AI Music Video (primary provider) | ✅ Key set |
 | **Runway** | AI Music Video (fallback provider) | ✅ Key set |
 | **Auphonic** | AI Mastering | ✅ Key set |
-| **Remotion** | Lyric Video rendering (Lambda) | ✅ Keys set |
+| **Remotion** | Lyric Video rendering (Lambda) — ✅ DEPLOYED, serveUrl set | ✅ Keys set |
 | **Brevo** | Transactional email, SMS, campaigns | ✅ Keys set |
 | **UploadThing** | File uploads (audio, images, PDFs) | ✅ Token set |
 | **AWS S3** | Stem/audio file storage | ✅ Keys set |
@@ -404,7 +404,7 @@ YoutubeReference
 | AI Cover Art (Replicate/Flux) | ✅ DONE |
 | AI Mastering (Auphonic) | ✅ DONE |
 | AI Music Video (Kling via FAL / Runway fallback) | ✅ DONE |
-| AI Lyric Video (Remotion Lambda) | ✅ DONE |
+| AI Lyric Video (Remotion Lambda) | ✅ BUILT — Whisper via Replicate, multi-step UI, Remotion deployed |
 | A&R Report (Claude) | ✅ DONE |
 | Press Kit (Claude + PDF) | ✅ DONE |
 | Bio Generator (Claude, free) | ✅ DONE |
@@ -535,8 +535,8 @@ YoutubeReference
 | `FAL_KEY` | AI Music Video (Kling via FAL) | ✅ SET |
 | `RUNWAY_API_KEY` | AI Music Video fallback | ✅ SET |
 | `AUPHONIC_API_KEY` | AI Mastering | ✅ SET |
-| `REMOTION_FUNCTION_NAME` | Lyric Video Lambda | ✅ SET |
-| `REMOTION_SERVE_URL` | Lyric Video Lambda | ✅ SET |
+| `REMOTION_FUNCTION_NAME` | Lyric Video Lambda (`remotion-render-4-0-436-mem2048mb-disk2048mb-120sec`) | ✅ SET |
+| `REMOTION_SERVE_URL` | Lyric Video Lambda serve URL | ✅ SET |
 | `BREVO_API_KEY` | Email and SMS sending | ✅ SET |
 | `BREVO_FROM_EMAIL` | Brevo sender email | ✅ SET |
 | `BREVO_FROM_NAME` | Brevo sender name | ✅ SET |

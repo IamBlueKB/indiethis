@@ -99,6 +99,7 @@ const TOOLS: Array<{
     type: "LYRIC_VIDEO", label: "Lyric Video",
     desc: "Auto-transcribe lyrics, review, then render animated video",
     icon: Mic,      price: PRICING_DEFAULTS.AI_LYRIC_VIDEO.display,          color: "#10B981",
+    external: "/studio/ai-tools/lyric-video",
   },
   {
     type: "AR_REPORT",  label: "A&R Report",

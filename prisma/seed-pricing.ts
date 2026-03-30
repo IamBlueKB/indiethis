@@ -33,6 +33,7 @@ const PRICING_SEED = [
   { key: "AI_CONTRACT_SCANNER",   label: "Contract Scanner",          value: 4.99,  display: "$4.99",    category: "ai_tools",        sortOrder: 20 },
   { key: "AI_BIO_GENERATOR",      label: "Bio Generator",             value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 21 },
   { key: "AI_SPLIT_SHEET",        label: "Split Sheet",               value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 22 },
+  { key: "LYRIC_VIDEO_AI_BG",     label: "Lyric Video AI Background", value: 5.00,  display: "$5.00",    category: "ai_tools",        sortOrder: 23 },
 
   // ─── Platform Revenue Cuts ────────────────────────────────────────────────
   { key: "CUT_MUSIC_SALES",   label: "Music Sales Cut",       value: 10,    display: "10%",      category: "platform_cuts",   sortOrder: 20 },

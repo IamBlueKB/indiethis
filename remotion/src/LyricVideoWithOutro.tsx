@@ -9,15 +9,17 @@ const OUTRO_FRAMES = 60;
 /**
  * Top-level composition component.
  *
- * Total duration = props.durationInFrames (lyric content) + OUTRO_FRAMES.
+ * Total duration = ceil(durationMs / 1000 * 30) frames (lyric content) + OUTRO_FRAMES.
  * Root.tsx's calculateMetadata adds OUTRO_FRAMES so Remotion Lambda renders
  * the full sequence including the outro card.
  */
 export function LyricVideoWithOutro(props: LyricVideoProps) {
+  const contentFrames = Math.ceil((props.durationMs / 1000) * 30);
+
   return (
     <Series>
       {/* ── Lyric video content ── */}
-      <Series.Sequence durationInFrames={props.durationInFrames}>
+      <Series.Sequence durationInFrames={contentFrames}>
         <LyricVideoContent {...props} />
       </Series.Sequence>
 

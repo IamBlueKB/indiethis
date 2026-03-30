@@ -227,6 +227,20 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Lyric video background — image or video upload for lyric video tool
+  lyricVideoBg: f({
+    image: { maxFileSize: "32MB", maxFileCount: 1 },
+    video: { maxFileSize: "512MB", maxFileCount: 1 },
+  })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Studio file delivery
   deliveryFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 20 },

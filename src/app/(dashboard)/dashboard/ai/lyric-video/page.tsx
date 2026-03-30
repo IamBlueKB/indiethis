@@ -1,11 +1,11 @@
 "use client";
 
+import React, { useEffect, useState, Suspense } from "react";
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
-import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Film, Loader2, CheckCircle2, Clock, AlertCircle, Upload, X,
-  Zap, PlayCircle, ChevronRight, Edit3,
+  Zap, PlayCircle, ChevronRight, Download, RefreshCw, Music,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
@@ -15,10 +15,23 @@ import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner"
 
 type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED";
 
-interface WhisperWord {
-  word:  string;
+interface Track {
+  id:       string;
+  title:    string;
+  fileUrl:  string | null;
+  coverArtUrl?: string | null;
+}
+
+interface TranscribedWord {
+  word:    string;
+  start:   number;
+  end:     number;
+}
+
+interface TranscribedSegment {
   start: number;
   end:   number;
+  text:  string;
 }
 
 interface PollData {
@@ -30,8 +43,8 @@ interface PollData {
   errorMessage:        string | null;
   phase?:              number;
   transcriptionReady?: boolean;
-  words?:              WhisperWord[];
-  segments?:           { start: number; end: number; text: string }[];
+  words?:              TranscribedWord[];
+  segments?:           TranscribedSegment[];
   text?:               string;
   duration?:           number | null;
   finalVideoUrl?:      string;
@@ -50,168 +63,108 @@ interface HistoryItem {
 
 const NEXT_CREDITS: Record<string, number> = { launch: 1, push: 3 };
 
-const VISUAL_STYLES = [
-  { value: "gradient",  label: "Gradient",  desc: "Smooth colour gradient background" },
-  { value: "cinematic", label: "Cinematic", desc: "Dramatic dark cinematic look" },
-  { value: "minimal",   label: "Minimal",   desc: "Clean minimal white/black" },
-  { value: "neon",      label: "Neon",      desc: "Neon glow on dark background" },
+type TextStyle   = "captions" | "centered" | "cinematic" | "minimal" | "visualizer";
+type FontChoice  = "inter" | "playfair" | "montserrat" | "oswald" | "raleway";
+type AspectRatio = "16:9" | "9:16" | "1:1";
+type TextPos     = "bottom" | "center" | "top";
+type BgType      = "photo" | "video" | "ai";
+
+const TEXT_STYLES: { value: TextStyle; label: string; preview: string; desc: string }[] = [
+  { value: "captions",   label: "Captions",   preview: "[ Hello world ]",         desc: "Line-by-line, active word highlighted" },
+  { value: "centered",   label: "Centered",   preview: "       Hello       ",      desc: "One word at a time, center stage" },
+  { value: "cinematic",  label: "Cinematic",  preview: "▌ Hello world ▐",          desc: "Blurred bar, slide-in animation" },
+  { value: "minimal",    label: "Minimal",    preview: "hello world next...",      desc: "Lowercase, subtle, corner placement" },
+  { value: "visualizer", label: "Visualizer", preview: "◉ ~~~waveform~~~ ◉",       desc: "Animated waveform + captions" },
 ];
 
-const FONT_STYLES = [
-  { value: "bold",    label: "Bold" },
-  { value: "elegant", label: "Elegant" },
-  { value: "default", label: "Default" },
+const FONT_OPTIONS: { value: FontChoice; label: string; sample: string; style: React.CSSProperties }[] = [
+  { value: "inter",      label: "Inter",      sample: "Aa",  style: { fontFamily: "system-ui, sans-serif" } },
+  { value: "playfair",   label: "Playfair",   sample: "Aa",  style: { fontFamily: "Georgia, serif", fontStyle: "italic" } },
+  { value: "montserrat", label: "Montserrat", sample: "Aa",  style: { fontFamily: "system-ui, sans-serif", letterSpacing: "0.05em" } },
+  { value: "oswald",     label: "Oswald",     sample: "Aa",  style: { fontFamily: "Impact, sans-serif", letterSpacing: "0.1em" } },
+  { value: "raleway",    label: "Raleway",    sample: "Aa",  style: { fontFamily: "system-ui, sans-serif", fontWeight: 300 } },
 ];
 
-const ASPECT_RATIOS = [
-  { value: "16:9", label: "16:9 — YouTube" },
-  { value: "9:16", label: "9:16 — Reels/TikTok" },
-  { value: "1:1",  label: "1:1 — Instagram" },
+const ASPECT_RATIOS: { value: AspectRatio; label: string; sub: string }[] = [
+  { value: "16:9", label: "YouTube",   sub: "16:9" },
+  { value: "9:16", label: "TikTok",    sub: "9:16" },
+  { value: "1:1",  label: "Instagram", sub: "1:1"  },
 ];
 
-// ─── Transcription review component ───────────────────────────────────────────
+// ─── Multi-step wizard steps ───────────────────────────────────────────────────
 
-function TranscriptionReview({
-  words,
-  text,
-  onApprove,
-  approving,
-  approveError,
-}: {
-  words:       WhisperWord[];
-  text?:       string;
-  onApprove:   (correctedWords?: WhisperWord[]) => void;
-  approving:   boolean;
-  approveError: string | null;
-}) {
-  const [editedWords, setEditedWords] = useState<WhisperWord[]>(words);
-  const [editingIdx,  setEditingIdx]  = useState<number | null>(null);
-  const [editValue,   setEditValue]   = useState("");
+type Step = "setup" | "lyrics" | "generate";
 
-  function startEdit(idx: number) {
-    setEditingIdx(idx);
-    setEditValue(editedWords[idx].word);
-  }
+const STEP_ORDER: Step[] = ["setup", "lyrics", "generate"];
+function getStepIndex(s: Step) { return STEP_ORDER.indexOf(s); }
 
-  function saveEdit(idx: number) {
-    const updated = editedWords.map((w, i) => i === idx ? { ...w, word: editValue.trim() || w.word } : w);
-    setEditedWords(updated);
-    setEditingIdx(null);
-  }
-
-  const correctedText = editedWords.map(w => w.word).join(" ");
-  const hasChanges    = editedWords.some((w, i) => w.word !== words[i].word);
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm font-semibold text-foreground">Review transcription</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Click any word to correct it. When happy, approve to generate the video.
-        </p>
-      </div>
-
-      {/* Word tokens */}
-      <div className="rounded-xl border p-4 flex flex-wrap gap-1.5 max-h-52 overflow-y-auto" style={{ borderColor: "var(--border)" }}>
-        {editedWords.map((w, i) => (
-          editingIdx === i ? (
-            <input
-              key={i}
-              autoFocus
-              value={editValue}
-              onChange={e => setEditValue(e.target.value)}
-              onBlur={() => saveEdit(i)}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") saveEdit(i); if (e.key === "Escape") setEditingIdx(null); }}
-              className="px-2 py-0.5 rounded-md text-sm border outline-none"
-              style={{ borderColor: "#D4A843", backgroundColor: "rgba(212,168,67,0.1)", color: "var(--foreground)", minWidth: 60, width: Math.max(60, editValue.length * 9) }}
-            />
-          ) : (
-            <button
-              key={i}
-              onClick={() => startEdit(i)}
-              className="px-2 py-0.5 rounded-md text-sm transition-all hover:opacity-80"
-              style={{
-                backgroundColor: w.word !== words[i].word ? "rgba(212,168,67,0.15)" : "var(--border)",
-                color:           w.word !== words[i].word ? "#D4A843" : "var(--foreground)",
-                border:          `1px solid ${w.word !== words[i].word ? "#D4A843" : "transparent"}`,
-              }}
-            >
-              {w.word}
-            </button>
-          )
-        ))}
-      </div>
-
-      {hasChanges && (
-        <p className="text-xs text-muted-foreground">
-          <span style={{ color: "#D4A843" }}>{editedWords.filter((w, i) => w.word !== words[i].word).length} words edited</span>
-          {" — these corrections will be used in the video."}
-        </p>
-      )}
-
-      {approveError && (
-        <div className="flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle size={14} className="flex-shrink-0" />
-          {approveError}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Approve to start rendering (~5–10 min)</p>
-        <button
-          onClick={() => onApprove(hasChanges ? editedWords : undefined)}
-          disabled={approving}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          {approving ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-          Approve Lyrics & Render
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Inner page (needs Suspense for useSearchParams) ──────────────────────────
+// ─── Inner content ─────────────────────────────────────────────────────────────
 
 function LyricVideoContent() {
   const searchParams = useSearchParams();
   const justPaid     = searchParams.get("paid") === "1";
 
-  // Form
-  const [trackUrl,     setTrackUrl]     = useState("");
-  const [visualStyle,  setVisualStyle]  = useState("gradient");
-  const [fontStyle,    setFontStyle]    = useState("bold");
-  const [accentColor,  setAccentColor]  = useState("#D4A843");
-  const [aspectRatio,  setAspectRatio]  = useState("16:9");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Step
+  const [step, setStep] = useState<Step>("setup");
 
-  // Job state
-  const [submitting,   setSubmitting]   = useState(false);
-  const [submitError,  setSubmitError]  = useState<string | null>(null);
-  const [approving,    setApproving]    = useState(false);
-  const [approveError, setApproveError] = useState<string | null>(null);
-  const [activeJobId,  setActiveJobId]  = useState<string | null>(null);
-  const [jobData,      setJobData]      = useState<PollData | null>(null);
+  // Step 1 — Setup
+  const [tracks,         setTracks]         = useState<Track[]>([]);
+  const [tracksLoading,  setTracksLoading]  = useState(true);
+  const [selectedTrack,  setSelectedTrack]  = useState<Track | null>(null);
+  const [bgType,         setBgType]         = useState<BgType>("photo");
+  const [bgUrl,          setBgUrl]          = useState("");
+  const [aspectRatio,    setAspectRatio]    = useState<AspectRatio>("16:9");
+  const [textStyle,      setTextStyle]      = useState<TextStyle>("captions");
+  const [fontChoice,     setFontChoice]     = useState<FontChoice>("inter");
+  const [textPosition,   setTextPosition]   = useState<TextPos>("bottom");
+  const [accentColor,    setAccentColor]    = useState("#D4A843");
+
+  // Transcribing
+  const [transcribing,   setTranscribing]   = useState(false);
+  const [transcribeErr,  setTranscribeErr]  = useState<string | null>(null);
+  const [transcribeData, setTranscribeData] = useState<{
+    words: TranscribedWord[];
+    segments: TranscribedSegment[];
+    text: string;
+  } | null>(null);
+
+  // Step 2 — Lyrics review (textarea per segment)
+  const [editedSegments, setEditedSegments] = useState<TranscribedSegment[]>([]);
+  const [previewing,     setPreviewing]     = useState(false);
+  const [previewUrl,     setPreviewUrl]     = useState<string | null>(null);
+  const [previewErr,     setPreviewErr]     = useState<string | null>(null);
+
+  // Step 3 — Generate job
+  const [submitting,     setSubmitting]     = useState(false);
+  const [submitError,    setSubmitError]    = useState<string | null>(null);
+  const [approving,      setApproving]      = useState(false);
+  const [approveError,   setApproveError]   = useState<string | null>(null);
+  const [activeJobId,    setActiveJobId]    = useState<string | null>(null);
+  const [jobData,        setJobData]        = useState<PollData | null>(null);
 
   // Credits
-  const [creditExhausted, setCreditExhausted] = useState(false);
-  const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
+  const [creditExhausted, setCreditExhausted] = useState(justPaid ? false : false);
+  const [creditInfo, setCreditInfo] = useState<{
+    used: number; limit: number; tier: string; priceDisplay: string;
+  } | null>(null);
 
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  // UploadThing
-  const { startUpload: uploadTrack, isUploading: trackUploading } = useUploadThing("artistTrack", {
-    onClientUploadComplete: (res) => {
-      const url = res[0]?.url;
-      if (url) setTrackUrl(url);
-    },
-  });
+  // Background upload
+  const { startUpload: uploadBg, isUploading: bgUploading } = useUploadThing(
+    "lyricVideoBg",
+    { onClientUploadComplete: (res) => { const url = res[0]?.url; if (url) setBgUrl(url); } },
+  );
 
-  // ── Load history on mount ─────────────────────────────────────────────────
+  // ── Load tracks + history on mount ───────────────────────────────────────
   useEffect(() => {
+    fetch("/api/dashboard/tracks")
+      .then(r => r.ok ? r.json() : { tracks: [] })
+      .then(d => setTracks(d.tracks ?? []))
+      .finally(() => setTracksLoading(false));
+
     fetch("/api/dashboard/ai/lyric-video")
       .then(r => r.ok ? r.json() : { jobs: [] })
       .then(d => {
@@ -245,74 +198,182 @@ function LyricVideoContent() {
             errorMessage: null,
           }, ...prev]);
         }
+        // Transcription ready — move to Step 2
+        if (data.transcriptionReady && data.words && step === "setup") {
+          setTranscribeData({
+            words:    data.words,
+            segments: data.segments ?? [],
+            text:     data.text ?? "",
+          });
+          setEditedSegments(data.segments ?? []);
+          setStep("lyrics");
+        }
       } catch { /* transient */ }
     }, 4000);
 
     return () => clearInterval(t);
-  }, [activeJobId, jobData?.status]);
+  }, [activeJobId, jobData?.status, step]);
 
-  // ── Submit ────────────────────────────────────────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!trackUrl.trim()) return;
+  // ── Step 1: Transcribe ────────────────────────────────────────────────────
+  async function handleTranscribe() {
+    if (!selectedTrack?.fileUrl) return;
+    setTranscribing(true);
+    setTranscribeErr(null);
+    try {
+      const res = await fetch("/api/dashboard/lyric-video/transcribe", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ trackId: selectedTrack.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTranscribeErr(data.error ?? "Transcription failed"); return; }
+      setTranscribeData(data);
+      setEditedSegments(data.segments ?? []);
+      setStep("lyrics");
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  // ── Step 2: Preview (10s) ─────────────────────────────────────────────────
+  async function handlePreview() {
+    if (!selectedTrack?.fileUrl || !transcribeData) return;
+    setPreviewing(true);
+    setPreviewErr(null);
+    setPreviewUrl(null);
+    try {
+      const correctedWords = buildCorrectedWords();
+      const res = await fetch("/api/dashboard/lyric-video/preview", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          lyrics:         correctedWords,
+          audioUrl:       selectedTrack.fileUrl,
+          trackTitle:     selectedTrack.title,
+          artistName:     "",
+          backgroundUrl:  bgUrl || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920",
+          backgroundType: bgType === "video" ? "video" : "image",
+          accentColor,
+          textStyle,
+          fontChoice,
+          textPosition,
+          aspectRatio,
+          durationMs:     10000,
+          previewOnly:    true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPreviewErr(data.error ?? "Preview failed"); return; }
+      if (data.previewUrl) setPreviewUrl(data.previewUrl);
+      else if (data.message) setPreviewErr(data.message);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  // ── Step 3: Generate full video ───────────────────────────────────────────
+  async function handleGenerate() {
+    if (!selectedTrack?.fileUrl || !transcribeData) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const correctedWords = buildCorrectedWords();
+      // Create the AIJob
       const res = await fetch("/api/dashboard/ai/lyric-video", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          trackUrl:    trackUrl.trim(),
-          visualStyle,
-          fontStyle,
+          trackUrl:      selectedTrack.fileUrl,
+          textStyle,
+          fontChoice,
           accentColor,
           aspectRatio,
+          textPosition,
+          backgroundUrl:  bgUrl || "",
+          backgroundType: bgType === "video" ? "video" : "image",
+          trackTitle:     selectedTrack.title,
+          artistName:     "",
+          correctedWords,
+          aiBackground:   bgType === "ai",
         }),
       });
 
-      if (res.status === 402) {
-        setCreditExhausted(true);
-        return;
-      }
+      if (res.status === 402) { setCreditExhausted(true); return; }
 
       const data = await res.json();
       if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
 
       const init: PollData = {
-        jobId: data.jobId, status: "QUEUED", priceCharged: null, phase: 0,
+        jobId: data.jobId, status: "QUEUED", priceCharged: null,
         createdAt: new Date().toISOString(), completedAt: null, errorMessage: null,
       };
       setActiveJobId(data.jobId);
       setJobData(init);
-      setTrackUrl("");
+      setStep("generate");
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Approve lyrics ────────────────────────────────────────────────────────
-  async function handleApprove(correctedWords?: WhisperWord[]) {
+  // ── Approve lyrics (existing flow for queued jobs) ────────────────────────
+  async function handleApprove() {
     if (!activeJobId) return;
     setApproving(true);
     setApproveError(null);
     try {
+      const correctedWords = buildCorrectedWords();
       const res = await fetch(`/api/ai-jobs/${activeJobId}/approve-lyrics`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    correctedWords ? JSON.stringify({ words: correctedWords }) : "{}",
+        body:    JSON.stringify({ words: correctedWords }),
       });
       const data = await res.json();
       if (!res.ok) { setApproveError(data.error ?? "Failed to approve"); return; }
-      // Job is now entering Phase 2 rendering — polling will pick up state
       setJobData(prev => prev ? { ...prev, transcriptionReady: false, phase: 2 } : prev);
+      setStep("generate");
     } finally {
       setApproving(false);
     }
   }
 
-  const isActive = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+  // ── Build corrected words from edited segments ────────────────────────────
+  function buildCorrectedWords(): TranscribedWord[] {
+    if (!transcribeData) return [];
+    // Reconstruct words from edited segment text + original word timings
+    const allWords = transcribeData.words;
+    if (editedSegments.length === 0) return allWords;
 
-  function dismissJob() { setJobData(null); setActiveJobId(null); }
+    const result: TranscribedWord[] = [];
+    for (const seg of editedSegments) {
+      // Find original words that fall within this segment
+      const segWords = allWords.filter(
+        w => w.start >= seg.start - 0.05 && w.end <= seg.end + 0.05,
+      );
+      // Split edited text back into tokens
+      const editedTokens = seg.text.trim().split(/\s+/);
+      editedTokens.forEach((token, i) => {
+        if (segWords[i]) {
+          result.push({ word: token, start: segWords[i].start, end: segWords[i].end });
+        } else if (segWords.length > 0) {
+          // Distribute remaining tokens across last word's time range
+          const last = segWords[segWords.length - 1];
+          result.push({ word: token, start: last.start, end: last.end });
+        }
+      });
+    }
+    return result;
+  }
+
+  function formatTime(sec: number) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  const isActive = jobData && (jobData.status === "QUEUED" || jobData.status === "PROCESSING");
+  function dismissJob() { setJobData(null); setActiveJobId(null); setStep("setup"); }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
@@ -322,248 +383,427 @@ function LyricVideoContent() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Lyric Video</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Upload your track — AI transcribes it, you review the lyrics, then we render the video via Remotion.
+          Upload your track, review the lyrics, then render your video automatically.
         </p>
       </div>
 
-      {/* Form */}
-      {!isActive && !jobData && (
-        <div className="rounded-2xl border p-5 space-y-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2">
-            <Film size={15} style={{ color: "#D4A843" }} />
-            <h2 className="text-sm font-semibold text-foreground">New Lyric Video</h2>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Track upload */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audio Track *</label>
-              {trackUrl ? (
-                <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
-                  <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
-                  <p className="text-sm text-foreground truncate flex-1">Track uploaded — ready to process</p>
-                  <button type="button" onClick={() => setTrackUrl("")} className="text-muted-foreground hover:text-foreground shrink-0">
-                    <X size={13} />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer transition-colors"
-                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-                    {trackUploading
-                      ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
-                      : <><Upload size={14} /> Upload WAV, MP3, or FLAC</>}
-                    <input type="file" accept="audio/*" className="sr-only" disabled={trackUploading}
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTrack([f]); e.target.value = ""; }}
-                    />
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
-                    <span className="text-xs text-muted-foreground">or paste URL</span>
-                    <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
-                  </div>
-                  <input
-                    type="url"
-                    value={trackUrl}
-                    onChange={e => setTrackUrl(e.target.value)}
-                    placeholder="https://example.com/track.mp3"
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Visual style */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Visual Style</label>
-              <div className="grid grid-cols-2 gap-2">
-                {VISUAL_STYLES.map(s => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    onClick={() => setVisualStyle(s.value)}
-                    className="rounded-xl border px-3 py-2.5 text-left transition-all"
-                    style={{
-                      borderColor:     visualStyle === s.value ? "#D4A843" : "var(--border)",
-                      backgroundColor: visualStyle === s.value ? "rgba(212,168,67,0.08)" : "transparent",
-                    }}
-                  >
-                    <p className="text-sm font-semibold text-foreground">{s.label}</p>
-                    <p className="text-xs text-muted-foreground">{s.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Advanced options toggle */}
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(v => !v)}
-              className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1"
-            >
-              <Edit3 size={11} />
-              {showAdvanced ? "Hide" : "Show"} font & colour options
-            </button>
-
-            {showAdvanced && (
-              <div className="space-y-4 pt-1">
-                {/* Font style */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Font Style</label>
-                  <div className="flex gap-2">
-                    {FONT_STYLES.map(f => (
-                      <button
-                        key={f.value}
-                        type="button"
-                        onClick={() => setFontStyle(f.value)}
-                        className="flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-all"
-                        style={{
-                          borderColor:     fontStyle === f.value ? "#D4A843" : "var(--border)",
-                          backgroundColor: fontStyle === f.value ? "rgba(212,168,67,0.08)" : "transparent",
-                          color:           fontStyle === f.value ? "#D4A843" : "var(--muted-foreground)",
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Accent colour */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accent Colour</label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={accentColor}
-                      onChange={e => setAccentColor(e.target.value)}
-                      className="w-10 h-10 rounded-lg border cursor-pointer"
-                      style={{ borderColor: "var(--border)", padding: 2 }}
-                    />
-                    <span className="text-sm text-muted-foreground">{accentColor}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAccentColor("#D4A843")}
-                      className="text-xs text-muted-foreground hover:text-foreground transition"
-                    >
-                      Reset to gold
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Aspect ratio */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Format</label>
-              <div className="flex gap-2">
-                {ASPECT_RATIOS.map(r => (
-                  <button
-                    key={r.value}
-                    type="button"
-                    onClick={() => setAspectRatio(r.value)}
-                    className="flex-1 rounded-xl border px-2 py-2 text-xs text-center transition-all"
-                    style={{
-                      borderColor:     aspectRatio === r.value ? "#D4A843" : "var(--border)",
-                      backgroundColor: aspectRatio === r.value ? "rgba(212,168,67,0.08)" : "transparent",
-                      color:           aspectRatio === r.value ? "#D4A843" : "var(--muted-foreground)",
-                      fontWeight:      aspectRatio === r.value ? "600" : "400",
-                    }}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {submitError && (
-              <div className="flex items-center gap-2 text-red-400 text-sm">
-                <AlertCircle size={14} className="flex-shrink-0" />
-                {submitError}
-              </div>
-            )}
-
-            {creditExhausted && creditInfo && (
-              <CreditExhaustedBanner
-                toolLabel="lyric video"
-                toolType="LYRIC_VIDEO"
-                creditsLimit={creditInfo.limit}
-                ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_LYRIC_VIDEO.display}
-                nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
-                nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
-                nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$99/mo"}
-                isMaxTier={creditInfo.tier === "reign"}
-              />
-            )}
-
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-muted-foreground">Lyric video · {PRICING_DEFAULTS.AI_LYRIC_VIDEO.display} or 1 credit · ~10 min</p>
-              <button
-                type="submit"
-                disabled={submitting || trackUploading || !trackUrl.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+      {/* Step indicators */}
+      {step !== "generate" && (
+        <div className="flex items-center gap-2">
+          {(["setup", "lyrics", "generate"] as Step[]).map((s, i) => (
+            <React.Fragment key={s}>
+              <div
+                className="flex items-center gap-1.5 text-xs font-medium"
+                style={{ color: step === s ? "#D4A843" : "var(--muted-foreground)", opacity: getStepIndex(step) < getStepIndex(s) ? 0.4 : 1 }}
               >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />}
-                Start Transcription
-              </button>
-            </div>
-          </form>
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    backgroundColor: step === s ? "#D4A843" : "var(--border)",
+                    color: step === s ? "#0A0A0A" : "var(--muted-foreground)",
+                  }}
+                >
+                  {i + 1}
+                </span>
+                {s === "setup" ? "Setup" : s === "lyrics" ? "Review Lyrics" : "Generate"}
+              </div>
+              {i < 2 && <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />}
+            </React.Fragment>
+          ))}
         </div>
       )}
 
-      {/* Active job status */}
-      {jobData && (
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
-          {/* Phase 0/1: Transcribing */}
-          {isActive && !jobData.transcriptionReady && (
-            <div className="flex items-start gap-3">
-              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+      {/* ── STEP 1: Setup ────────────────────────────────────────────────── */}
+      {step === "setup" && !isActive && (
+        <div className="space-y-6">
+          {/* Track selector */}
+          <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <Music size={15} style={{ color: "#D4A843" }} />
+              <h2 className="text-sm font-semibold text-foreground">Select Track</h2>
+            </div>
+
+            {tracksLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Loader2 size={14} className="animate-spin" /> Loading your tracks…
+              </div>
+            ) : tracks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tracks found. Upload a track in Music first.</p>
+            ) : (
+              <select
+                value={selectedTrack?.id ?? ""}
+                onChange={e => {
+                  const t = tracks.find(tr => tr.id === e.target.value) ?? null;
+                  setSelectedTrack(t);
+                }}
+                className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <option value="">— choose a track —</option>
+                {tracks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Background */}
+          <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <h2 className="text-sm font-semibold text-foreground">Background</h2>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { value: "photo" as BgType, label: "Upload Photo", sub: "jpg, png, webp" },
+                { value: "video" as BgType, label: "Upload Video", sub: "mp4, mov" },
+                { value: "ai"    as BgType, label: "AI Generated", sub: "+$5.00" },
+              ] as { value: BgType; label: string; sub: string }[]).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setBgType(opt.value); setBgUrl(""); }}
+                  className="rounded-xl border p-3 text-left transition-all"
+                  style={{
+                    borderColor:     bgType === opt.value ? "#D4A843" : "var(--border)",
+                    backgroundColor: bgType === opt.value ? "rgba(212,168,67,0.08)" : "transparent",
+                  }}
+                >
+                  <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.sub}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Upload area */}
+            {bgType !== "ai" && (
               <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {jobData.status === "QUEUED" ? "Queued — starting transcription…" : "Transcribing your audio…"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {jobData.status === "PROCESSING"
-                    ? "Running word-level transcription. Takes ~1–3 minutes."
-                    : "Job is waiting to start…"}
-                </p>
+                {bgUrl ? (
+                  <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#34C759", backgroundColor: "rgba(52,199,89,0.06)" }}>
+                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                    <p className="text-sm text-foreground truncate flex-1">Background uploaded</p>
+                    <button type="button" onClick={() => setBgUrl("")} className="text-muted-foreground hover:text-foreground">
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer"
+                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                    {bgUploading
+                      ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                      : <><Upload size={14} /> {bgType === "video" ? "Upload MP4 / MOV" : "Upload JPG / PNG / WebP"}</>}
+                    <input
+                      type="file"
+                      accept={bgType === "video" ? "video/mp4,video/quicktime" : "image/jpeg,image/png,image/webp"}
+                      className="sr-only"
+                      disabled={bgUploading}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadBg([f]); e.target.value = ""; }}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+            {bgType === "ai" && (
+              <p className="text-xs text-muted-foreground">
+                A background will be generated automatically from your track title and genre. Additional $5.00 applies.
+              </p>
+            )}
+          </div>
+
+          {/* Aspect ratio */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <h2 className="text-sm font-semibold text-foreground">Format</h2>
+            <div className="flex gap-3">
+              {ASPECT_RATIOS.map(r => (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => setAspectRatio(r.value)}
+                  className="flex-1 rounded-xl border py-3 text-center transition-all"
+                  style={{
+                    borderColor:     aspectRatio === r.value ? "#D4A843" : "var(--border)",
+                    backgroundColor: aspectRatio === r.value ? "rgba(212,168,67,0.08)" : "transparent",
+                  }}
+                >
+                  <p className="text-sm font-semibold" style={{ color: aspectRatio === r.value ? "#D4A843" : "var(--foreground)" }}>{r.label}</p>
+                  <p className="text-xs text-muted-foreground">{r.sub}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Text style */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <h2 className="text-sm font-semibold text-foreground">Text Style</h2>
+            <div className="grid grid-cols-1 gap-2">
+              {TEXT_STYLES.map(s => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setTextStyle(s.value)}
+                  className="rounded-xl border px-4 py-3 text-left flex items-center gap-4 transition-all"
+                  style={{
+                    borderColor:     textStyle === s.value ? "#D4A843" : "var(--border)",
+                    backgroundColor: textStyle === s.value ? "rgba(212,168,67,0.08)" : "transparent",
+                  }}
+                >
+                  <span className="font-mono text-xs text-muted-foreground w-36 shrink-0 truncate">{s.preview}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{s.label}</p>
+                    <p className="text-xs text-muted-foreground">{s.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Font */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <h2 className="text-sm font-semibold text-foreground">Font</h2>
+            <div className="flex flex-wrap gap-2">
+              {FONT_OPTIONS.map(f => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => setFontChoice(f.value)}
+                  className="rounded-xl border px-4 py-2.5 flex items-center gap-2 transition-all"
+                  style={{
+                    borderColor:     fontChoice === f.value ? "#D4A843" : "var(--border)",
+                    backgroundColor: fontChoice === f.value ? "rgba(212,168,67,0.08)" : "transparent",
+                  }}
+                >
+                  <span style={{ ...f.style, fontSize: 20 }}>{f.sample}</span>
+                  <span className="text-xs font-medium" style={{ color: fontChoice === f.value ? "#D4A843" : "var(--foreground)" }}>{f.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Text position (only for captions + minimal) */}
+          {(textStyle === "captions" || textStyle === "minimal") && (
+            <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <h2 className="text-sm font-semibold text-foreground">Text Position</h2>
+              <div className="flex gap-2">
+                {(["bottom", "center", "top"] as TextPos[]).map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setTextPosition(p)}
+                    className="flex-1 rounded-xl border py-2 text-xs font-medium capitalize transition-all"
+                    style={{
+                      borderColor:     textPosition === p ? "#D4A843" : "var(--border)",
+                      backgroundColor: textPosition === p ? "rgba(212,168,67,0.08)" : "transparent",
+                      color:           textPosition === p ? "#D4A843" : "var(--muted-foreground)",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Phase 1 done — transcription ready for review */}
-          {jobData.transcriptionReady && jobData.words && !jobData.finalVideoUrl && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 size={16} className="text-emerald-400" />
-                <p className="text-sm font-semibold text-emerald-400">
-                  Transcription ready — {jobData.words.length} words
-                  {jobData.duration && ` · ${jobData.duration.toFixed(0)}s`}
-                </p>
+          {/* Accent color */}
+          <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Accent Color</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Used for highlighted words</p>
               </div>
+              <div className="flex items-center gap-3 ml-auto">
+                <input
+                  type="color"
+                  value={accentColor}
+                  onChange={e => setAccentColor(e.target.value)}
+                  className="w-9 h-9 rounded-lg border cursor-pointer shrink-0"
+                  style={{ borderColor: "var(--border)", padding: 2 }}
+                />
+                <span className="text-sm text-muted-foreground font-mono">{accentColor}</span>
+                <button
+                  type="button"
+                  onClick={() => setAccentColor("#D4A843")}
+                  className="text-xs text-muted-foreground hover:text-foreground transition"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
 
-              <TranscriptionReview
-                words={jobData.words}
-                text={jobData.text}
-                onApprove={handleApprove}
-                approving={approving}
-                approveError={approveError}
-              />
+          {transcribeErr && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={14} />
+              {transcribeErr}
             </div>
           )}
 
-          {/* Phase 2: rendering */}
-          {isActive && jobData.phase === 2 && !jobData.transcriptionReady && (
-            <div className="flex items-start gap-3">
-              <Loader2 size={18} className="animate-spin mt-0.5 flex-shrink-0" style={{ color: "#D4A843" }} />
+          {creditExhausted && creditInfo && (
+            <CreditExhaustedBanner
+              toolLabel="lyric video"
+              toolType="LYRIC_VIDEO"
+              creditsLimit={creditInfo.limit}
+              ppuPrice={creditInfo.priceDisplay || PRICING_DEFAULTS.AI_LYRIC_VIDEO.display}
+              nextTierName={creditInfo.tier === "launch" ? "Push" : "Reign"}
+              nextTierCredits={NEXT_CREDITS[creditInfo.tier as "launch" | "push"] ?? 0}
+              nextTierPrice={creditInfo.tier === "launch" ? "$49/mo" : "$99/mo"}
+              isMaxTier={creditInfo.tier === "reign"}
+            />
+          )}
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {PRICING_DEFAULTS.AI_LYRIC_VIDEO.display} or 1 credit
+              {bgType === "ai" && " + $5.00 AI background"}
+            </p>
+            <button
+              type="button"
+              disabled={!selectedTrack || transcribing}
+              onClick={handleTranscribe}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {transcribing
+                ? <><Loader2 size={14} className="animate-spin" /> Transcribing…</>
+                : <><Film size={14} /> Transcribe Lyrics</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 2: Lyrics review ──────────────────────────────────────────── */}
+      {step === "lyrics" && transcribeData && (
+        <div className="space-y-5">
+          <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-foreground">
+                Transcription ready — {transcribeData.words.length} words
+              </h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Edit any words below. Timestamps are locked — only text can be corrected.
+            </p>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {editedSegments.map((seg, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <span className="text-xs text-muted-foreground font-mono shrink-0 mt-2.5 w-12">
+                    [{formatTime(seg.start)}]
+                  </span>
+                  <textarea
+                    value={seg.text}
+                    onChange={e => {
+                      const updated = [...editedSegments];
+                      updated[idx] = { ...updated[idx], text: e.target.value };
+                      setEditedSegments(updated);
+                    }}
+                    rows={1}
+                    className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-foreground outline-none resize-none"
+                    style={{ borderColor: seg.text !== transcribeData.segments[idx]?.text ? "#D4A843" : "var(--border)" }}
+                    onInput={e => {
+                      const el = e.target as HTMLTextAreaElement;
+                      el.style.height = "auto";
+                      el.style.height = el.scrollHeight + "px";
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview section */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-foreground">Phase 2: Rendering lyric video…</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Generating Remotion animation script and rendering on Lambda. Takes ~5–10 minutes.
-                </p>
+                <h2 className="text-sm font-semibold text-foreground">Preview (10 seconds, free)</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">See how your video will look before generating</p>
               </div>
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={previewing}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-50 transition border"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                {previewing ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+                Preview 10s
+              </button>
+            </div>
+
+            {previewErr && (
+              <p className="text-xs text-muted-foreground">{previewErr}</p>
+            )}
+
+            {previewUrl && (
+              <div className="rounded-xl overflow-hidden aspect-video" style={{ backgroundColor: "#000" }}>
+                <video src={previewUrl} controls autoPlay className="w-full h-full object-contain" />
+              </div>
+            )}
+          </div>
+
+          {approveError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={14} />
+              {approveError}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setStep("setup")}
+              className="text-xs text-muted-foreground hover:text-foreground transition"
+            >
+              ← Back to setup
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={submitting || approving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {submitting
+                ? <><Loader2 size={14} className="animate-spin" /> Starting…</>
+                : <><Zap size={14} /> Generate Full Video</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 3 / Active job status ─────────────────────────────────────── */}
+      {(step === "generate" || isActive || (jobData && !isActive)) && jobData && (
+        <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          {/* Queued / rendering */}
+          {isActive && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <Loader2 size={18} className="animate-spin mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {jobData.status === "QUEUED"
+                      ? "Queued — starting render…"
+                      : jobData.phase === 2
+                      ? "Rendering your lyric video…"
+                      : "Processing…"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {jobData.status === "PROCESSING" && jobData.phase !== 2
+                      ? "Transcribing audio…"
+                      : "Rendering via Lambda. Takes 5–10 minutes."}
+                  </p>
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: "var(--border)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-1000"
+                  style={{
+                    backgroundColor: "#D4A843",
+                    width: jobData.status === "QUEUED" ? "5%" : jobData.phase === 2 ? "60%" : "30%",
+                  }}
+                />
+              </div>
+              <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">
+                ← Cancel
+              </button>
             </div>
           )}
 
@@ -579,57 +819,66 @@ function LyricVideoContent() {
                   Dismiss
                 </button>
               </div>
-              <div className="rounded-xl overflow-hidden aspect-video" style={{ backgroundColor: "var(--border)" }}>
+              <div
+                className="rounded-xl overflow-hidden"
+                style={{
+                  backgroundColor: "#000",
+                  aspectRatio: aspectRatio === "9:16" ? "9/16" : aspectRatio === "1:1" ? "1/1" : "16/9",
+                  maxHeight: 400,
+                }}
+              >
                 <video src={jobData.finalVideoUrl} controls className="w-full h-full object-contain" />
               </div>
-              <a
-                href={jobData.finalVideoUrl}
-                download="lyric-video.mp4"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-              >
-                <PlayCircle size={14} /> Download MP4
-              </a>
+              <div className="flex items-center gap-3 flex-wrap">
+                <a
+                  href={jobData.finalVideoUrl}
+                  download="lyric-video.mp4"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  <Download size={14} /> Download MP4
+                </a>
+                <button
+                  type="button"
+                  onClick={dismissJob}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  <RefreshCw size={14} /> Make another
+                </button>
+              </div>
             </div>
           )}
 
           {/* Failed */}
           {jobData.status === "FAILED" && (
             <div className="flex items-start gap-3 text-red-400">
-              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="text-sm font-semibold">Lyric video generation failed</p>
-                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error occurred"}</p>
+                <p className="text-sm font-semibold">Video generation failed</p>
+                <p className="text-xs text-red-400/70">{jobData.errorMessage ?? "Unknown error"}</p>
                 <button onClick={dismissJob} className="text-xs text-muted-foreground hover:text-foreground transition">Dismiss</button>
               </div>
             </div>
           )}
-
-          {/* Cancel button when active (not in transcription review) */}
-          {isActive && !jobData.transcriptionReady && (
-            <button onClick={dismissJob} className="mt-4 text-xs text-muted-foreground hover:text-foreground transition">
-              ← Cancel and start new
-            </button>
-          )}
         </div>
       )}
 
-      {/* History */}
+      {/* ── History ──────────────────────────────────────────────────────────── */}
       {!historyLoading && history.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Lyric Videos</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Past Videos</p>
           <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
             {history.map(job => (
               <div key={job.id} className="flex items-center gap-4 px-5 py-4 border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
-                <div className="w-14 h-10 rounded-lg overflow-hidden shrink-0 flex items-center justify-center" style={{ backgroundColor: "var(--border)" }}>
-                  {job.status === "COMPLETE"   ? <Film size={16} className="text-emerald-400" />          :
-                   job.status === "PROCESSING" ? <Loader2 size={16} className="text-blue-400 animate-spin" /> :
-                   job.status === "FAILED"     ? <AlertCircle size={16} className="text-red-400" />       :
-                   <Clock size={16} className="text-yellow-400" />}
+                <div className="w-12 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--border)" }}>
+                  {job.status === "COMPLETE"   ? <Film size={14} className="text-emerald-400" />
+                 : job.status === "PROCESSING" ? <Loader2 size={14} className="text-blue-400 animate-spin" />
+                 : job.status === "FAILED"     ? <AlertCircle size={14} className="text-red-400" />
+                 : <Clock size={14} className="text-yellow-400" />}
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground">
                     {new Date(job.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -644,7 +893,6 @@ function LyricVideoContent() {
                     )}
                   </div>
                 </div>
-
                 {job.outputData?.finalVideoUrl && (
                   <a
                     href={job.outputData.finalVideoUrl}
@@ -665,7 +913,7 @@ function LyricVideoContent() {
   );
 }
 
-// ─── Page wrapper (Suspense for useSearchParams) ───────────────────────────────
+// ─── Page wrapper ──────────────────────────────────────────────────────────────
 
 export default function LyricVideoPage() {
   return (

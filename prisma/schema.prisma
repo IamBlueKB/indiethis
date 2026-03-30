@@ -1,18 +1,1726 @@
-// IndieThis — Prisma Schema
-// Database: PostgreSQL
-// Auth: NextAuth v5 (Credentials + JWT strategy)
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")    // pooler URL (port 6543) — used at runtime
-  directUrl = env("DIRECT_URL")      // direct URL (port 5432) — used by prisma db push/migrate
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id                       String                 @id @default(cuid())
+  email                    String                 @unique
+  emailVerified            DateTime?
+  phone                    String?
+  passwordHash             String
+  role                     Role                   @default(ARTIST)
+  name                     String
+  artistName               String?
+  bio                      String?
+  photo                    String?
+  instagramHandle          String?
+  tiktokHandle             String?
+  youtubeChannel           String?
+  spotifyUrl               String?
+  appleMusicUrl            String?
+  stripeCustomerId         String?
+  stripeConnectId          String?
+  passwordResetToken       String?                @unique
+  passwordResetExpiry      DateTime?
+  igFollowClaimed          Boolean                @default(false)
+  referralCode             String?                @unique
+  referredById             String?
+  referredByCode           String?
+  referralRewardTier       ReferralRewardTier     @default(NONE)
+  artistSlug               String?                @unique
+  isComped                 Boolean                @default(false)
+  compExpiresAt            DateTime?
+  isSuspended              Boolean                @default(false)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  lastLoginAt              DateTime?
+  city                     String?
+  genres                   String[]
+  soundcloudUrl            String?
+  signupPath               String?
+  onboardingStep           Int                    @default(0)
+  planSelectedAt           DateTime?
+  setupCompletedAt         DateTime?
+  firstVisitAt             DateTime?
+  firstContentAt           DateTime?
+  pagePublishedAt          DateTime?
+  autoSigninToken          String?                @unique
+  autoSigninTokenExpiresAt DateTime?
+  smsOptIn                 Boolean                @default(false)
+  aiGenerations            AIGeneration[]
+  accounts                 Account[]
+  affiliate                Affiliate?
+  affiliateReferral        AffiliateReferral?     @relation("AffiliateReferredUser")
+  ambassador               Ambassador?
+  artistBookingInquiries   ArtistBookingInquiry[]
+  artistCollaborators      ArtistCollaborator[]
+  artistPhotos             ArtistPhoto[]
+  artistPressItems         ArtistPressItem[]
+  artistReleases           ArtistRelease[]
+  artistShows              ArtistShow[]
+  artistSite               ArtistSite?
+  artistSupports           ArtistSupport[]
+  artistTestimonials       ArtistTestimonial[]
+  artistVideos             ArtistVideo[]
+  artistLicenses           BeatLicense[]          @relation("ArtistLicenses")
+  producerLicenses         BeatLicense[]          @relation("ProducerLicenses")
+  receivedPreviews         BeatPreview[]          @relation("ArtistPreviews")
+  producedPreviews         BeatPreview[]          @relation("ProducerPreviews")
+  sessions                 BookingSession[]
+  broadcastLogs            BroadcastLog[]
+  deliveredFiles           DeliveredFile[]
+  featuredCards            ExploreFeatureCard[]   @relation("FeaturedArtist")
+  fanAutomations           FanAutomation[]
+  fanContacts              FanContact[]
+  fanScores                FanScore[]
+  licenseDocuments         LicenseDocument[]
+  artistLinkClicks         LinkClick[]            @relation("ArtistLinkClicks")
+  merchProducts            MerchProduct[]
+  notifications            Notification[]
+  onboardingEmails         OnboardingEmailLog[]
+  artistPageViews          PageView[]             @relation("ArtistPageViews")
+  payments                 Payment[]
+  preSaveCampaigns         PreSaveCampaign[]
+  producerLeaseSettings    ProducerLeaseSettings?
+  producerProfile          ProducerProfile?
+  promoRedemptions         PromoRedemption[]
+  reEngagementEmails       ReEngagementEmailLog[]
+  receipts                 Receipt[]
+  recentPlays              RecentPlay[]
+  referralReceived         Referral?              @relation("ReferredReferrals")
+  referralsGiven           Referral[]             @relation("ReferrerReferrals")
+  releasePlans             ReleasePlan[]
+  sampleLogs               SampleLog[]
+  artistSessionNotes       SessionNote[]
+  showInterests            ShowInterest[]
+  splits                   Split[]                @relation("UserSplits")
+  splitSheetsCreated       SplitSheet[]           @relation("SplitSheetCreator")
+  stemSeparations          StemSeparation[]
+  artistStreamLeases       StreamLease[]          @relation("ArtistStreamLeases")
+  producerStreamLeases     StreamLease[]          @relation("ProducerStreamLeases")
+  streamLeaseBookmarks     StreamLeaseBookmark[]
+  ownedStudios             Studio[]
+  studios                  StudioArtist[]
+  subscription             Subscription?
+  tracks                   Track[]
+  artistTrackPlays         TrackPlay[]            @relation("ArtistTrackPlays")
+  referredBy               User?                  @relation("Referrals", fields: [referredById], references: [id])
+  referrals                User[]                 @relation("Referrals")
+  attribution              UserAttribution?
+  youtubeSync              YouTubeSync?
+  youtubeReferences        YoutubeReference[]
+}
+
+model Studio {
+  id                       String                 @id @default(cuid())
+  name                     String
+  slug                     String                 @unique
+  address                  String?
+  phone                    String?
+  email                    String?
+  description              String?
+  hours                    String?
+  streetAddress            String?
+  city                     String?
+  state                    String?
+  zipCode                  String?
+  instagram                String?
+  tiktok                   String?
+  youtube                  String?
+  facebook                 String?
+  cashAppHandle            String?
+  zelleHandle              String?
+  paypalHandle             String?
+  venmoHandle              String?
+  stripePaymentsEnabled    Boolean                @default(false)
+  photos                   String[]
+  logo                     String?
+  heroImage                String?
+  tagline                  String?
+  services                 String[]
+  servicesJson             String?
+  testimonials             String?
+  twitter                  String?
+  isEnterprise             Boolean                @default(false)
+  studioTier               StudioTier             @default(PRO)
+  template                 StudioTemplate         @default(CLASSIC)
+  accentColor              String?
+  customDomain             String?
+  isPublished              Boolean                @default(false)
+  bio                      String?
+  logoUrl                  String?
+  galleryImages            Json?
+  studioHours              Json?
+  hoursNote                String?
+  socialLinks              Json?
+  paymentMethods           Json?
+  featuredArtists          Json?
+  pageConfig               Json?
+  tierOverride             String?
+  moderationStatus         ModerationStatus       @default(CLEAN)
+  moderationReason         String?
+  moderationScannedAt      DateTime?
+  onboardingCompleted      Boolean                @default(false)
+  generationsUsedThisMonth Int                    @default(0)
+  generationResetDate      DateTime?
+  referralCredits          Float                  @default(0)
+  referralCreditHistory    Json?
+  emailSequenceEnabled     Boolean                @default(false)
+  averageSessionRate       Float                  @default(150)
+  ownerId                  String
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  activityLog              ActivityLog[]
+  sessions                 BookingSession[]
+  contacts                 Contact[]
+  contactSubmissions       ContactSubmission[]
+  deliveredFiles           DeliveredFile[]
+  emailCampaigns           EmailCampaign[]
+  generationLogs           GenerationLog[]
+  intakeLinks              IntakeLink[]
+  intakeSubmissions        IntakeSubmission[]
+  invoices                 Invoice[]
+  pageViews                PageView[]
+  quickSends               QuickSend[]
+  scheduledEmails          ScheduledEmail[]
+  sessionNotes             SessionNote[]
+  owner                    User                   @relation(fields: [ownerId], references: [id])
+  artists                  StudioArtist[]
+  credits                  StudioCredit[]
+  engineers                StudioEngineer[]
+  equipment                StudioEquipment[]
+  portfolioTracks          StudioPortfolioTrack[]
+}
+
+model StudioArtist {
+  id       String   @id @default(cuid())
+  studioId String
+  artistId String
+  joinedAt DateTime @default(now())
+  artist   User     @relation(fields: [artistId], references: [id])
+  studio   Studio   @relation(fields: [studioId], references: [id])
+
+  @@unique([studioId, artistId])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  tier                   SubscriptionTier
+  status                 SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId   String?
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  aiVideoCreditsUsed     Int                @default(0)
+  aiVideoCreditsLimit    Int
+  aiArtCreditsUsed       Int                @default(0)
+  aiArtCreditsLimit      Int
+  aiMasterCreditsUsed    Int                @default(0)
+  aiMasterCreditsLimit   Int
+  lyricVideoCreditsUsed  Int                @default(0)
+  lyricVideoCreditsLimit Int
+  aarReportCreditsUsed   Int                @default(0)
+  aarReportCreditsLimit  Int
+  pressKitCreditsUsed    Int                @default(0)
+  pressKitCreditsLimit   Int                @default(0)
+  smsBroadcastsUsed      Int                @default(0)
+  cancelReason           String?
+  canceledAt             DateTime?
+  streamLeaseGraceUntil  DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation(fields: [userId], references: [id])
+}
+
+model BookingSession {
+  id             String          @id @default(cuid())
+  studioId       String
+  artistId       String?
+  contactId      String?
+  dateTime       DateTime
+  duration       Int?
+  sessionType    String?
+  status         SessionStatus   @default(PENDING)
+  paymentStatus  PaymentStatus   @default(UNPAID)
+  paymentMethod  PaymentMethod?
+  intakeData     Json?
+  notes          String?
+  engineerNotes  String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  artist         User?           @relation(fields: [artistId], references: [id])
+  contact        Contact?        @relation(fields: [contactId], references: [id])
+  studio         Studio          @relation(fields: [studioId], references: [id])
+  deliveredFiles DeliveredFile[]
+  sessionNotes   SessionNote[]
+}
+
+model Track {
+  id                   String                @id @default(cuid())
+  artistId             String
+  title                String
+  description          String?
+  fileUrl              String
+  coverArtUrl          String?
+  price                Float?
+  status               TrackStatus           @default(DRAFT)
+  plays                Int                   @default(0)
+  downloads            Int                   @default(0)
+  earnings             Float                 @default(0)
+  projectName          String?
+  releaseId            String?
+  bpm                  Int?
+  musicalKey           String?
+  audioHash            String?
+  totalLicenses        Int                   @default(0)
+  totalStreamLeases    Int                   @default(0)
+  totalPlays           Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  genre                String?
+  videoBeatLinks       ArtistVideo[]         @relation("VideoBeatLink")
+  videoTrackLinks      ArtistVideo[]         @relation("VideoTrackLink")
+  audioFeatures        AudioFeatures?
+  beatLeaseSettings    BeatLeaseSettings?
+  beatLicenses         BeatLicense[]
+  beatPreviews         BeatPreview[]
+  licenseDocuments     LicenseDocument[]
+  recentPlays          RecentPlay[]
+  releasePlans         ReleasePlan[]
+  sampleLogs           SampleLog[]
+  splitSheet           SplitSheet?
+  streamLeases         StreamLease[]
+  streamLeaseBookmarks StreamLeaseBookmark[]
+  artist               User                  @relation(fields: [artistId], references: [id])
+  release              ArtistRelease?        @relation(fields: [releaseId], references: [id])
+  trackPlays           TrackPlay[]
+}
+
+model DeliveredFile {
+  id               String          @id @default(cuid())
+  sessionId        String?
+  artistId         String
+  studioId         String
+  contactId        String?
+  fileUrl          String
+  fileName         String
+  notes            String?
+  notificationSent Boolean         @default(false)
+  deliveredAt      DateTime        @default(now())
+  artist           User            @relation(fields: [artistId], references: [id])
+  contact          Contact?        @relation(fields: [contactId], references: [id])
+  session          BookingSession? @relation(fields: [sessionId], references: [id])
+  studio           Studio          @relation(fields: [studioId], references: [id])
+}
+
+model MerchProduct {
+  id              String        @id @default(cuid())
+  artistId        String
+  title           String
+  description     String?
+  imageUrl        String
+  basePrice       Float
+  artistMarkup    Float
+  productType     ProductType
+  variants        Json?
+  isActive        Boolean       @default(true)
+  printfulId      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  videoMerchLinks ArtistVideo[] @relation("VideoMerchLink")
+  orders          MerchOrder[]
+  artist          User          @relation(fields: [artistId], references: [id])
+}
+
+model MerchOrder {
+  id                String            @id @default(cuid())
+  merchProductId    String
+  artistId          String
+  buyerEmail        String
+  quantity          Int
+  totalPrice        Float
+  platformCut       Float
+  artistEarnings    Float
+  fulfillmentStatus FulfillmentStatus @default(PENDING)
+  trackingNumber    String?
+  stripePaymentId   String?
+  createdAt         DateTime          @default(now())
+  merchProduct      MerchProduct      @relation(fields: [merchProductId], references: [id])
+}
+
+model AIGeneration {
+  id         String             @id @default(cuid())
+  artistId   String
+  type       AIGenerationType
+  inputData  Json?
+  outputData Json?
+  outputUrl  String?
+  creditUsed Boolean            @default(false)
+  paymentId  String?
+  status     AIGenerationStatus @default(QUEUED)
+  createdAt  DateTime           @default(now())
+  artist     User               @relation(fields: [artistId], references: [id])
+}
+
+model ArtistSite {
+  id                    String             @id @default(cuid())
+  artistId              String             @unique
+  template              ArtistSiteTemplate @default(TEMPLATE_1)
+  colorScheme           Json?
+  heroImage             String?
+  bioContent            String?
+  showMusic             Boolean            @default(true)
+  showVideos            Boolean            @default(true)
+  showMerch             Boolean            @default(true)
+  showContact           Boolean            @default(false)
+  followGateEnabled     Boolean            @default(false)
+  pwywEnabled           Boolean            @default(false)
+  credentials           String[]
+  bookingRate           Float?
+  customDomain          String?
+  isPublished           Boolean            @default(false)
+  draftMode             Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  pinnedMessage         String?
+  pinnedActionText      String?
+  pinnedActionUrl       String?
+  activityTickerEnabled Boolean            @default(false)
+  genre                 String?
+  role                  String?
+  city                  String?
+  soundcloudUrl         String?
+  artist                User               @relation(fields: [artistId], references: [id])
+}
+
+model YoutubeReference {
+  id           String   @id @default(cuid())
+  artistId     String
+  url          String
+  videoId      String
+  title        String
+  thumbnailUrl String
+  authorName   String?
+  projectTag   String?
+  folder       String?
+  createdAt    DateTime @default(now())
+  artist       User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String
+  amount          Float
+  method          String?
+  status          String
+  stripePaymentId String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model EmailCampaign {
+  id              String    @id @default(cuid())
+  studioId        String
+  subject         String
+  body            String
+  recipientFilter Json?
+  recipientCount  Int       @default(0)
+  openCount       Int       @default(0)
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  attachmentUrls  String[]
+  studio          Studio    @relation(fields: [studioId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Contact {
+  id                  String             @id @default(cuid())
+  studioId            String
+  name                String
+  firstName           String?
+  lastName            String?
+  email               String?
+  phone               String?
+  photoUrl            String?
+  instagramHandle     String?
+  genre               String?
+  notes               String?
+  source              ContactSource      @default(MANUAL)
+  tags                String[]           @default([])
+  totalSpent          Float              @default(0)
+  lastSessionDate     DateTime?
+  referredToIndieThis Boolean            @default(false)
+  convertedToBooking  Boolean            @default(false)
+  convertedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  activityLog         ActivityLog[]
+  sessions            BookingSession[]
+  studio              Studio             @relation(fields: [studioId], references: [id])
+  deliveredFiles      DeliveredFile[]
+  intakeSubmissions   IntakeSubmission[]
+  invoices            Invoice[]
+}
+
+model ActivityLog {
+  id          String          @id @default(cuid())
+  contactId   String
+  studioId    String
+  type        ActivityLogType
+  description String
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+  contact     Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  studio      Studio          @relation(fields: [studioId], references: [id])
+}
+
+model IntakeLink {
+  id           String            @id @default(cuid())
+  studioId     String
+  contactId    String?
+  token        String            @unique
+  name         String?
+  email        String?
+  phone        String?
+  sessionDate  DateTime?
+  sessionTime  String?
+  endTime      String?
+  hourlyRate   Float?
+  sessionHours Float?
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime          @default(now())
+  studio       Studio            @relation(fields: [studioId], references: [id])
+  submission   IntakeSubmission?
+}
+
+model IntakeSubmission {
+  id                   String     @id @default(cuid())
+  intakeLinkId         String     @unique
+  studioId             String
+  contactId            String?
+  artistName           String
+  genre                String?
+  projectDesc          String?
+  youtubeLinks         String[]
+  fileUrls             String[]
+  photoUrl             String?
+  notes                String?
+  bpmDetected          Int?
+  keyDetected          String?
+  instagram            String?
+  tiktok               String?
+  youtubeHandle        String?
+  paymentMethod        String?
+  depositPaid          Boolean    @default(false)
+  depositAmount        Float?
+  aiVideoRequested     Boolean    @default(false)
+  convertedToBookingId String?
+  status               String     @default("PENDING")
+  createdAt            DateTime   @default(now())
+  contact              Contact?   @relation(fields: [contactId], references: [id])
+  intakeLink           IntakeLink @relation(fields: [intakeLinkId], references: [id])
+  studio               Studio     @relation(fields: [studioId], references: [id])
+}
+
+model QuickSend {
+  id                   String    @id @default(cuid())
+  studioId             String
+  contactId            String?
+  senderName           String
+  recipientEmail       String
+  recipientPhone       String?
+  fileUrls             String[]
+  message              String?
+  token                String    @unique
+  expiresAt            DateTime
+  downloadedAt         DateTime?
+  sendFollowUpSequence Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  studio               Studio    @relation(fields: [studioId], references: [id])
+}
+
+model BeatPreview {
+  id             String            @id @default(cuid())
+  producerId     String
+  artistId       String?
+  trackId        String
+  expiresAt      DateTime
+  isDownloadable Boolean           @default(false)
+  status         BeatPreviewStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  licenses       BeatLicense[]
+  artist         User?             @relation("ArtistPreviews", fields: [artistId], references: [id])
+  producer       User              @relation("ProducerPreviews", fields: [producerId], references: [id])
+  track          Track             @relation(fields: [trackId], references: [id])
+}
+
+model BeatLicense {
+  id            String      @id @default(cuid())
+  beatPreviewId String
+  trackId       String
+  producerId    String
+  artistId      String
+  licenseType   LicenseType
+  customTerms   String?
+  price         Float
+  status        String      @default("ACTIVE")
+  pdfUrl        String?
+  createdAt     DateTime    @default(now())
+  artist        User        @relation("ArtistLicenses", fields: [artistId], references: [id])
+  beatPreview   BeatPreview @relation(fields: [beatPreviewId], references: [id])
+  producer      User        @relation("ProducerLicenses", fields: [producerId], references: [id])
+  track         Track       @relation(fields: [trackId], references: [id])
+}
+
+model Receipt {
+  id              String      @id @default(cuid())
+  userId          String
+  type            ReceiptType
+  description     String
+  amount          Float
+  paymentMethod   String?
+  stripePaymentId String?
+  pdfUrl          String?
+  createdAt       DateTime    @default(now())
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  studioId      String
+  contactId     String
+  invoiceNumber Int
+  lineItems     Json
+  subtotal      Float
+  tax           Float         @default(0)
+  taxRate       Float         @default(0)
+  total         Float
+  dueDate       DateTime
+  status        InvoiceStatus @default(DRAFT)
+  paymentMethod String?
+  paidAt        DateTime?
+  remindersSent Int           @default(0)
+  notes         String?
+  pdfUrl        String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  contact       Contact       @relation(fields: [contactId], references: [id])
+  studio        Studio        @relation(fields: [studioId], references: [id])
+
+  @@unique([studioId, invoiceNumber])
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  studioId  String
+  name      String
+  email     String
+  phone     String?
+  message   String
+  source    String   @default("PUBLIC_PAGE")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}
+
+model GenerationLog {
+  id             String         @id @default(cuid())
+  studioId       String
+  template       StudioTemplate
+  configSnapshot Json
+  createdAt      DateTime       @default(now())
+  wasPaid        Boolean        @default(false)
+  studio         Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
+}
+
+model PageView {
+  id       String   @id @default(cuid())
+  studioId String?
+  artistId String?
+  viewedAt DateTime @default(now())
+  ipHash   String
+  referrer String?
+  artist   User?    @relation("ArtistPageViews", fields: [artistId], references: [id], onDelete: Cascade)
+  studio   Studio?  @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+  @@index([studioId, viewedAt])
+  @@index([studioId, ipHash, viewedAt])
+  @@index([artistId])
+  @@index([artistId, viewedAt])
+  @@index([artistId, ipHash, viewedAt])
+  @@index([artistId, referrer])
+}
+
+model TrackPlay {
+  id       String   @id @default(cuid())
+  trackId  String
+  artistId String
+  ipHash   String
+  playedAt DateTime @default(now())
+  artist   User     @relation("ArtistTrackPlays", fields: [artistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([trackId])
+  @@index([artistId, playedAt])
+  @@index([trackId, ipHash, playedAt])
+}
+
+model LinkClick {
+  id        String   @id @default(cuid())
+  artistId  String
+  platform  String
+  trackId   String?
+  clickedAt DateTime @default(now())
+  artist    User     @relation("ArtistLinkClicks", fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([artistId, platform])
+  @@index([artistId, clickedAt])
+}
+
+model GenerationFeedback {
+  id              String   @id @default(cuid())
+  pageType        PageType
+  ownerId         String
+  generationLogId String?
+  sectionType     String
+  fieldChanged    String
+  aiOriginalValue String
+  userEditedValue String
+  createdAt       DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([fieldChanged])
+  @@index([sectionType])
+}
+
+model AIInsightsLog {
+  id          String      @id @default(cuid())
+  insightType InsightType
+  referenceId String?
+  input       String
+  output      String
+  actionTaken String?
+  accuracy    Boolean?
+  createdAt   DateTime    @default(now())
+
+  @@index([insightType])
+  @@index([referenceId])
+}
+
+model AIJob {
+  id               String            @id @default(cuid())
+  type             AIJobType
+  status           AIJobStatus       @default(QUEUED)
+  triggeredBy      AIJobTrigger
+  triggeredById    String
+  artistId         String?
+  studioId         String?
+  inputData        Json?
+  outputData       Json?
+  provider         String
+  costToUs         Float?
+  priceCharged     Float?
+  errorMessage     String?
+  createdAt        DateTime          @default(now())
+  completedAt      DateTime?
+  licenseDocuments LicenseDocument[]
+
+  @@index([triggeredById])
+  @@index([artistId])
+  @@index([studioId])
+  @@index([status])
+  @@index([type])
+}
+
+model ScheduledEmail {
+  id           String               @id @default(cuid())
+  studioId     String
+  contactId    String?
+  contactEmail String
+  quickSendId  String?
+  sequenceStep SequenceStep
+  subject      String               @default("")
+  body         String               @default("")
+  scheduledFor DateTime
+  status       ScheduledEmailStatus @default(PENDING)
+  sentAt       DateTime?
+  errorMessage String?
+  createdAt    DateTime             @default(now())
+  studio       Studio               @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+  @@index([status, scheduledFor])
+  @@index([quickSendId])
+}
+
+model Referral {
+  id             String    @id @default(cuid())
+  referrerUserId String
+  referredUserId String    @unique
+  isActive       Boolean   @default(false)
+  activatedAt    DateTime?
+  deactivatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  referred       User      @relation("ReferredReferrals", fields: [referredUserId], references: [id])
+  referrer       User      @relation("ReferrerReferrals", fields: [referrerUserId], references: [id])
+
+  @@index([referrerUserId])
+  @@index([isActive])
+}
+
+model Affiliate {
+  id                       String              @id @default(cuid())
+  /// Linked account — nullable so non-account applicants can apply; set on approval or on account creation
+  userId                   String?             @unique
+  /// Applicant identity captured from the form (for pre-account applicants)
+  applicantName            String
+  applicantEmail           String
+  status                   AffiliateStatus     @default(PENDING)
+  /// Landing page URL: indiethis.com/go/[customSlug] — generated at approval
+  customSlug               String?             @unique
+  /// Discount code their audience uses at signup (10% off first 3 months) — generated at approval
+  discountCode             String?             @unique
+  commissionRate           Float               @default(0.20)
+  commissionDurationMonths Int                 @default(12)
+  totalEarned              Float               @default(0)
+  pendingPayout            Float               @default(0)
+  /// Stripe Connect account for commission payouts
+  stripeConnectAccountId   String?
+  /// Raw application form data: socialLinks, audienceSize, creatorType, promotionPlan
+  applicationData          Json?
+  /// Payout history: Array<{ amount: number, date: string, stripeTransferId: string, status: 'paid' }>
+  payoutHistory            Json?
+  appliedAt                DateTime            @default(now())
+  approvedAt               DateTime?
+  createdAt                DateTime            @default(now())
+  user                     User?               @relation(fields: [userId], references: [id])
+  referrals                AffiliateReferral[]
+
+  @@index([status])
+  @@index([applicantEmail])
+}
+
+model AffiliateReferral {
+  id                  String    @id @default(cuid())
+  affiliateId         String
+  referredUserId      String    @unique
+  /// Snapshot of commissionRate at time of referral (locked in)
+  commissionRate      Float
+  /// Months of commission remaining; decrements each billing cycle
+  monthsRemaining     Int       @default(12)
+  totalCommissionPaid Float     @default(0)
+  /// true while the referred user has an active paid subscription
+  isActive            Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  affiliate           Affiliate @relation(fields: [affiliateId], references: [id])
+  referredUser        User      @relation("AffiliateReferredUser", fields: [referredUserId], references: [id])
+
+  @@index([affiliateId])
+  @@index([isActive])
+}
+
+model UserAttribution {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  /// Platform referral code (?ref=)
+  ref         String?
+  /// Affiliate ID (?affiliate=)
+  affiliateId String?
+  /// Acquisition channel: file_delivery | studio_page | artist_page | social | direct | ad
+  source      String?
+  /// UTM parameters
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  /// First URL the user hit before signing up (populated by client)
+  landingPage String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([source])
+  @@index([utmSource])
+  @@index([utmCampaign])
+}
+
+model PreSaveCampaign {
+  id            String         @id @default(cuid())
+  artistId      String
+  title         String
+  artUrl        String?
+  releaseDate   DateTime
+  spotifyUrl    String?
+  appleMusicUrl String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  artist        User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  clicks        PreSaveClick[]
+
+  @@index([artistId])
+}
+
+model PreSaveClick {
+  id         String          @id @default(cuid())
+  campaignId String
+  platform   PreSavePlatform
+  clickedAt  DateTime        @default(now())
+  campaign   PreSaveCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([campaignId, platform])
+}
+
+model ArtistVideo {
+  id                String         @id @default(cuid())
+  artistId          String
+  title             String
+  description       String?
+  videoUrl          String?
+  thumbnailUrl      String?
+  embedUrl          String?
+  type              VideoType      @default(UPLOAD)
+  category          VideoCategory?
+  duration          Int?
+  sortOrder         Int            @default(0)
+  isPublished       Boolean        @default(true)
+  syncedFromYouTube Boolean        @default(false)
+  youtubeVideoId    String?        @unique
+  linkedTrackId     String?
+  linkedBeatId      String?
+  linkedMerchId     String?
+  createdAt         DateTime       @default(now())
+  artist            User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  linkedBeat        Track?         @relation("VideoBeatLink", fields: [linkedBeatId], references: [id])
+  linkedMerch       MerchProduct?  @relation("VideoMerchLink", fields: [linkedMerchId], references: [id])
+  linkedTrack       Track?         @relation("VideoTrackLink", fields: [linkedTrackId], references: [id])
+}
+
+model YouTubeSync {
+  id            String     @id @default(cuid())
+  userId        String     @unique
+  channelId     String
+  channelUrl    String
+  channelName   String?
+  channelAvatar String?
+  lastSyncedAt  DateTime?
+  nextSyncAt    DateTime?
+  syncStatus    SyncStatus @default(PENDING)
+  totalVideos   Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ArtistShow {
+  id        String         @id @default(cuid())
+  artistId  String
+  venueName String
+  city      String
+  date      DateTime
+  ticketUrl String?
+  isSoldOut Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  artist    User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  waitlist  ShowWaitlist[]
+
+  @@index([artistId])
+}
+
+model ShowWaitlist {
+  id        String     @id @default(cuid())
+  showId    String
+  email     String
+  createdAt DateTime   @default(now())
+  show      ArtistShow @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@unique([showId, email])
+  @@index([showId])
+}
+
+model ShowInterest {
+  id        String   @id @default(cuid())
+  artistId  String
+  email     String
+  createdAt DateTime @default(now())
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email])
+  @@index([artistId])
+}
+
+model ArtistSupport {
+  id              String   @id @default(cuid())
+  artistId        String
+  supporterEmail  String
+  amount          Float
+  message         String?
+  stripePaymentId String?
+  createdAt       DateTime @default(now())
+  artist          User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([artistId, supporterEmail])
+}
+
+model FanContact {
+  id        String           @id @default(cuid())
+  artistId  String
+  email     String
+  phone     String?
+  zip       String?
+  source    FanContactSource
+  createdAt DateTime         @default(now())
+  artist    User             @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email, source])
+  @@index([artistId])
+  @@index([artistId, source])
+}
+
+model FanScore {
+  id          String    @id @default(cuid())
+  artistId    String
+  email       String
+  totalSpend  Float     @default(0)
+  merchSpend  Float     @default(0)
+  tipSpend    Float     @default(0)
+  orderCount  Int       @default(0)
+  tipCount    Int       @default(0)
+  lastSpentAt DateTime?
+  updatedAt   DateTime  @updatedAt
+  artist      User      @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, email])
+  @@index([artistId])
+  @@index([artistId, totalSpend])
+}
+
+model BroadcastLog {
+  id             String   @id @default(cuid())
+  artistId       String
+  message        String
+  segment        String
+  recipientCount Int
+  successCount   Int      @default(0)
+  sentAt         DateTime @default(now())
+  artist         User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+  @@index([artistId, sentAt])
+}
+
+model ArtistBookingInquiry {
+  id          String   @id @default(cuid())
+  artistId    String
+  name        String
+  email       String
+  inquiryType String
+  message     String
+  createdAt   DateTime @default(now())
+  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model AdminAccount {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  role               AdminRole @default(SUPPORT_ADMIN)
+  /// ID of the admin who created this account (null for the bootstrap super-admin)
+  createdBy          String?
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([email])
+  @@index([role])
+}
+
+model ArtistRelease {
+  id           String        @id @default(cuid())
+  artistId     String
+  title        String
+  coverUrl     String?
+  releaseDate  DateTime?
+  type         ReleaseType   @default(SINGLE)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  artist       User          @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  releasePlans ReleasePlan[]
+  tracks       Track[]
+
+  @@index([artistId])
+}
+
+model ArtistPhoto {
+  id        String   @id @default(cuid())
+  artistId  String
+  imageUrl  String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistTestimonial {
+  id          String   @id @default(cuid())
+  artistId    String
+  quote       String
+  attribution String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistCollaborator {
+  id         String   @id @default(cuid())
+  artistId   String
+  name       String
+  photoUrl   String?
+  artistSlug String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  artist     User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model ArtistPressItem {
+  id        String   @id @default(cuid())
+  artistId  String
+  source    String
+  title     String
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model StudioPortfolioTrack {
+  id          String   @id @default(cuid())
+  studioId    String
+  title       String
+  artistName  String
+  audioUrl    String
+  coverUrl    String?
+  description String?
+  artistSlug  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+model StudioCredit {
+  id             String   @id @default(cuid())
+  studioId       String
+  artistName     String
+  artistPhotoUrl String?
+  projectName    String?
+  artistSlug     String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  studio         Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+model StudioEngineer {
+  id          String   @id @default(cuid())
+  studioId    String
+  name        String
+  role        String
+  photoUrl    String?
+  specialties String[]
+  bio         String?
+  artistSlug  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+model StudioEquipment {
+  id        String            @id @default(cuid())
+  studioId  String
+  category  EquipmentCategory @default(OTHER)
+  name      String
+  sortOrder Int               @default(0)
+  createdAt DateTime          @default(now())
+  studio    Studio            @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+}
+
+model PromoCode {
+  id                 String            @id @default(cuid())
+  code               String            @unique
+  type               PromoCodeType
+  tier               SubscriptionTier?
+  value              Float?
+  durationDays       Int?
+  durationMonths     Int?
+  maxRedemptions     Int               @default(1)
+  currentRedemptions Int               @default(0)
+  expiresAt          DateTime?
+  isActive           Boolean           @default(true)
+  notes              String?
+  metadata           Json?
+  ambassadorId       String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  ambassador         Ambassador?       @relation(fields: [ambassadorId], references: [id])
+  redemptions        PromoRedemption[]
+
+  @@index([ambassadorId])
+  @@index([code])
+}
+
+model PromoRedemption {
+  id             String            @id @default(cuid())
+  promoCodeId    String
+  userId         String
+  redeemedAt     DateTime          @default(now())
+  convertedAt    DateTime?
+  convertedTier  SubscriptionTier?
+  upgradedAt     DateTime?
+  upgradedToTier SubscriptionTier?
+  status         RedemptionStatus  @default(ACTIVE)
+  expiresAt      DateTime?
+  graceUntil     DateTime?
+  warningSentAt  DateTime?
+  promoCode      PromoCode         @relation(fields: [promoCodeId], references: [id])
+  user           User              @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([promoCodeId])
+  @@index([status, expiresAt])
+}
+
+model Ambassador {
+  id                   String             @id @default(cuid())
+  userId               String?            @unique
+  name                 String
+  email                String
+  tier                 AmbassadorTier     @default(STANDARD)
+  rewardType           RewardType         @default(FLAT_PER_CONVERSION)
+  rewardValue          Float              @default(5.0)
+  rewardDurationMonths Int?
+  creditBalance        Float              @default(0)
+  totalEarned          Float              @default(0)
+  totalPaidOut         Float              @default(0)
+  isActive             Boolean            @default(true)
+  notes                String?
+  stripeConnectId      String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  user                 User?              @relation(fields: [userId], references: [id])
+  payouts              AmbassadorPayout[]
+  promoCodes           PromoCode[]
+
+  @@index([email])
+}
+
+model AmbassadorPayout {
+  id             String     @id @default(cuid())
+  ambassadorId   String
+  amount         Float
+  method         String
+  stripePayoutId String?
+  createdAt      DateTime   @default(now())
+  ambassador     Ambassador @relation(fields: [ambassadorId], references: [id])
+
+  @@index([ambassadorId])
+}
+
+model PlatformPricing {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  value     Float
+  display   String
+  category  String
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model StreamLease {
+  id                String                @id @default(cuid())
+  artistId          String
+  beatId            String
+  producerId        String
+  trackTitle        String
+  audioUrl          String
+  coverUrl          String?
+  isActive          Boolean               @default(true)
+  activatedAt       DateTime              @default(now())
+  cancelledAt       DateTime?
+  trackHash         String?
+  duplicateFlag     Boolean               @default(false)
+  duplicateFlagNote String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  licenseDocuments  LicenseDocument[]
+  artist            User                  @relation("ArtistStreamLeases", fields: [artistId], references: [id])
+  beat              Track                 @relation(fields: [beatId], references: [id])
+  producer          User                  @relation("ProducerStreamLeases", fields: [producerId], references: [id])
+  agreement         StreamLeaseAgreement?
+  payments          StreamLeasePayment[]
+  plays             StreamLeasePlay[]
+}
+
+model StreamLeasePlay {
+  id            String      @id @default(cuid())
+  streamLeaseId String
+  viewerIpHash  String
+  playedAt      DateTime    @default(now())
+  streamLease   StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+model StreamLeasePayment {
+  id              String      @id @default(cuid())
+  streamLeaseId   String
+  artistId        String
+  producerId      String
+  totalAmount     Float       @default(1.00)
+  producerAmount  Float       @default(0.70)
+  platformAmount  Float       @default(0.30)
+  stripeInvoiceId String
+  paidAt          DateTime    @default(now())
+  status          String      @default("PAID")
+  failedAt        DateTime?
+  failureReason   String?
+  streamLease     StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+model BeatLeaseSettings {
+  id                  String   @id @default(cuid())
+  beatId              String   @unique
+  streamLeaseEnabled  Boolean  @default(true)
+  maxStreamLeases     Int?
+  creditFormat        String   @default("Prod. {producerName}")
+  revocationPolicy    String   @default("A")
+  contentRestrictions String[] @default([])
+  customRestriction   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  beat                Track    @relation(fields: [beatId], references: [id])
+}
+
+model ProducerLeaseSettings {
+  id                  String   @id @default(cuid())
+  producerId          String   @unique
+  streamLeaseEnabled  Boolean  @default(true)
+  creditFormat        String   @default("Prod. {producerName}")
+  revocationPolicy    String   @default("A")
+  contentRestrictions String[] @default([])
+  customRestriction   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  producer            User     @relation(fields: [producerId], references: [id])
+}
+
+model StreamLeaseAgreement {
+  id               String      @id @default(cuid())
+  streamLeaseId    String      @unique
+  agreementHtml    String
+  producerTerms    Json
+  artistAcceptedAt DateTime
+  createdAt        DateTime    @default(now())
+  streamLease      StreamLease @relation(fields: [streamLeaseId], references: [id])
+}
+
+model StreamLeaseBookmark {
+  id        String   @id @default(cuid())
+  artistId  String
+  beatId    String
+  createdAt DateTime @default(now())
+  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  beat      Track    @relation(fields: [beatId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, beatId])
+}
+
+model ProducerProfile {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  displayName              String?
+  bio                      String?
+  defaultLeasePrice        Float?
+  defaultNonExclusivePrice Float?
+  defaultExclusivePrice    Float?
+  separatePayoutEnabled    Boolean  @default(false)
+  producerStripeConnectId  String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  user                     User     @relation(fields: [userId], references: [id])
+}
+
+model LicenseDocument {
+  id            String        @id @default(cuid())
+  userId        String
+  title         String
+  fileUrl       String
+  fileType      String
+  source        LicenseSource
+  notes         String?
+  trackId       String?
+  streamLeaseId String?
+  aiJobId       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  aiJob         AIJob?        @relation(fields: [aiJobId], references: [id])
+  streamLease   StreamLease?  @relation(fields: [streamLeaseId], references: [id])
+  track         Track?        @relation(fields: [trackId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([trackId])
+  @@index([streamLeaseId])
+  @@index([aiJobId])
+}
+
+model SessionNote {
+  id               String                  @id @default(cuid())
+  bookingSessionId String
+  studioId         String
+  artistId         String
+  title            String
+  body             String
+  status           SessionNoteStatus       @default(DRAFT)
+  isShared         Boolean                 @default(false)
+  artistFeedback   String?
+  feedbackAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  artist           User                    @relation(fields: [artistId], references: [id])
+  bookingSession   BookingSession          @relation(fields: [bookingSessionId], references: [id], onDelete: Cascade)
+  studio           Studio                  @relation(fields: [studioId], references: [id])
+  attachments      SessionNoteAttachment[]
+
+  @@index([bookingSessionId])
+  @@index([studioId])
+  @@index([artistId])
+}
+
+model SessionNoteAttachment {
+  id            String      @id @default(cuid())
+  sessionNoteId String
+  fileUrl       String
+  fileName      String
+  fileSize      Int?
+  createdAt     DateTime    @default(now())
+  sessionNote   SessionNote @relation(fields: [sessionNoteId], references: [id], onDelete: Cascade)
+
+  @@index([sessionNoteId])
+}
+
+model SplitSheet {
+  id          String           @id @default(cuid())
+  trackId     String           @unique
+  createdById String
+  status      SplitSheetStatus @default(PENDING)
+  documentUrl String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  splits      Split[]
+  createdBy   User             @relation("SplitSheetCreator", fields: [createdById], references: [id])
+  track       Track            @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+}
+
+model Split {
+  id              String         @id @default(cuid())
+  splitSheetId    String
+  userId          String?
+  name            String
+  email           String
+  role            SplitRole
+  percentage      Float
+  reviewToken     String         @unique @default(cuid())
+  agreedAt        DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  ipHash          String?
+  stripeConnectId String?
+  pendingBalance  Float          @default(0)
+  totalPaid       Float          @default(0)
+  createdAt       DateTime       @default(now())
+  splitSheet      SplitSheet     @relation(fields: [splitSheetId], references: [id], onDelete: Cascade)
+  user            User?          @relation("UserSplits", fields: [userId], references: [id])
+  payments        SplitPayment[]
+
+  @@index([splitSheetId])
+  @@index([userId])
+}
+
+model SplitPayment {
+  id               String   @id @default(cuid())
+  splitId          String
+  amount           Float
+  sourceType       String
+  sourceId         String
+  stripeTransferId String?
+  paidAt           DateTime @default(now())
+  split            Split    @relation(fields: [splitId], references: [id])
+
+  @@index([splitId])
+}
+
+model ReleasePlan {
+  id          String            @id @default(cuid())
+  artistId    String
+  trackId     String?
+  releaseId   String?
+  title       String
+  releaseDate DateTime
+  status      ReleasePlanStatus @default(PLANNING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  artist      User              @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  release     ArtistRelease?    @relation(fields: [releaseId], references: [id])
+  track       Track?            @relation(fields: [trackId], references: [id])
+  tasks       ReleasePlanTask[]
+
+  @@index([artistId])
+}
+
+model ReleasePlanTask {
+  id            String          @id @default(cuid())
+  releasePlanId String
+  title         String
+  description   String?
+  category      TaskCategory
+  dueDate       DateTime
+  sortOrder     Int
+  isCompleted   Boolean         @default(false)
+  completedAt   DateTime?
+  actionType    TaskActionType?
+  actionUrl     String?
+  linkedItemId  String?
+  createdAt     DateTime        @default(now())
+  releasePlan   ReleasePlan     @relation(fields: [releasePlanId], references: [id], onDelete: Cascade)
+
+  @@index([releasePlanId])
+}
+
+model ExploreFeatureCard {
+  id             String    @id @default(cuid())
+  type           String    @default("ANNOUNCEMENT")
+  headline       String
+  description    String?
+  imageUrl       String?
+  gradient       String?
+  ctaText        String    @default("Learn More")
+  ctaUrl         String
+  isActive       Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  linkedArtistId String?
+  linkedArtist   User?     @relation("FeaturedArtist", fields: [linkedArtistId], references: [id])
+
+  @@index([isActive, sortOrder])
+}
+
+model RecentPlay {
+  id       String   @id @default(cuid())
+  userId   String
+  trackId  String
+  playedAt DateTime @default(now())
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt])
+  @@index([trackId])
+}
+
+model OnboardingEmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  emailType String
+  sentAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emailType])
+  @@index([userId])
+}
+
+model ReEngagementEmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  emailType String
+  cycleKey  String
+  sentAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emailType, cycleKey])
+  @@index([userId])
+}
+
+model PendingSignup {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  role            Role
+  signupPath      String?
+  referredByCode  String?
+  affiliateId     String?
+  promoCode       String?
+  source          String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  landingPage     String?
+  firstVisitAt    DateTime?
+  stripeSessionId String?   @unique
+  tier            String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+}
+
+model AudioFeatures {
+  id               String   @id @default(cuid())
+  trackId          String?  @unique
+  loudness         Float    @default(0.5)
+  energy           Float    @default(0.5)
+  danceability     Float    @default(0.5)
+  acousticness     Float    @default(0.5)
+  instrumentalness Float    @default(0.5)
+  speechiness      Float    @default(0.5)
+  liveness         Float    @default(0.5)
+  valence          Float    @default(0.5)
+  genre            String?
+  mood             String?
+  isVocal          Boolean  @default(true)
+  analyzedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  track            Track?   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([trackId])
+}
+
+model StemSeparation {
+  id               String   @id @default(cuid())
+  userId           String
+  originalFileUrl  String
+  originalFileName String
+  vocalsUrl        String?
+  drumsUrl         String?
+  bassUrl          String?
+  otherUrl         String?
+  status           String   @default("pending")
+  replicateId      String?
+  stripePaymentId  String?
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model SampleLog {
+  id              String   @id @default(cuid())
+  userId          String
+  trackId         String?
+  sampleSource    String
+  sampleType      String
+  isCleared       Boolean  @default(false)
+  clearanceMethod String?
+  clearanceNotes  String?
+  clearanceDocUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  track           Track?   @relation(fields: [trackId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([trackId])
+}
+
+model FanAutomation {
+  id          String   @id @default(cuid())
+  userId      String
+  triggerType String
+  isActive    Boolean  @default(true)
+  subject     String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, triggerType])
+  @@index([userId])
+}
 
 enum Role {
   ARTIST
@@ -133,7 +1841,6 @@ enum FanContactSource {
 }
 
 enum NotificationType {
-  // Legacy / existing
   FILE_DELIVERED
   PAYMENT_RECEIVED
   BOOKING_CONFIRMED
@@ -151,8 +1858,6 @@ enum NotificationType {
   RELEASE_PLAN_TASK_DUE
   RELEASE_PLAN_OVERDUE
   RELEASE_PLAN_LAUNCH_DAY
-
-  // Fan & Revenue
   FAN_SIGNUP
   MERCH_ORDER
   TIP_RECEIVED
@@ -160,37 +1865,23 @@ enum NotificationType {
   STREAM_LEASE_ACTIVATED
   STREAM_LEASE_CANCELLED
   MUSIC_SALE
-
-  // Booking & Studio
   BOOKING_REQUEST
   BOOKING_CANCELLED
   INTAKE_SUBMISSION
-
-  // Splits & Collaboration
   SPLIT_SHEET_RECEIVED
-
-  // Promo & Ambassador
   PROMO_CODE_REDEEMED
   AMBASSADOR_SIGNUP
   AMBASSADOR_CONVERSION
   AMBASSADOR_REFERRAL_CHURNED
-
-  // Release & Content
   PRE_SAVE_MILESTONE
   STREAM_LEASE_PLAY_MILESTONE
-
-  // Platform
   AI_JOB_COMPLETE
   SUBSCRIPTION_RENEWED
   SUBSCRIPTION_FAILED
   TRIAL_EXPIRING
   ACCOUNT_COMPED
-
-  // Stem Separation
   STEM_SEPARATION_COMPLETE
   STEM_SEPARATION_FAILED
-
-  // Admin
   CONTENT_FLAGGED
   NEW_USER_SIGNUP
 }
@@ -404,1572 +2095,10 @@ enum SyncStatus {
   FAILED
 }
 
-// ─── NextAuth Required Models ─────────────────────────────────────────────────
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-// ─── Business Models ──────────────────────────────────────────────────────────
-
-model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
-  emailVerified    DateTime?
-  phone            String?
-  smsOptIn         Boolean  @default(false)
-  passwordHash     String
-  role             Role     @default(ARTIST)
-  name             String
-  artistName       String?
-  bio              String?
-  photo            String?
-  instagramHandle  String?
-  tiktokHandle     String?
-  youtubeChannel   String?
-  spotifyUrl       String?
-  appleMusicUrl    String?
-  stripeCustomerId String?
-  stripeConnectId      String?
-  passwordResetToken   String?   @unique
-  passwordResetExpiry  DateTime?
-  igFollowClaimed  Boolean  @default(false)
-  referralCode         String?             @unique
-  referredById         String?
-  referredByCode       String?
-  referralRewardTier   ReferralRewardTier  @default(NONE)
-  artistSlug           String?             @unique
-  isComped         Boolean   @default(false)
-  compExpiresAt    DateTime?
-  isSuspended      Boolean   @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  lastLoginAt      DateTime?
-  city             String?
-  genres           String[]
-  soundcloudUrl    String?
-  signupPath       String?
-  onboardingStep   Int       @default(0)
-  planSelectedAt           DateTime?
-  setupCompletedAt         DateTime?
-  firstVisitAt             DateTime?
-  firstContentAt           DateTime?
-  pagePublishedAt          DateTime?
-  autoSigninToken          String?   @unique
-  autoSigninTokenExpiresAt DateTime?
-  accounts         Account[]
-  subscription     Subscription?
-  tracks           Track[]
-  sessions         BookingSession[]
-  aiGenerations    AIGeneration[]
-  merchProducts    MerchProduct[]
-  artistSite       ArtistSite?
-  deliveredFiles   DeliveredFile[]
-  studios          StudioArtist[]
-  ownedStudios     Studio[]
-  payments         Payment[]
-  notifications    Notification[]
-  receipts         Receipt[]
-  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id])
-  referrals        User[]           @relation("Referrals")
-  producedPreviews   BeatPreview[]      @relation("ProducerPreviews")
-  receivedPreviews   BeatPreview[]      @relation("ArtistPreviews")
-  producerLicenses   BeatLicense[]      @relation("ProducerLicenses")
-  artistLicenses     BeatLicense[]      @relation("ArtistLicenses")
-  youtubeReferences  YoutubeReference[]
-  preSaveCampaigns   PreSaveCampaign[]
-  artistVideos       ArtistVideo[]
-  youtubeSync        YouTubeSync?
-  artistShows        ArtistShow[]
-  showInterests      ShowInterest[]
-  artistSupports          ArtistSupport[]
-  fanContacts             FanContact[]
-  fanScores               FanScore[]
-  broadcastLogs           BroadcastLog[]
-  artistBookingInquiries  ArtistBookingInquiry[]
-  artistPageViews         PageView[]         @relation("ArtistPageViews")
-  artistTrackPlays        TrackPlay[]        @relation("ArtistTrackPlays")
-  artistLinkClicks        LinkClick[]        @relation("ArtistLinkClicks")
-  referralsGiven     Referral[]         @relation("ReferrerReferrals")
-  referralReceived   Referral?          @relation("ReferredReferrals")
-  affiliate          Affiliate?
-  affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
-  attribution        UserAttribution?
-  artistReleases     ArtistRelease[]
-  artistPhotos       ArtistPhoto[]
-  artistTestimonials ArtistTestimonial[]
-  artistCollaborators ArtistCollaborator[]
-  artistPressItems   ArtistPressItem[]
-  promoRedemptions     PromoRedemption[]
-  ambassador           Ambassador?
-  artistStreamLeases    StreamLease[]          @relation("ArtistStreamLeases")
-  producerStreamLeases  StreamLease[]          @relation("ProducerStreamLeases")
-  producerLeaseSettings ProducerLeaseSettings?
-  streamLeaseBookmarks  StreamLeaseBookmark[]
-  producerProfile       ProducerProfile?
-  licenseDocuments      LicenseDocument[]
-  artistSessionNotes    SessionNote[]
-  splitSheetsCreated    SplitSheet[]      @relation("SplitSheetCreator")
-  splits                Split[]           @relation("UserSplits")
-  releasePlans          ReleasePlan[]
-  recentPlays           RecentPlay[]
-  featuredCards         ExploreFeatureCard[] @relation("FeaturedArtist")
-  onboardingEmails      OnboardingEmailLog[]
-  reEngagementEmails    ReEngagementEmailLog[]
-  stemSeparations       StemSeparation[]
-  sampleLogs            SampleLog[]
-  fanAutomations        FanAutomation[]
-}
-
-model Studio {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  address      String?
-  phone        String?
-  email        String?
-  description  String?
-  hours        String?
-  streetAddress        String?
-  city                 String?
-  state                String?
-  zipCode              String?
-  instagram            String?
-  tiktok               String?
-  youtube              String?
-  facebook             String?
-  cashAppHandle        String?
-  zelleHandle          String?
-  paypalHandle         String?
-  venmoHandle          String?
-  stripePaymentsEnabled Boolean @default(false)
-  photos       String[]
-  logo         String?
-  heroImage    String?
-  tagline      String?
-  services     String[]
-  servicesJson String?
-  testimonials String?
-  twitter      String?
-  isEnterprise Boolean  @default(false)
-  studioTier    StudioTier     @default(PRO)
-  template      StudioTemplate @default(CLASSIC)
-  accentColor   String?
-  customDomain  String?
-  isPublished   Boolean        @default(false)
-  bio           String?
-  logoUrl       String?
-  galleryImages Json?
-  studioHours   Json?
-  hoursNote     String?
-  socialLinks   Json?
-  paymentMethods Json?
-  featuredArtists Json?
-  pageConfig               Json?
-  tierOverride             String?
-  moderationStatus         ModerationStatus @default(CLEAN)
-  moderationReason         String?
-  moderationScannedAt      DateTime?
-  onboardingCompleted      Boolean   @default(false)
-  generationsUsedThisMonth Int       @default(0)
-  generationResetDate      DateTime?
-  referralCredits          Float     @default(0)
-  referralCreditHistory    Json?
-  emailSequenceEnabled     Boolean   @default(false)
-  averageSessionRate       Float     @default(150)
-  ownerId      String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  owner              User              @relation(fields: [ownerId], references: [id])
-  artists            StudioArtist[]
-  sessions           BookingSession[]
-  deliveredFiles     DeliveredFile[]
-  emailCampaigns     EmailCampaign[]
-  contacts           Contact[]
-  intakeLinks        IntakeLink[]
-  intakeSubmissions  IntakeSubmission[]
-  quickSends         QuickSend[]
-  activityLog        ActivityLog[]
-  invoices           Invoice[]
-  contactSubmissions ContactSubmission[]
-  generationLogs     GenerationLog[]
-  pageViews          PageView[]
-  scheduledEmails    ScheduledEmail[]
-  portfolioTracks    StudioPortfolioTrack[]
-  credits            StudioCredit[]
-  engineers          StudioEngineer[]
-  equipment          StudioEquipment[]
-  sessionNotes       SessionNote[]
-}
-
-model StudioArtist {
-  id       String   @id @default(cuid())
-  studioId String
-  artistId String
-  joinedAt DateTime @default(now())
-
-  studio   Studio   @relation(fields: [studioId], references: [id])
-  artist   User     @relation(fields: [artistId], references: [id])
-
-  @@unique([studioId, artistId])
-}
-
-model Subscription {
-  id                     String             @id @default(cuid())
-  userId                 String             @unique
-  tier                   SubscriptionTier
-  status                 SubscriptionStatus @default(ACTIVE)
-  stripeSubscriptionId   String?
-  currentPeriodStart     DateTime
-  currentPeriodEnd       DateTime
-  aiVideoCreditsUsed     Int                @default(0)
-  aiVideoCreditsLimit    Int
-  aiArtCreditsUsed       Int                @default(0)
-  aiArtCreditsLimit      Int
-  aiMasterCreditsUsed    Int                @default(0)
-  aiMasterCreditsLimit   Int
-  lyricVideoCreditsUsed  Int                @default(0)
-  lyricVideoCreditsLimit Int
-  aarReportCreditsUsed   Int                @default(0)
-  aarReportCreditsLimit  Int
-  pressKitCreditsUsed    Int                @default(0)
-  pressKitCreditsLimit   Int                @default(0)
-  smsBroadcastsUsed      Int                @default(0)
-  cancelReason           String?
-  canceledAt             DateTime?
-  streamLeaseGraceUntil  DateTime?          // set when invoice.payment_failed; cleared on invoice.paid
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
-
-  user                   User               @relation(fields: [userId], references: [id])
-}
-
-// Named BookingSession to avoid conflict with NextAuth's Session model
-model BookingSession {
-  id            String        @id @default(cuid())
-  studioId      String
-  artistId      String?
-  contactId     String?
-  dateTime      DateTime
-  duration      Int?
-  sessionType   String?
-  status        SessionStatus @default(PENDING)
-  paymentStatus PaymentStatus @default(UNPAID)
-  paymentMethod PaymentMethod?
-  intakeData    Json?
-  notes         String?
-  engineerNotes String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  studio         Studio          @relation(fields: [studioId], references: [id])
-  artist         User?           @relation(fields: [artistId], references: [id])
-  contact        Contact?        @relation(fields: [contactId], references: [id])
-  deliveredFiles DeliveredFile[]
-  sessionNotes   SessionNote[]
-}
-
-model Track {
-  id          String      @id @default(cuid())
-  artistId    String
-  title       String
-  description String?
-  fileUrl     String
-  coverArtUrl String?
-  price       Float?
-  status      TrackStatus @default(DRAFT)
-  plays       Int         @default(0)
-  downloads   Int         @default(0)
-  earnings    Float       @default(0)
-  projectName String?
-  releaseId   String?
-  bpm         Int?
-  musicalKey  String?
-  audioHash         String?  // SHA-256 of the beat file — for duplicate detection
-  totalLicenses     Int      @default(0)  // count of all license sales
-  totalStreamLeases Int      @default(0)  // count of active stream leases
-  totalPlays        Int      @default(0)  // sum of plays across all stream-leased tracks
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  artist           User               @relation(fields: [artistId], references: [id])
-  release          ArtistRelease?     @relation(fields: [releaseId], references: [id], onDelete: SetNull)
-  beatPreviews     BeatPreview[]
-  beatLicenses     BeatLicense[]
-  trackPlays       TrackPlay[]
-  streamLeases          StreamLease[]
-  beatLeaseSettings     BeatLeaseSettings?
-  streamLeaseBookmarks  StreamLeaseBookmark[]
-  licenseDocuments      LicenseDocument[]
-  splitSheet            SplitSheet?
-  releasePlans          ReleasePlan[]
-  genre                 String?
-  recentPlays           RecentPlay[]
-  videoTrackLinks       ArtistVideo[]  @relation("VideoTrackLink")
-  videoBeatLinks        ArtistVideo[]  @relation("VideoBeatLink")
-  audioFeatures         AudioFeatures?
-  sampleLogs            SampleLog[]
-}
-
-model DeliveredFile {
-  id               String         @id @default(cuid())
-  sessionId        String?
-  artistId         String
-  studioId         String
-  contactId        String?
-  fileUrl          String
-  fileName         String
-  notes            String?
-  notificationSent Boolean        @default(false)
-  deliveredAt      DateTime       @default(now())
-
-  session          BookingSession? @relation(fields: [sessionId], references: [id])
-  artist           User            @relation(fields: [artistId], references: [id])
-  studio           Studio          @relation(fields: [studioId], references: [id])
-  contact          Contact?        @relation(fields: [contactId], references: [id])
-}
-
-model MerchProduct {
-  id           String      @id @default(cuid())
-  artistId     String
-  title        String
-  description  String?
-  imageUrl     String
-  basePrice    Float
-  artistMarkup Float
-  productType  ProductType
-  variants     Json?
-  isActive     Boolean     @default(true)
-  printfulId   String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  artist          User          @relation(fields: [artistId], references: [id])
-  orders          MerchOrder[]
-  videoMerchLinks ArtistVideo[] @relation("VideoMerchLink")
-}
-
-model MerchOrder {
-  id                String            @id @default(cuid())
-  merchProductId    String
-  artistId          String
-  buyerEmail        String
-  quantity          Int
-  totalPrice        Float
-  platformCut       Float
-  artistEarnings    Float
-  fulfillmentStatus FulfillmentStatus @default(PENDING)
-  trackingNumber    String?
-  stripePaymentId   String?
-  createdAt         DateTime          @default(now())
-
-  merchProduct      MerchProduct      @relation(fields: [merchProductId], references: [id])
-}
-
-model AIGeneration {
-  id         String             @id @default(cuid())
-  artistId   String
-  type       AIGenerationType
-  inputData  Json?
-  outputData Json?
-  outputUrl  String?
-  creditUsed Boolean            @default(false)
-  paymentId  String?
-  status     AIGenerationStatus @default(QUEUED)
-  createdAt  DateTime           @default(now())
-
-  artist     User               @relation(fields: [artistId], references: [id])
-}
-
-model ArtistSite {
-  id                String             @id @default(cuid())
-  artistId          String             @unique
-  template          ArtistSiteTemplate @default(TEMPLATE_1)
-  colorScheme       Json?
-  heroImage         String?
-  bioContent        String?
-  showMusic         Boolean            @default(true)
-  showVideos        Boolean            @default(true)
-  showMerch         Boolean            @default(true)
-  showContact       Boolean            @default(false)
-  followGateEnabled Boolean            @default(false)
-  pwywEnabled       Boolean            @default(false)
-  credentials       String[]
-  bookingRate       Float?
-  customDomain      String?
-  isPublished       Boolean            @default(false)
-  draftMode         Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  pinnedMessage         String?
-  pinnedActionText      String?
-  pinnedActionUrl       String?
-  activityTickerEnabled Boolean            @default(false)
-
-  genre                 String?
-  role                  String?
-  city                  String?
-  soundcloudUrl         String?
-
-  artist            User               @relation(fields: [artistId], references: [id])
-}
-
-model YoutubeReference {
-  id           String   @id @default(cuid())
-  artistId     String
-  url          String
-  videoId      String
-  title        String
-  thumbnailUrl String
-  authorName   String?
-  projectTag   String?
-  folder       String?
-  createdAt    DateTime @default(now())
-
-  artist  User @relation(fields: [artistId], references: [id], onDelete: Cascade)
-}
-
-model Payment {
-  id              String   @id @default(cuid())
-  userId          String
-  type            String
-  amount          Float
-  method          String?
-  status          String
-  stripePaymentId String?
-  metadata        Json?
-  createdAt       DateTime @default(now())
-
-  user            User     @relation(fields: [userId], references: [id])
-}
-
-model EmailCampaign {
-  id              String    @id @default(cuid())
-  studioId        String
-  subject         String
-  body            String
-  recipientFilter Json?
-  recipientCount  Int       @default(0)
-  openCount       Int       @default(0)
-  sentAt          DateTime?
-  createdAt       DateTime  @default(now())
-  attachmentUrls  String[]
-
-  studio          Studio    @relation(fields: [studioId], references: [id])
-}
-
-// ─── Notification Center ──────────────────────────────────────────────────────
-
-model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  type      NotificationType
-  title     String
-  message   String
-  isRead    Boolean          @default(false)
-  link      String?
-  createdAt DateTime         @default(now())
-
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ─── Studio CRM ───────────────────────────────────────────────────────────────
-
-model Contact {
-  id              String        @id @default(cuid())
-  studioId        String
-  name            String
-  firstName       String?
-  lastName        String?
-  email           String?
-  phone           String?
-  photoUrl        String?
-  instagramHandle String?
-  genre           String?
-  notes           String?
-  source               ContactSource @default(MANUAL)
-  tags                 String[]      @default([])
-  totalSpent           Float         @default(0)
-  lastSessionDate      DateTime?
-  referredToIndieThis  Boolean       @default(false)
-  convertedToBooking   Boolean       @default(false)
-  convertedAt          DateTime?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-
-  studio             Studio            @relation(fields: [studioId], references: [id])
-  sessions           BookingSession[]
-  deliveredFiles     DeliveredFile[]
-  intakeSubmissions  IntakeSubmission[]
-  activityLog        ActivityLog[]
-  invoices           Invoice[]
-}
-
-model ActivityLog {
-  id          String          @id @default(cuid())
-  contactId   String
-  studioId    String
-  type        ActivityLogType
-  description String
-  metadata    Json?
-  createdAt   DateTime        @default(now())
-
-  contact     Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  studio      Studio          @relation(fields: [studioId], references: [id])
-}
-
-// ─── Intake Form Links ────────────────────────────────────────────────────────
-
-model IntakeLink {
-  id        String    @id @default(cuid())
-  studioId  String
-  contactId String?
-  token       String    @unique
-  name        String?
-  email       String?
-  phone       String?
-  sessionDate  DateTime?
-  sessionTime  String?
-  endTime      String?
-  hourlyRate   Float?
-  sessionHours Float?
-  expiresAt    DateTime
-  usedAt       DateTime?
-  createdAt    DateTime  @default(now())
-
-  studio     Studio           @relation(fields: [studioId], references: [id])
-  submission IntakeSubmission?
-}
-
-model IntakeSubmission {
-  id                    String   @id @default(cuid())
-  intakeLinkId          String   @unique
-  studioId              String
-  contactId             String?
-  artistName            String
-  genre                 String?
-  projectDesc           String?
-  youtubeLinks          String[]
-  fileUrls              String[]
-  photoUrl              String?
-  notes                 String?
-  bpmDetected           Int?
-  keyDetected           String?
-  instagram             String?
-  tiktok                String?
-  youtubeHandle         String?
-  paymentMethod         String?
-  depositPaid           Boolean  @default(false)
-  depositAmount         Float?
-  aiVideoRequested      Boolean  @default(false)
-  convertedToBookingId  String?
-  status                String   @default("PENDING") // PENDING | CONFIRMED | COMPLETED | CANCELLED
-  createdAt             DateTime @default(now())
-
-  intakeLink  IntakeLink @relation(fields: [intakeLinkId], references: [id])
-  studio      Studio     @relation(fields: [studioId], references: [id])
-  contact     Contact?   @relation(fields: [contactId], references: [id])
-}
-
-// ─── Quick Send (WeTransfer-style) ────────────────────────────────────────────
-
-model QuickSend {
-  id             String    @id @default(cuid())
-  studioId       String
-  contactId      String?
-  senderName     String
-  recipientEmail String
-  recipientPhone String?
-  fileUrls       String[]
-  message        String?
-  token                String    @unique
-  expiresAt            DateTime
-  downloadedAt         DateTime?
-  sendFollowUpSequence Boolean   @default(false)
-  createdAt            DateTime  @default(now())
-
-  studio   Studio   @relation(fields: [studioId], references: [id])
-}
-
-// ─── Beat Preview + Licensing ─────────────────────────────────────────────────
-
-model BeatPreview {
-  id             String            @id @default(cuid())
-  producerId     String
-  artistId       String?
-  trackId        String
-  expiresAt      DateTime
-  isDownloadable Boolean           @default(false)
-  status         BeatPreviewStatus @default(PENDING)
-  createdAt      DateTime          @default(now())
-
-  producer      User          @relation("ProducerPreviews", fields: [producerId], references: [id])
-  artist        User?         @relation("ArtistPreviews", fields: [artistId], references: [id])
-  track         Track         @relation(fields: [trackId], references: [id])
-  licenses      BeatLicense[]
-}
-
-model BeatLicense {
-  id            String      @id @default(cuid())
-  beatPreviewId String
-  trackId       String
-  producerId    String
-  artistId      String
-  licenseType   LicenseType
-  customTerms   String?
-  price         Float
-  status        String      @default("ACTIVE")
-  pdfUrl        String?
-  createdAt     DateTime    @default(now())
-
-  beatPreview BeatPreview @relation(fields: [beatPreviewId], references: [id])
-  track       Track       @relation(fields: [trackId], references: [id])
-  producer    User        @relation("ProducerLicenses", fields: [producerId], references: [id])
-  artist      User        @relation("ArtistLicenses", fields: [artistId], references: [id])
-}
-
-// ─── Receipts ──────────────────────────────────────────────────────────────────
-
-model Receipt {
-  id              String      @id @default(cuid())
-  userId          String
-  type            ReceiptType
-  description     String
-  amount          Float
-  paymentMethod   String?
-  stripePaymentId String?
-  pdfUrl          String?
-  createdAt       DateTime    @default(now())
-
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ─── Studio Invoices ───────────────────────────────────────────────────────────
-
-model Invoice {
-  id             String        @id @default(cuid())
-  studioId       String
-  contactId      String
-  invoiceNumber  Int
-  lineItems      Json
-  subtotal       Float
-  tax            Float         @default(0)
-  taxRate        Float         @default(0)
-  total          Float
-  dueDate        DateTime
-  status         InvoiceStatus @default(DRAFT)
-  paymentMethod  String?
-  paidAt         DateTime?
-  remindersSent  Int           @default(0)
-  notes          String?
-  pdfUrl         String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  studio   Studio   @relation(fields: [studioId], references: [id])
-  contact  Contact  @relation(fields: [contactId], references: [id])
-
-  @@unique([studioId, invoiceNumber])
-}
-
-// ─── Studio Public Page Contact Submissions ───────────────────────────────────
-
-model ContactSubmission {
-  id        String   @id @default(cuid())
-  studioId  String
-  name      String
-  email     String
-  phone     String?
-  message   String
-  source    String   @default("PUBLIC_PAGE")
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
-}
-
-model GenerationLog {
-  id             String         @id @default(cuid())
-  studioId       String
-  template       StudioTemplate
-  configSnapshot Json
-  createdAt      DateTime       @default(now())
-  wasPaid        Boolean        @default(false)
-
-  studio         Studio         @relation(fields: [studioId], references: [id], onDelete: Cascade)
-}
-
-// ─── Page View Tracking ───────────────────────────────────────────────────────
-
-model PageView {
-  id       String   @id @default(cuid())
-  studioId String?
-  artistId String?
-  viewedAt DateTime @default(now())
-  ipHash   String
-  referrer String?  // "qr" when fan arrives via QR code scan
-
-  studio   Studio?  @relation(fields: [studioId], references: [id], onDelete: Cascade)
-  artist   User?    @relation("ArtistPageViews", fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-  @@index([studioId, viewedAt])
-  @@index([studioId, ipHash, viewedAt])
-  @@index([artistId])
-  @@index([artistId, viewedAt])
-  @@index([artistId, ipHash, viewedAt])
-  @@index([artistId, referrer])
-}
-
-// ─── Artist Track Plays ───────────────────────────────────────────────────────
-
-model TrackPlay {
-  id       String   @id @default(cuid())
-  trackId  String
-  artistId String
-  ipHash   String
-  playedAt DateTime @default(now())
-
-  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  artist   User     @relation("ArtistTrackPlays", fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-  @@index([trackId])
-  @@index([artistId, playedAt])
-  @@index([trackId, ipHash, playedAt])
-}
-
-// ─── Artist Link Clicks ───────────────────────────────────────────────────────
-
-model LinkClick {
-  id        String   @id @default(cuid())
-  artistId  String
-  platform  String
-  trackId   String?
-  clickedAt DateTime @default(now())
-
-  artist    User     @relation("ArtistLinkClicks", fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-  @@index([artistId, platform])
-  @@index([artistId, clickedAt])
-}
-
-// ─── AI Feedback & Learning Models ───────────────────────────────────────────
-
-model GenerationFeedback {
-  id              String   @id @default(cuid())
-  pageType        PageType
-  ownerId         String
-  generationLogId String?
-  sectionType     String
-  fieldChanged    String
-  aiOriginalValue String   @db.Text
-  userEditedValue String   @db.Text
-  createdAt       DateTime @default(now())
-
-  @@index([ownerId])
-  @@index([fieldChanged])
-  @@index([sectionType])
-}
-
-model AIInsightsLog {
-  id          String      @id @default(cuid())
-  insightType InsightType
-  referenceId String?
-  input       String      @db.Text
-  output      String      @db.Text
-  actionTaken String?
-  accuracy    Boolean?
-  createdAt   DateTime    @default(now())
-
-  @@index([insightType])
-  @@index([referenceId])
-}
-
-// ─── Unified AI Job Queue ──────────────────────────────────────────────────────
-
-model AIJob {
-  id              String       @id @default(cuid())
-  type            AIJobType
-  status          AIJobStatus  @default(QUEUED)
-  triggeredBy     AIJobTrigger
-  triggeredById   String
-  artistId        String?
-  studioId        String?
-  inputData       Json?
-  outputData      Json?
-  provider        String
-  costToUs        Float?
-  priceCharged    Float?
-  errorMessage    String?
-  createdAt       DateTime     @default(now())
-  completedAt     DateTime?
-
-  licenseDocuments LicenseDocument[]
-
-  @@index([triggeredById])
-  @@index([artistId])
-  @@index([studioId])
-  @@index([status])
-  @@index([type])
-}
-
-// ─── Email Sequence Scheduler ─────────────────────────────────────────────────
-
-model ScheduledEmail {
-  id           String               @id @default(cuid())
-  studioId     String
-  contactId    String?
-  contactEmail String
-  quickSendId  String?
-  sequenceStep SequenceStep
-  subject      String               @default("")
-  body         String               @default("")
-  scheduledFor DateTime
-  status       ScheduledEmailStatus @default(PENDING)
-  sentAt       DateTime?
-  errorMessage String?
-  createdAt    DateTime             @default(now())
-
-  studio       Studio               @relation(fields: [studioId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-  @@index([status, scheduledFor])
-  @@index([quickSendId])
-}
-
-// ─── Referral Tracking ────────────────────────────────────────────────────────
-
-model Referral {
-  id              String    @id @default(cuid())
-  referrerUserId  String
-  referredUserId  String    @unique          // a user can only be referred once
-  isActive        Boolean   @default(false)  // true while referred user has active subscription
-  activatedAt     DateTime?                  // when isActive first became true
-  deactivatedAt   DateTime?                  // when isActive last became false (churn)
-  createdAt       DateTime  @default(now())
-
-  referrer        User      @relation("ReferrerReferrals", fields: [referrerUserId], references: [id])
-  referred        User      @relation("ReferredReferrals", fields: [referredUserId],  references: [id])
-
-  @@index([referrerUserId])
-  @@index([isActive])
-}
-
-// ─── Affiliate Program ────────────────────────────────────────────────────────
-
-model Affiliate {
-  id                        String          @id @default(cuid())
-  /// Linked account — nullable so non-account applicants can apply; set on approval or on account creation
-  userId                    String?         @unique
-  /// Applicant identity captured from the form (for pre-account applicants)
-  applicantName             String
-  applicantEmail            String
-  status                    AffiliateStatus @default(PENDING)
-  /// Landing page URL: indiethis.com/go/[customSlug] — generated at approval
-  customSlug                String?         @unique
-  /// Discount code their audience uses at signup (10% off first 3 months) — generated at approval
-  discountCode              String?         @unique
-  commissionRate            Float           @default(0.20)
-  commissionDurationMonths  Int             @default(12)
-  totalEarned               Float           @default(0)
-  pendingPayout             Float           @default(0)
-  /// Stripe Connect account for commission payouts
-  stripeConnectAccountId    String?
-  /// Raw application form data: socialLinks, audienceSize, creatorType, promotionPlan
-  applicationData           Json?
-  /// Payout history: Array<{ amount: number, date: string, stripeTransferId: string, status: 'paid' }>
-  payoutHistory             Json?
-  appliedAt                 DateTime        @default(now())
-  approvedAt                DateTime?
-  createdAt                 DateTime        @default(now())
-
-  user      User?               @relation(fields: [userId], references: [id])
-  referrals AffiliateReferral[]
-
-  @@index([status])
-  @@index([applicantEmail])
-}
-
-model AffiliateReferral {
-  id                   String    @id @default(cuid())
-  affiliateId          String
-  referredUserId       String    @unique   // a user can only be referred by one affiliate
-  /// Snapshot of commissionRate at time of referral (locked in)
-  commissionRate       Float
-  /// Months of commission remaining; decrements each billing cycle
-  monthsRemaining      Int       @default(12)
-  totalCommissionPaid  Float     @default(0)
-  /// true while the referred user has an active paid subscription
-  isActive             Boolean   @default(false)
-  createdAt            DateTime  @default(now())
-
-  affiliate    Affiliate @relation(fields: [affiliateId], references: [id])
-  referredUser User      @relation("AffiliateReferredUser", fields: [referredUserId], references: [id])
-
-  @@index([affiliateId])
-  @@index([isActive])
-}
-
-// ─── Attribution Tracking ─────────────────────────────────────────────────────
-
-model UserAttribution {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-
-  /// Platform referral code (?ref=)
-  ref           String?
-  /// Affiliate ID (?affiliate=)
-  affiliateId   String?
-  /// Acquisition channel: file_delivery | studio_page | artist_page | social | direct | ad
-  source        String?
-  /// UTM parameters
-  utmSource     String?
-  utmMedium     String?
-  utmCampaign   String?
-  /// First URL the user hit before signing up (populated by client)
-  landingPage   String?
-
-  createdAt     DateTime @default(now())
-
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([affiliateId])
-  @@index([source])
-  @@index([utmSource])
-  @@index([utmCampaign])
-}
-
-// ─── Pre-Save Campaigns ───────────────────────────────────────────────────────
-
-model PreSaveCampaign {
-  id            String          @id @default(cuid())
-  artistId      String
-  title         String
-  artUrl        String?
-  releaseDate   DateTime
-  spotifyUrl    String?
-  appleMusicUrl String?
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  artist        User            @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  clicks        PreSaveClick[]
-
-  @@index([artistId])
-}
-
-// ─── Pre-save click tracking ──────────────────────────────────────────────────
-
-model PreSaveClick {
-  id         String          @id @default(cuid())
-  campaignId String
-  platform   PreSavePlatform
-  clickedAt  DateTime        @default(now())
-
-  campaign   PreSaveCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-
-  @@index([campaignId])
-  @@index([campaignId, platform])
-}
-
 enum PreSavePlatform {
   SPOTIFY
   APPLE_MUSIC
 }
-
-// ─── Artist Videos ────────────────────────────────────────────────────────────
-
-model ArtistVideo {
-  id              String         @id @default(cuid())
-  artistId        String
-  title           String
-  description     String?
-  videoUrl        String?
-  thumbnailUrl    String?
-  embedUrl        String?
-  type            VideoType      @default(UPLOAD)
-  category        VideoCategory?
-  duration        Int?
-  sortOrder       Int            @default(0)
-  isPublished     Boolean        @default(true)
-  syncedFromYouTube Boolean       @default(false)
-  youtubeVideoId  String?        @unique // YouTube video ID (for deduplication)
-  linkedTrackId   String?
-  linkedBeatId    String?
-  linkedMerchId   String?
-  createdAt       DateTime       @default(now())
-  artist          User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  linkedTrack     Track?         @relation("VideoTrackLink", fields: [linkedTrackId], references: [id], onDelete: SetNull)
-  linkedBeat      Track?         @relation("VideoBeatLink",  fields: [linkedBeatId],  references: [id], onDelete: SetNull)
-  linkedMerch     MerchProduct?  @relation("VideoMerchLink", fields: [linkedMerchId], references: [id], onDelete: SetNull)
-}
-
-// ─── YouTube Sync ─────────────────────────────────────────────────────────────
-
-model YouTubeSync {
-  id            String     @id @default(cuid())
-  userId        String     @unique
-  channelId     String
-  channelUrl    String
-  channelName   String?
-  channelAvatar String?
-  lastSyncedAt  DateTime?
-  nextSyncAt    DateTime?
-  syncStatus    SyncStatus @default(PENDING)
-  totalVideos   Int        @default(0)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ─── Shows & Events ───────────────────────────────────────────────────────────
-
-model ArtistShow {
-  id        String         @id @default(cuid())
-  artistId  String
-  venueName String
-  city      String
-  date      DateTime
-  ticketUrl String?
-  isSoldOut Boolean        @default(false)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-
-  artist    User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  waitlist  ShowWaitlist[]
-
-  @@index([artistId])
-}
-
-model ShowWaitlist {
-  id        String     @id @default(cuid())
-  showId    String
-  email     String
-  createdAt DateTime   @default(now())
-
-  show      ArtistShow @relation(fields: [showId], references: [id], onDelete: Cascade)
-
-  @@unique([showId, email])
-  @@index([showId])
-}
-
-model ShowInterest {
-  id        String   @id @default(cuid())
-  artistId  String
-  email     String
-  createdAt DateTime @default(now())
-
-  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([artistId, email])
-  @@index([artistId])
-}
-
-// ─── Artist Support (Pay-What-You-Want Tips) ──────────────────────────────────
-
-model ArtistSupport {
-  id               String   @id @default(cuid())
-  artistId         String
-  supporterEmail   String
-  amount           Float                    // in dollars
-  message          String?
-  stripePaymentId  String?
-  createdAt        DateTime @default(now())
-
-  artist           User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-  @@index([artistId, supporterEmail])
-}
-
-// ─── Fan Contacts (artist page email/SMS capture) ─────────────────────────────
-
-model FanContact {
-  id        String          @id @default(cuid())
-  artistId  String
-  email     String
-  phone     String?
-  zip       String?
-  source    FanContactSource
-  createdAt DateTime        @default(now())
-
-  artist    User            @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([artistId, email, source])
-  @@index([artistId])
-  @@index([artistId, source])
-}
-
-// ─── Fan Score (cached spend ranking per artist) ─────────────────────────────
-// Recomputed on every MERCH and SUPPORT_TIP webhook event.
-// Also rebuilt on demand via POST /api/dashboard/fan-scores/refresh.
-
-model FanScore {
-  id          String    @id @default(cuid())
-  artistId    String
-  email       String
-  totalSpend  Float     @default(0)
-  merchSpend  Float     @default(0)
-  tipSpend    Float     @default(0)
-  orderCount  Int       @default(0)
-  tipCount    Int       @default(0)
-  lastSpentAt DateTime?
-  updatedAt   DateTime  @updatedAt
-
-  artist      User      @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([artistId, email])
-  @@index([artistId])
-  @@index([artistId, totalSpend])
-}
-
-// ─── SMS Broadcast Log ────────────────────────────────────────────────────────
-
-model BroadcastLog {
-  id             String   @id @default(cuid())
-  artistId       String
-  message        String   @db.Text
-  segment        String   // e.g. "ALL" | "RELEASE_NOTIFY" | "SHOW_NOTIFY" | "TOP_SPENDERS" | "MERCH_BUYERS" | "ZIP:90210"
-  recipientCount Int
-  successCount   Int      @default(0)
-  sentAt         DateTime @default(now())
-
-  artist         User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-  @@index([artistId, sentAt])
-}
-
-// ─── Artist Booking Inquiries (public contact form) ──────────────────────────
-
-model ArtistBookingInquiry {
-  id          String   @id @default(cuid())
-  artistId    String
-  name        String
-  email       String
-  inquiryType String   // "Booking" | "Feature" | "Press" | "Management" | "Other"
-  message     String
-  createdAt   DateTime @default(now())
-
-  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-}
-
-// ─── Admin Accounts ───────────────────────────────────────────────────────────
-
-model AdminAccount {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         AdminRole @default(SUPPORT_ADMIN)
-  /// ID of the admin who created this account (null for the bootstrap super-admin)
-  createdBy    String?
-  isActive           Boolean   @default(true)
-  mustChangePassword Boolean   @default(true)
-  lastLoginAt        DateTime?
-  createdAt          DateTime  @default(now())
-
-  @@index([email])
-  @@index([role])
-}
-
-// ─── Artist Website Extensions ────────────────────────────────────────────────
-
-model ArtistRelease {
-  id          String      @id @default(cuid())
-  artistId    String
-  title       String
-  coverUrl    String?
-  releaseDate DateTime?
-  type        ReleaseType @default(SINGLE)
-  sortOrder   Int         @default(0)
-  createdAt   DateTime    @default(now())
-
-  artist       User        @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  tracks       Track[]
-  releasePlans ReleasePlan[]
-
-  @@index([artistId])
-}
-
-model ArtistPhoto {
-  id        String   @id @default(cuid())
-  artistId  String
-  imageUrl  String
-  caption   String?
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-}
-
-model ArtistTestimonial {
-  id          String   @id @default(cuid())
-  artistId    String
-  quote       String
-  attribution String
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-
-  artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-}
-
-model ArtistCollaborator {
-  id         String   @id @default(cuid())
-  artistId   String
-  name       String
-  photoUrl   String?
-  artistSlug String?
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  artist     User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-}
-
-model ArtistPressItem {
-  id        String   @id @default(cuid())
-  artistId  String
-  source    String
-  title     String
-  url       String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId])
-}
-
-// ─── Studio Portfolio Tracks ──────────────────────────────────────────────────
-
-model StudioPortfolioTrack {
-  id          String   @id @default(cuid())
-  studioId    String
-  title       String
-  artistName  String
-  audioUrl    String
-  coverUrl    String?
-  description String?
-  artistSlug  String?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-
-  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-}
-
-// ─── Studio Credits ───────────────────────────────────────────────────────────
-
-model StudioCredit {
-  id             String   @id @default(cuid())
-  studioId       String
-  artistName     String
-  artistPhotoUrl String?
-  projectName    String?
-  artistSlug     String?
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-
-  studio         Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-}
-
-// ─── Studio Engineers ─────────────────────────────────────────────────────────
-
-model StudioEngineer {
-  id          String   @id @default(cuid())
-  studioId    String
-  name        String
-  role        String
-  photoUrl    String?
-  specialties String[]
-  bio         String?
-  artistSlug  String?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-
-  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-}
-
-// ─── Studio Equipment ─────────────────────────────────────────────────────────
-
-model StudioEquipment {
-  id        String            @id @default(cuid())
-  studioId  String
-  category  EquipmentCategory @default(OTHER)
-  name      String
-  sortOrder Int               @default(0)
-  createdAt DateTime          @default(now())
-
-  studio    Studio            @relation(fields: [studioId], references: [id], onDelete: Cascade)
-
-  @@index([studioId])
-}
-
-// ─── Promo Codes & Ambassadors ────────────────────────────────────────────────
-
-model PromoCode {
-  id                  String          @id @default(cuid())
-  code                String          @unique
-  type                PromoCodeType
-  tier                SubscriptionTier?
-  value               Float?
-  durationDays        Int?
-  durationMonths      Int?
-  maxRedemptions      Int             @default(1)
-  currentRedemptions  Int             @default(0)
-  expiresAt           DateTime?
-  isActive            Boolean         @default(true)
-  notes               String?
-  metadata            Json?           // AI_BUNDLE per-tool breakdown: {"art":10,"master":5,...}
-  ambassadorId        String?
-  ambassador          Ambassador?     @relation(fields: [ambassadorId], references: [id])
-  redemptions         PromoRedemption[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-
-  @@index([ambassadorId])
-  @@index([code])
-}
-
-model PromoRedemption {
-  id              String           @id @default(cuid())
-  promoCodeId     String
-  promoCode       PromoCode        @relation(fields: [promoCodeId], references: [id])
-  userId          String
-  user            User             @relation(fields: [userId], references: [id])
-  redeemedAt      DateTime         @default(now())
-  convertedAt     DateTime?
-  convertedTier   SubscriptionTier?
-  upgradedAt      DateTime?
-  upgradedToTier  SubscriptionTier?
-  status          RedemptionStatus @default(ACTIVE)
-  expiresAt       DateTime?
-  graceUntil      DateTime?
-  warningSentAt   DateTime?
-
-  @@index([userId])
-  @@index([promoCodeId])
-  @@index([status, expiresAt])
-}
-
-model Ambassador {
-  id                   String           @id @default(cuid())
-  userId               String?          @unique
-  user                 User?            @relation(fields: [userId], references: [id])
-  name                 String
-  email                String
-  tier                 AmbassadorTier   @default(STANDARD)
-  rewardType           RewardType       @default(FLAT_PER_CONVERSION)
-  rewardValue          Float            @default(5.0)
-  rewardDurationMonths Int?
-  creditBalance        Float            @default(0)
-  totalEarned          Float            @default(0)
-  totalPaidOut         Float            @default(0)
-  isActive             Boolean          @default(true)
-  notes                String?
-  stripeConnectId      String?
-  promoCodes           PromoCode[]
-  payouts              AmbassadorPayout[]
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-
-  @@index([email])
-}
-
-model AmbassadorPayout {
-  id             String     @id @default(cuid())
-  ambassadorId   String
-  ambassador     Ambassador @relation(fields: [ambassadorId], references: [id])
-  amount         Float
-  method         String
-  stripePayoutId String?
-  createdAt      DateTime   @default(now())
-
-  @@index([ambassadorId])
-}
-
-model PlatformPricing {
-  id        String   @id @default(cuid())
-  key       String   @unique  // e.g. "PLAN_LAUNCH", "AI_COVER_ART"
-  label     String            // Human-readable label
-  value     Float             // Numeric value (dollars or percent)
-  display   String            // Formatted display e.g. "$4.99" or "15%"
-  category  String            // "subscriptions" | "ai_tools" | "platform_cuts"
-  sortOrder Int      @default(0)
-  updatedAt DateTime @updatedAt
-  updatedBy String?           // admin email who last changed it
-}
-
-// ─── Stream Leases ─────────────────────────────────────────────────────────────
-
-model StreamLease {
-  id              String    @id @default(cuid())
-  artistId        String
-  beatId          String
-  producerId      String
-  trackTitle      String
-  audioUrl        String
-  coverUrl        String?
-  isActive        Boolean   @default(true)
-  activatedAt     DateTime  @default(now())
-  cancelledAt     DateTime?
-  trackHash       String?   // SHA-256 of the artist's uploaded finished song
-  duplicateFlag   Boolean   @default(false) // true if trackHash matches another lease or beat
-  duplicateFlagNote String? // details about the duplicate
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  artist    User          @relation("ArtistStreamLeases",   fields: [artistId],   references: [id])
-  beat      Track         @relation(fields: [beatId],        references: [id])
-  producer  User          @relation("ProducerStreamLeases", fields: [producerId], references: [id])
-  payments  StreamLeasePayment[]
-  plays     StreamLeasePlay[]
-  agreement        StreamLeaseAgreement?
-  licenseDocuments LicenseDocument[]
-}
-
-model StreamLeasePlay {
-  id            String      @id @default(cuid())
-  streamLeaseId String
-  viewerIpHash  String
-  playedAt      DateTime    @default(now())
-
-  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
-}
-
-model StreamLeasePayment {
-  id              String      @id @default(cuid())
-  streamLeaseId   String
-  artistId        String
-  producerId      String
-  totalAmount     Float       @default(1.00)
-  producerAmount  Float       @default(0.70)
-  platformAmount  Float       @default(0.30)
-  stripeInvoiceId String
-  paidAt          DateTime    @default(now())
-  status          String      @default("PAID")  // "PAID" | "FAILED"
-  failedAt        DateTime?
-  failureReason   String?
-
-  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
-}
-
-// ─── Stream Lease Agreement System ─────────────────────────────────────────────
-
-// Per-beat lease settings (overrides producer global settings)
-model BeatLeaseSettings {
-  id                  String   @id @default(cuid())
-  beatId              String   @unique
-  streamLeaseEnabled  Boolean  @default(true)
-  maxStreamLeases     Int?                       // null = unlimited; enforced on lease creation
-  creditFormat        String   @default("Prod. {producerName}")
-  revocationPolicy    String   @default("A")   // A = 30-day notice, B = violation only, C = cannot revoke
-  contentRestrictions String[] @default([])
-  customRestriction   String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  beat Track @relation(fields: [beatId], references: [id])
-}
-
-// Producer global defaults (applies to all beats unless per-beat override exists)
-model ProducerLeaseSettings {
-  id                  String   @id @default(cuid())
-  producerId          String   @unique
-  streamLeaseEnabled  Boolean  @default(true)
-  creditFormat        String   @default("Prod. {producerName}")
-  revocationPolicy    String   @default("A")
-  contentRestrictions String[] @default([])
-  customRestriction   String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  producer User @relation(fields: [producerId], references: [id])
-}
-
-// Snapshot of the agreement at time of signing — immutable record of terms in effect
-model StreamLeaseAgreement {
-  id               String      @id @default(cuid())
-  streamLeaseId    String      @unique
-  agreementHtml    String      // full rendered agreement at time of signing
-  producerTerms    Json        // snapshot of producer settings at time of signing
-  artistAcceptedAt DateTime
-  createdAt        DateTime    @default(now())
-
-  streamLease StreamLease @relation(fields: [streamLeaseId], references: [id])
-}
-
-model StreamLeaseBookmark {
-  id        String   @id @default(cuid())
-  artistId  String
-  beatId    String
-  createdAt DateTime @default(now())
-
-  artist User  @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  beat   Track @relation(fields: [beatId],   references: [id], onDelete: Cascade)
-
-  @@unique([artistId, beatId])
-}
-
-model ProducerProfile {
-  id                       String   @id @default(cuid())
-  userId                   String   @unique
-  displayName              String?  // producer alias if different from artist name
-  bio                      String?  // producer-specific bio shown on beats section of artist page
-  defaultLeasePrice        Float?
-  defaultNonExclusivePrice Float?
-  defaultExclusivePrice    Float?
-  separatePayoutEnabled    Boolean  @default(false)
-  producerStripeConnectId  String?  // Stripe Connect account ID for separate producer payouts
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-}
-
-// ─── License & Receipt Vault ────────────────────────────────────────────────
 
 enum LicenseSource {
   SPLICE
@@ -1985,133 +2114,6 @@ enum LicenseSource {
   WORK_FOR_HIRE
   OTHER
 }
-
-model LicenseDocument {
-  id            String        @id @default(cuid())
-  userId        String
-  title         String        // user-provided name: "Splice License - Midnight Piano Loop"
-  fileUrl       String        // uploaded file URL (PDF, PNG, JPG)
-  fileType      String        // pdf, png, jpg
-  source        LicenseSource // where it came from
-  notes         String?       // optional user notes
-
-  // Linkage — what content this document is attached to
-  trackId       String?       // if attached to a track or beat (beats are Tracks in this schema)
-  streamLeaseId String?       // if attached to a stream lease
-  aiJobId       String?       // if attached to an AI tool output
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  user        User         @relation(fields: [userId],        references: [id])
-  track       Track?       @relation(fields: [trackId],       references: [id])
-  streamLease StreamLease? @relation(fields: [streamLeaseId], references: [id])
-  aiJob       AIJob?       @relation(fields: [aiJobId],       references: [id])
-
-  @@index([userId])
-  @@index([trackId])
-  @@index([streamLeaseId])
-  @@index([aiJobId])
-}
-
-// ─── Session Notes / Project Tracker ─────────────────────────────────────────
-
-model SessionNote {
-  id               String            @id @default(cuid())
-  bookingSessionId String
-  studioId         String
-  artistId         String
-  title            String
-  body             String            @db.Text
-  status           SessionNoteStatus @default(DRAFT)
-  isShared         Boolean           @default(false)  // true = visible to artist
-  artistFeedback   String?           @db.Text
-  feedbackAt       DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  bookingSession   BookingSession    @relation(fields: [bookingSessionId], references: [id], onDelete: Cascade)
-  studio           Studio            @relation(fields: [studioId], references: [id])
-  artist           User              @relation(fields: [artistId], references: [id])
-  attachments      SessionNoteAttachment[]
-
-  @@index([bookingSessionId])
-  @@index([studioId])
-  @@index([artistId])
-}
-
-model SessionNoteAttachment {
-  id            String      @id @default(cuid())
-  sessionNoteId String
-  fileUrl       String
-  fileName      String
-  fileSize      Int?
-  createdAt     DateTime    @default(now())
-
-  sessionNote   SessionNote @relation(fields: [sessionNoteId], references: [id], onDelete: Cascade)
-
-  @@index([sessionNoteId])
-}
-
-// ─── Split Sheets / Payment Splitting ────────────────────────────────────────
-
-model SplitSheet {
-  id          String           @id @default(cuid())
-  trackId     String           @unique
-  createdById String
-  status      SplitSheetStatus @default(PENDING)
-  documentUrl String?          // generated PDF URL once all parties agree
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  track       Track            @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  createdBy   User             @relation("SplitSheetCreator", fields: [createdById], references: [id])
-  splits      Split[]
-
-  @@index([createdById])
-}
-
-model Split {
-  id              String    @id @default(cuid())
-  splitSheetId    String
-  userId          String?
-  name            String
-  email           String
-  role            SplitRole
-  percentage      Float
-  reviewToken     String    @unique @default(cuid())
-  agreedAt        DateTime?
-  rejectedAt      DateTime?
-  rejectionReason String?   @db.Text
-  ipHash          String?   // hashed IP captured at agreement time
-  stripeConnectId String?
-  pendingBalance  Float     @default(0)
-  totalPaid       Float     @default(0)
-  createdAt       DateTime  @default(now())
-
-  splitSheet      SplitSheet   @relation(fields: [splitSheetId], references: [id], onDelete: Cascade)
-  user            User?        @relation("UserSplits", fields: [userId], references: [id])
-  payments        SplitPayment[]
-
-  @@index([splitSheetId])
-  @@index([userId])
-}
-
-model SplitPayment {
-  id               String   @id @default(cuid())
-  splitId          String
-  amount           Float
-  sourceType       String   // MERCH_SALE, TIP, STREAM_LEASE, LICENSE_SALE, MUSIC_SALE
-  sourceId         String
-  stripeTransferId String?
-  paidAt           DateTime @default(now())
-
-  split            Split    @relation(fields: [splitId], references: [id])
-
-  @@index([splitId])
-}
-
-// ─── Release Planner ──────────────────────────────────────────────────────────
 
 enum ReleasePlanStatus {
   PLANNING
@@ -2142,213 +2144,4 @@ enum TaskActionType {
   UPLOAD_TRACK
   SPLIT_SHEET
   CUSTOM
-}
-
-model ReleasePlan {
-  id          String            @id @default(cuid())
-  artistId    String
-  trackId     String?
-  releaseId   String?
-  title       String
-  releaseDate DateTime
-  status      ReleasePlanStatus @default(PLANNING)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  artist  User           @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  track   Track?         @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  release ArtistRelease? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
-  tasks   ReleasePlanTask[]
-
-  @@index([artistId])
-}
-
-model ReleasePlanTask {
-  id            String          @id @default(cuid())
-  releasePlanId String
-  title         String
-  description   String?         @db.Text
-  category      TaskCategory
-  dueDate       DateTime
-  sortOrder     Int
-  isCompleted   Boolean         @default(false)
-  completedAt   DateTime?
-  actionType    TaskActionType?
-  actionUrl     String?
-  linkedItemId  String?
-  createdAt     DateTime        @default(now())
-
-  releasePlan ReleasePlan @relation(fields: [releasePlanId], references: [id], onDelete: Cascade)
-
-  @@index([releasePlanId])
-}
-
-// ─── Explore Page ─────────────────────────────────────────────────────────────
-
-model ExploreFeatureCard {
-  id          String    @id @default(cuid())
-  type        String    @default("ANNOUNCEMENT") // ARTIST_SPOTLIGHT | BEAT_PACK | STUDIO_PROMO | AI_SHOWCASE | ANNOUNCEMENT
-  headline    String
-  description String?   @db.Text
-  imageUrl    String?
-  gradient    String?   // fallback CSS gradient string
-  ctaText     String    @default("Learn More")
-  ctaUrl      String
-  isActive    Boolean   @default(true)
-  sortOrder   Int       @default(0)
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  linkedArtistId String?
-  linkedArtist   User?   @relation("FeaturedArtist", fields: [linkedArtistId], references: [id], onDelete: SetNull)
-
-  @@index([isActive, sortOrder])
-}
-
-model RecentPlay {
-  id       String   @id @default(cuid())
-  userId   String
-  trackId  String
-  playedAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@index([userId, playedAt])
-  @@index([trackId])
-}
-
-// ─── Onboarding Email Log ─────────────────────────────────────────────────────
-
-model OnboardingEmailLog {
-  id        String   @id @default(cuid())
-  userId    String
-  emailType String   // WELCOME | DAY1_TRACK | DAY3_AI | DAY5_PAGE | DAY7_FANS | DAY14_DISCOVER | DAY30_MILESTONE
-  sentAt    DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, emailType])
-  @@index([userId])
-}
-
-model ReEngagementEmailLog {
-  id        String   @id @default(cuid())
-  userId    String
-  emailType String   // 7DAY | 14DAY | 30DAY | 45DAY
-  cycleKey  String   // ISO date string of cycle start (lastLoginAt snapshot) — reset when user logs back in
-  sentAt    DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, emailType, cycleKey])
-  @@index([userId])
-}
-
-// Temporary signup data stored before Stripe payment completes.
-// Deleted once the account is created. Expires after 24 hours.
-model PendingSignup {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String
-  passwordHash    String
-  role            Role
-  signupPath      String?
-  referredByCode  String?
-  affiliateId     String?
-  promoCode       String?
-  source          String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  landingPage     String?
-  firstVisitAt    DateTime?
-  stripeSessionId String?   @unique
-  tier            String?
-  createdAt       DateTime  @default(now())
-  expiresAt       DateTime
-}
-
-// ─── Stem Separation ──────────────────────────────────────────────────────────
-
-model AudioFeatures {
-  id               String   @id @default(cuid())
-  trackId          String?  @unique
-  track            Track?   @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  loudness         Float    @default(0.5)
-  energy           Float    @default(0.5)
-  danceability     Float    @default(0.5)
-  acousticness     Float    @default(0.5)
-  instrumentalness Float    @default(0.5)
-  speechiness      Float    @default(0.5)
-  liveness         Float    @default(0.5)
-  valence          Float    @default(0.5)
-  genre            String?
-  mood             String?
-  isVocal          Boolean  @default(true)
-  analyzedAt       DateTime @default(now())
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([trackId])
-}
-
-model StemSeparation {
-  id                String   @id @default(cuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
-  originalFileUrl   String
-  originalFileName  String
-  vocalsUrl         String?
-  drumsUrl          String?
-  bassUrl           String?
-  otherUrl          String?
-  status            String   @default("pending") // pending, processing, completed, failed
-  replicateId       String?  // Replicate prediction ID for polling
-  stripePaymentId   String?
-  errorMessage      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([userId])
-}
-
-// ─── Sample Clearance Tracker ─────────────────────────────────────────────────
-
-model SampleLog {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id])
-  trackId          String?
-  track            Track?   @relation(fields: [trackId], references: [id])
-  sampleSource     String
-  sampleType       String           // INTERPOLATION, DIRECT_SAMPLE, LOOP, PRESET, REPLAY
-  isCleared        Boolean  @default(false)
-  clearanceMethod  String?          // LICENSE, ROYALTY_FREE, ORIGINAL_OWNER_PERMISSION, FAIR_USE, PENDING
-  clearanceNotes   String?
-  clearanceDocUrl  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([userId])
-  @@index([trackId])
-}
-
-// ─── Fan Thank-You Automations ────────────────────────────────────────────────
-
-model FanAutomation {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  triggerType String   // FIRST_PURCHASE, FIRST_TIP, REPEAT_BUYER, BIG_TIPPER, ANNIVERSARY
-  isActive    Boolean  @default(true)
-  subject     String
-  body        String   @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([userId, triggerType])
-  @@index([userId])
 }
