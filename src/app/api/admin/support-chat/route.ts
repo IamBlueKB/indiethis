@@ -4,7 +4,7 @@ import { claude, SONNET } from "@/lib/claude";
 import { logInsight } from "@/lib/ai-log";
 import { NextRequest, NextResponse } from "next/server";
 
-const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
+const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 49, REIGN: 99 };
 
 export async function POST(req: NextRequest) {
   const session = await getAdminSession();

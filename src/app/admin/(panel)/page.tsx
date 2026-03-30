@@ -29,7 +29,7 @@ import ChurnPredictionTable from "@/components/admin/ChurnPredictionTable";
 import AdminViewOnlyBanner from "@/components/admin/AdminViewOnlyBanner";
 import { requireAdminAccess } from "@/lib/require-admin-access";
 
-const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
+const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 49, REIGN: 99 };
 
 function pctDelta(current: number, prev: number): { delta: string; positive: boolean } | null {
   if (prev === 0) return null;

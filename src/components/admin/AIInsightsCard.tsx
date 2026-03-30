@@ -5,7 +5,7 @@ import { cacheGet, cacheSet, TTL_24H } from "@/lib/admin-cache";
 import { logInsight } from "@/lib/ai-log";
 import { Sparkles, Clock } from "lucide-react";
 
-const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 29, REIGN: 79 };
+const TIER_PRICE: Record<string, number> = { LAUNCH: 0, PUSH: 49, REIGN: 99 };
 const CACHE_KEY = "admin:insights:card";
 
 async function getInsights() {

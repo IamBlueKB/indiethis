@@ -251,7 +251,7 @@ function CoverArtForm({ onSubmit, submitting }: {
         className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors"
         style={{ background: "#D4A843", color: "#0A0A0A", opacity: submitting || !prompt.trim() ? 0.5 : 1 }}
       >
-        {submitting ? "Generating…" : "Generate Cover Art ($2)"}
+        {submitting ? "Generating…" : "Generate Cover Art ($4.99)"}
       </button>
     </div>
   );
@@ -310,7 +310,7 @@ function MasteringForm({ onSubmit, submitting }: {
         className="w-full py-2.5 rounded-lg text-sm font-semibold"
         style={{ background: "#D4A843", color: "#0A0A0A", opacity: submitting || !trackUrl.trim() ? 0.5 : 1 }}
       >
-        {submitting ? "Mastering…" : "Master Track ($5)"}
+        {submitting ? "Mastering…" : "Master Track ($7.99)"}
       </button>
     </div>
   );
@@ -380,7 +380,7 @@ function LyricVideoForm({ onSubmit, submitting }: {
         className="w-full py-2.5 rounded-lg text-sm font-semibold"
         style={{ background: "#D4A843", color: "#0A0A0A", opacity: submitting || !trackUrl.trim() ? 0.5 : 1 }}
       >
-        {submitting ? "Transcribing…" : "Generate Lyric Video (from $12)"}
+        {submitting ? "Transcribing…" : "Generate Lyric Video ($14.99)"}
       </button>
     </div>
   );
@@ -462,7 +462,7 @@ function ARReportForm({ onSubmit, submitting }: {
         className="w-full py-2.5 rounded-lg text-sm font-semibold"
         style={{ background: "#D4A843", color: "#0A0A0A", opacity: submitting || !trackUrl.trim() ? 0.5 : 1 }}
       >
-        {submitting ? "Analyzing…" : "Generate A&R Report ($8)"}
+        {submitting ? "Analyzing…" : "Generate A&R Report ($14.99)"}
       </button>
     </div>
   );
@@ -581,7 +581,7 @@ function PressKitForm({ onSubmit, submitting, defaultArtistName }: {
         className="w-full py-2.5 rounded-lg text-sm font-semibold"
         style={{ background: "#D4A843", color: "#0A0A0A", opacity: submitting || !artistName.trim() ? 0.5 : 1 }}
       >
-        {submitting ? "Generating…" : "Generate Press Kit ($6)"}
+        {submitting ? "Generating…" : "Generate Press Kit ($9.99)"}
       </button>
     </div>
   );
