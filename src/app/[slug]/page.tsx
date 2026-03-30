@@ -657,6 +657,42 @@ export default async function SlugPage({
 
   // ── Artist? ───────────────────────────────────────────────────────────────
   const artistPage = await ArtistSite({ slug });
-  if (!artistPage) notFound();
+  if (!artistPage) {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center"
+        style={{ backgroundColor: "#0A0A0A" }}
+      >
+        {/* IndieThis logo mark */}
+        <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden style={{ marginBottom: "2rem" }}>
+          <rect width="48" height="48" rx="12" fill="#D4A843" />
+          <rect x="20" y="18" width="6" height="22" rx="3" fill="#0A0A0A" />
+          <polygon points="18,5 18,16 28,10.5" fill="#E85D4A" />
+        </svg>
+
+        <p style={{ color: "#333", fontSize: "6rem", fontWeight: 700, lineHeight: 1, margin: 0 }}>
+          404
+        </p>
+        <h1 style={{ color: "#fff", fontSize: "1.5rem", fontWeight: 600, marginTop: "1rem", marginBottom: 0 }}>
+          This page doesn&apos;t exist
+        </h1>
+        <p style={{ color: "#666", marginTop: "0.5rem", fontSize: "1rem" }}>
+          The artist, studio, or DJ you&apos;re looking for isn&apos;t here.
+        </p>
+        <a
+          href="/explore"
+          style={{
+            marginTop: "2rem",
+            color: "#D4A843",
+            fontWeight: 600,
+            fontSize: "1rem",
+            textDecoration: "none",
+          }}
+        >
+          Explore IndieThis →
+        </a>
+      </div>
+    );
+  }
   return artistPage;
 }
