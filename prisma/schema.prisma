@@ -2349,16 +2349,18 @@ model DJAttribution {
 }
 
 model DJWithdrawal {
-  id              String    @id @default(cuid())
-  djProfileId     String
-  djProfile       DJProfile @relation(fields: [djProfileId], references: [id])
-  amount          Int
-  stripePayoutId  String?
-  status          String    @default("PENDING")
-  createdAt       DateTime  @default(now())
-  completedAt     DateTime?
+  id               String    @id @default(cuid())
+  djProfileId      String
+  djProfile        DJProfile @relation(fields: [djProfileId], references: [id])
+  amount           Int
+  stripePayoutId   String?
+  stripeTransferId String?
+  status           String    @default("PENDING")
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
 
   @@index([djProfileId])
+  @@index([stripeTransferId])
 }
 
 model DJMix {

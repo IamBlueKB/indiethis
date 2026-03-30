@@ -992,5 +992,51 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── DJ Payout: Stripe Connect transfer events ──────────────────────────
+  // transfer.paid / transfer.failed are not in the Stripe SDK event union
+  // (Connect-only events), so they are handled outside the switch.
+  // NOTE: Add "transfer.paid" and "transfer.failed" to your Stripe dashboard
+  //       webhook subscribed events for this endpoint.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawEvent = event as any;
+
+  if (rawEvent.type === "transfer.paid") {
+    const transferId: string | undefined = rawEvent.data?.object?.id;
+    if (transferId) {
+      const withdrawal = await db.dJWithdrawal.findFirst({
+        where: { stripeTransferId: transferId },
+        select: { id: true },
+      });
+      if (withdrawal) {
+        await db.dJWithdrawal.update({
+          where: { id: withdrawal.id },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        });
+      }
+    }
+  }
+
+  if (rawEvent.type === "transfer.failed") {
+    const transferId: string | undefined = rawEvent.data?.object?.id;
+    if (transferId) {
+      const failedWithdrawal = await db.dJWithdrawal.findFirst({
+        where: { stripeTransferId: transferId },
+        select: { id: true, amount: true, djProfileId: true },
+      });
+      if (failedWithdrawal) {
+        await db.$transaction([
+          db.dJWithdrawal.update({
+            where: { id: failedWithdrawal.id },
+            data: { status: "FAILED" },
+          }),
+          db.dJProfile.update({
+            where: { id: failedWithdrawal.djProfileId },
+            data: { balance: { increment: failedWithdrawal.amount } },
+          }),
+        ]);
+      }
+    }
+  }
+
   return NextResponse.json({ received: true });
 }

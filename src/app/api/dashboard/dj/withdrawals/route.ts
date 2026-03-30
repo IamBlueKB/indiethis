@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 
 const MIN_WITHDRAWAL = 2500; // $25.00 in cents
@@ -78,6 +79,9 @@ export async function POST(_req: NextRequest) {
 
   const amount = djProfile.balance;
 
+  if (!stripe)
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+
   // Create withdrawal record and deduct balance atomically
   const [withdrawal] = await db.$transaction([
     db.dJWithdrawal.create({
@@ -93,8 +97,42 @@ export async function POST(_req: NextRequest) {
     }),
   ]);
 
-  // TODO: Trigger actual Stripe Connect payout once Stripe account is connected
-  // await stripe.transfers.create({ amount, currency: "usd", destination: djProfile.user.stripeConnectId });
+  // Trigger Stripe Connect transfer — status stays PENDING until transfer.paid webhook confirms.
+  // NOTE: Add "transfer.paid" and "transfer.failed" to your Stripe dashboard webhook subscribed events.
+  try {
+    const transfer = await stripe.transfers.create({
+      amount,
+      currency: "usd",
+      destination: djProfile.user.stripeConnectId!,
+      description: `DJ withdrawal — ${withdrawal.id}`,
+      metadata: { withdrawalId: withdrawal.id, djProfileId: djProfile.id },
+    });
 
-  return NextResponse.json({ withdrawal }, { status: 201 });
+    await db.dJWithdrawal.update({
+      where: { id: withdrawal.id },
+      data: { stripeTransferId: transfer.id },
+    });
+
+    return NextResponse.json(
+      { withdrawal: { ...withdrawal, stripeTransferId: transfer.id } },
+      { status: 201 }
+    );
+  } catch (err) {
+    // Stripe transfer failed — roll back balance decrement and mark withdrawal FAILED
+    console.error("[dj-withdrawal] Stripe transfer failed:", err);
+    await db.$transaction([
+      db.dJProfile.update({
+        where: { id: djProfile.id },
+        data: { balance: { increment: amount } },
+      }),
+      db.dJWithdrawal.update({
+        where: { id: withdrawal.id },
+        data: { status: "FAILED" },
+      }),
+    ]);
+    return NextResponse.json(
+      { error: "Payout failed. Your balance has been restored. Please try again." },
+      { status: 502 }
+    );
+  }
 }
