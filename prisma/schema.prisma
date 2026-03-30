@@ -132,6 +132,7 @@ model User {
   splits                   Split[]                @relation("UserSplits")
   splitSheetsCreated       SplitSheet[]           @relation("SplitSheetCreator")
   stemSeparations          StemSeparation[]
+  trackShieldScans         TrackShieldScan[]
   artistStreamLeases       StreamLease[]          @relation("ArtistStreamLeases")
   producerStreamLeases     StreamLease[]          @relation("ProducerStreamLeases")
   streamLeaseBookmarks     StreamLeaseBookmark[]
@@ -335,6 +336,7 @@ model Track {
   crateItems           CrateItem[]
   djMixTracks          DJMixTrack[]
   fingerprint          AudioFingerprint?
+  shieldResults        TrackShieldResult[]
 }
 
 model AudioFingerprint {
@@ -2428,4 +2430,28 @@ enum TaskActionType {
   UPLOAD_TRACK
   SPLIT_SHEET
   CUSTOM
+}
+
+model TrackShieldScan {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id])
+  packageType     String
+  amount          Int
+  status          String              @default("PENDING")
+  stripePaymentId String?
+  createdAt       DateTime            @default(now())
+  completedAt     DateTime?
+  tracks          TrackShieldResult[]
+}
+
+model TrackShieldResult {
+  id         String          @id @default(cuid())
+  scanId     String
+  scan       TrackShieldScan @relation(fields: [scanId], references: [id])
+  trackId    String
+  track      Track           @relation(fields: [trackId], references: [id])
+  matches    Json
+  matchCount Int             @default(0)
+  scannedAt  DateTime        @default(now())
 }

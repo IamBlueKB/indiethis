@@ -40,6 +40,7 @@ import {
   Disc3,
   ShieldCheck,
   Settings2,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -62,7 +63,8 @@ const navItems: NavItem[] = [
   { label: "Analytics",     href: "/dashboard/analytics",    icon: BarChart2 },
   { label: "Broadcasts",    href: "/dashboard/broadcasts",   icon: MessageSquare },
   { label: "QR Code",       href: "/dashboard/qr",           icon: QrCode },
-  { label: "AI Tools",      href: "/dashboard/ai/video",     icon: Wand2 },
+  { label: "AI Tools",      href: "/dashboard/ai/video",        icon: Wand2  },
+  { label: "Track Shield", href: "/dashboard/ai/track-shield", icon: Shield },
   { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag },
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
   { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },

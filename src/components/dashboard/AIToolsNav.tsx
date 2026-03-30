@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wand2, Image, Music, Film, BarChart3, FileText, Scissors, Sparkles, Shield, Users } from "lucide-react";
+import { Wand2, Image, Music, Film, BarChart3, FileText, Scissors, Sparkles, Shield, Users, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tools = [
@@ -14,8 +14,9 @@ const tools = [
   { label: "Press Kit",        href: "/dashboard/ai/press-kit",        icon: FileText  },
   { label: "Vocal Remover",    href: "/dashboard/ai/vocal-remover",    icon: Scissors  },
   { label: "Bio Generator",    href: "/dashboard/ai/bio-generator",    icon: Sparkles  },
-  { label: "Contract Scanner", href: "/dashboard/ai/contract-scanner", icon: Shield    },
-  { label: "Split Sheets",    href: "/dashboard/ai/split-sheet",      icon: Users     },
+  { label: "Contract Scanner", href: "/dashboard/ai/contract-scanner", icon: Shield      },
+  { label: "Split Sheets",    href: "/dashboard/ai/split-sheet",      icon: Users       },
+  { label: "Track Shield",    href: "/dashboard/ai/track-shield",     icon: ShieldCheck },
 ];
 
 export function AIToolsNav() {

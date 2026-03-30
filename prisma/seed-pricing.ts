@@ -30,10 +30,14 @@ const PRICING_SEED = [
   { key: "AI_VIDEO_MEDIUM",       label: "AI Music Video (1min)",     value: 29,    display: "$29",      category: "ai_tools",        sortOrder: 17 },
   { key: "AI_VIDEO_LONG",         label: "AI Music Video (3min)",     value: 49,    display: "$49",      category: "ai_tools",        sortOrder: 18 },
   { key: "AI_VOCAL_REMOVER",      label: "Vocal Remover",             value: 1.99,  display: "$1.99",    category: "ai_tools",        sortOrder: 19 },
-  { key: "AI_CONTRACT_SCANNER",   label: "Contract Scanner",          value: 4.99,  display: "$4.99",    category: "ai_tools",        sortOrder: 20 },
-  { key: "AI_BIO_GENERATOR",      label: "Bio Generator",             value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 21 },
-  { key: "AI_SPLIT_SHEET",        label: "Split Sheet",               value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 22 },
-  { key: "LYRIC_VIDEO_AI_BG",     label: "Lyric Video AI Background", value: 5.00,  display: "$5.00",    category: "ai_tools",        sortOrder: 23 },
+  { key: "AI_CONTRACT_SCANNER",      label: "Contract Scanner",               value: 4.99,  display: "$4.99",    category: "ai_tools",        sortOrder: 20 },
+  { key: "AI_BIO_GENERATOR",         label: "Bio Generator",                  value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 21 },
+  { key: "AI_SPLIT_SHEET",           label: "Split Sheet",                    value: 0,     display: "Free",     category: "ai_tools",        sortOrder: 22 },
+  { key: "LYRIC_VIDEO_AI_BG",        label: "Lyric Video AI Background",      value: 5.00,  display: "$5.00",    category: "ai_tools",        sortOrder: 23 },
+  { key: "TRACK_SHIELD_SINGLE",      label: "Track Shield (Single)",          value: 2.99,  display: "$2.99",    category: "ai_tools",        sortOrder: 24 },
+  { key: "TRACK_SHIELD_5",           label: "Track Shield (5-Pack)",          value: 9.99,  display: "$9.99",    category: "ai_tools",        sortOrder: 25 },
+  { key: "TRACK_SHIELD_10",          label: "Track Shield (10-Pack)",         value: 14.99, display: "$14.99",   category: "ai_tools",        sortOrder: 26 },
+  { key: "TRACK_SHIELD_CATALOG",     label: "Track Shield (Full Catalog)",    value: 29.99, display: "$29.99",   category: "ai_tools",        sortOrder: 27 },
 
   // ─── Platform Revenue Cuts ────────────────────────────────────────────────
   { key: "CUT_MUSIC_SALES",   label: "Music Sales Cut",       value: 10,    display: "10%",      category: "platform_cuts",   sortOrder: 20 },

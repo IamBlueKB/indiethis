@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Wand2, Users, Loader2, CheckCircle2, AlertCircle, ChevronLeft,
   Upload, X, Download, Play, Music, FileText, Image, Film, Mic,
-  Sparkles, Clock,
+  Sparkles, Clock, Shield,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
@@ -1229,6 +1229,32 @@ export default function StudioAIToolsPage() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Track Shield (artist-side tool) ──────────────────────────────── */}
+        {!activeTool && (
+          <div
+            className="rounded-2xl border p-5 flex items-start gap-4"
+            style={{ borderColor: "var(--border)", background: "var(--card)" }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "#D4A84318" }}
+            >
+              <Shield size={20} style={{ color: "#D4A843" }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold mb-0.5" style={{ color: "var(--foreground)" }}>
+                Track Shield
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--muted-foreground)" }}>
+                Artists can scan their music for unauthorized use across the internet. Direct your
+                clients to their IndieThis artist dashboard at{" "}
+                <span style={{ color: "#D4A843" }}>/dashboard/ai/track-shield</span> to run a scan.
+                Pricing starts at $2.99 per track.
+              </p>
             </div>
           </div>
         )}
