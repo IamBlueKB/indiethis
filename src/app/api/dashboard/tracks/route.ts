@@ -45,10 +45,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Fingerprint the track if fileUrl is a local filesystem path — fire and forget
-  // TODO: fileUrl is currently a remote URL (S3/Supabase), not a local path.
-  // To enable fingerprinting, download the file locally first, then call fingerprintTrack.
-  if (track.fileUrl && !track.fileUrl.startsWith("http://") && !track.fileUrl.startsWith("https://")) {
+  // Fingerprint the track (handles remote S3/Supabase URLs and local paths) — fire and forget
+  if (track.fileUrl) {
     fingerprintTrack(track.id, track.fileUrl).catch(() => {});
   }
 
