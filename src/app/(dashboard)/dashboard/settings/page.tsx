@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   User, Music2, Phone, Instagram, Youtube, Globe, Check, Link2, Camera, Loader2, Lock, Eye, EyeOff, AlertTriangle, X,
-  Mic2, DollarSign, Radio, CreditCard, ChevronDown, RefreshCw, Unlink, Disc3,
+  Mic2, DollarSign, Radio, CreditCard, ChevronDown, RefreshCw, Unlink, Disc3, ExternalLink,
 } from "lucide-react";
 import { formatPhoneInput } from "@/lib/formatPhone";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -376,9 +376,23 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage your artist profile</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your artist profile</p>
+        </div>
+        {slug && (
+          <a
+            href={`/${slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors hover:bg-white/5"
+            style={{ color: "#D4A843", borderColor: "#D4A843" }}
+          >
+            <ExternalLink size={13} />
+            Preview My Page
+          </a>
+        )}
       </div>
 
       {/* Profile Photo */}
