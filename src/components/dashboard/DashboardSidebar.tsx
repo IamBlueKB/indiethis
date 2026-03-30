@@ -35,6 +35,8 @@ import {
   Upload,
   Compass,
   Sparkles,
+  ShoppingCart,
+  Disc3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -49,6 +51,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard",     href: "/dashboard",              icon: LayoutDashboard },
   { label: "Explore",       href: "/explore",                icon: Compass },
   { label: "Music",         href: "/dashboard/music",        icon: Music },
+  { label: "Sales",         href: "/dashboard/music/sales",  icon: ShoppingCart },
   { label: "Videos",        href: "/dashboard/videos",       icon: Video },
   { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
   { label: "Fans",          href: "/dashboard/fans",              icon: Users },
@@ -89,12 +92,17 @@ const producerStreamLeaseItem: NavItem = {
   icon: Radio,
 };
 
+const djNavItems: NavItem[] = [
+  { label: "Crates", href: "/dashboard/dj/crates", icon: Disc3 },
+];
+
 type Props = {
   hasProducerActivity: boolean;
   hasProducerStreamLeases: boolean;
+  djMode?: boolean;
 };
 
-export default function DashboardSidebar({ hasProducerActivity, hasProducerStreamLeases }: Props) {
+export default function DashboardSidebar({ hasProducerActivity, hasProducerStreamLeases, djMode }: Props) {
   const pathname = usePathname();
   const { user } = useUserStore();
 
@@ -151,6 +159,37 @@ export default function DashboardSidebar({ hasProducerActivity, hasProducerStrea
               Producer
             </p>
             {producerItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors no-underline",
+                    active
+                      ? "bg-accent/10 text-accent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  )}
+                >
+                  <Icon size={17} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* DJ section — only shown when djMode is enabled */}
+        {djMode && (
+          <div className="pt-4">
+            <p
+              className="px-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase"
+              style={{ color: "#D4A843" }}
+            >
+              DJ
+            </p>
+            {djNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               return (

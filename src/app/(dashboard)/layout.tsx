@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/signup/setup");
   }
 
-  const [beatCount, producerLeaseCount, gracePeriod] = await Promise.all([
+  const [beatCount, producerLeaseCount, gracePeriod, userFlags] = await Promise.all([
     // Count beats — tracks that have a BeatLeaseSettings record
     db.beatLeaseSettings.count({ where: { beat: { artistId: userId } } }),
     db.streamLease.count({ where: { producerId: userId } }),
@@ -38,16 +38,22 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       select: { graceUntil: true },
       orderBy: { graceUntil: "asc" },
     }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { djMode: true },
+    }),
   ]);
 
 const hasProducerActivity = beatCount > 0;
   const hasProducerStreamLeases = producerLeaseCount > 0;
+  const hasDjMode = userFlags?.djMode ?? false;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--background)" }}>
       <DashboardSidebar
         hasProducerActivity={hasProducerActivity}
         hasProducerStreamLeases={hasProducerStreamLeases}
+        djMode={hasDjMode}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <DashboardTopBar />
