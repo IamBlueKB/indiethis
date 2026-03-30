@@ -13,9 +13,11 @@ import SimilarArtists from "@/components/audio/SimilarArtists";
 import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
 import RadarFilterResults from "@/components/explore/RadarFilterResults";
 import PublicNav from "@/components/layout/PublicNav";
+import AddToCrateButton from "@/components/dj/AddToCrateButton";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
-  Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar,
+  Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
+  Disc, Disc3,
 } from "lucide-react";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
@@ -78,6 +80,21 @@ type FeaturedCard = {
   ctaText: string;
   ctaUrl: string;
   linkedArtist: { id: string; name: string; photo: string | null } | null;
+};
+
+type DigitalProductItem = {
+  id: string;
+  title: string;
+  type: "SINGLE" | "ALBUM";
+  price: number;
+  coverArtUrl: string | null;
+  user: {
+    id: string;
+    name: string;
+    artistName: string | null;
+    artistSlug: string | null;
+    artistSite: { isPublished: boolean } | null;
+  };
 };
 
 type SearchResults = {
@@ -195,6 +212,9 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
         <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{track.artist.name}</p>
       )}
       <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>{track.plays.toLocaleString()} plays</p>
+      <div className="mt-1.5">
+        <AddToCrateButton trackId={track.id} />
+      </div>
       {artistSlug && (
         <Link href={`/${artistSlug}`} className="text-[9px] mt-1 block hover:underline" style={{ color: "#555" }}>
           More from {track.artist.name} →
@@ -655,7 +675,7 @@ function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemoveP
 
 // ── Filter Pills ───────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound";
+type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store";
 
 type FilterTabDef = { key: FilterTab; label: string; icon?: React.ElementType };
 
@@ -665,9 +685,142 @@ const FILTER_TABS: FilterTabDef[] = [
   { key: "artists", label: "Artists",  icon: Users },
   { key: "music",   label: "Music",    icon: Music2 },
   { key: "beats",   label: "Beats",    icon: Headphones },
+  { key: "store",   label: "Store",    icon: ShoppingBag },
   { key: "studios", label: "Studios",  icon: Building2 },
   { key: "ai",      label: "AI Tools", icon: Wand2 },
 ];
+
+// ── Digital Product Checkout Modal ─────────────────────────────────────────
+
+function DigitalProductCheckoutModal({ product, onClose }: { product: DigitalProductItem; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCheckout() {
+    if (!email.includes("@")) { setError("Enter a valid email address."); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/digital-products/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: product.id, buyerEmail: email }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) { setError(data.error ?? "Something went wrong."); return; }
+      window.location.href = data.url;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const artistName = product.user.artistName || product.user.name;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+      <div className="w-full max-w-sm rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0" style={{ backgroundColor: "#1a1a1a" }}>
+              {product.coverArtUrl
+                ? <img src={product.coverArtUrl} alt={product.title} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center"><Disc3 size={20} style={{ color: "#444" }} /></div>
+              }
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">{product.title}</p>
+              <p className="text-xs" style={{ color: "#888" }}>{artistName}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between py-2 border-t border-b" style={{ borderColor: "#2a2a2a" }}>
+          <span className="text-sm text-gray-400">Total</span>
+          <span className="text-lg font-bold" style={{ color: "#D4A843" }}>${(product.price / 100).toFixed(2)}</span>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>Your email (download link sent here)</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCheckout()}
+            placeholder="you@example.com"
+            className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-white outline-none focus:ring-2 focus:ring-accent/50"
+            style={{ borderColor: "#2a2a2a", backgroundColor: "#1a1a1a" }}
+          />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+
+        <button
+          onClick={handleCheckout}
+          disabled={loading || !email.trim()}
+          className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition-colors"
+          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+        >
+          {loading ? <Loader2 size={14} className="animate-spin inline" /> : `Buy for $${(product.price / 100).toFixed(2)} →`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Digital Product Card ────────────────────────────────────────────────────
+
+function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; onBuy: (p: DigitalProductItem) => void }) {
+  const artistSlug = product.user.artistSite?.isPublished ? product.user.artistSlug : null;
+  const artistName = product.user.artistName || product.user.name;
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden group"
+      style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+    >
+      <div className="relative w-full aspect-square overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
+        {product.coverArtUrl
+          ? <img src={product.coverArtUrl} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          : <div className="w-full h-full flex items-center justify-center">
+              {product.type === "ALBUM"
+                ? <Disc size={36} style={{ color: "#333" }} />
+                : <Disc3 size={36} style={{ color: "#333" }} />
+              }
+            </div>
+        }
+        <span
+          className="absolute top-2 left-2 text-[9px] font-black px-1.5 py-0.5 rounded-full"
+          style={{ backgroundColor: product.type === "ALBUM" ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.1)", color: product.type === "ALBUM" ? "#D4A843" : "#aaa", border: `1px solid ${product.type === "ALBUM" ? "rgba(212,168,67,0.4)" : "#333"}` }}
+        >
+          {product.type}
+        </span>
+      </div>
+      <div className="p-3 space-y-1.5">
+        <p className="text-sm font-semibold text-white truncate">{product.title}</p>
+        {artistSlug ? (
+          <Link href={`/${artistSlug}`} className="text-[11px] block hover:underline truncate" style={{ color: "#888" }}>
+            {artistName}
+          </Link>
+        ) : (
+          <p className="text-[11px] truncate" style={{ color: "#888" }}>{artistName}</p>
+        )}
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-sm font-bold" style={{ color: "#D4A843" }}>${(product.price / 100).toFixed(2)}</span>
+          <button
+            onClick={() => onBuy(product)}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors"
+            style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
+          >
+            Buy
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── AI Tools Showcase ──────────────────────────────────────────────────────
 
@@ -751,6 +904,9 @@ export default function ExploreClient() {
   const [studios, setStudios] = useState<StudioItem[]>([]);
   const [rising, setRising] = useState<ArtistItem[]>([]);
   const [recentPlays, setRecentPlays] = useState<TrackItem[]>([]);
+  const [digitalProducts, setDigitalProducts] = useState<DigitalProductItem[]>([]);
+  const [loadingStore, setLoadingStore] = useState(true);
+  const [buyProduct, setBuyProduct] = useState<DigitalProductItem | null>(null);
 
   const [studioQuery, setStudioQuery] = useState("");
   const [studioSearching, setStudioSearching] = useState(false);
@@ -781,6 +937,7 @@ export default function ExploreClient() {
     artists: useRef<HTMLElement>(null),
     ai:      useRef<HTMLElement>(null),
     sound:   useRef<HTMLElement>(null),
+    store:   useRef<HTMLElement>(null),
   };
 
   useEffect(() => {
@@ -792,6 +949,7 @@ export default function ExploreClient() {
     fetch("/api/explore/beats").then(r => r.json()).then(d => { setBeats(d.beats ?? []); setLoadingBeats(false); });
     fetch("/api/explore/studios").then(r => r.json()).then(d => { setStudios(d.studios ?? []); setLoadingStudios(false); });
     fetch("/api/explore/rising").then(r => r.json()).then(d => { setRising(d.artists ?? []); setLoadingRising(false); });
+    fetch("/api/explore/digital-products").then(r => r.json()).then(d => { setDigitalProducts(d.products ?? []); setLoadingStore(false); });
 
     if (loggedIn) {
       fetch("/api/explore/recently-played").then(r => r.json()).then(d => setRecentPlays(d.plays ?? []));
@@ -933,6 +1091,9 @@ export default function ExploreClient() {
   }
 
   const showSection = (key: string) => activeFilter !== "sound" && (activeFilter === "all" || activeFilter === key || key === "featured");
+
+  // Store section — shown on "all" or "store" filter only (not cluttering music/beats views)
+  const showStore = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "store");
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
@@ -1241,6 +1402,30 @@ export default function ExploreClient() {
           </section>
         )}
 
+        {/* Section: Digital Products Store */}
+        {showStore && (
+          <section ref={sectionRefs.store as React.RefObject<HTMLElement>}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>STORE</p>
+                <h2 className="text-xl font-bold text-white">Music &amp; Merch</h2>
+              </div>
+            </div>
+            {loadingStore
+              ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
+              : digitalProducts.length === 0
+                ? <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#141414" }}>
+                    <p className="text-sm" style={{ color: "#555" }}>No products available yet — check back soon.</p>
+                  </div>
+                : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {digitalProducts.map((p) => (
+                      <DigitalProductCard key={p.id} product={p} onBuy={setBuyProduct} />
+                    ))}
+                  </div>
+            }
+          </section>
+        )}
+
         {/* Section 7: Studios */}
         {showSection("studios") && (
           <section id="studios" ref={sectionRefs.studios as React.RefObject<HTMLElement>}>
@@ -1341,6 +1526,10 @@ export default function ExploreClient() {
       </div>
 
       <Footer />
+
+      {buyProduct && (
+        <DigitalProductCheckoutModal product={buyProduct} onClose={() => setBuyProduct(null)} />
+      )}
 
       {licenseBeat && (
         <BeatLicenseModal
