@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-03-29_
+_Last updated: 2026-03-30_
 
 ---
 
@@ -48,6 +48,7 @@ _Last updated: 2026-03-29_
 | `/dashboard/ai/split-sheet` | Split sheet generator (free) |
 | `/dashboard/ai/bio-generator` | Bio generator (free, Claude) |
 | `/dashboard/ai/contract-scanner` | Contract scanner (Claude + pdf-parse) |
+| `/dashboard/ai/track-shield` | Track Shield — PPU internet scan for unauthorized music use |
 | `/dashboard/vault` | Secure file storage vault |
 | `/dashboard/shows` | Artist shows and events |
 | `/dashboard/fans` | Fan database, segmentation, automations |
@@ -67,6 +68,17 @@ _Last updated: 2026-03-29_
 | `/dashboard/producer/analytics` | Producer analytics dashboard |
 | `/dashboard/producer/stream-leases` | Producer stream lease management |
 | `/dashboard/producer/earnings` | Producer earnings projections |
+| `/dashboard/music/sales` | Digital product sales — Singles, EPs, Albums (price-per-unit) |
+| `/dashboard/dj-activity` | Artist view — DJs who have their tracks in crates |
+| `/dashboard/dj/analytics` | DJ analytics — fans attributed, revenue, 12-week chart |
+| `/dashboard/dj/settings` | DJ profile settings — bio, genres, city, social links |
+| `/dashboard/dj/earnings` | DJ earnings — balance, withdrawals, attribution history |
+| `/dashboard/dj/verification` | DJ verification application flow |
+| `/dashboard/dj/crates` | DJ crate management |
+| `/dashboard/dj/mixes` | DJ mix uploads with ACRCloud tracklist identification |
+| `/dashboard/dj/sets` | DJ set management (YouTube-linked) |
+| `/dashboard/dj/events` | DJ event listings |
+| `/dashboard/dj/bookings` | DJ booking requests |
 
 ---
 
@@ -82,7 +94,7 @@ _Last updated: 2026-03-29_
 | `/studio/deliver` | QuickSend file delivery interface |
 | `/studio/invoices` | Invoice builder and tracker |
 | `/studio/email` | Email blast campaign builder |
-| `/studio/ai-tools` | AI tool access (Vocal Remover, Contract Scanner, Bio, Split Sheet) |
+| `/studio/ai-tools` | AI tool access (Vocal Remover, Contract Scanner, Bio, Split Sheet, Track Shield) |
 | `/studio/analytics` | Studio business analytics |
 | `/studio/payments` | Payment history |
 | `/studio/artists` | Artist roster management |
@@ -124,6 +136,7 @@ _Last updated: 2026-03-29_
 | `/admin/lead-tracking/value` | Lead value attribution |
 | `/admin/settings/pricing` | PlatformPricing live editor |
 | `/admin/analytics/funnel` | Conversion funnel analytics |
+| `/admin/dj-verification` | DJ verification queue (approve/deny applications) |
 
 ---
 
@@ -144,11 +157,13 @@ _Last updated: 2026-03-29_
 | `/affiliate/apply` | Affiliate application |
 | `/ambassador/[code]` | Ambassador referral landing |
 | `/ref/[customSlug]` | Custom referral link |
-| `/[slug]` | Artist public site (dynamic) |
+| `/[slug]` | Artist public site (dynamic) — with Store section (digital products) and "Picked by X DJs" badge |
 | `/[slug]/intake/[token]` | Studio intake submission form |
 | `/dl/[token]` | File download by token |
 | `/invoice/[id]` | Public invoice view and Stripe payment |
 | `/splits/review/[token]` | Split sheet review and e-sign |
+| `/dj/[djSlug]` | Public DJ profile — sets, mixes, crates, events |
+| `/dj/[djSlug]/crate/[crateName]` | Public DJ crate page |
 
 ---
 
@@ -182,6 +197,15 @@ _Last updated: 2026-03-29_
 | `GET /api/ai-jobs/[id]` | Poll individual job status |
 | `GET /api/ai-jobs/[id]/press-kit-pdf` | Download completed press kit PDF |
 
+### Track Shield
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/dashboard/ai/track-shield` | List past scans and results |
+| `POST /api/dashboard/ai/track-shield/checkout` | Create Stripe Checkout for selected package |
+| `POST /api/dashboard/ai/track-shield/scan` | Trigger AudD scans after payment |
+| `GET /api/dashboard/ai/track-shield/[scanId]` | Detailed results for one scan |
+| `GET /api/dashboard/ai/track-shield/[scanId]/pdf` | Download scan report as PDF |
+
 ### AI Tools — Standalone (no credit queue)
 | Endpoint | Description |
 |----------|-------------|
@@ -190,6 +214,27 @@ _Last updated: 2026-03-29_
 | `POST /api/ai-tools/contract-scanner` | Scan PDF contract with Claude |
 | `POST /api/ai-tools/split-sheet` | Generate split sheet PDF |
 | `POST /api/ai-tools/bio-generator` | Generate artist bio with Claude |
+
+### Digital Products
+| Endpoint | Description |
+|----------|-------------|
+| `GET/POST /api/dashboard/digital-products` | Digital product CRUD (Singles, EPs, Albums) |
+| `POST /api/dashboard/digital-products/checkout` | Stripe Checkout for digital product purchase |
+| `GET /api/explore/digital-products` | Public listing of published digital products |
+| `GET /api/dl/[token]` | Buyer download by token (ID3-tagged MP3) |
+
+### DJ Platform
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/dj/attribute` | Set attribution cookie for a DJ's page/crate/mix visit |
+| `GET/PUT /api/dj/profile` | Get or update DJ profile (bio, genres, city, social links) |
+| `GET /api/dj/earnings` | DJ balance, total earnings, attributions, withdrawals |
+| `POST /api/dj/withdraw` | Request payout via Stripe Connect transfer |
+| `GET /api/dashboard/dj/analytics` | DJ analytics — fans, revenue, 12-week chart data |
+| `GET /api/admin/dj-verification` | Admin: list PENDING verification applications |
+| `POST /api/admin/dj-verification/[id]/approve` | Admin: approve DJ verification |
+| `POST /api/admin/dj-verification/[id]/deny` | Admin: deny DJ verification |
+| `POST /api/admin/audio-fingerprints/backfill` | Admin: backfill fingerprints for existing tracks |
 
 ### Dashboard — Artist Content
 | Endpoint | Description |
@@ -304,7 +349,7 @@ _Last updated: 2026-03-29_
 
 ---
 
-## PRISMA MODELS (89 total)
+## PRISMA MODELS (110 total)
 
 ```
 Account              ActivityLog          AdminAccount
@@ -314,28 +359,33 @@ AmbassadorPayout     ArtistBookingInquiry ArtistCollaborator
 ArtistPhoto          ArtistPressItem      ArtistRelease
 ArtistShow           ArtistSite           ArtistSupport
 ArtistTestimonial    ArtistVideo          AudioFeatures
-BeatLeaseSettings    BeatLicense          BeatPreview
-BookingSession       BroadcastLog         Contact
-ContactSubmission    DeliveredFile        EmailCampaign
-ExploreFeatureCard   FanAutomation        FanContact
-FanScore             GenerationFeedback   GenerationLog
-IntakeLink           IntakeSubmission     Invoice
-LicenseDocument      LinkClick            MerchOrder
-MerchProduct         Notification         OnboardingEmailLog
-PageView             Payment              PendingSignup
-PlatformPricing      PreSaveCampaign      PreSaveClick
-ProducerLeaseSettings ProducerProfile     PromoCode
-PromoRedemption      QuickSend            RecentPlay
-ReEngagementEmailLog Receipt              Referral
-ReleasePlan          ReleasePlanTask      SampleLog
-ScheduledEmail       SessionNote          SessionNoteAttachment
-ShowInterest         ShowWaitlist         Split
-SplitPayment         SplitSheet           StemSeparation
-StreamLease          StreamLeaseAgreement StreamLeaseBookmark
-StreamLeasePayment   StreamLeasePlay      Studio
-StudioArtist         StudioCredit         StudioEngineer
-StudioEquipment      StudioPortfolioTrack Subscription
-Track                TrackPlay            User
+AudioFingerprint     BeatLeaseSettings    BeatLicense
+BeatPreview          BookingSession       BroadcastLog
+Contact              ContactSubmission    CrateItem
+DeliveredFile        DigitalProduct       DigitalPurchase
+DJAttribution        DJCrate              DJEvent
+DJMix                DJMixTrack           DJProfile
+DJSet                DJVerificationApplication DJWithdrawal
+EmailCampaign        ExploreFeatureCard   FanAutomation
+FanContact           FanScore             GenerationFeedback
+GenerationLog        IntakeLink           IntakeSubmission
+Invoice              LicenseDocument      LinkClick
+MerchOrder           MerchProduct         Notification
+OnboardingEmailLog   PageView             Payment
+PendingSignup        PlatformPricing      PreSaveCampaign
+PreSaveClick         ProducerLeaseSettings ProducerProfile
+PromoCode            PromoRedemption      QuickSend
+RecentPlay           ReEngagementEmailLog Receipt
+Referral             ReleasePlan          ReleasePlanTask
+SampleLog            ScheduledEmail       SessionNote
+SessionNoteAttachment ShowInterest        ShowWaitlist
+Split                SplitPayment         SplitSheet
+StemSeparation       StreamLease          StreamLeaseAgreement
+StreamLeaseBookmark  StreamLeasePayment   StreamLeasePlay
+Studio               StudioArtist         StudioCredit
+StudioEngineer       StudioEquipment      StudioPortfolioTrack
+Subscription         Track                TrackPlay
+TrackShieldResult    TrackShieldScan      User
 UserAttribution      VerificationToken    YouTubeSync
 YoutubeReference
 ```
@@ -346,7 +396,7 @@ YoutubeReference
 
 | Service | Purpose | Status |
 |---------|---------|--------|
-| **Stripe** | Subscriptions, PPU, payouts, webhooks | ⚠️ KEYS MISSING — all payment flows fail |
+| **Stripe** | Subscriptions, PPU, payouts, webhooks | ✅ Keys set — test mode |
 | **Anthropic Claude** | Contract Scanner, Bio Generator, A&R Report, Press Kit | ✅ Key set |
 | **OpenAI** | A&R Report Whisper transcription | ✅ Key set |
 | **Replicate** | Vocal Remover (Demucs) + Lyric Video Whisper transcription | ✅ Key set |
@@ -358,10 +408,13 @@ YoutubeReference
 | **UploadThing** | File uploads (audio, images, PDFs) | ✅ Token set |
 | **AWS S3** | Stem/audio file storage | ✅ Keys set |
 | **Supabase PostgreSQL** | Primary database | ✅ Connected |
-| **YouTube Data API** | YouTube video sync/embed | ⚠️ Key referenced but not found in .env.local |
+| **YouTube Data API** | YouTube video sync/embed + DJ set seeding | ✅ Key set |
+| **AudD** | Track Shield — content recognition scanning against 80M+ songs | ⚠️ AUDD_API_KEY needed |
+| **ACRCloud** | DJ mix track identification via audio fingerprint | ⚠️ Keys needed |
+| **Chromaprint / fpcalc** | Audio fingerprinting for track upload | ⚠️ Binary not on Vercel — falls back to SHA-256 + music-metadata |
 | **Sentry** | Error monitoring | ❌ NOT INTEGRATED |
 | **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
-| **Stripe Connect** | Producer direct payouts | ⚠️ Code complete, no Stripe account connected |
+| **Stripe Connect** | DJ and producer direct payouts | ✅ Code complete — transfer.paid/failed webhook handlers wired |
 
 ---
 
@@ -401,16 +454,17 @@ YoutubeReference
 ### AI Tools
 | Feature | Status |
 |---------|--------|
-| AI Cover Art (Replicate/Flux) | ✅ DONE |
-| AI Mastering (Auphonic) | ✅ DONE |
+| AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 | ✅ DONE |
+| AI Mastering (Auphonic) — $7.99 PPU | ✅ DONE |
 | AI Music Video (Kling via FAL / Runway fallback) | ✅ DONE |
-| AI Lyric Video (Remotion Lambda) | ✅ BUILT — Whisper via Replicate, multi-step UI, Remotion deployed |
+| AI Lyric Video (Remotion Lambda) — $14.99 PPU | ✅ BUILT — Whisper via Replicate, multi-step UI, Remotion deployed |
 | A&R Report (Claude) | ✅ DONE |
-| Press Kit (Claude + PDF) | ✅ DONE |
+| Press Kit (Claude + PDF) — $9.99 PPU | ✅ DONE |
 | Bio Generator (Claude, free) | ✅ DONE |
 | Contract Scanner (Claude + pdf-parse, PPU) | ✅ DONE |
 | Split Sheet Generator (free PDF) | ✅ DONE |
 | Vocal Remover (Replicate Demucs, PPU) | ✅ DONE |
+| Track Shield (AudD content scan) — Single $2.99 / 5-pack $9.99 / 10-pack $14.99 / Catalog $29.99 | ✅ DONE |
 | Credit system (used/limit per tier) | ✅ DONE |
 | Credit reset on monthly renewal (`invoice.paid`) | ✅ DONE |
 | PPU Stripe Checkout flow | ✅ DONE |
@@ -421,15 +475,16 @@ YoutubeReference
 ### Subscription & Billing
 | Feature | Status |
 |---------|--------|
-| Subscription tiers (Launch $19 / Push $49 / Reign $99) | ✅ DONE (code) |
-| Studio tiers (Pro $49 / Elite $99) | ✅ DONE (code) |
-| Stripe Checkout for new subscriptions | ⚠️ PARTIAL — keys missing |
-| Subscription upgrade/downgrade | ⚠️ PARTIAL — keys missing |
-| Stripe billing portal | ⚠️ PARTIAL — keys missing |
-| Stripe webhook (subscription lifecycle) | ✅ DONE (code) |
-| Affiliate commission on renewals | ✅ DONE (code) |
-| Stripe Connect producer payouts | ⚠️ PARTIAL — needs Stripe account |
+| Subscription tiers (Launch $19 / Push $49 / Reign $99) | ✅ DONE |
+| Studio tiers (Pro $49 / Elite $99) | ✅ DONE |
+| Stripe Checkout for new subscriptions | ✅ DONE — Stripe keys set |
+| Subscription upgrade/downgrade | ✅ DONE — Stripe keys set |
+| Stripe billing portal | ✅ DONE — Stripe keys set |
+| Stripe webhook (subscription lifecycle) | ✅ DONE |
+| Affiliate commission on renewals | ✅ DONE |
+| Stripe Connect DJ + producer payouts (`transfer.paid`/`transfer.failed` wired) | ✅ DONE (code) — needs Stripe account connected |
 | DB-backed PlatformPricing (admin editable) | ✅ DONE |
+| Price standardization (Reign $99, Mastering $7.99, Lyric Video $14.99, Press Kit $9.99, Cover Art $4.99/$7.99) | ✅ DONE |
 
 ### Beat Marketplace
 | Feature | Status |
@@ -437,11 +492,24 @@ YoutubeReference
 | Producer beat listings | ✅ DONE |
 | Beat preview player | ✅ DONE |
 | Beat licensing (Basic / Exclusive / Unlimited) | ✅ DONE |
-| Beat purchase via Stripe Checkout | ⚠️ PARTIAL — keys missing |
+| Beat purchase via Stripe Checkout | ✅ DONE — Stripe keys set |
 | Stream Leases ($1/mo recurring) | ✅ DONE |
 | Stream lease revenue splits (70/30) | ✅ DONE |
 | Stream lease grace period (3 days) on failed payment | ✅ DONE |
 | License document PDF | ✅ DONE |
+
+### Digital Products (new)
+| Feature | Status |
+|---------|--------|
+| Digital product types: Single ($0.99–$49.99), EP ($4.99–$99.99), Album ($4.99–$99.99) | ✅ DONE |
+| Artist creates and prices digital products | ✅ DONE |
+| Stripe Checkout for digital purchase | ✅ DONE |
+| Buyer email receipt via Brevo on purchase | ✅ DONE |
+| Artist in-app notification on sale | ✅ DONE |
+| Token-gated download link for buyer | ✅ DONE |
+| ID3 tags embedded in MP3 on download (node-id3) | ✅ DONE |
+| Metadata fields: title, artist, album, genre, year, ISRC, songwriter, producer, copyright, explicit, BPM, key | ✅ DONE |
+| StoreSection on public artist page (`/[slug]`) | ✅ DONE |
 
 ### Explore & Discovery
 | Feature | Status |
@@ -476,6 +544,32 @@ YoutubeReference
 | Referral tracking and reward billing | ✅ DONE |
 | Affiliate coupon at Stripe checkout (10% / 3mo) | ✅ DONE |
 
+### DJ Platform (new)
+| Feature | Status |
+|---------|--------|
+| DJ mode toggle on user account | ✅ DONE |
+| DJ profile (slug, bio, genres, city, social links, profile photo) | ✅ DONE |
+| Public DJ profile page (`/dj/[djSlug]`) — sets, mixes, crates, events | ✅ DONE |
+| Public crate page (`/dj/[djSlug]/crate/[crateName]`) | ✅ DONE |
+| DJ crate management + CrateItem tracking | ✅ DONE |
+| DJ mix uploads with ACRCloud auto-tracklist identification | ✅ DONE |
+| DJ set management (YouTube-linked, real thumbnail data) | ✅ DONE |
+| DJ events listing | ✅ DONE |
+| DJ verification flow (NONE → PENDING → APPROVED/DENIED) | ✅ DONE |
+| Attribution cookie on profile/mix/crate visit (`POST /api/dj/attribute`) | ✅ DONE |
+| DJ Attribution Engine — 10% of artist portion credited to DJ on purchase if `djDiscoveryOptIn=true` | ✅ DONE |
+| DJ earnings dashboard — balance, total, attributions, withdrawals | ✅ DONE |
+| DJ payout via Stripe Connect (`stripe.transfers.create`, transfer.paid/failed webhooks) | ✅ DONE (code) |
+| DJ analytics dashboard — fans attributed, revenue, 12-week Recharts chart | ✅ DONE |
+| DJ settings page — bio, genres, city, social links | ✅ DONE |
+| Artist DJ Activity page — crate adds, DJs who have their tracks, DJ-attributed revenue | ✅ DONE |
+| "Picked by X DJs" badge on artist public page (shows when ≥3 DJs) | ✅ DONE |
+| Admin DJ analytics section (platform stats, top DJs, pending verification) | ✅ DONE |
+| Admin DJ verification queue (approve/deny) | ✅ DONE |
+| Audio fingerprinting on track upload (fpcalc → SHA-256 fallback for Vercel) | ✅ DONE |
+| DJ directory tab on Explore page | ✅ DONE |
+| Seed script with real YouTube DJ set data (`scripts/seed-dj.js`) | ✅ DONE |
+
 ### Admin Panel
 | Feature | Status |
 |---------|--------|
@@ -489,6 +583,13 @@ YoutubeReference
 | Conversion funnel analytics | ✅ DONE |
 | Content moderation queue | ✅ DONE |
 | Admin team management with roles | ✅ DONE |
+| DJ analytics stats + verification queue | ✅ DONE |
+
+### Artist Public Page UX
+| Feature | Status |
+|---------|--------|
+| Preview My Page button on `/dashboard/site` and `/dashboard/settings` | ✅ DONE |
+| Branded 404 page for unknown slugs (dark theme, IndieThis logo, link to explore) | ✅ DONE |
 
 ### Not Started
 | Feature | Status |
@@ -512,8 +613,12 @@ YoutubeReference
 | 2 | `AudioFeatures` table | Sparse data — radar filter works but most tracks/beats have no AudioFeatures record; similarity matching returns few results |
 | 3 | ~~Stripe everywhere~~ | ~~No `STRIPE_SECRET_KEY` in env → all subscription, PPU, invoice, beat purchase flows return 503 in dev~~ **FIXED** — all 6 Stripe env vars set; products + prices created in test mode |
 | 4 | ~~`CRON_SECRET` not set~~ | ~~Cron routes have no auth protection in dev~~ **FIXED** — all 5 cron routes validated; `CRON_SECRET` set in `.env` |
-| 5 | `YOUTUBE_API_KEY` not set | YouTube sync (`/lib/youtube-sync.ts`) will fail silently |
+| 5 | ~~`YOUTUBE_API_KEY` not set~~ | **FIXED** — key set in `.env.local` |
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
+| 7 | `AUDD_API_KEY` not set | Track Shield scans will fail until this is added |
+| 8 | ACRCloud keys not set | DJ mix tracklist auto-identification will fail |
+| 9 | `AudioFeatures` table | Sparse data — radar filter and similarity matching return few results |
+| 10 | Chromaprint / fpcalc not on Vercel | Audio fingerprinting falls back to SHA-256 hash — not a true acoustic fingerprint; future enhancement needed |
 
 ---
 
@@ -558,7 +663,11 @@ YoutubeReference
 | `STRIPE_PRICE_ID_PUSH_LIFETIME` | Lifetime Push price (if applicable) | ❌ MISSING |
 | `STRIPE_PRICE_ID_REIGN_LIFETIME` | Lifetime Reign price (if applicable) | ❌ MISSING |
 | `CRON_SECRET` | Cron route authentication | ✅ SET |
-| `YOUTUBE_API_KEY` | YouTube video sync | ❌ MISSING |
+| `YOUTUBE_API_KEY` | YouTube video sync + DJ set seeding | ✅ SET |
+| `AUDD_API_KEY` | Track Shield — AudD content recognition API | ❌ MISSING — required for Track Shield scans |
+| `ACR_CLOUD_ACCESS_KEY` | ACRCloud mix track identification | ❌ MISSING — required for DJ mix tracklists |
+| `ACR_CLOUD_ACCESS_SECRET` | ACRCloud secret | ❌ MISSING |
+| `ACR_CLOUD_HOST` | ACRCloud endpoint | ❌ MISSING |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
@@ -573,7 +682,10 @@ YoutubeReference
 - [ ] Create products + prices for Studio Pro ($49), Studio Elite ($99) → add to `PLAN_PRICES` in `stripe.ts`
 - [x] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
 - [ ] Add `invoice.created` to webhook subscribed events (required for stream lease billing)
-- [ ] Configure Stripe Connect for producer direct payouts
+- [ ] Configure Stripe Connect for DJ + producer direct payouts
+- [x] Add `transfer.paid` and `transfer.failed` to webhook subscribed events (DJ payouts)
 - [ ] Set webhook endpoint to `https://indiethis.com/api/stripe/webhook` (production)
 - [ ] Test: new signup → `checkout.session.completed` → user created + credits set
 - [ ] Test: monthly renewal → `invoice.paid` (billing_reason=subscription_cycle) → credits reset
+- [ ] Test: digital product purchase → buyer gets email receipt + download link
+- [ ] Test: DJ payout → `DJWithdrawal` status updates to COMPLETED via `transfer.paid` webhook
