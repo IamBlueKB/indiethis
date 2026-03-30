@@ -584,9 +584,9 @@ async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing LYRIC_VIDEO job ${job.id} — Step 10a: Whisper transcription`);
 
   // ── Env check ────────────────────────────────────────────────────────────
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey || openaiKey.startsWith("your_"))
-    throw new Error("OPENAI_API_KEY is not configured — add it to .env.local to use Lyric Video generation.");
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  if (!replicateToken || replicateToken.startsWith("your_"))
+    throw new Error("REPLICATE_API_TOKEN is not configured — add it to .env.local to use Lyric Video generation.");
 
   // ── Extract inputs ────────────────────────────────────────────────────────
   const input = (job.inputData ?? {}) as Record<string, unknown>;
@@ -607,44 +607,58 @@ async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
   if (!trackUrl?.trim())
     throw new Error("LYRIC_VIDEO job missing required input: trackUrl");
 
-  // ── Step 10a: Whisper — word-level transcription ──────────────────────────
-  console.log(`[lyric-video] fetching audio: ${trackUrl}`);
+  // ── Step 10a: Replicate Whisper — word-level transcription ───────────────
+  console.log(`[lyric-video] transcribing with Replicate Whisper large-v3: ${trackUrl}`);
 
-  const openai = new OpenAI({ apiKey: openaiKey });
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Replicate = require("replicate");
+  const replicate = new Replicate({ auth: replicateToken });
 
-  const audioRes = await fetch(trackUrl);
-  if (!audioRes.ok) throw new Error(`Failed to fetch audio: ${audioRes.statusText}`);
+  const replicateOutput = await replicate.run(
+    "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d6d5b9b6b2e3d7d4b31d5c0b6",
+    {
+      input: {
+        audio:           trackUrl,  // direct URL works
+        model:           "large-v3",
+        word_timestamps: true,
+        temperature:     0,
+      },
+    },
+  ) as {
+    transcription: string;
+    segments: Array<{
+      text:  string;
+      start: number;
+      end:   number;
+      words: Array<{ word: string; start: number; end: number; probability: number }>;
+    }>;
+  };
 
-  const audioBuffer = await audioRes.arrayBuffer();
-  const audioName   = trackUrl.split("/").pop() ?? "track.mp3";
-  const audioFile   = await toFile(Buffer.from(audioBuffer), audioName, {
-    type: audioRes.headers.get("content-type") ?? "audio/mpeg",
-  });
-
-  console.log(`[lyric-video] transcribing with Whisper (word-level timestamps)…`);
-
-  const transcription = await openai.audio.transcriptions.create({
-    model:                   "whisper-1",
-    file:                    audioFile,
-    response_format:         "verbose_json",
-    timestamp_granularities: ["word", "segment"],
-  });
-
-  // Cost: $0.006 per minute
-  const audioDurationMinutes = (transcription.duration ?? 0) / 60;
-  const costToUs = audioDurationMinutes * 0.006;
-
-  // Word-level entries: [{ word, start, end }]
+  // Flatten segments[].words[] into a flat words array
   type WhisperWord    = { word: string; start: number; end: number };
   type WhisperSegment = { id: number; start: number; end: number; text: string };
 
-  const words    = (transcription.words    ?? []) as WhisperWord[];
-  const segments = (transcription.segments ?? []) as WhisperSegment[];
-  const fullText = transcription.text ?? "";
+  const words: WhisperWord[] = (replicateOutput.segments ?? []).flatMap((seg) =>
+    (seg.words ?? []).map((w) => ({ word: w.word, start: w.start, end: w.end })),
+  );
+
+  const segments: WhisperSegment[] = (replicateOutput.segments ?? []).map((seg, i) => ({
+    id:    i,
+    start: seg.start,
+    end:   seg.end,
+    text:  seg.text,
+  }));
+
+  const fullText = replicateOutput.transcription ?? "";
+
+  // Estimate duration from last segment end (Replicate doesn't return explicit duration)
+  const audioDuration = segments.length > 0 ? segments[segments.length - 1].end : 0;
+  // Cost: Replicate whisper large-v3 ~$0.0088/min
+  const costToUs = (audioDuration / 60) * 0.0088;
 
   console.log(
     `[lyric-video] Whisper complete — ${words.length} words, ` +
-    `${segments.length} segments, ${audioDurationMinutes.toFixed(2)} min. ` +
+    `${segments.length} segments, ${(audioDuration / 60).toFixed(2)} min. ` +
     `Cost: $${costToUs.toFixed(4)}`,
   );
 
@@ -660,8 +674,8 @@ async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
         words,               // [{ word, start, end }] — used by Remotion for word-by-word animation
         segments,            // sentence-level segments with start/end times
         text:        fullText,
-        duration:    transcription.duration ?? null,
-        whisperModel: "whisper-1",
+        duration:    audioDuration > 0 ? audioDuration : null,
+        whisperModel: "openai/whisper:large-v3",
         transcriptionCostToUs: costToUs,
 
         // Render metadata saved for Step 11
@@ -1632,167 +1646,100 @@ export async function continueLyricVideoRender(
   }
 
   // ── Env checks ────────────────────────────────────────────────────────────
-  const serveUrl      = process.env.REMOTION_SERVE_URL;
-  const functionName  = process.env.REMOTION_FUNCTION_NAME;
-  const awsRegion     = process.env.AWS_REGION ?? "us-east-1";
-  const anthropicKey  = process.env.ANTHROPIC_API_KEY;
+  const serveUrl     = process.env.REMOTION_SERVE_URL;
+  const functionName = process.env.REMOTION_FUNCTION_NAME;
+  const awsRegion    = process.env.AWS_REGION ?? "us-east-1";
 
   if (!serveUrl || serveUrl.startsWith("your_"))
     throw new Error("REMOTION_SERVE_URL is not configured — add it to .env.local");
-  if (!functionName || functionName.startsWith("remotion-render") && functionName === "remotion-render-4-0-436-mem2048mb-disk2048mb-120sec")
-    console.warn("[lyric-video/phase2] REMOTION_FUNCTION_NAME looks like the default placeholder — make sure it is set to your actual deployed function name");
-  if (!anthropicKey || anthropicKey === "sk-ant-...")
-    throw new Error("ANTHROPIC_API_KEY is not configured");
+  if (!functionName)
+    console.warn("[lyric-video/phase2] REMOTION_FUNCTION_NAME is not set — render may fail");
 
   // ── Resolve word list (corrected or from transcription) ───────────────────
   const words: WhisperWord[] =
     correctedWords ??
     ((savedOutput.words ?? []) as WhisperWord[]);
 
-  type SavedSegment = { id: number; start: number; end: number; text: string };
-  const segments = (savedOutput.segments ?? []) as SavedSegment[];
-
   const {
     trackUrl,
-    visualStyle = "cinematic",
-    fontStyle   = "default",
-    accentColor = "#FFFFFF",
-    aspectRatio = "16:9",
+    accentColor   = "#D4A843",
+    aspectRatio   = "16:9",
+    textStyle     = "captions",
+    fontChoice    = "inter",
+    textPosition  = "bottom",
+    backgroundUrl = "",
+    backgroundType = "image",
+    trackTitle    = "Untitled",
+    artistName    = "Artist",
   } = savedOutput as {
-    trackUrl?:    string;
-    visualStyle?: string;
-    fontStyle?:   string;
-    accentColor?: string;
-    aspectRatio?: string;
+    trackUrl?:      string;
+    accentColor?:   string;
+    aspectRatio?:   string;
+    textStyle?:     string;
+    fontChoice?:    string;
+    textPosition?:  string;
+    backgroundUrl?: string;
+    backgroundType?: string;
+    trackTitle?:    string;
+    artistName?:    string;
   };
 
   if (!trackUrl?.trim())
     throw new Error("Lyric video Phase 2: trackUrl missing from outputData");
 
-  // ── Group words into lines using segment boundaries ───────────────────────
-  // Each segment from Whisper corresponds to one lyric line.
-  // We attach the word-level timing to each line for fine-grained animation.
-  type LyricLine = {
-    lineIndex:      number;
-    text:           string;
-    lineStartSec:   number;
-    lineEndSec:     number;
-    words:          Array<{ word: string; startSec: number; endSec: number }>;
-  };
+  // ── Convert words (start/end in seconds) → lyrics (startMs/endMs) ─────────
+  const lyrics = words.map((w) => ({
+    word:    w.word,
+    startMs: Math.round(w.start * 1000),
+    endMs:   Math.round(w.end   * 1000),
+  }));
 
-  const lyricsLines: LyricLine[] = segments.map((seg, i) => {
-    const lineWords = words.filter(
-      (w) => w.start >= seg.start - 0.05 && w.end <= seg.end + 0.05,
-    );
-    return {
-      lineIndex:    i,
-      text:         seg.text.trim(),
-      lineStartSec: seg.start,
-      lineEndSec:   seg.end,
-      words:        lineWords.map((w) => ({
-        word:     w.word,
-        startSec: w.start,
-        endSec:   w.end,
-      })),
-    };
-  });
+  const durationMs = lyrics.length > 0
+    ? lyrics[lyrics.length - 1].endMs + 500
+    : Number(savedOutput.duration ?? 180) * 1000;
 
-  // ── Step 11a: Claude Sonnet — generate Remotion animation script ──────────
-  console.log(`[lyric-video/phase2] generating animation script via Claude (${lyricsLines.length} lines)…`);
+  const claudeCostToUs = 0; // No Claude step needed — composition handles animation
 
-  const claudePrompt = `Generate a Remotion animation script for a lyric video. For each line, specify: animation type (fadeIn, typewriter, slideUp, bounce), timing (start frame, end frame based on timestamps at 30fps), position on screen, any emphasis words that should animate differently. Return as JSON array.
-
-Visual style: ${visualStyle}
-Font style: ${fontStyle}
-Accent color: ${accentColor}
-Aspect ratio: ${aspectRatio}
-
-Lyrics with word-level timing:
-${JSON.stringify(lyricsLines, null, 2)}
-
-Return ONLY a valid JSON array. Each element must have:
-{
-  "lineIndex": number,
-  "text": string,
-  "animation": "fadeIn" | "typewriter" | "slideUp" | "bounce",
-  "lineStartFrame": number,
-  "lineEndFrame": number,
-  "position": "top" | "center" | "bottom",
-  "y": number (0–100 percentage from top),
-  "words": [{ "word": string, "startFrame": number, "endFrame": number, "emphasize": boolean }]
-}
-
-Use 30fps for frame calculation (multiply seconds by 30). Vary animations to match the energy of the lyrics. Use emphasis sparingly for emotionally significant words.`;
-
-  const claudeRes = await claude.messages.create({
-    model:      SONNET,
-    max_tokens: 4096,
-    messages: [{ role: "user", content: claudePrompt }],
-  });
-
-  // Parse Claude's JSON response
-  const rawText = claudeRes.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-
-  // Strip possible markdown fences
-  const jsonText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let animationScript: any[];
-  try {
-    animationScript = JSON.parse(jsonText) as unknown[];
-  } catch {
-    throw new Error(`Claude returned invalid JSON for animation script:\n${rawText.slice(0, 500)}`);
-  }
-
-  const claudeCostToUs =
-    (claudeRes.usage.input_tokens  / 1_000_000) * 3 +
-    (claudeRes.usage.output_tokens / 1_000_000) * 15;
-
-  console.log(`[lyric-video/phase2] animation script ready — ${animationScript.length} lines, Claude cost $${claudeCostToUs.toFixed(4)}`);
-
-  // Save animation script to job output (so artist can inspect it if needed)
+  // Save render start to job output
   await db.aIJob.update({
     where: { id: jobId },
     data: {
       outputData: {
         ...savedOutput,
-        animationScript,
         renderStartedAt: new Date().toISOString(),
       } as Prisma.InputJsonValue,
-      costToUs: (Number(savedOutput.transcriptionCostToUs ?? 0)) + claudeCostToUs,
     },
   });
 
   // ── Step 11b: Remotion Lambda — render the lyric video ────────────────────
   console.log(`[lyric-video/phase2] dispatching Remotion Lambda render for job ${jobId}…`);
 
-  const totalDurationFrames = Math.ceil(
-    (Number(savedOutput.duration ?? 180)) * 30,
-  );
+  const totalDurationFrames = Math.ceil((durationMs / 1000) * 30);
 
   const { renderId, bucketName } = await renderMediaOnLambda({
-    region:          awsRegion as Parameters<typeof renderMediaOnLambda>[0]["region"],
-    functionName:    functionName!,
+    region:       awsRegion as Parameters<typeof renderMediaOnLambda>[0]["region"],
+    functionName: functionName!,
     serveUrl,
-    composition:     "LyricVideo",
+    composition:  "LyricVideo",
     inputProps: {
-      trackUrl,
-      animationScript,
-      visualStyle,
-      fontStyle,
+      lyrics,
+      audioUrl:        trackUrl,
+      trackTitle,
+      artistName,
+      backgroundUrl,
+      backgroundType,
       accentColor,
+      textStyle,
+      fontChoice,
+      textPosition,
       aspectRatio,
-      durationInFrames: totalDurationFrames,
+      durationMs,
     },
-    codec:           "h264",
-    imageFormat:     "jpeg",
-    maxRetries:      2,
-    privacy:         "public",
-    outName:         `lyric-video-${jobId}.mp4`,
+    codec:       "h264",
+    imageFormat: "jpeg",
+    maxRetries:  2,
+    privacy:     "public",
+    outName:     `lyric-video-${jobId}.mp4`,
   });
 
   console.log(`[lyric-video/phase2] render dispatched — renderId: ${renderId}, bucket: ${bucketName}`);
@@ -1848,12 +1795,10 @@ Use 30fps for frame calculation (multiply seconds by 30). Vary animations to mat
       status: AIJobStatus.COMPLETE,
       outputData: {
         ...savedOutput,
-        animationScript,
         finalVideoUrl,
         renderId,
         bucketName,
-        renderCompletedAt:  new Date().toISOString(),
-        claudeScriptCost:   claudeCostToUs,
+        renderCompletedAt: new Date().toISOString(),
         remotionCostEst,
         totalCostToUs,
       } as Prisma.InputJsonValue,
