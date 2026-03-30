@@ -65,6 +65,7 @@ const navItems: NavItem[] = [
   { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag },
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
   { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },
+  { label: "DJ Activity",   href: "/dashboard/dj-activity",  icon: Radio },
   { label: "License Vault", href: "/dashboard/vault",        icon: Archive },
   { label: "Samples",       href: "/dashboard/samples",     icon: Upload },
   { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },

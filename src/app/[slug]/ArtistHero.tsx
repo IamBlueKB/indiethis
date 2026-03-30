@@ -72,6 +72,7 @@ export interface ArtistHeroProps {
   genre:             string | null;
   role:              string | null;
   city:              string | null;
+  djPickedCount?:    number;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -92,6 +93,7 @@ export default function ArtistHero({
   genre,
   role,
   city,
+  djPickedCount,
 }: ArtistHeroProps) {
   const loadTrack     = useAudioStore((s) => s.load);
   const playInContext = useAudioStore((s) => s.playInContext);
@@ -175,6 +177,29 @@ export default function ArtistHero({
         >
           {displayName}
         </h1>
+
+        {/* DJ picked badge */}
+        {djPickedCount !== undefined && djPickedCount >= 3 && (
+          <span
+            style={{
+              display:       "inline-flex",
+              alignItems:    "center",
+              gap:           4,
+              fontSize:      10,
+              fontWeight:    600,
+              letterSpacing: "0.4px",
+              color:         "#D4A843",
+              border:        "1px solid rgba(212,168,67,0.50)",
+              borderRadius:  "20px",
+              padding:       "2px 8px",
+              marginTop:     4,
+              marginBottom:  0,
+              width:         "fit-content",
+            }}
+          >
+            ♪ Picked by {djPickedCount} DJs
+          </span>
+        )}
 
         {/* Identity line: genre · role · city */}
         {identityLine && (

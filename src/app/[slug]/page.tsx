@@ -283,6 +283,21 @@ async function ArtistSite({ slug }: { slug: string }) {
 
   const hasMusic = releases.length > 0 || artist.tracks.length > 0 || streamLeaseTracks.length > 0;
 
+  // Count distinct DJs who have this artist's tracks in their crates
+  const allArtistTrackIds = [
+    ...releases.flatMap((r) => r.tracks.map((t) => t.id)),
+    ...artist.tracks.map((t) => t.id),
+  ];
+  let djPickedCount = 0;
+  if (allArtistTrackIds.length > 0) {
+    const crateItemRows = await db.crateItem.findMany({
+      where:  { trackId: { in: allArtistTrackIds } },
+      select: { crate: { select: { djProfileId: true } } },
+    });
+    const uniqueDJIds = new Set(crateItemRows.map((r) => r.crate.djProfileId));
+    djPickedCount = uniqueDJIds.size;
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
 
@@ -316,6 +331,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         genre={site.genre ?? null}
         role={site.role ?? null}
         city={site.city ?? null}
+        djPickedCount={djPickedCount}
       />
 
       {/* Body */}
