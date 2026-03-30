@@ -45,6 +45,11 @@ const PRICING_SEED = [
   { key: "STREAM_LEASE_PRODUCER_SHARE", label: "Stream Lease Producer Share", value: 0.70, display: "70%",   category: "stream_leases", sortOrder: 31 },
   { key: "STREAM_LEASE_PLATFORM_SHARE", label: "Stream Lease Platform Share", value: 0.30, display: "30%",   category: "stream_leases", sortOrder: 32 },
 
+  // ─── DJ Crate Limits (per tier) ──────────────────────────────────────────
+  { key: "DJ_CRATE_LIMIT_LAUNCH", label: "DJ Crate Limit (Launch)", value: 5,  display: "5 crates",   category: "dj_limits", sortOrder: 50 },
+  { key: "DJ_CRATE_LIMIT_PUSH",   label: "DJ Crate Limit (Push)",   value: 15, display: "15 crates",  category: "dj_limits", sortOrder: 51 },
+  { key: "DJ_CRATE_LIMIT_REIGN",  label: "DJ Crate Limit (Reign)",  value: 0,  display: "Unlimited",  category: "dj_limits", sortOrder: 52 },
+
   // ─── SMS Broadcast Limits (per tier, per month) ───────────────────────────
   { key: "SMS_LIMIT_LAUNCH",       label: "SMS Limit (Launch)",       value: 100,  display: "100/mo",  category: "sms_limits", sortOrder: 40 },
   { key: "SMS_LIMIT_PUSH",         label: "SMS Limit (Push)",         value: 500,  display: "500/mo",  category: "sms_limits", sortOrder: 41 },

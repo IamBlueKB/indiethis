@@ -79,9 +79,12 @@ model User {
   autoSigninToken          String?                @unique
   autoSigninTokenExpiresAt DateTime?
   smsOptIn                 Boolean                @default(false)
+  djMode                   Boolean                @default(false)
   aiGenerations            AIGeneration[]
   accounts                 Account[]
   affiliate                Affiliate?
+  digitalProducts          DigitalProduct[]
+  djProfile                DJProfile?
   affiliateReferral        AffiliateReferral?     @relation("AffiliateReferredUser")
   ambassador               Ambassador?
   artistBookingInquiries   ArtistBookingInquiry[]
@@ -326,6 +329,8 @@ model Track {
   artist               User                  @relation(fields: [artistId], references: [id])
   release              ArtistRelease?        @relation(fields: [releaseId], references: [id])
   trackPlays           TrackPlay[]
+  digitalProducts      DigitalProduct[]      @relation("DigitalProductTracks")
+  crateItems           CrateItem[]
 }
 
 model DeliveredFile {
@@ -2120,6 +2125,175 @@ enum ReleasePlanStatus {
   IN_PROGRESS
   LAUNCHED
   CANCELLED
+}
+
+// ─── Digital Sales ────────────────────────────────────────────────────────────
+
+model DigitalProduct {
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id])
+  type          DigitalProductType
+  title         String
+  price         Int
+  description   String?
+  coverArtUrl   String?
+  tracks        Track[]             @relation("DigitalProductTracks")
+  published     Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  purchases     DigitalPurchase[]
+
+  @@index([userId])
+}
+
+model DigitalPurchase {
+  id               String         @id @default(cuid())
+  digitalProductId String
+  digitalProduct   DigitalProduct @relation(fields: [digitalProductId], references: [id])
+  buyerId          String?
+  buyerEmail       String
+  amount           Int
+  platformFee      Int
+  artistEarnings   Int
+  djAttributionId  String?
+  stripePaymentId  String?
+  downloadToken    String         @unique @default(cuid())
+  downloadCount    Int            @default(0)
+  maxDownloads     Int            @default(5)
+  createdAt        DateTime       @default(now())
+
+  @@index([digitalProductId])
+  @@index([downloadToken])
+}
+
+enum DigitalProductType {
+  SINGLE
+  ALBUM
+}
+
+// ─── DJ Feature ───────────────────────────────────────────────────────────────
+
+model DJProfile {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id])
+  slug            String          @unique
+  bio             String?
+  genres          String[]
+  city            String?
+  profilePhotoUrl String?
+  socialLinks     Json?
+  isVerified      Boolean         @default(false)
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  balance         Int             @default(0)
+  totalEarnings   Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  crates               Crate[]
+  sets                 DJSet[]
+  events               DJEvent[]
+  attributions         DJAttribution[]
+  withdrawals          DJWithdrawal[]
+  collaboratingCrates  CrateCollaborator[]
+}
+
+model Crate {
+  id            String              @id @default(cuid())
+  djProfileId   String
+  djProfile     DJProfile           @relation(fields: [djProfileId], references: [id])
+  name          String
+  description   String?
+  isPublic      Boolean             @default(true)
+  coverArtUrl   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  items         CrateItem[]
+  collaborators CrateCollaborator[]
+  invites       CrateInvite[]
+
+  @@index([djProfileId])
+}
+
+model CrateItem {
+  id        String   @id @default(cuid())
+  crateId   String
+  crate     Crate    @relation(fields: [crateId], references: [id])
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  addedAt   DateTime @default(now())
+  notes     String?
+
+  @@unique([crateId, trackId])
+  @@index([crateId])
+}
+
+model CrateCollaborator {
+  id          String    @id @default(cuid())
+  crateId     String
+  crate       Crate     @relation(fields: [crateId], references: [id])
+  djProfileId String
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  addedAt     DateTime  @default(now())
+
+  @@unique([crateId, djProfileId])
+}
+
+model CrateInvite {
+  id          String   @id @default(cuid())
+  crateId     String
+  crate       Crate    @relation(fields: [crateId], references: [id])
+  invitedById String
+  invitedId   String
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+
+  @@unique([crateId, invitedId])
+  @@index([invitedId])
+}
+
+model DJSet {
+  id          String    @id @default(cuid())
+  djProfileId String
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  title       String
+  createdAt   DateTime  @default(now())
+
+  @@index([djProfileId])
+}
+
+model DJEvent {
+  id          String    @id @default(cuid())
+  djProfileId String
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  title       String
+  eventDate   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([djProfileId])
+}
+
+model DJAttribution {
+  id                String    @id @default(cuid())
+  djProfileId       String
+  djProfile         DJProfile @relation(fields: [djProfileId], references: [id])
+  digitalPurchaseId String?
+  amount            Int       @default(0)
+  createdAt         DateTime  @default(now())
+
+  @@index([djProfileId])
+}
+
+model DJWithdrawal {
+  id          String    @id @default(cuid())
+  djProfileId String
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  amount      Int
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+
+  @@index([djProfileId])
 }
 
 enum TaskCategory {

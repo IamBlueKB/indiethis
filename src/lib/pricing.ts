@@ -90,6 +90,10 @@ export const PRICING_DEFAULTS = {
   SMS_LIMIT_REIGN:        { value: 2000, display: "2000/mo" },
   SMS_LIMIT_STUDIO_PRO:   { value: 500,  display: "500/mo"  },
   SMS_LIMIT_STUDIO_ELITE: { value: 2000, display: "2000/mo" },
+  // DJ crate limits per tier
+  DJ_CRATE_LIMIT_LAUNCH:  { value: 5,    display: "5 crates"  },
+  DJ_CRATE_LIMIT_PUSH:    { value: 15,   display: "15 crates" },
+  DJ_CRATE_LIMIT_REIGN:   { value: 0,    display: "Unlimited" },
 } as const;
 
 export type PricingKey = keyof typeof PRICING_DEFAULTS;
@@ -101,5 +105,15 @@ export function getSmsLimit(tier: string, pricing: PricingMap): number {
     pricing[key]?.value ??
     (PRICING_DEFAULTS as Record<string, { value: number }>)[key]?.value ??
     100
+  );
+}
+
+/** Returns the DJ crate limit for a subscription tier (0 = unlimited), from a live PricingMap */
+export function getCrateLimit(tier: string, pricing: PricingMap): number {
+  const key = `DJ_CRATE_LIMIT_${tier}`;
+  return (
+    pricing[key]?.value ??
+    (PRICING_DEFAULTS as Record<string, { value: number }>)[key]?.value ??
+    5
   );
 }
