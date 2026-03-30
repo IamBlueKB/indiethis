@@ -352,7 +352,7 @@ YoutubeReference
 | **Replicate** | Vocal Remover (Demucs model) | ✅ Key set |
 | **FAL.ai / Kling** | AI Music Video (primary provider) | ✅ Key set |
 | **Runway** | AI Music Video (fallback provider) | ✅ Key set |
-| **Dolby** | AI Mastering | ✅ Keys set (4 keys) |
+| **Auphonic** | AI Mastering | ✅ Key set |
 | **Remotion** | Lyric Video rendering (Lambda) | ✅ Keys set |
 | **Brevo** | Transactional email, SMS, campaigns | ✅ Keys set |
 | **UploadThing** | File uploads (audio, images, PDFs) | ✅ Token set |
@@ -402,7 +402,7 @@ YoutubeReference
 | Feature | Status |
 |---------|--------|
 | AI Cover Art (Replicate/Flux) | ✅ DONE |
-| AI Mastering (Dolby) | ✅ DONE |
+| AI Mastering (Auphonic) | ✅ DONE |
 | AI Music Video (Kling via FAL / Runway fallback) | ✅ DONE |
 | AI Lyric Video (Remotion Lambda) | ✅ DONE |
 | A&R Report (Claude) | ✅ DONE |
@@ -534,10 +534,7 @@ YoutubeReference
 | `REPLICATE_API_TOKEN` | Vocal Remover (Demucs) | ✅ SET |
 | `FAL_KEY` | AI Music Video (Kling via FAL) | ✅ SET |
 | `RUNWAY_API_KEY` | AI Music Video fallback | ✅ SET |
-| `DOLBY_API_KEY` | AI Mastering | ✅ SET |
-| `DOLBY_API_SECRET` | AI Mastering | ✅ SET |
-| `DOLBY_APP_KEY` | AI Mastering | ✅ SET |
-| `DOLBY_APP_SECRET` | AI Mastering | ✅ SET |
+| `AUPHONIC_API_KEY` | AI Mastering | ✅ SET |
 | `REMOTION_FUNCTION_NAME` | Lyric Video Lambda | ✅ SET |
 | `REMOTION_SERVE_URL` | Lyric Video Lambda | ✅ SET |
 | `BREVO_API_KEY` | Email and SMS sending | ✅ SET |

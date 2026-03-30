@@ -9,7 +9,7 @@
  *   5. On failure  → sets status FAILED + stores errorMessage.
  *
  * Provider integrations:
- *   Step 4  — AR_REPORT:   Whisper (transcription) + Dolby analyzeMusic + Claude Sonnet
+ *   Step 4  — AR_REPORT:   Whisper (transcription) + Auphonic analyzeMusic + Claude Sonnet
  *   Step 5+ — remaining handlers wired in subsequent steps
  */
 
@@ -25,7 +25,6 @@ import type { QueueStatus } from "@fal-ai/client";
 import ffmpegFluent from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { UTApi } from "uploadthing/server";
-import * as dolbyClient from "@dolbyio/dolbyio-rest-apis-client";
 import { claude, SONNET } from "@/lib/claude";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import { embedIndieThisMetadata } from "@/lib/image-metadata";
@@ -389,13 +388,10 @@ async function handleMastering(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing MASTERING job ${job.id} via ${job.provider}`);
 
   // ── Env checks ───────────────────────────────────────────────────────────
-  const dolbyKey    = process.env.DOLBY_API_KEY    ?? process.env.DOLBY_APP_KEY;
-  const dolbySecret = process.env.DOLBY_API_SECRET ?? process.env.DOLBY_APP_SECRET;
+  const auphonicKey = process.env.AUPHONIC_API_KEY;
 
-  if (!dolbyKey    || dolbyKey.startsWith("your_"))
-    throw new Error("DOLBY_API_KEY is not configured — add it to .env.local to use AI Mastering.");
-  if (!dolbySecret || dolbySecret.startsWith("your_"))
-    throw new Error("DOLBY_API_SECRET is not configured — add it to .env.local to use AI Mastering.");
+  if (!auphonicKey || auphonicKey.startsWith("your_"))
+    throw new Error("AUPHONIC_API_KEY is not configured — add it to .env.local to use AI Mastering.");
 
   // ── Extract inputs ────────────────────────────────────────────────────────
   const input = (job.inputData ?? {}) as Record<string, string>;
@@ -404,201 +400,183 @@ async function handleMastering(job: AIJob): Promise<HandlerResult> {
   if (!trackUrl?.trim())
     throw new Error("MASTERING job missing required input: trackUrl");
 
-  // ── Dolby auth ────────────────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dolbyToken: any = await dolbyClient.media.authentication.getApiAccessToken(
-    dolbyKey, dolbySecret, 1800,
-  );
-
-  // ── Step 1: upload source audio to Dolby temporary storage ───────────────
-  console.log(`[mastering] fetching source audio: ${trackUrl}`);
-  const audioRes = await fetch(trackUrl);
-  if (!audioRes.ok) throw new Error(`Failed to fetch audio: ${audioRes.statusText}`);
-  const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-  const filename    = trackUrl.split("/").pop() ?? "source.mp3";
-
-  console.log(`[mastering] uploading ${audioBuffer.length} bytes to Dolby storage`);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const uploadResult: any = await dolbyClient.media.io.getUploadUrl(dolbyToken, filename);
-  const dlbInputUrl: string = uploadResult?.url ?? uploadResult?.dlb_url;
-  const signedPutUrl: string = uploadResult?.signed_url ?? uploadResult?.upload_url;
-
-  if (!dlbInputUrl || !signedPutUrl)
-    throw new Error("Dolby did not return upload URL — check DOLBY_API_KEY is valid.");
-
-  // PUT the audio to Dolby's signed S3 URL
-  const putRes = await fetch(signedPutUrl, {
-    method:  "PUT",
-    body:    audioBuffer,
-    headers: { "Content-Type": audioRes.headers.get("content-type") ?? "audio/mpeg" },
-  });
-  if (!putRes.ok) throw new Error(`Dolby upload PUT failed: ${putRes.statusText}`);
-  console.log(`[mastering] source uploaded → ${dlbInputUrl}`);
-
-  // ── Step 2: define the 3 mastering profiles ───────────────────────────────
+  // ── Define the 3 mastering profiles ──────────────────────────────────────
   const PROFILES = [
     {
-      label:       "Warm",
-      description: "Boosted low-mids, gentle compression — ideal for late-night listening",
-      preset:      "C",    // Warm / bass-forward
-      loudness:    -14,    // Streaming standard
-      peak:        -1.0,
-      dlbOutputUrl: `dlb://mastering-${job.id}-warm`,
+      label:          "Warm",
+      description:    "Boosted low-mids, gentle compression — ideal for late-night listening",
+      loudnesstarget: "-14",
+      filtering:      "0",
     },
     {
-      label:       "Punchy",
-      description: "Emphasized transients, tighter compression — energetic and club-ready",
-      preset:      "D",    // Dynamic
-      loudness:    -9,     // Aggressive / commercial
-      peak:        -1.0,
-      dlbOutputUrl: `dlb://mastering-${job.id}-punchy`,
+      label:          "Punchy",
+      description:    "Emphasized transients, tighter compression — energetic and club-ready",
+      loudnesstarget: "-9",
+      filtering:      "0",
     },
     {
-      label:       "Broadcast Ready",
-      description: "Loudness normalized to -14 LUFS, balanced EQ — Spotify / Apple Music compliant",
-      preset:      "A",    // Balanced
-      loudness:    -14,
-      peak:        -1.5,   // Slightly conservative for broadcast compliance
-      dlbOutputUrl: `dlb://mastering-${job.id}-broadcast`,
+      label:          "Broadcast Ready",
+      description:    "Loudness normalized to -14 LUFS, balanced EQ — Spotify / Apple Music compliant",
+      loudnesstarget: "-14",
+      filtering:      "1",
     },
   ] as const;
 
-  // ── Step 3: start all 3 mastering jobs in parallel ────────────────────────
-  console.log(`[mastering] starting 3 mastering jobs in parallel`);
+  const authHeader = `bearer ${auphonicKey}`;
 
-  const jobIds = await Promise.all(
-    PROFILES.map(async (profile) => {
-      const body = JSON.stringify({
-        inputs:  [{ source: dlbInputUrl }],
-        outputs: [{
-          destination: profile.dlbOutputUrl,
-          master: {
-            dynamic_eq: { enable: true, preset: profile.preset },
-            loudness: {
-              enable:              true,
-              dialog_intelligence: false,
-              peak:                profile.peak,
-              loudness:            profile.loudness,
-            },
-          },
-        }],
+  // ── Start all 3 productions in parallel ──────────────────────────────────
+  console.log(`[mastering] starting 3 Auphonic productions in parallel`);
+
+  type AuphonicProduction = {
+    profile: (typeof PROFILES)[number];
+    uuid:    string;
+  };
+
+  const startResults = await Promise.allSettled(
+    PROFILES.map(async (profile): Promise<AuphonicProduction> => {
+      const form = new URLSearchParams();
+      form.set("input_file",      trackUrl);
+      form.set("action",          "start");
+      form.set("loudnesstarget",  profile.loudnesstarget);
+      form.set("filtering",       profile.filtering);
+
+      const res = await fetch("https://auphonic.com/api/simple/productions.json", {
+        method:  "POST",
+        headers: {
+          Authorization:  authHeader,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: form.toString(),
       });
-      const jobId = await dolbyClient.media.mastering.start(dolbyToken, body) as string;
-      console.log(`[mastering] ${profile.label} job started: ${jobId}`);
-      return { profile, jobId };
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText);
+        throw new Error(`Auphonic create failed for ${profile.label}: ${res.status} ${text}`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json: any = await res.json();
+      const uuid: string = json?.data?.uuid;
+      if (!uuid) throw new Error(`Auphonic did not return uuid for ${profile.label}`);
+      console.log(`[mastering] ${profile.label} production started — uuid: ${uuid}`);
+      return { profile, uuid };
     }),
   );
 
-  // ── Step 4: poll all 3 jobs in parallel ──────────────────────────────────
-  console.log(`[mastering] polling all 3 jobs for completion`);
-
-  const MAX_WAIT_MS = 600_000; // 10 minutes — mastering can be slow
+  // ── Poll each production until Done / Error ───────────────────────────────
+  const MAX_WAIT_MS = 600_000; // 10 minutes
   const POLL_MS     = 6_000;
 
-  const pollOne = async (jobId: string, label: string): Promise<{ status: string; result: unknown }> => {
+  type PollResult = {
+    statusString: string;
+    downloadUrl:  string | null;
+    measuredLUFS: number | null;
+  };
+
+  const pollProduction = async (uuid: string, label: string): Promise<PollResult> => {
     const started = Date.now();
     while (Date.now() - started < MAX_WAIT_MS) {
       await new Promise((r) => setTimeout(r, POLL_MS));
+      const res = await fetch(`https://auphonic.com/api/production/${uuid}.json`, {
+        headers: { Authorization: authHeader },
+      });
+      if (!res.ok) {
+        console.warn(`[mastering] poll HTTP error for ${label}: ${res.status}`);
+        continue;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res: any = await dolbyClient.media.mastering.getResults(dolbyToken, jobId);
-      const status = res?.status as string;
-      console.log(`[mastering] ${label} status: ${status}`);
-      if (["Success", "Failed", "Canceled", "Expired"].includes(status)) {
-        return { status, result: res };
+      const json: any = await res.json();
+      const statusString: string = json?.data?.status_string ?? "Unknown";
+      console.log(`[mastering] ${label} status: ${statusString}`);
+      if (statusString === "Done") {
+        const downloadUrl = (json?.data?.output_files?.[0]?.download_url as string) ?? null;
+        return { statusString, downloadUrl, measuredLUFS: null };
+      }
+      if (statusString === "Error") {
+        return { statusString, downloadUrl: null, measuredLUFS: null };
       }
     }
-    return { status: "Timeout", result: null };
+    return { statusString: "Timeout", downloadUrl: null, measuredLUFS: null };
   };
 
-  const pollResults = await Promise.allSettled(
-    jobIds.map(({ profile, jobId }) => pollOne(jobId, profile.label)),
-  );
-
-  // ── Step 5: collect download URLs for completed jobs ─────────────────────
-  type MasteringOutput = {
+  // Build poll tasks only for successfully started productions
+  type OutputEntry = {
     label:        string;
     description:  string;
-    preset:       string;
-    loudnessLUFS: number;
     downloadUrl:  string | null;
     measuredLUFS: number | null;
     status:       string;
   };
 
-  const outputs: MasteringOutput[] = [];
+  const outputs: OutputEntry[] = [];
+  const pollTasks: Array<{ index: number; profile: (typeof PROFILES)[number]; uuid: string }> = [];
 
-  for (let i = 0; i < jobIds.length; i++) {
-    const { profile }  = jobIds[i];
-    const pollResult   = pollResults[i];
-
-    if (pollResult.status === "rejected" || pollResult.value.status !== "Success") {
-      const reason = pollResult.status === "rejected"
-        ? String(pollResult.reason)
-        : `Job ended with status: ${pollResult.value.status}`;
-      console.warn(`[mastering] ${profile.label} failed: ${reason}`);
+  for (let i = 0; i < startResults.length; i++) {
+    const sr = startResults[i];
+    const profile = PROFILES[i];
+    if (sr.status === "rejected") {
+      console.warn(`[mastering] ${profile.label} start failed: ${sr.reason}`);
       outputs.push({
-        label:        profile.label,
-        description:  profile.description,
-        preset:       profile.preset,
-        loudnessLUFS: profile.loudness,
-        downloadUrl:  null,
+        label:       profile.label,
+        description: profile.description,
+        downloadUrl: null,
         measuredLUFS: null,
-        status:       pollResult.status === "rejected" ? "Failed" : pollResult.value.status,
+        status:      "Failed",
       });
-      continue;
+    } else {
+      pollTasks.push({ index: i, profile, uuid: sr.value.uuid });
+      outputs.push(null as unknown as OutputEntry); // placeholder
     }
+  }
 
-    // Get signed HTTPS download URL for this dlb:// output
-    let downloadUrl: string | null = null;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dlResult: any = await dolbyClient.media.io.getDownloadUrl(dolbyToken, profile.dlbOutputUrl);
-      downloadUrl = (dlResult?.url ?? dlResult?.signed_url) as string;
-    } catch (e) {
-      console.warn(`[mastering] could not get download URL for ${profile.label}: ${e}`);
+  const pollResults = await Promise.allSettled(
+    pollTasks.map(({ profile, uuid }) => pollProduction(uuid, profile.label)),
+  );
+
+  for (let t = 0; t < pollTasks.length; t++) {
+    const { index, profile } = pollTasks[t];
+    const pr = pollResults[t];
+    if (pr.status === "rejected") {
+      console.warn(`[mastering] ${profile.label} poll threw: ${pr.reason}`);
+      outputs[index] = {
+        label:       profile.label,
+        description: profile.description,
+        downloadUrl: null,
+        measuredLUFS: null,
+        status:      "Failed",
+      };
+    } else {
+      const { statusString, downloadUrl, measuredLUFS } = pr.value;
+      outputs[index] = {
+        label:       profile.label,
+        description: profile.description,
+        downloadUrl: statusString === "Done" ? downloadUrl : null,
+        measuredLUFS,
+        status:      statusString === "Done" ? "Success" : statusString,
+      };
+      if (statusString === "Done") {
+        console.log(
+          `[mastering] ${profile.label} complete. ` +
+          `Download: ${downloadUrl?.slice(0, 60)}…`,
+        );
+      } else {
+        console.warn(`[mastering] ${profile.label} ended with status: ${statusString}`);
+      }
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = pollResult.value.result as any;
-    const measuredLUFS = r?.result?.loudness?.measured_loudness ?? null;
-
-    outputs.push({
-      label:        profile.label,
-      description:  profile.description,
-      preset:       profile.preset,
-      loudnessLUFS: profile.loudness,
-      downloadUrl,
-      measuredLUFS,
-      status:       "Success",
-    });
-
-    console.log(
-      `[mastering] ${profile.label} complete — measured ${measuredLUFS} LUFS. ` +
-      `Download: ${downloadUrl?.slice(0, 60)}…`,
-    );
   }
 
   const successCount = outputs.filter((o) => o.status === "Success").length;
   if (successCount === 0)
-    throw new Error("All 3 Dolby mastering jobs failed. Check DOLBY_API_KEY and try again.");
+    throw new Error("All 3 Auphonic mastering productions failed. Check AUPHONIC_API_KEY and try again.");
 
-  // Dolby mastering cost: ~$0.006 per minute per job
-  const audioDurationMinutes = audioBuffer.length / (1411 * 125); // rough estimate at 1411kbps
-  const costToUs = successCount * audioDurationMinutes * 0.006;
-
-  console.log(
-    `[mastering] done — ${successCount}/3 succeeded. ` +
-    `Est. cost: $${costToUs.toFixed(4)}`,
-  );
+  console.log(`[mastering] done — ${successCount}/3 succeeded.`);
 
   return {
     outputData: {
-      outputs,           // array of { label, description, downloadUrl, measuredLUFS, status }
+      outputs,        // array of { label, description, downloadUrl, measuredLUFS, status }
       sourceTrackUrl: trackUrl,
-      dlbInputUrl,
       successCount,
     },
-    costToUs,
   };
 }
 
@@ -715,16 +693,10 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
 
   // ── Env checks — fail fast with actionable messages ──────────────────────
   const openaiKey  = process.env.OPENAI_API_KEY;
-  const dolbyKey   = process.env.DOLBY_API_KEY   ?? process.env.DOLBY_APP_KEY;
-  const dolbySecret= process.env.DOLBY_API_SECRET ?? process.env.DOLBY_APP_SECRET;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
   if (!openaiKey   || openaiKey.startsWith("your_"))
     throw new Error("OPENAI_API_KEY is not configured — add it to .env.local to use the A&R Report.");
-  if (!dolbyKey    || dolbyKey.startsWith("your_"))
-    throw new Error("DOLBY_API_KEY is not configured — add it to .env.local to use the A&R Report.");
-  if (!dolbySecret || dolbySecret.startsWith("your_"))
-    throw new Error("DOLBY_API_SECRET is not configured — add it to .env.local to use the A&R Report.");
   if (!anthropicKey || anthropicKey.startsWith("sk-ant-api") === false && anthropicKey === "sk-ant-...")
     throw new Error("ANTHROPIC_API_KEY is not configured — add it to .env.local to use the A&R Report.");
 
@@ -768,75 +740,12 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
 
   console.log(`[ar-report] Whisper complete — ${audioDurationMinutes.toFixed(1)} min, ${lyrics.length} chars`);
 
-  // ── Step 2: Dolby analyzeMusic ────────────────────────────────────────────
-  console.log(`[ar-report] analyzing audio via Dolby analyzeMusic`);
+  // ── Step 2: audio analysis (placeholder — no third-party analyzer configured) ─
+  // Audio analysis is not available without a dedicated service.
+  // audioAnalysis remains empty; the Claude report will note measurements as unavailable.
+  const audioAnalysis: Record<string, unknown> = {};
 
-  let audioAnalysis: Record<string, unknown> = {};
-
-  try {
-    // Get Dolby access token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dolbyToken: any = await dolbyClient.media.authentication.getApiAccessToken(
-      dolbyKey,
-      dolbySecret,
-      1800,
-    );
-
-    // Build the analyze job body
-    const analyzeBody = JSON.stringify({
-      inputs:  [{ source: trackUrl }],
-      outputs: [{ destination: `dlb://ar-report-${job.id}` }],
-    });
-
-    // Start analyze job
-    const analyzeJobId = await dolbyClient.media.analyzeMusic.start(dolbyToken, analyzeBody) as string;
-    console.log(`[ar-report] Dolby analyzeMusic job started: ${analyzeJobId}`);
-
-    // Poll for results (max 3 minutes, 5-second intervals)
-    const maxWaitMs  = 180_000;
-    const pollMs     = 5_000;
-    const started    = Date.now();
-    let   analyzeResult: Record<string, unknown> | null = null;
-
-    while (Date.now() - started < maxWaitMs) {
-      await new Promise((r) => setTimeout(r, pollMs));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: any = await dolbyClient.media.analyzeMusic.getResults(dolbyToken, analyzeJobId);
-      const status = result?.status as string;
-
-      if (status === "Success") {
-        analyzeResult = result;
-        break;
-      }
-      if (["Failed", "Canceled", "Expired"].includes(status)) {
-        console.warn(`[ar-report] Dolby analyzeMusic ${status} — proceeding without audio analysis`);
-        break;
-      }
-    }
-
-    if (analyzeResult) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = analyzeResult as any;
-      audioAnalysis = {
-        loudness:      r?.result?.audio?.loudness?.measured     ?? null,
-        truePeak:      r?.result?.audio?.loudness?.true_peak    ?? null,
-        dynamicRange:  r?.result?.audio?.dynamics?.range        ?? null,
-        noiseLevel:    r?.result?.audio?.noise?.snr_avg         ?? null,
-        tempo:         r?.result?.music?.tempo?.bpm             ?? null,
-        key:           r?.result?.music?.key?.value             ?? null,
-        mode:          r?.result?.music?.key?.mode              ?? null,
-        energy:        r?.result?.music?.energy?.value          ?? null,
-        danceability:  r?.result?.music?.danceability?.value    ?? null,
-      };
-      // Dolby analyzeMusic: ~$0.003 per minute
-      totalCost += audioDurationMinutes * 0.003;
-    }
-  } catch (dolbyErr: unknown) {
-    // Non-fatal — proceed with what we have
-    console.warn(`[ar-report] Dolby analyze error (non-fatal): ${dolbyErr instanceof Error ? dolbyErr.message : dolbyErr}`);
-  }
-
-  console.log(`[ar-report] audio analysis:`, audioAnalysis);
+  console.log(`[ar-report] audio analysis: skipped (no analyzer configured)`);
 
   // ── Step 3: Claude Sonnet — generate A&R report ───────────────────────────
   console.log(`[ar-report] generating report via Claude Sonnet`);
@@ -859,7 +768,7 @@ Be specific and actionable, not generic. Reference actual data from the audio an
 - Target Market: ${targetMarket || "Not specified"}
 - Comparable Artists: ${comparableArtists || "Not specified"}
 
-**Audio Analysis (Dolby.io):**
+**Audio Analysis:**
 - Integrated Loudness: ${audioAnalysis.loudness != null ? `${audioAnalysis.loudness} LUFS` : "Not available"}
 - True Peak: ${audioAnalysis.truePeak != null ? `${audioAnalysis.truePeak} dBTP` : "Not available"}
 - Dynamic Range: ${audioAnalysis.dynamicRange != null ? `${audioAnalysis.dynamicRange} LU` : "Not available"}
