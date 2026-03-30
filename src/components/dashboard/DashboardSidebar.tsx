@@ -39,6 +39,7 @@ import {
   ShoppingCart,
   Disc3,
   ShieldCheck,
+  Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -104,6 +105,7 @@ const djNavItems: NavItem[] = [
   { label: "Analytics", href: "/dashboard/dj/analytics", icon: BarChart2 },
   { label: "Earnings",      href: "/dashboard/dj/earnings",      icon: DollarSign },
   { label: "Verification",  href: "/dashboard/dj/verification",  icon: ShieldCheck },
+  { label: "DJ Settings",   href: "/dashboard/dj/settings",      icon: Settings2 },
 ];
 
 type Props = {
