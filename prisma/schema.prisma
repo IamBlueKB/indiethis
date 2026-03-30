@@ -333,6 +333,16 @@ model Track {
   digitalProducts      DigitalProduct[]      @relation("DigitalProductTracks")
   crateItems           CrateItem[]
   djMixTracks          DJMixTrack[]
+  fingerprint          AudioFingerprint?
+}
+
+model AudioFingerprint {
+  id          String   @id @default(cuid())
+  trackId     String   @unique
+  track       Track    @relation(fields: [trackId], references: [id])
+  fingerprint String
+  duration    Int
+  createdAt   DateTime @default(now())
 }
 
 model DeliveredFile {

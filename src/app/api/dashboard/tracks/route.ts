@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
@@ -43,6 +44,13 @@ export async function POST(req: NextRequest) {
       description: body.description?.trim() ?? null,
     },
   });
+
+  // Fingerprint the track if fileUrl is a local filesystem path — fire and forget
+  // TODO: fileUrl is currently a remote URL (S3/Supabase), not a local path.
+  // To enable fingerprinting, download the file locally first, then call fingerprintTrack.
+  if (track.fileUrl && !track.fileUrl.startsWith("http://") && !track.fileUrl.startsWith("https://")) {
+    fingerprintTrack(track.id, track.fileUrl).catch(() => {});
+  }
 
   // Record first content upload timestamp — fire and forget
   void db.user.updateMany({
