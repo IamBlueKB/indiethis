@@ -20,6 +20,7 @@ import BookingSection from "./BookingSection";
 import ArtistFooter from "./ArtistFooter";
 import ArtistPageViewTracker from "./ArtistPageViewTracker";
 import ArtistNav from "./ArtistNav";
+import StoreSection, { type DigitalProductPublic } from "./StoreSection";
 import BeatsSection, { type PublicBeat } from "./BeatsSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
@@ -174,6 +175,18 @@ async function ArtistSite({ slug }: { slug: string }) {
     where:   { artistId: artist.id, isActive: true },
     orderBy: { createdAt: "desc" },
     select:  { id: true, title: true, artUrl: true, releaseDate: true, spotifyUrl: true, appleMusicUrl: true },
+  });
+
+  // Digital products for sale
+  const digitalProducts: DigitalProductPublic[] = await db.digitalProduct.findMany({
+    where:   { userId: artist.id, published: true },
+    orderBy: { createdAt: "desc" },
+    take:    12,
+    select: {
+      id: true, title: true, type: true, price: true,
+      coverArtUrl: true, description: true,
+      _count: { select: { tracks: true } },
+    },
   });
 
   // Marketplace beats by this producer (published tracks with BeatLeaseSettings)
@@ -400,6 +413,11 @@ async function ArtistSite({ slug }: { slug: string }) {
           <div id="merch">
             <MerchGrid products={artist.merchProducts} artistSlug={slug} justPurchased={false} />
           </div>
+        )}
+
+        {/* 10b. Digital Store */}
+        {digitalProducts.length > 0 && (
+          <StoreSection products={digitalProducts} artistName={displayName} />
         )}
 
         {/* 11. Support */}
