@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-03-30_
+_Last updated: 2026-03-30 (session 2)_
 
 ---
 
@@ -446,7 +446,9 @@ YoutubeReference
 | Release planner with task tracking | ✅ DONE |
 | SMS broadcast campaigns | ✅ DONE |
 | Play/link click analytics | ✅ DONE |
-| Referral program | ✅ DONE |
+| Referral program + reward tiers (CREDIT_1 / FREE_MONTH / DISCOUNT_20 / LIFETIME_PUSH / LIFETIME_REIGN) | ✅ DONE |
+| Referral LIFETIME tier — $0 Stripe prices created, subscription migration wired | ✅ DONE |
+| Referral tier-drop detection — reverts subscription to paid + in-app notification + Brevo email | ✅ DONE |
 | Affiliate program | ✅ DONE |
 | Custom artist slug | ✅ DONE |
 | Notifications (in-app) | ✅ DONE |
@@ -615,7 +617,7 @@ YoutubeReference
 | 4 | ~~`CRON_SECRET` not set~~ | ~~Cron routes have no auth protection in dev~~ **FIXED** — all 5 cron routes validated; `CRON_SECRET` set in `.env` |
 | 5 | ~~`YOUTUBE_API_KEY` not set~~ | **FIXED** — key set in `.env.local` |
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
-| 7 | `STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME` | Placeholder keys added to `.env.local` — fill in once created in Stripe dashboard |
+| 7 | ~~`STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME`~~ | **FIXED** — $0 Stripe prices created, IDs set in `.env.local`, billing + tier-drop logic fully wired |
 | 9 | `AudioFeatures` table | Sparse data — radar filter and similarity matching return few results |
 | 10 | Chromaprint / fpcalc not on Vercel | Audio fingerprinting falls back to SHA-256 hash — not a true acoustic fingerprint; future enhancement needed |
 
@@ -659,7 +661,8 @@ YoutubeReference
 | `STRIPE_PRICE_LAUNCH` | Launch plan Stripe price ID | ✅ SET |
 | `STRIPE_PRICE_PUSH` | Push plan Stripe price ID | ✅ SET |
 | `STRIPE_PRICE_REIGN` | Reign plan Stripe price ID | ✅ SET |
-| `STRIPE_PRICE_ID_PUSH_LIFETIME` | Lifetime Push price (if applicable) | ❌ MISSING |
+| `STRIPE_PRICE_ID_PUSH_LIFETIME` | $0 Push lifetime price (`price_1TGonsCnAaQlzZZifcbsXKba`) | ✅ SET |
+| `STRIPE_PRICE_ID_REIGN_LIFETIME` | $0 Reign lifetime price (`price_1TGontCnAaQlzZZiZvBCO8of`) | ✅ SET |
 | `STRIPE_PRICE_ID_REIGN_LIFETIME` | Lifetime Reign price (if applicable) | ❌ MISSING |
 | `CRON_SECRET` | Cron route authentication | ✅ SET |
 | `YOUTUBE_API_KEY` | YouTube video sync + DJ set seeding | ✅ SET |
@@ -677,6 +680,7 @@ YoutubeReference
 - [x] Add `STRIPE_WEBHOOK_SECRET` to env
 - [x] Create products + prices for Launch ($19), Push ($49), Reign ($99) → add price IDs to env
 - [ ] Create products + prices for Studio Pro ($49), Studio Elite ($99) → add to `PLAN_PRICES` in `stripe.ts`
+- [x] Create $0 lifetime prices for Push + Reign referral rewards → price IDs set in env
 - [x] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
 - [ ] Add `invoice.created` to webhook subscribed events (required for stream lease billing)
 - [ ] Configure Stripe Connect for DJ + producer direct payouts
