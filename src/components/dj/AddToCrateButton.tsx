@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Loader2, Check, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -23,6 +24,8 @@ export default function AddToCrateButton({ trackId }: Props) {
   const [added, setAdded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!session?.user) { setLoaded(true); return; }
@@ -75,7 +78,15 @@ export default function AddToCrateButton({ trackId }: Props) {
   return (
     <div ref={containerRef} className="relative">
       <button
-        onClick={() => { setOpen(v => !v); setError(null); }}
+        ref={buttonRef}
+        onClick={() => {
+          setError(null);
+          if (!open && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
+          }
+          setOpen(v => !v);
+        }}
         className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-colors"
         style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
         title="Add to Crate"
@@ -90,10 +101,10 @@ export default function AddToCrateButton({ trackId }: Props) {
         }
       </button>
 
-      {open && (
+      {open && dropdownPos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute top-full mt-1 right-0 rounded-xl border shadow-xl z-50 overflow-hidden min-w-[160px]"
-          style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+          className="fixed rounded-xl border shadow-xl overflow-hidden min-w-[160px]"
+          style={{ backgroundColor: "#141414", borderColor: "#2a2a2a", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
         >
           {crates.length === 0 ? (
             <p className="px-3 py-2 text-xs" style={{ color: "#888" }}>No crates yet.</p>
@@ -120,7 +131,8 @@ export default function AddToCrateButton({ trackId }: Props) {
               {error}
             </p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
