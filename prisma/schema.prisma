@@ -331,6 +331,7 @@ model Track {
   trackPlays           TrackPlay[]
   digitalProducts      DigitalProduct[]      @relation("DigitalProductTracks")
   crateItems           CrateItem[]
+  djMixTracks          DJMixTrack[]
 }
 
 model DeliveredFile {
@@ -2198,6 +2199,7 @@ model DJProfile {
   attributions         DJAttribution[]
   withdrawals          DJWithdrawal[]
   collaboratingCrates  CrateCollaborator[]
+  mixes                DJMix[]
 }
 
 model Crate {
@@ -2321,6 +2323,36 @@ model DJWithdrawal {
   createdAt   DateTime  @default(now())
 
   @@index([djProfileId])
+}
+
+model DJMix {
+  id          String       @id @default(cuid())
+  djProfileId String
+  djProfile   DJProfile    @relation(fields: [djProfileId], references: [id])
+  title       String
+  audioUrl    String
+  coverArtUrl String?
+  duration    Int?
+  description String?
+  tracklist   DJMixTrack[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([djProfileId])
+}
+
+model DJMixTrack {
+  id        String   @id @default(cuid())
+  djMixId   String
+  djMix     DJMix    @relation(fields: [djMixId], references: [id], onDelete: Cascade)
+  trackId   String?
+  track     Track?   @relation(fields: [trackId], references: [id])
+  position  Int
+  startTime Int?
+  title     String?
+  artist    String?
+
+  @@index([djMixId])
 }
 
 enum TaskCategory {
