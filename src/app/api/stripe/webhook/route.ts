@@ -295,6 +295,58 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      // --- Digital product purchase ---
+      if (checkSession.metadata?.type === "DIGITAL_PRODUCT") {
+        const { productId, buyerEmail, platformFee: feeStr, artistEarnings: earningsStr } = checkSession.metadata;
+        if (productId && buyerEmail) {
+          const alreadyPurchased = await db.digitalPurchase.findFirst({
+            where: { stripePaymentId: checkSession.id },
+            select: { id: true },
+          });
+          if (!alreadyPurchased) {
+            const purchase = await db.digitalPurchase.create({
+              data: {
+                digitalProductId: productId,
+                buyerEmail,
+                amount:          checkSession.amount_total ?? 0,
+                platformFee:     parseInt(feeStr ?? "0", 10),
+                artistEarnings:  parseInt(earningsStr ?? "0", 10),
+                stripePaymentId: checkSession.id,
+              },
+              include: {
+                digitalProduct: {
+                  select: { title: true, userId: true },
+                },
+              },
+            });
+
+            // Send buyer download email
+            const dlLink = `${process.env.NEXTAUTH_URL ?? "https://indiethis.com"}/dl/digital/${purchase.downloadToken}`;
+            void sendEmail({
+              to: { email: buyerEmail },
+              subject: `Your download is ready: ${purchase.digitalProduct.title}`,
+              htmlContent: `
+                <p>Thanks for your purchase!</p>
+                <p>Your download link for <strong>${purchase.digitalProduct.title}</strong> is ready:</p>
+                <p><a href="${dlLink}">${dlLink}</a></p>
+                <p>This link allows up to ${purchase.maxDownloads} downloads.</p>
+                <p>— The IndieThis Team</p>
+              `,
+            }).catch(() => {});
+
+            // Notify artist
+            void createNotification({
+              userId: purchase.digitalProduct.userId,
+              type: "MUSIC_SALE",
+              title: "New digital sale!",
+              message: `Someone purchased "${purchase.digitalProduct.title}" — you earn $${(purchase.artistEarnings / 100).toFixed(2)}`,
+              link: "/dashboard/music/sales",
+            }).catch(() => {});
+          }
+        }
+        break;
+      }
+
       // --- Atomic new-signup fallback (PendingSignup flow) ---
       // The /signup/complete page is the primary account creator; this webhook
       // handler is the idempotent fallback in case the user closes the tab before

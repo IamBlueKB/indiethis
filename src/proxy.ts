@@ -32,6 +32,10 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/artists")) return true;
   if (pathname.startsWith("/api/studios")) return true;
   if (pathname.startsWith("/api/beats")) return true;
+  // Digital product checkout — public (buyer provides email)
+  if (pathname === "/api/digital-products/checkout") return true;
+  // Digital download API — public (uses token auth)
+  if (pathname.startsWith("/api/dl/digital/")) return true;
   // Public studio contact form — /api/studio/[studioId]/contact
   if (/^\/api\/studio\/[^/]+\/contact$/.test(pathname)) return true;
   if (pathname.startsWith("/_next")) return true;
