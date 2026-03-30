@@ -16,6 +16,8 @@ import {
   ShoppingBag,
   Globe,
   ChevronRight,
+  ShieldCheck,
+  ShieldX,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,6 +62,14 @@ type UserDetail = {
   totalBeatLicenses: number;
   totalMerchOrders: number;
 };
+
+type DJProfileInfo = {
+  id: string;
+  slug: string;
+  isVerified: boolean;
+  verificationStatus: string;
+  verifiedAt: string | null;
+} | null;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -202,6 +212,8 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
   const [subTier, setSubTier] = useState(""); const [subStatus, setSubStatus] = useState("");
 
   const [impersonating, setImpersonating] = useState(false);
+  const [djProfile, setDjProfile] = useState<DJProfileInfo>(null);
+  const [djVerifyLoading, setDjVerifyLoading] = useState(false);
 
   useEffect(() => {
     fetch(`/api/admin/users/${id}`)
@@ -217,6 +229,13 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
         setSubTier(d.subscription?.tier ?? ""); setSubStatus(d.subscription?.status ?? "");
       })
       .finally(() => setLoading(false));
+    // Load DJ profile info in parallel
+    fetch(`/api/admin/users/${id}/dj-verify`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { djProfile: DJProfileInfo } | null) => {
+        if (d?.djProfile) setDjProfile(d.djProfile);
+      })
+      .catch(() => {});
   }, [id]);
 
   const save = useCallback(async (body: Record<string, unknown>) => {
@@ -239,6 +258,26 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
         window.open(`/api/admin/impersonate/start?t=${encodeURIComponent(token)}`, "_blank");
       }
     } finally { setImpersonating(false); }
+  }
+
+  async function handleDjVerify(action: "verify" | "revoke") {
+    setDjVerifyLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/dj-verify`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        const d = await res.json() as { djProfile: DJProfileInfo };
+        setDjProfile(d.djProfile);
+        showToast(action === "verify" ? "DJ Verified" : "Verification Revoked");
+      } else {
+        const d = await res.json() as { error?: string };
+        showToast(d.error ?? "Action failed", false);
+      }
+    } catch { showToast("Action failed", false); }
+    finally { setDjVerifyLoading(false); }
   }
 
   if (loading) return <div className="flex items-center justify-center py-24"><Loader2 size={20} className="animate-spin text-muted-foreground" /></div>;
@@ -571,6 +610,58 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
                 ))}
               </div>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* DJ Verification Section */}
+      {djProfile && (
+        <Card title="DJ Verification">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-medium text-foreground">
+                  @{djProfile.slug}
+                </p>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: djProfile.isVerified ? "rgba(52,199,89,0.12)" : "rgba(255,255,255,0.06)",
+                    color: djProfile.isVerified ? "#34C759" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  {djProfile.verificationStatus}
+                </span>
+              </div>
+              {djProfile.verifiedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Verified {fmt(djProfile.verifiedAt)}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {!djProfile.isVerified ? (
+                <button
+                  onClick={() => handleDjVerify("verify")}
+                  disabled={djVerifyLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: "rgba(52,199,89,0.15)", color: "#34C759" }}
+                >
+                  {djVerifyLoading ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+                  Verify DJ
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDjVerify("revoke")}
+                  disabled={djVerifyLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}
+                >
+                  {djVerifyLoading ? <Loader2 size={13} className="animate-spin" /> : <ShieldX size={13} />}
+                  Revoke Verification
+                </button>
+              )}
+            </div>
           </div>
         </Card>
       )}

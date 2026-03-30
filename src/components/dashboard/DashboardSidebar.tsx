@@ -38,6 +38,7 @@ import {
   Sparkles,
   ShoppingCart,
   Disc3,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -94,12 +95,14 @@ const producerStreamLeaseItem: NavItem = {
 };
 
 const djNavItems: NavItem[] = [
-  { label: "Crates",   href: "/dashboard/dj/crates",   icon: Disc3 },
-  { label: "Mixes",    href: "/dashboard/dj/mixes",    icon: ListMusic },
-  { label: "Sets",     href: "/dashboard/dj/sets",     icon: Video },
-  { label: "Events",   href: "/dashboard/dj/events",   icon: CalendarDays },
-  { label: "Bookings", href: "/dashboard/dj/bookings", icon: MessageSquare },
-  { label: "Earnings", href: "/dashboard/dj/earnings", icon: DollarSign },
+  { label: "Crates",    href: "/dashboard/dj/crates",    icon: Disc3 },
+  { label: "Mixes",     href: "/dashboard/dj/mixes",     icon: ListMusic },
+  { label: "Sets",      href: "/dashboard/dj/sets",      icon: Video },
+  { label: "Events",    href: "/dashboard/dj/events",    icon: CalendarDays },
+  { label: "Bookings",  href: "/dashboard/dj/bookings",  icon: MessageSquare },
+  { label: "Analytics", href: "/dashboard/dj/analytics", icon: BarChart2 },
+  { label: "Earnings",      href: "/dashboard/dj/earnings",      icon: DollarSign },
+  { label: "Verification",  href: "/dashboard/dj/verification",  icon: ShieldCheck },
 ];
 
 type Props = {

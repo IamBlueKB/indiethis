@@ -130,6 +130,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     OPS_ADMIN:     "full",
     SUPPORT_ADMIN: "none",
   },
+  "dj-verification": {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
 };
 
 // ---------------------------------------------------------------------------

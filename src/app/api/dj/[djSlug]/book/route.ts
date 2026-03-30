@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/dj/[djSlug]/book — public, creates DJBookingInquiry record
@@ -10,7 +11,7 @@ export async function POST(
 
   const djProfile = await db.dJProfile.findUnique({
     where: { slug: djSlug },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
 
   if (!djProfile) return NextResponse.json({ error: "DJ not found" }, { status: 404 });
@@ -39,6 +40,15 @@ export async function POST(
       message: body.message.trim(),
     },
   });
+
+  // Notify the DJ
+  void createNotification({
+    userId: djProfile.userId,
+    type: "DJ_BOOKING_INQUIRY",
+    title: "New booking inquiry",
+    message: `${body.name.trim()} sent a booking inquiry.`,
+    link: "/dashboard/dj/bookings",
+  }).catch(() => {});
 
   return NextResponse.json({ success: true, id: inquiry.id });
 }

@@ -54,6 +54,14 @@ export async function POST(_req: NextRequest) {
   if (!djProfile)
     return NextResponse.json({ error: "DJ profile not found" }, { status: 404 });
 
+  // Require verification before withdrawing
+  if (!djProfile.isVerified) {
+    return NextResponse.json(
+      { error: "Verification required to withdraw earnings" },
+      { status: 403 }
+    );
+  }
+
   // Validate Stripe Connect account
   if (!djProfile.user.stripeConnectId)
     return NextResponse.json(

@@ -1891,6 +1891,11 @@ enum NotificationType {
   STEM_SEPARATION_FAILED
   CONTENT_FLAGGED
   NEW_USER_SIGNUP
+  DJ_ATTRIBUTION_EARNED
+  DJ_VERIFICATION_UPDATE
+  DJ_BOOKING_INQUIRY
+  DJ_CRATE_INVITE
+  DJ_WEEKLY_SUMMARY
 }
 
 enum SplitSheetStatus {
@@ -2192,6 +2197,7 @@ model DJProfile {
   verifiedBy      String?
   balance         Int             @default(0)
   totalEarnings   Int             @default(0)
+  verificationStatus   String   @default("NONE") // NONE, PENDING, APPROVED, DENIED
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   crates               Crate[]
@@ -2202,6 +2208,7 @@ model DJProfile {
   withdrawals          DJWithdrawal[]
   collaboratingCrates  CrateCollaborator[]
   mixes                DJMix[]
+  verificationApplication DJVerificationApplication?
 }
 
 model Crate {
@@ -2363,6 +2370,19 @@ model DJMixTrack {
   artist    String?
 
   @@index([djMixId])
+}
+
+model DJVerificationApplication {
+  id          String    @id @default(cuid())
+  djProfileId String    @unique
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  status      String    @default("PENDING") // PENDING, APPROVED, DENIED
+  adminNote   String?
+  appliedAt   DateTime  @default(now())
+  reviewedAt  DateTime?
+  reviewedBy  String?
+
+  @@index([status])
 }
 
 enum TaskCategory {

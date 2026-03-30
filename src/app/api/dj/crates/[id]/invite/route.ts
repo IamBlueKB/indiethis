@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/dj/crates/[id]/invite
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const djProfile = await db.dJProfile.findUnique({
     where: { userId: session.user.id as string },
-    select: { id: true },
+    select: { id: true, user: { select: { name: true } } },
   });
   if (!djProfile) return NextResponse.json({ error: "DJ profile not found" }, { status: 404 });
 
@@ -46,6 +47,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: "PENDING",
       },
     });
+
+    // Notify the invited DJ
+    const invitedDj = await db.dJProfile.findUnique({
+      where: { id: invitedProfile.id },
+      select: { userId: true },
+    });
+    if (invitedDj) {
+      const inviterName = djProfile.user.name ?? "A DJ";
+      void createNotification({
+        userId: invitedDj.userId,
+        type: "DJ_CRATE_INVITE",
+        title: "Crate collaboration invite",
+        message: `${inviterName} invited you to collaborate on a crate.`,
+        link: "/dashboard/dj/crates",
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ invite });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("Unique constraint")) {
