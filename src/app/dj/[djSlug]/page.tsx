@@ -78,6 +78,27 @@ export default async function DJProfilePage(
         },
         orderBy: { date: "asc" },
       },
+      mixes: {
+        select: {
+          id: true,
+          title: true,
+          audioUrl: true,
+          coverArtUrl: true,
+          duration: true,
+          description: true,
+          tracklist: {
+            include: {
+              track: {
+                include: {
+                  artist: { select: { name: true, artistName: true, artistSlug: true } },
+                },
+              },
+            },
+            orderBy: { position: "asc" },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 

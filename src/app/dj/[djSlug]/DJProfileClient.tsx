@@ -35,6 +35,30 @@ type DJEvent = {
   description: string | null;
 };
 
+type MixTrackItem = {
+  id: string;
+  position: number;
+  startTime: number | null;
+  title: string | null;
+  artist: string | null;
+  trackId: string | null;
+  track: {
+    id: string;
+    title: string;
+    artist: { name: string | null; artistName: string | null; artistSlug: string | null };
+  } | null;
+};
+
+type DJMixPublic = {
+  id: string;
+  title: string;
+  audioUrl: string;
+  coverArtUrl: string | null;
+  duration: number | null;
+  description: string | null;
+  tracklist: MixTrackItem[];
+};
+
 type DJProfileData = {
   id: string;
   slug: string;
@@ -48,6 +72,7 @@ type DJProfileData = {
   crates: Crate[];
   sets: DJSet[];
   events: DJEvent[];
+  mixes?: DJMixPublic[];
   totalCrateItems: number;
 };
 
@@ -141,6 +166,7 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
+  const [activeMixId, setActiveMixId] = useState<string | null>(null);
 
   const displayName = djProfile.user.artistName ?? djProfile.user.name;
   const photo = djProfile.profilePhotoUrl ?? djProfile.user.photo;
@@ -477,6 +503,92 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
             </div>
           )}
         </section>
+
+        {/* Mixes */}
+        {djProfile.mixes && djProfile.mixes.length > 0 && (
+          <section>
+            <div className="mb-6">
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>Mixes</p>
+              <h2 className="text-xl font-bold text-white">Full Mixes</h2>
+            </div>
+            <div className="space-y-4">
+              {djProfile.mixes.map(mix => {
+                const isActive = activeMixId === mix.id;
+                return (
+                  <div key={mix.id} className="rounded-xl border overflow-hidden" style={{ borderColor: "#222" }}>
+                    {/* Mix header */}
+                    <button
+                      onClick={() => setActiveMixId(isActive ? null : mix.id)}
+                      className="w-full flex items-center gap-4 p-4 text-left hover:bg-zinc-900/50 transition-colors"
+                    >
+                      <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
+                        {mix.coverArtUrl
+                          ? <img src={mix.coverArtUrl} alt={mix.title} className="w-full h-full object-cover" />
+                          : <span className="text-2xl">🎵</span>
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-white truncate">{mix.title}</p>
+                        {mix.description && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: "#888" }}>{mix.description}</p>}
+                        <p className="text-xs mt-1" style={{ color: "#666" }}>
+                          {mix.tracklist.length} tracks
+                          {mix.duration && ` · ${Math.floor(mix.duration / 3600)}h ${Math.floor((mix.duration % 3600) / 60)}m`}
+                        </p>
+                      </div>
+                      <span className="text-xs" style={{ color: "#666" }}>{isActive ? "▲" : "▼"}</span>
+                    </button>
+
+                    {/* Expanded player + tracklist */}
+                    {isActive && (
+                      <div className="border-t" style={{ borderColor: "#222" }}>
+                        {/* Audio player */}
+                        <div className="p-4 pb-0">
+                          <audio controls className="w-full h-10" style={{ colorScheme: "dark" }}>
+                            <source src={mix.audioUrl} />
+                            Your browser does not support audio playback.
+                          </audio>
+                        </div>
+                        {/* Tracklist */}
+                        {mix.tracklist.length > 0 && (
+                          <div className="p-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: "#555" }}>Tracklist</p>
+                            <div className="space-y-2">
+                              {mix.tracklist.map(item => {
+                                const displayTitle  = item.track?.title ?? item.title ?? "Unknown Track";
+                                const displayArtist = item.track?.artist?.artistName ?? item.track?.artist?.name ?? item.artist ?? "Unknown Artist";
+                                const artistSlug    = item.track?.artist?.artistSlug;
+                                const startSec      = item.startTime ?? 0;
+                                const mm = Math.floor(startSec / 60);
+                                const ss = startSec % 60;
+                                const timeLabel = `${mm}:${String(ss).padStart(2, "0")}`;
+                                return (
+                                  <div key={item.id} className="flex items-center gap-3">
+                                    <span className="text-xs font-mono w-10 text-right flex-shrink-0" style={{ color: "#555" }}>{timeLabel}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm text-white truncate block">{displayTitle}</span>
+                                      {artistSlug ? (
+                                        <a href={`/${artistSlug}`} className="text-xs hover:underline" style={{ color: "#D4A843" }}>{displayArtist}</a>
+                                      ) : (
+                                        <span className="text-xs" style={{ color: "#666" }}>{displayArtist}</span>
+                                      )}
+                                    </div>
+                                    {item.trackId && (
+                                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#D4A843" }} title="IndieThis track" />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Book This DJ */}
         <section id="booking-form">

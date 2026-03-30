@@ -95,6 +95,7 @@ const producerStreamLeaseItem: NavItem = {
 
 const djNavItems: NavItem[] = [
   { label: "Crates",   href: "/dashboard/dj/crates",   icon: Disc3 },
+  { label: "Mixes",    href: "/dashboard/dj/mixes",    icon: ListMusic },
   { label: "Sets",     href: "/dashboard/dj/sets",     icon: Video },
   { label: "Events",   href: "/dashboard/dj/events",   icon: CalendarDays },
   { label: "Bookings", href: "/dashboard/dj/bookings", icon: MessageSquare },
