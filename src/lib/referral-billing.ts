@@ -8,8 +8,8 @@
  *   CREDIT_1       — +1 pressKit credit in DB (only credit normally at $0 for all tiers)
  *   FREE_MONTH     — negative Stripe balance transaction = full month free
  *   DISCOUNT_20    — "referral-20pct" Stripe coupon attached to subscription (permanent)
- *   LIFETIME_PUSH  — TODO: migrate subscription to $0 PUSH price
- *   LIFETIME_REIGN — TODO: migrate subscription to $0 REIGN price
+ *   LIFETIME_PUSH  — migrate subscription to $0 PUSH price (STRIPE_PRICE_ID_PUSH_LIFETIME)
+ *   LIFETIME_REIGN — migrate subscription to $0 REIGN price (STRIPE_PRICE_ID_REIGN_LIFETIME)
  *   NONE           — remove any referral coupon that may be on the subscription
  */
 
@@ -103,38 +103,44 @@ export async function applyReferralRewardsToInvoice(
 
       // ── 10 active referrals → PUSH plan free ─────────────────────────────
       case "LIFETIME_PUSH": {
-        // TODO: migrate subscription to a $0 PUSH price created in the Stripe
-        // dashboard and configured via env var STRIPE_PRICE_ID_PUSH_LIFETIME.
-        //
-        //   if (subId && process.env.STRIPE_PRICE_ID_PUSH_LIFETIME) {
-        //     const sub = await stripe.subscriptions.retrieve(subId);
-        //     await stripe.subscriptions.update(subId, {
-        //       items: [{ id: sub.items.data[0].id, price: process.env.STRIPE_PRICE_ID_PUSH_LIFETIME }],
-        //       proration_behavior: "none",
-        //     });
-        //   }
+        if (!subId) break;
+        const lifetimePushPrice = process.env.STRIPE_PRICE_ID_PUSH_LIFETIME;
+        if (!lifetimePushPrice) {
+          console.warn(
+            `[referral-billing] LIFETIME_PUSH skipped for user ${user.id} — ` +
+            "STRIPE_PRICE_ID_PUSH_LIFETIME not configured.",
+          );
+          break;
+        }
+        const sub = await stripe.subscriptions.retrieve(subId);
+        await stripe.subscriptions.update(subId, {
+          items: [{ id: sub.items.data[0].id, price: lifetimePushPrice }],
+          proration_behavior: "none",
+        });
         console.log(
-          `[referral-billing] LIFETIME_PUSH for user ${user.id} — ` +
-          "TODO: configure STRIPE_PRICE_ID_PUSH_LIFETIME and uncomment migration.",
+          `[referral-billing] LIFETIME_PUSH — migrated subscription ${subId} to $0 PUSH lifetime price for user ${user.id}`,
         );
         break;
       }
 
       // ── 25 active referrals → REIGN plan free ────────────────────────────
       case "LIFETIME_REIGN": {
-        // TODO: migrate subscription to a $0 REIGN price created in the Stripe
-        // dashboard and configured via env var STRIPE_PRICE_ID_REIGN_LIFETIME.
-        //
-        //   if (subId && process.env.STRIPE_PRICE_ID_REIGN_LIFETIME) {
-        //     const sub = await stripe.subscriptions.retrieve(subId);
-        //     await stripe.subscriptions.update(subId, {
-        //       items: [{ id: sub.items.data[0].id, price: process.env.STRIPE_PRICE_ID_REIGN_LIFETIME }],
-        //       proration_behavior: "none",
-        //     });
-        //   }
+        if (!subId) break;
+        const lifetimeReignPrice = process.env.STRIPE_PRICE_ID_REIGN_LIFETIME;
+        if (!lifetimeReignPrice) {
+          console.warn(
+            `[referral-billing] LIFETIME_REIGN skipped for user ${user.id} — ` +
+            "STRIPE_PRICE_ID_REIGN_LIFETIME not configured.",
+          );
+          break;
+        }
+        const sub = await stripe.subscriptions.retrieve(subId);
+        await stripe.subscriptions.update(subId, {
+          items: [{ id: sub.items.data[0].id, price: lifetimeReignPrice }],
+          proration_behavior: "none",
+        });
         console.log(
-          `[referral-billing] LIFETIME_REIGN for user ${user.id} — ` +
-          "TODO: configure STRIPE_PRICE_ID_REIGN_LIFETIME and uncomment migration.",
+          `[referral-billing] LIFETIME_REIGN — migrated subscription ${subId} to $0 REIGN lifetime price for user ${user.id}`,
         );
         break;
       }
@@ -148,6 +154,64 @@ export async function applyReferralRewardsToInvoice(
     }
   } catch (err) {
     console.error("[referral-billing] applyReferralRewardsToInvoice failed:", err);
+  }
+}
+
+// ─── Lifetime tier revert ─────────────────────────────────────────────────────
+
+/**
+ * Revert a subscription from a $0 lifetime price back to the standard paid
+ * price for the user's plan tier. Called from referral-tracking when a tier
+ * drops from LIFETIME_PUSH or LIFETIME_REIGN to anything lower.
+ *
+ * @param userId  The referrer's user ID — used to look up their subscription tier.
+ * @param subId   The Stripe subscription ID to update.
+ */
+export async function revertLifetimeBilling(
+  userId: string,
+  subId: string,
+): Promise<void> {
+  if (!stripe) return;
+
+  try {
+    // Determine which plan the user is on (LAUNCH / PUSH / REIGN).
+    const subscription = await db.subscription.findUnique({
+      where:  { userId },
+      select: { tier: true },
+    });
+
+    if (!subscription) {
+      console.warn(`[referral-billing] revertLifetimeBilling — no subscription found for user ${userId}`);
+      return;
+    }
+
+    const tierToPriceEnvKey: Record<string, string> = {
+      LAUNCH: "STRIPE_PRICE_LAUNCH",
+      PUSH:   "STRIPE_PRICE_PUSH",
+      REIGN:  "STRIPE_PRICE_REIGN",
+    };
+
+    const envKey   = tierToPriceEnvKey[subscription.tier];
+    const priceId  = envKey ? process.env[envKey] : undefined;
+
+    if (!priceId) {
+      console.warn(
+        `[referral-billing] revertLifetimeBilling — no paid price ID configured for tier ${subscription.tier} (user ${userId})`,
+      );
+      return;
+    }
+
+    const sub = await stripe.subscriptions.retrieve(subId);
+    await stripe.subscriptions.update(subId, {
+      items: [{ id: sub.items.data[0].id, price: priceId }],
+      proration_behavior: "none",
+    });
+
+    console.log(
+      `[referral-billing] revertLifetimeBilling — reverted subscription ${subId} to standard ${subscription.tier} price for user ${userId}`,
+    );
+  } catch (err) {
+    console.error("[referral-billing] revertLifetimeBilling failed:", err);
   }
 }
 

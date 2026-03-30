@@ -1909,6 +1909,7 @@ enum NotificationType {
   DJ_BOOKING_INQUIRY
   DJ_CRATE_INVITE
   DJ_WEEKLY_SUMMARY
+  REFERRAL_TIER_DROP
 }
 
 enum SplitSheetStatus {
