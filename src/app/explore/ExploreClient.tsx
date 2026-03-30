@@ -82,6 +82,17 @@ type FeaturedCard = {
   linkedArtist: { id: string; name: string; photo: string | null } | null;
 };
 
+type DJItem = {
+  id: string;
+  slug: string;
+  genres: string[];
+  city: string | null;
+  profilePhotoUrl: string | null;
+  isVerified: boolean;
+  user: { name: string; artistName: string | null; photo: string | null };
+  totalCrateItems: number;
+};
+
 type DigitalProductItem = {
   id: string;
   title: string;
@@ -675,7 +686,7 @@ function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemoveP
 
 // ── Filter Pills ───────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store";
+type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store" | "djs";
 
 type FilterTabDef = { key: FilterTab; label: string; icon?: React.ElementType };
 
@@ -685,6 +696,7 @@ const FILTER_TABS: FilterTabDef[] = [
   { key: "artists", label: "Artists",  icon: Users },
   { key: "music",   label: "Music",    icon: Music2 },
   { key: "beats",   label: "Beats",    icon: Headphones },
+  { key: "djs",     label: "DJs",      icon: Disc3 },
   { key: "store",   label: "Store",    icon: ShoppingBag },
   { key: "studios", label: "Studios",  icon: Building2 },
   { key: "ai",      label: "AI Tools", icon: Wand2 },
@@ -929,6 +941,14 @@ export default function ExploreClient() {
   const [loadingStudios, setLoadingStudios] = useState(true);
   const [loadingRising, setLoadingRising] = useState(true);
 
+  // DJ directory state
+  const [djs, setDjs] = useState<DJItem[]>([]);
+  const [risingDjs, setRisingDjs] = useState<DJItem[]>([]);
+  const [loadingDjs, setLoadingDjs] = useState(true);
+  const [djGenreFilter, setDjGenreFilter] = useState<string>("");
+  const [djCityFilter, setDjCityFilter] = useState<string>("");
+  const [djSort, setDjSort] = useState<"crates" | "newest">("crates");
+
   // Section refs for scroll-to
   const sectionRefs: Record<string, React.RefObject<HTMLElement | null>> = {
     music:   useRef<HTMLElement>(null),
@@ -938,6 +958,7 @@ export default function ExploreClient() {
     ai:      useRef<HTMLElement>(null),
     sound:   useRef<HTMLElement>(null),
     store:   useRef<HTMLElement>(null),
+    djs:     useRef<HTMLElement>(null),
   };
 
   useEffect(() => {
@@ -950,6 +971,11 @@ export default function ExploreClient() {
     fetch("/api/explore/studios").then(r => r.json()).then(d => { setStudios(d.studios ?? []); setLoadingStudios(false); });
     fetch("/api/explore/rising").then(r => r.json()).then(d => { setRising(d.artists ?? []); setLoadingRising(false); });
     fetch("/api/explore/digital-products").then(r => r.json()).then(d => { setDigitalProducts(d.products ?? []); setLoadingStore(false); });
+    fetch("/api/explore/djs").then(r => r.json()).then((d: { djs?: DJItem[]; rising?: DJItem[] }) => {
+      setDjs(d.djs ?? []);
+      setRisingDjs(d.rising ?? []);
+      setLoadingDjs(false);
+    });
 
     if (loggedIn) {
       fetch("/api/explore/recently-played").then(r => r.json()).then(d => setRecentPlays(d.plays ?? []));
@@ -1088,6 +1114,21 @@ export default function ExploreClient() {
     const data = await res.json();
     setStudios(data.studios ?? []);
     setStudioSearching(false);
+  }
+
+  function fetchDjsFiltered() {
+    setLoadingDjs(true);
+    const params = new URLSearchParams();
+    if (djGenreFilter) params.set("genre", djGenreFilter);
+    if (djCityFilter) params.set("city", djCityFilter);
+    params.set("sort", djSort);
+    fetch(`/api/explore/djs?${params.toString()}`)
+      .then(r => r.json())
+      .then((d: { djs?: DJItem[]; rising?: DJItem[] }) => {
+        setDjs(d.djs ?? []);
+        setRisingDjs(d.rising ?? []);
+        setLoadingDjs(false);
+      });
   }
 
   const showSection = (key: string) => activeFilter !== "sound" && (activeFilter === "all" || activeFilter === key || key === "featured");
@@ -1497,6 +1538,143 @@ export default function ExploreClient() {
                 Discover More Artists →
               </Link>
             </div>
+          </section>
+        )}
+
+        {/* Section: DJ Directory */}
+        {showSection("djs") && (
+          <section ref={sectionRefs.djs as React.RefObject<HTMLElement>}>
+            <SectionHeader label="DJ DIRECTORY" title="Find DJs" />
+
+            {/* Rising DJs */}
+            {risingDjs.length > 0 && (activeFilter === "all" || activeFilter === "djs") && (
+              <div className="mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-3" style={{ color: "#D4A843" }}>Rising DJs</p>
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                  {risingDjs.map(dj => {
+                    const name = dj.user.artistName ?? dj.user.name;
+                    const photo = dj.profilePhotoUrl ?? dj.user.photo;
+                    return (
+                      <Link
+                        key={dj.id}
+                        href={`/dj/${dj.slug}`}
+                        className="shrink-0 w-32 group text-center"
+                      >
+                        <div
+                          className="w-24 h-24 rounded-2xl overflow-hidden mx-auto mb-2 flex items-center justify-center text-2xl font-black border-2 border-transparent group-hover:border-[#D4A843] transition-colors"
+                          style={{ backgroundColor: "#1a1a1a" }}
+                        >
+                          {photo
+                            ? <img src={photo} alt={name} className="w-full h-full object-cover" />
+                            : <span style={{ color: "#D4A843" }}>{name[0]?.toUpperCase()}</span>
+                          }
+                        </div>
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name}</p>
+                        {dj.city && <p className="text-[10px] truncate mt-0.5" style={{ color: "#666" }}>{dj.city}</p>}
+                        <p className="text-[10px] mt-0.5" style={{ color: "#D4A843" }}>{dj.totalCrateItems} tracks</p>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Filters */}
+            {activeFilter === "djs" && (
+              <div className="flex flex-wrap gap-3 mb-6 items-end">
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#666" }}>Genre</label>
+                  <select
+                    value={djGenreFilter}
+                    onChange={e => setDjGenreFilter(e.target.value)}
+                    className="rounded-lg px-3 py-2 text-sm text-white border outline-none"
+                    style={{ backgroundColor: "#1a1a1a", borderColor: "#333" }}
+                  >
+                    <option value="">All Genres</option>
+                    {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#666" }}>City</label>
+                  <input
+                    className="rounded-lg px-3 py-2 text-sm text-white border outline-none focus:border-[#D4A843] transition-colors"
+                    style={{ backgroundColor: "#1a1a1a", borderColor: "#333" }}
+                    placeholder="Atlanta, GA"
+                    value={djCityFilter}
+                    onChange={e => setDjCityFilter(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#666" }}>Sort By</label>
+                  <select
+                    value={djSort}
+                    onChange={e => setDjSort(e.target.value as "crates" | "newest")}
+                    className="rounded-lg px-3 py-2 text-sm text-white border outline-none"
+                    style={{ backgroundColor: "#1a1a1a", borderColor: "#333" }}
+                  >
+                    <option value="crates">Most Tracks in Crates</option>
+                    <option value="newest">Newest</option>
+                  </select>
+                </div>
+                <button
+                  onClick={fetchDjsFiltered}
+                  className="px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  Filter
+                </button>
+              </div>
+            )}
+
+            {loadingDjs ? (
+              <div className="flex justify-center py-8">
+                <Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} />
+              </div>
+            ) : djs.length === 0 ? (
+              <p className="text-sm text-center py-8" style={{ color: "#555" }}>No DJs found.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {(activeFilter === "all" ? djs.slice(0, 10) : djs).map(dj => {
+                  const name = dj.user.artistName ?? dj.user.name;
+                  const photo = dj.profilePhotoUrl ?? dj.user.photo;
+                  return (
+                    <Link
+                      key={dj.id}
+                      href={`/dj/${dj.slug}`}
+                      className="group rounded-xl border p-3 text-center transition-colors hover:border-[#D4A843]"
+                      style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+                    >
+                      <div
+                        className="w-16 h-16 rounded-xl overflow-hidden mx-auto mb-2.5 flex items-center justify-center text-xl font-black"
+                        style={{ backgroundColor: "#1a1a1a" }}
+                      >
+                        {photo
+                          ? <img src={photo} alt={name} className="w-full h-full object-cover" />
+                          : <span style={{ color: "#D4A843" }}>{name[0]?.toUpperCase()}</span>
+                        }
+                      </div>
+                      <div className="flex items-center justify-center gap-1 mb-0.5">
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name}</p>
+                        {dj.isVerified && <span style={{ color: "#D4A843" }}>✓</span>}
+                      </div>
+                      {dj.city && <p className="text-[10px] truncate" style={{ color: "#666" }}>{dj.city}</p>}
+                      <div className="flex flex-wrap justify-center gap-1 my-1.5">
+                        {dj.genres.slice(0, 3).map(g => (
+                          <span
+                            key={g}
+                            className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold"
+                            style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}
+                          >
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[10px]" style={{ color: "#555" }}>{dj.totalCrateItems} tracks in crates</p>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
