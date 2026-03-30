@@ -99,6 +99,7 @@ const djNavItems: NavItem[] = [
   { label: "Sets",     href: "/dashboard/dj/sets",     icon: Video },
   { label: "Events",   href: "/dashboard/dj/events",   icon: CalendarDays },
   { label: "Bookings", href: "/dashboard/dj/bookings", icon: MessageSquare },
+  { label: "Earnings", href: "/dashboard/dj/earnings", icon: DollarSign },
 ];
 
 type Props = {

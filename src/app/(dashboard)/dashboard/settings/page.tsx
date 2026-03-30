@@ -24,6 +24,7 @@ type UserSettings = {
   appleMusicUrl: string | null;
   artistSlug: string | null;
   djMode: boolean;
+  djDiscoveryOptIn: boolean;
 };
 
 type YtStatus = {
@@ -84,6 +85,9 @@ export default function SettingsPage() {
   const [djMode, setDjMode] = useState(false);
   const [djToggling, setDjToggling] = useState(false);
   const [djMsg, setDjMsg] = useState<string | null>(null);
+
+  // DJ Discovery opt-in state
+  const [djDiscoveryOptIn, setDjDiscoveryOptIn] = useState(false);
 
   const [name, setName] = useState("");
   const [artistName, setArtistName] = useState("");
@@ -191,6 +195,7 @@ export default function SettingsPage() {
         setSlug(u.artistSlug ?? "");
         setPhoto(u.photo ?? null);
         setDjMode(u.djMode ?? false);
+        setDjDiscoveryOptIn(u.djDiscoveryOptIn ?? false);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -291,6 +296,7 @@ export default function SettingsPage() {
           instagramHandle: instagram, tiktokHandle: tiktok,
           youtubeChannel: youtube, spotifyUrl: spotify,
           appleMusicUrl: appleMusic, artistSlug: slug,
+          djDiscoveryOptIn,
         }),
       });
       if (res.status === 409) {
@@ -921,6 +927,29 @@ export default function SettingsPage() {
             <Check size={13} /> {djMsg}
           </div>
         )}
+      </Section>
+
+      {/* DJ Discovery Revenue Share */}
+      <Section title="DJ Discovery Revenue Share" icon={<Disc3 size={15} className="text-accent" />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">DJ Discovery Revenue Share</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              When enabled, DJs who drive fans to your music can earn 10% of your sales revenue from those referrals. IndieThis handles all calculations automatically.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDjDiscoveryOptIn((prev) => !prev)}
+            className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+            style={{ backgroundColor: djDiscoveryOptIn ? "#D4A843" : "var(--border)" }}
+          >
+            <span
+              className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+              style={{ transform: djDiscoveryOptIn ? "translateX(16px)" : "translateX(0)" }}
+            />
+          </button>
+        </div>
       </Section>
 
       {userData && (

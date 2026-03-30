@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   CheckCircle, Instagram, Music2, MapPin, Ticket, Calendar, Clock,
@@ -167,6 +167,12 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
   const [activeMixId, setActiveMixId] = useState<string | null>(null);
+
+  // Set attribution cookie so digital purchases from this visit are credited to the DJ
+  useEffect(() => {
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    document.cookie = `dj_attribution_${djProfile.id}=${djProfile.id}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+  }, [djProfile.id]);
 
   const displayName = djProfile.user.artistName ?? djProfile.user.name;
   const photo = djProfile.profilePhotoUrl ?? djProfile.user.photo;

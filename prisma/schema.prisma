@@ -80,6 +80,7 @@ model User {
   autoSigninTokenExpiresAt DateTime?
   smsOptIn                 Boolean                @default(false)
   djMode                   Boolean                @default(false)
+  djDiscoveryOptIn         Boolean                @default(false)
   aiGenerations            AIGeneration[]
   accounts                 Account[]
   affiliate                Affiliate?
@@ -2158,6 +2159,7 @@ model DigitalPurchase {
   platformFee      Int
   artistEarnings   Int
   djAttributionId  String?
+  djAttribution    DJAttribution?  @relation(fields: [djAttributionId], references: [id])
   stripePaymentId  String?
   downloadToken    String         @unique @default(cuid())
   downloadCount    Int            @default(0)
@@ -2304,23 +2306,31 @@ model DJBookingInquiry {
 }
 
 model DJAttribution {
-  id                String    @id @default(cuid())
-  djProfileId       String
-  djProfile         DJProfile @relation(fields: [djProfileId], references: [id])
-  digitalPurchaseId String?
-  amount            Int       @default(0)
-  createdAt         DateTime  @default(now())
+  id              String          @id @default(cuid())
+  djProfileId     String
+  djProfile       DJProfile       @relation(fields: [djProfileId], references: [id])
+  fanSessionId    String
+  sourceType      String          // CRATE, MIX, PROFILE
+  sourceId        String
+  artistId        String
+  amount          Int             @default(0)
+  createdAt       DateTime        @default(now())
+  expiresAt       DateTime
+  purchases       DigitalPurchase[]
 
   @@index([djProfileId])
+  @@index([fanSessionId])
 }
 
 model DJWithdrawal {
-  id          String    @id @default(cuid())
-  djProfileId String
-  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
-  amount      Int
-  status      String    @default("PENDING")
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(cuid())
+  djProfileId     String
+  djProfile       DJProfile @relation(fields: [djProfileId], references: [id])
+  amount          Int
+  stripePayoutId  String?
+  status          String    @default("PENDING")
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
 
   @@index([djProfileId])
 }

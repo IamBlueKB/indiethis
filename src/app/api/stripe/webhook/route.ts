@@ -304,14 +304,18 @@ export async function POST(req: NextRequest) {
             select: { id: true },
           });
           if (!alreadyPurchased) {
+            const djAttributionIdMeta = checkSession.metadata?.djAttributionId ?? null;
+            const artistEarnings = parseInt(earningsStr ?? "0", 10);
+
             const purchase = await db.digitalPurchase.create({
               data: {
                 digitalProductId: productId,
                 buyerEmail,
                 amount:          checkSession.amount_total ?? 0,
                 platformFee:     parseInt(feeStr ?? "0", 10),
-                artistEarnings:  parseInt(earningsStr ?? "0", 10),
+                artistEarnings,
                 stripePaymentId: checkSession.id,
+                ...(djAttributionIdMeta ? { djAttributionId: djAttributionIdMeta } : {}),
               },
               include: {
                 digitalProduct: {
@@ -319,6 +323,47 @@ export async function POST(req: NextRequest) {
                 },
               },
             });
+
+            // DJ attribution split — 10% of artist portion if artist opted in
+            if (djAttributionIdMeta) {
+              void (async () => {
+                try {
+                  const artistUser = await db.user.findUnique({
+                    where: { id: purchase.digitalProduct.userId },
+                    select: { djDiscoveryOptIn: true },
+                  });
+                  if (artistUser?.djDiscoveryOptIn) {
+                    const djCut = Math.round(artistEarnings * 0.10);
+                    const djProfile = await db.dJProfile.findUnique({
+                      where: { id: djAttributionIdMeta },
+                      select: { id: true },
+                    });
+                    if (djProfile) {
+                      await db.dJProfile.update({
+                        where: { id: djProfile.id },
+                        data: {
+                          balance:       { increment: djCut },
+                          totalEarnings: { increment: djCut },
+                        },
+                      });
+                      await db.dJAttribution.create({
+                        data: {
+                          djProfileId:  djProfile.id,
+                          fanSessionId: checkSession.id,
+                          sourceType:   "PURCHASE",
+                          sourceId:     purchase.id,
+                          artistId:     purchase.digitalProduct.userId,
+                          amount:       djCut,
+                          expiresAt:    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                        },
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.error("[DJ Attribution] split failed:", e);
+                }
+              })();
+            }
 
             // Send buyer download email
             const dlLink = `${process.env.NEXTAUTH_URL ?? "https://indiethis.com"}/dl/digital/${purchase.downloadToken}`;

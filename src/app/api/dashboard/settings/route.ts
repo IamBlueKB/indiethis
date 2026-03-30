@@ -27,6 +27,7 @@ export async function GET() {
       appleMusicUrl: true,
       artistSlug: true,
       djMode: true,
+      djDiscoveryOptIn: true,
     },
   });
 
@@ -76,11 +77,13 @@ export async function PATCH(req: NextRequest) {
       spotifyUrl: body.spotifyUrl?.trim() ?? undefined,
       appleMusicUrl: body.appleMusicUrl?.trim() ?? undefined,
       artistSlug: body.artistSlug ?? undefined,
+      djDiscoveryOptIn: typeof body.djDiscoveryOptIn === "boolean" ? body.djDiscoveryOptIn : undefined,
     },
     select: {
       id: true, name: true, artistName: true, email: true, phone: true, smsOptIn: true,
       bio: true, photo: true, instagramHandle: true, tiktokHandle: true,
       youtubeChannel: true, spotifyUrl: true, appleMusicUrl: true, artistSlug: true,
+      djDiscoveryOptIn: true,
     },
   });
 
