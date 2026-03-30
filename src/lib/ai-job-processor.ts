@@ -19,7 +19,6 @@ import fs from "fs";
 import sharp from "sharp";
 import { db } from "@/lib/db";
 import { AIJobStatus, type AIJob, type Prisma } from "@prisma/client";
-import OpenAI, { toFile } from "openai";
 import { fal } from "@fal-ai/client";
 import type { QueueStatus } from "@fal-ai/client";
 import ffmpegFluent from "fluent-ffmpeg";
@@ -706,11 +705,11 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing AR_REPORT job ${job.id} via ${job.provider}`);
 
   // ── Env checks — fail fast with actionable messages ──────────────────────
-  const openaiKey  = process.env.OPENAI_API_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  const anthropicKey   = process.env.ANTHROPIC_API_KEY;
 
-  if (!openaiKey   || openaiKey.startsWith("your_"))
-    throw new Error("OPENAI_API_KEY is not configured — add it to .env.local to use the A&R Report.");
+  if (!replicateToken || replicateToken.startsWith("your_"))
+    throw new Error("REPLICATE_API_TOKEN is not configured — add it to .env.local to use the A&R Report.");
   if (!anthropicKey || anthropicKey.startsWith("sk-ant-api") === false && anthropicKey === "sk-ant-...")
     throw new Error("ANTHROPIC_API_KEY is not configured — add it to .env.local to use the A&R Report.");
 
@@ -722,32 +721,32 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
 
   let totalCost = 0;
 
-  // ── Step 1: Whisper transcription ─────────────────────────────────────────
-  console.log(`[ar-report] transcribing audio via Whisper: ${trackUrl}`);
-  const openai = new OpenAI({ apiKey: openaiKey });
+  // ── Step 1: Whisper transcription via Replicate ───────────────────────────
+  console.log(`[ar-report] transcribing audio via Replicate Whisper: ${trackUrl}`);
 
-  // Fetch the audio file from its URL and pass as a File to Whisper
-  const audioResponse = await fetch(trackUrl);
-  if (!audioResponse.ok) throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`);
-  const audioBuffer  = await audioResponse.arrayBuffer();
-  const audioName    = trackUrl.split("/").pop() ?? "track.mp3";
-  const audioFile    = await toFile(Buffer.from(audioBuffer), audioName, {
-    type: audioResponse.headers.get("content-type") ?? "audio/mpeg",
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Replicate = require("replicate");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const replicate = new Replicate({ auth: replicateToken });
 
-  const transcription = await openai.audio.transcriptions.create({
-    model: "whisper-1",
-    file:  audioFile,
-    response_format: "verbose_json",   // includes segments with timestamps
-    timestamp_granularities: ["segment"],
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const whisperOutput = await replicate.run(
+    "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d6d5b9b6b2e3d7d4b31d5c0b6",
+    { input: { audio: trackUrl, word_timestamps: true } },
+  ) as Record<string, unknown>;
 
-  // Estimate Whisper cost: $0.006 per minute
-  const audioDurationMinutes = (transcription.duration ?? 180) / 60;
-  totalCost += audioDurationMinutes * 0.006;
+  // Flatten segments[].words[] into a flat words array and extract segments
+  type WhisperSegment = { start: number; end: number; text: string; words?: Array<{ word: string; start: number; end: number }> };
+  const rawSegments = (whisperOutput?.segments ?? []) as WhisperSegment[];
+  const segments    = rawSegments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
 
-  const lyrics    = transcription.text ?? "(No lyrics detected — instrumental or transcription failed)";
-  const segments  = (transcription.segments ?? []) as Array<{ start: number; end: number; text: string }>;
+  // Estimate Replicate Whisper cost: $0.0088/min
+  const lastSeg              = rawSegments[rawSegments.length - 1];
+  const audioDurationSeconds = lastSeg?.end ?? 180;
+  const audioDurationMinutes = audioDurationSeconds / 60;
+  totalCost += audioDurationMinutes * 0.0088;
+
+  const lyrics = (whisperOutput?.transcription as string) ?? "(No lyrics detected — instrumental or transcription failed)";
   const lyricsWithTimestamps = segments.length > 0
     ? segments.map((s) => `[${s.start.toFixed(1)}s] ${s.text.trim()}`).join("\n")
     : lyrics;
