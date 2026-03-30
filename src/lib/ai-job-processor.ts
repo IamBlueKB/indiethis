@@ -79,17 +79,8 @@ const KLING_RATIO_MAP: Record<string, string> = {
   "1:1":  "1:1",
 };
 
-/** Runway aspect ratio strings (width:height pixel counts). */
-const RUNWAY_RATIO_MAP: Record<string, string> = {
-  "16:9": "1280:768",
-  "9:16": "768:1280",
-  "1:1":  "960:960",
-};
-
 // Kling cost: $0.029 per second of output
 const KLING_COST_PER_SEC = 0.029;
-// Runway Gen-3 Alpha Turbo cost: ~$0.05 per second
-const RUNWAY_COST_PER_SEC = 0.05;
 
 // ─── Tiered pricing for AI video generation ───────────────────────────────────
 
@@ -166,106 +157,16 @@ async function generateWithKling(
   return { videoUrl, provider: "kling" };
 }
 
-/**
- * Generate video via Runway Gen-3 Alpha Turbo (fallback provider).
- * Returns { videoUrl, taskId, provider: "runway" } on success.
- */
-async function generateWithRunway(
-  imageUrl: string,
-  prompt: string,
-  aspectRatio: string,
-  durationSeconds: number,
-): Promise<{ videoUrl: string; taskId: string; provider: "runway" }> {
-  const runwayKey = process.env.RUNWAY_API_KEY;
-  if (!runwayKey || runwayKey.startsWith("your_"))
-    throw new Error("RUNWAY_API_KEY is not configured");
-
-  const RUNWAY_API_BASE = "https://api.dev.runwayml.com/v1";
-  const RUNWAY_VERSION  = "2024-11-06";
-  const runwaySecs      = Math.min(durationSeconds, 10);
-
-  console.log(
-    `[video/runway] submitting image-to-video — ${runwaySecs}s, ratio: ${RUNWAY_RATIO_MAP[aspectRatio] ?? "1280:768"}`,
-  );
-
-  const submitRes = await fetch(`${RUNWAY_API_BASE}/image_to_video`, {
-    method: "POST",
-    headers: {
-      "Content-Type":     "application/json",
-      "Authorization":    `Bearer ${runwayKey}`,
-      "X-Runway-Version": RUNWAY_VERSION,
-    },
-    body: JSON.stringify({
-      model:       "gen3a_turbo",
-      promptImage: imageUrl,
-      promptText:  prompt,
-      duration:    runwaySecs,
-      ratio:       RUNWAY_RATIO_MAP[aspectRatio] ?? "1280:768",
-    }),
-  });
-
-  if (!submitRes.ok) {
-    const errBody = await submitRes.text();
-    throw new Error(`Runway submit failed (${submitRes.status}): ${errBody}`);
-  }
-
-  const taskId = ((await submitRes.json()) as { id: string }).id;
-  if (!taskId) throw new Error("Runway returned no task ID");
-
-  console.log(`[video/runway] task submitted: ${taskId}`);
-
-  // Poll for completion
-  const MAX_WAIT_MS = 600_000;
-  const POLL_MS     = 8_000;
-  const started     = Date.now();
-
-  while (Date.now() - started < MAX_WAIT_MS) {
-    await new Promise((r) => setTimeout(r, POLL_MS));
-
-    const pollRes = await fetch(`${RUNWAY_API_BASE}/tasks/${taskId}`, {
-      headers: {
-        "Authorization":    `Bearer ${runwayKey}`,
-        "X-Runway-Version": RUNWAY_VERSION,
-      },
-    });
-
-    if (!pollRes.ok) { console.warn(`[video/runway] poll ${pollRes.status} — retrying`); continue; }
-
-    const p = (await pollRes.json()) as {
-      status: string; output?: string[]; failure?: string; failureCode?: string;
-    };
-
-    console.log(`[video/runway] task ${taskId}: ${p.status}`);
-
-    if (p.status === "SUCCEEDED") {
-      const videoUrl = p.output?.[0];
-      if (!videoUrl) throw new Error("Runway returned SUCCEEDED but no output URL");
-      return { videoUrl, taskId, provider: "runway" };
-    }
-    if (p.status === "FAILED")
-      throw new Error(`Runway failed: ${p.failure ?? p.failureCode ?? "unknown"}`);
-  }
-
-  throw new Error("Runway video generation timed out after 10 minutes.");
-}
-
 // ─── handleVideo — Phase 1 preview ───────────────────────────────────────────
 
 async function handleVideo(job: AIJob): Promise<HandlerResult> {
   console.log(`[ai-jobs] processing VIDEO job ${job.id} — Phase 1 preview`);
 
-  // ── Env check: require at least one provider ──────────────────────────────
-  const falKey    = process.env.FAL_KEY;
-  const runwayKey = process.env.RUNWAY_API_KEY;
+  // ── Env check ─────────────────────────────────────────────────────────────
+  const falKey = process.env.FAL_KEY;
 
-  if (
-    (!falKey    || falKey.startsWith("your_")) &&
-    (!runwayKey || runwayKey.startsWith("your_"))
-  ) {
-    throw new Error(
-      "No video provider configured — add FAL_KEY (Kling) or RUNWAY_API_KEY to .env.local.",
-    );
-  }
+  if (!falKey || falKey.startsWith("your_"))
+    throw new Error("FAL_KEY is not configured — add it to .env.local to use video generation.");
 
   // ── Extract inputs ────────────────────────────────────────────────────────
   const input = (job.inputData ?? {}) as Record<string, unknown>;
@@ -304,44 +205,14 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
 
   const stylePrompt = VIDEO_STYLE_PROMPTS[style] ?? VIDEO_STYLE_PROMPTS["cinematic"];
 
-  // ── Try Kling first, fall back to Runway ──────────────────────────────────
-  let videoUrl: string;
-  let providerUsed: "kling" | "runway";
-  let extraMeta: Record<string, unknown> = {};
+  // ── Generate via Kling ────────────────────────────────────────────────────
+  const res      = await generateWithKling(imageUrl, stylePrompt, aspectRatio, 10);
+  const videoUrl = res.videoUrl;
+  const extraMeta: Record<string, unknown> = { falModel: "fal-ai/kling-video/v1.6/pro/image-to-video" };
+  console.log(`[video] Kling preview generated: ${videoUrl}`);
 
-  const klingAvailable = falKey && !falKey.startsWith("your_");
-
-  if (klingAvailable) {
-    try {
-      const res = await generateWithKling(imageUrl, stylePrompt, aspectRatio, 10);
-      videoUrl     = res.videoUrl;
-      providerUsed = res.provider;
-      extraMeta    = { falModel: "fal-ai/kling-video/v1.6/pro/image-to-video" };
-      console.log(`[video] Kling preview generated: ${videoUrl}`);
-    } catch (klingErr: unknown) {
-      const klingMsg = klingErr instanceof Error ? klingErr.message : String(klingErr);
-      console.warn(`[video] Kling failed — falling back to Runway. Error: ${klingMsg}`);
-
-      // Attempt Runway fallback
-      const res   = await generateWithRunway(imageUrl, stylePrompt, aspectRatio, 10);
-      videoUrl     = res.videoUrl;
-      providerUsed = res.provider;
-      extraMeta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo", klingError: klingMsg };
-      console.log(`[video] Runway fallback preview generated: ${videoUrl}`);
-    }
-  } else {
-    // Kling not configured — go straight to Runway
-    const res   = await generateWithRunway(imageUrl, stylePrompt, aspectRatio, 10);
-    videoUrl     = res.videoUrl;
-    providerUsed = res.provider;
-    extraMeta    = { runwayTaskId: res.taskId, runwayModel: "gen3a_turbo" };
-    console.log(`[video] Runway preview generated: ${videoUrl}`);
-  }
-
-  // Phase 1 cost: 10 seconds @ provider rate
-  const costToUs = providerUsed === "kling"
-    ? 10 * KLING_COST_PER_SEC
-    : 10 * RUNWAY_COST_PER_SEC;
+  // Phase 1 cost: 10 seconds @ Kling rate
+  const costToUs = 10 * KLING_COST_PER_SEC;
 
   // ── Write Phase 1 result to DB — status stays PROCESSING ─────────────────
   await db.aIJob.update({
@@ -351,7 +222,7 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
         previewUrl:      videoUrl,
         previewReady:    true,
         phase:           1,
-        provider:        providerUsed,
+        provider:        "kling",
         style,
         aspectRatio,
         durationSeconds,      // tier-capped value — used by Phase 2 full render
@@ -368,7 +239,7 @@ async function handleVideo(job: AIJob): Promise<HandlerResult> {
   });
 
   console.log(
-    `[video] Phase 1 complete (${providerUsed}) — tier ${tier} ($${priceCharged}), ` +
+    `[video] Phase 1 complete (kling) — tier ${tier} ($${priceCharged}), ` +
     `provider cost $${costToUs.toFixed(3)}. Job ${job.id} awaiting user approval for Phase 2.`,
   );
 
@@ -1281,7 +1152,7 @@ type VideoClip = {
   status:      "pending" | "generating" | "success" | "failed";
   retries:     number;
   costToUs:    number;
-  provider?:   "kling" | "runway";
+  provider?:   "kling";
 };
 
 // ─── Phase 2 low-level helpers ────────────────────────────────────────────────
@@ -1298,27 +1169,16 @@ async function saveVideoPhase2State(
 }
 
 /**
- * Generate one 10-second clip using Kling (primary) or Runway (fallback).
+ * Generate one 10-second clip using Kling.
  * Returns { url, costToUs, providerUsed }.
  */
 async function generateSingleClip(
   imageUrl:    string,
   prompt:      string,
   aspectRatio: string,
-): Promise<{ url: string; costToUs: number; providerUsed: "kling" | "runway" }> {
-  const klingAvailable = !!(process.env.FAL_KEY) && !process.env.FAL_KEY.startsWith("your_");
-
-  if (klingAvailable) {
-    try {
-      const res = await generateWithKling(imageUrl, prompt, aspectRatio, 10);
-      return { url: res.videoUrl, costToUs: 10 * KLING_COST_PER_SEC, providerUsed: "kling" };
-    } catch (err) {
-      console.warn(`[video/clip] Kling failed — falling back to Runway: ${err instanceof Error ? err.message : err}`);
-    }
-  }
-
-  const res = await generateWithRunway(imageUrl, prompt, aspectRatio, 10);
-  return { url: res.videoUrl, costToUs: 10 * RUNWAY_COST_PER_SEC, providerUsed: "runway" };
+): Promise<{ url: string; costToUs: number; providerUsed: "kling" }> {
+  const res = await generateWithKling(imageUrl, prompt, aspectRatio, 10);
+  return { url: res.videoUrl, costToUs: 10 * KLING_COST_PER_SEC, providerUsed: "kling" };
 }
 
 /**

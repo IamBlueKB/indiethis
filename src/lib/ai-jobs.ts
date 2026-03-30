@@ -46,7 +46,7 @@ export const PPU_LABELS: Partial<Record<AIJobType, string>> = {
 // ─── Provider names (informational — caller sets the actual provider string) ──
 
 export const DEFAULT_PROVIDERS: Partial<Record<AIJobType, string>> = {
-  VIDEO:            "kling",      // Kling 1.6 Pro via fal.ai (Runway fallback)
+  VIDEO:            "kling",      // Kling 1.6 Pro via fal.ai
   COVER_ART:        "fal",
   MASTERING:        "dolby",
   LYRIC_VIDEO:      "remotion",
