@@ -2194,6 +2194,7 @@ model DJProfile {
   crates               Crate[]
   sets                 DJSet[]
   events               DJEvent[]
+  bookingInquiries     DJBookingInquiry[]
   attributions         DJAttribution[]
   withdrawals          DJWithdrawal[]
   collaboratingCrates  CrateCollaborator[]
@@ -2254,11 +2255,16 @@ model CrateInvite {
 }
 
 model DJSet {
-  id          String    @id @default(cuid())
-  djProfileId String
-  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
-  title       String
-  createdAt   DateTime  @default(now())
+  id           String    @id @default(cuid())
+  djProfileId  String
+  djProfile    DJProfile @relation(fields: [djProfileId], references: [id])
+  title        String
+  videoUrl     String
+  thumbnailUrl String?
+  duration     Int?
+  venue        String?
+  date         DateTime?
+  createdAt    DateTime  @default(now())
 
   @@index([djProfileId])
 }
@@ -2267,8 +2273,29 @@ model DJEvent {
   id          String    @id @default(cuid())
   djProfileId String
   djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
-  title       String
-  eventDate   DateTime
+  name        String
+  venue       String
+  city        String
+  date        DateTime
+  time        String?
+  ticketUrl   String?
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@index([djProfileId])
+}
+
+model DJBookingInquiry {
+  id          String    @id @default(cuid())
+  djProfileId String
+  djProfile   DJProfile @relation(fields: [djProfileId], references: [id])
+  name        String
+  email       String
+  phone       String?
+  eventDate   DateTime?
+  venue       String?
+  message     String
+  status      String    @default("PENDING")
   createdAt   DateTime  @default(now())
 
   @@index([djProfileId])
