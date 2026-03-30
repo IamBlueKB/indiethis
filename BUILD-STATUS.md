@@ -615,7 +615,7 @@ YoutubeReference
 | 4 | ~~`CRON_SECRET` not set~~ | ~~Cron routes have no auth protection in dev~~ **FIXED** — all 5 cron routes validated; `CRON_SECRET` set in `.env` |
 | 5 | ~~`YOUTUBE_API_KEY` not set~~ | **FIXED** — key set in `.env.local` |
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
-| 7 | ACRCloud keys not set | DJ mix tracklist auto-identification will fail — add ACR_CLOUD_ACCESS_KEY, ACR_CLOUD_ACCESS_SECRET, ACR_CLOUD_HOST |
+| 7 | `STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME` | Placeholder keys added to `.env.local` — fill in once created in Stripe dashboard |
 | 9 | `AudioFeatures` table | Sparse data — radar filter and similarity matching return few results |
 | 10 | Chromaprint / fpcalc not on Vercel | Audio fingerprinting falls back to SHA-256 hash — not a true acoustic fingerprint; future enhancement needed |
 
@@ -664,9 +664,7 @@ YoutubeReference
 | `CRON_SECRET` | Cron route authentication | ✅ SET |
 | `YOUTUBE_API_KEY` | YouTube video sync + DJ set seeding | ✅ SET |
 | `AUDD_API_KEY` | Track Shield — AudD content recognition API | ✅ SET |
-| `ACR_CLOUD_ACCESS_KEY` | ACRCloud mix track identification | ❌ MISSING — required for DJ mix tracklists |
-| `ACR_CLOUD_ACCESS_SECRET` | ACRCloud secret | ❌ MISSING |
-| `ACR_CLOUD_HOST` | ACRCloud endpoint | ❌ MISSING |
+| `ACRCLOUD_TOKEN` | ACRCloud JWT token for mix track identification | ✅ SET |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
