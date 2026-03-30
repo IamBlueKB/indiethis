@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
   // Tracks without fingerprints
   const tracks = await db.track.findMany({
-    where: { fingerprint: { is: null }, fileUrl: { not: null } },
+    where: { fingerprint: { is: null } },
     select: { id: true, fileUrl: true },
     skip: page * batchSize,
     take: batchSize,
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     processed++;
   }
 
-  const remaining = await db.track.count({ where: { fingerprint: { is: null }, fileUrl: { not: null } } });
+  const remaining = await db.track.count({ where: { fingerprint: { is: null } } });
 
   return NextResponse.json({ processed, remaining, page, hasMore: remaining > 0 });
 }
