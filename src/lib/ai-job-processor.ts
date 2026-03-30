@@ -715,11 +715,54 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
 
   // ── Extract job inputs ────────────────────────────────────────────────────
   const input = (job.inputData ?? {}) as Record<string, string>;
-  const { trackUrl, genre, artistBio, targetMarket, comparableArtists } = input;
+  const { trackUrl, trackId, genre, artistBio, targetMarket, comparableArtists } = input;
 
   if (!trackUrl) throw new Error("AR_REPORT job missing required input: trackUrl");
 
   let totalCost = 0;
+
+  // ── Step 0: Look up AudioFeatures from DB ─────────────────────────────────
+  let audioFeatures: {
+    bpm?: number | null;
+    musicalKey?: string | null;
+    energy?: number | null;
+    danceability?: number | null;
+    valence?: number | null;
+    acousticness?: number | null;
+    instrumentalness?: number | null;
+    liveness?: number | null;
+    speechiness?: number | null;
+    loudness?: number | null;
+  } = {};
+
+  try {
+    // Try by trackId first, fall back to matching by fileUrl
+    const track = trackId
+      ? await db.track.findUnique({ where: { id: trackId }, include: { audioFeatures: true } })
+      : await db.track.findFirst({ where: { fileUrl: trackUrl }, include: { audioFeatures: true } });
+
+    if (track) {
+      audioFeatures = {
+        bpm:              track.bpm             ?? track.audioFeatures?.energy    ?? null,
+        musicalKey:       track.musicalKey      ?? null,
+        energy:           track.audioFeatures?.energy           ?? null,
+        danceability:     track.audioFeatures?.danceability     ?? null,
+        valence:          track.audioFeatures?.valence          ?? null,
+        acousticness:     track.audioFeatures?.acousticness     ?? null,
+        instrumentalness: track.audioFeatures?.instrumentalness ?? null,
+        liveness:         track.audioFeatures?.liveness         ?? null,
+        speechiness:      track.audioFeatures?.speechiness      ?? null,
+        loudness:         track.audioFeatures?.loudness         ?? null,
+      };
+      // Fix bpm — it's on the Track model directly, not AudioFeatures
+      audioFeatures.bpm = track.bpm ?? null;
+      console.log(`[ar-report] AudioFeatures loaded for track ${track.id}`);
+    } else {
+      console.log(`[ar-report] No track found for URL — proceeding without AudioFeatures`);
+    }
+  } catch (e) {
+    console.warn(`[ar-report] Failed to load AudioFeatures: ${e}`);
+  }
 
   // ── Step 1: Whisper transcription via Replicate ───────────────────────────
   console.log(`[ar-report] transcribing audio via Replicate Whisper: ${trackUrl}`);
@@ -753,12 +796,8 @@ async function handleARReport(job: AIJob): Promise<HandlerResult> {
 
   console.log(`[ar-report] Whisper complete — ${audioDurationMinutes.toFixed(1)} min, ${lyrics.length} chars`);
 
-  // ── Step 2: audio analysis (placeholder — no third-party analyzer configured) ─
-  // Audio analysis is not available without a dedicated service.
-  // audioAnalysis remains empty; the Claude report will note measurements as unavailable.
-  const audioAnalysis: Record<string, unknown> = {};
-
-  console.log(`[ar-report] audio analysis: skipped (no analyzer configured)`);
+  // ── Step 2: audio analysis — from AudioFeatures DB record ────────────────
+  console.log(`[ar-report] audio analysis: ${Object.values(audioFeatures).some(v => v != null) ? "loaded from AudioFeatures" : "not available"}`);
 
   // ── Step 3: Claude Sonnet — generate A&R report ───────────────────────────
   console.log(`[ar-report] generating report via Claude Sonnet`);
@@ -782,13 +821,16 @@ Be specific and actionable, not generic. Reference actual data from the audio an
 - Comparable Artists: ${comparableArtists || "Not specified"}
 
 **Audio Analysis:**
-- Integrated Loudness: ${audioAnalysis.loudness != null ? `${audioAnalysis.loudness} LUFS` : "Not available"}
-- True Peak: ${audioAnalysis.truePeak != null ? `${audioAnalysis.truePeak} dBTP` : "Not available"}
-- Dynamic Range: ${audioAnalysis.dynamicRange != null ? `${audioAnalysis.dynamicRange} LU` : "Not available"}
-- Tempo: ${audioAnalysis.tempo != null ? `${audioAnalysis.tempo} BPM` : "Not available"}
-- Key: ${audioAnalysis.key != null ? `${audioAnalysis.key} ${audioAnalysis.mode ?? ""}`.trim() : "Not available"}
-- Energy: ${audioAnalysis.energy != null ? audioAnalysis.energy : "Not available"}
-- Danceability: ${audioAnalysis.danceability != null ? audioAnalysis.danceability : "Not available"}
+- BPM / Tempo: ${audioFeatures.bpm != null ? `${audioFeatures.bpm} BPM` : "Not available"}
+- Musical Key: ${audioFeatures.musicalKey != null ? audioFeatures.musicalKey : "Not available"}
+- Energy: ${audioFeatures.energy != null ? `${(audioFeatures.energy * 100).toFixed(0)}% (${audioFeatures.energy >= 0.7 ? "high" : audioFeatures.energy >= 0.4 ? "medium" : "low"})` : "Not available"}
+- Danceability: ${audioFeatures.danceability != null ? `${(audioFeatures.danceability * 100).toFixed(0)}% (${audioFeatures.danceability >= 0.7 ? "highly danceable" : audioFeatures.danceability >= 0.4 ? "moderately danceable" : "low danceability"})` : "Not available"}
+- Valence (mood): ${audioFeatures.valence != null ? `${(audioFeatures.valence * 100).toFixed(0)}% (${audioFeatures.valence >= 0.6 ? "positive/upbeat" : audioFeatures.valence >= 0.4 ? "neutral" : "dark/melancholic"})` : "Not available"}
+- Acousticness: ${audioFeatures.acousticness != null ? `${(audioFeatures.acousticness * 100).toFixed(0)}% (${audioFeatures.acousticness >= 0.7 ? "primarily acoustic" : audioFeatures.acousticness >= 0.3 ? "mixed" : "primarily electronic/produced"})` : "Not available"}
+- Instrumentalness: ${audioFeatures.instrumentalness != null ? `${(audioFeatures.instrumentalness * 100).toFixed(0)}% (${audioFeatures.instrumentalness >= 0.5 ? "likely instrumental" : "vocal track"})` : "Not available"}
+- Liveness: ${audioFeatures.liveness != null ? `${(audioFeatures.liveness * 100).toFixed(0)}% (${audioFeatures.liveness >= 0.8 ? "likely live recording" : "studio recording"})` : "Not available"}
+- Speechiness: ${audioFeatures.speechiness != null ? `${(audioFeatures.speechiness * 100).toFixed(0)}% (${audioFeatures.speechiness >= 0.66 ? "spoken word" : audioFeatures.speechiness >= 0.33 ? "rap/hybrid" : "sung vocals"})` : "Not available"}
+- Loudness: ${audioFeatures.loudness != null ? `${(audioFeatures.loudness * 60 - 60).toFixed(1)} LUFS (estimated)` : "Not available"}
 - Audio Duration: ${audioDurationMinutes.toFixed(1)} minutes
 
 **Lyrics (transcribed via Whisper):**
@@ -825,7 +867,7 @@ Please write the A&R report now.`.trim();
       report:         reportText,
       lyrics,
       lyricsWithTimestamps,
-      audioAnalysis,
+      audioFeatures,
       audioDurationMinutes,
       whisperModel:   "whisper-1",
       claudeModel:    SONNET,

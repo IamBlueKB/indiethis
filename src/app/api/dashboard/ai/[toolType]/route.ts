@@ -156,6 +156,7 @@ function validateARReport(body: any): ValidationResult {
     ok: true,
     inputData: {
       trackUrl:           body.trackUrl.trim(),
+      trackId:            body.trackId            ?? "",
       genre:              body.genre              ?? "",
       artistBio:          body.artistBio          ?? "",
       targetMarket:       body.targetMarket       ?? "",
