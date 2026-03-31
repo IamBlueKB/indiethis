@@ -281,6 +281,83 @@ export async function sendSaleNotification(sale: {
 }
 
 // ---------------------------------------------------------------------------
+// Self-fulfilled merch order notification
+// ---------------------------------------------------------------------------
+
+export async function sendSelfFulfilledOrderEmail(params: {
+  artistEmail: string;
+  artistName:  string;
+  orderId:     string;
+  buyerName:   string;
+  buyerEmail:  string;
+  shippingAddress: {
+    line1:   string;
+    line2?:  string;
+    city:    string;
+    state:   string;
+    zip:     string;
+    country: string;
+  };
+  items: { title: string; size: string; color: string; quantity: number; unitPrice: number }[];
+  totalPrice: number;
+}): Promise<void> {
+  const itemsHtml = params.items
+    .map(
+      (i) =>
+        `<tr>
+          <td style="padding:4px 8px">${i.title}</td>
+          <td style="padding:4px 8px">${i.size}${i.color ? ` / ${i.color}` : ""}</td>
+          <td style="padding:4px 8px">×${i.quantity}</td>
+          <td style="padding:4px 8px">$${i.unitPrice.toFixed(2)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const addr = params.shippingAddress;
+  const addressHtml = [addr.line1, addr.line2, `${addr.city}, ${addr.state} ${addr.zip}`, addr.country]
+    .filter(Boolean)
+    .join("<br>");
+
+  await sendEmail({
+    to: { email: params.artistEmail, name: params.artistName },
+    subject: `New order — ship to ${params.buyerName}`,
+    htmlContent: `
+      <h1>You Have a New Order!</h1>
+      <p>Hi ${params.artistName}, someone just purchased your merch. Please ship the item(s) as soon as possible.</p>
+
+      <h2 style="margin-top:24px">Order #${params.orderId.slice(-8).toUpperCase()}</h2>
+      <table style="border-collapse:collapse;width:100%;max-width:480px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:4px 8px;text-align:left">Item</th>
+            <th style="padding:4px 8px;text-align:left">Variant</th>
+            <th style="padding:4px 8px;text-align:left">Qty</th>
+            <th style="padding:4px 8px;text-align:left">Price</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <p><strong>Order total:</strong> $${params.totalPrice.toFixed(2)}</p>
+
+      <h2 style="margin-top:24px">Ship To</h2>
+      <p>
+        <strong>${params.buyerName}</strong><br>
+        ${addressHtml}<br>
+        <a href="mailto:${params.buyerEmail}">${params.buyerEmail}</a>
+      </p>
+
+      <p style="margin-top:24px">
+        <a href="${APP_URL()}/dashboard/merch" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
+          View in Dashboard →
+        </a>
+      </p>
+    `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["merch", "self-fulfilled", "order"],
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Intake form link emails
 // ---------------------------------------------------------------------------
 

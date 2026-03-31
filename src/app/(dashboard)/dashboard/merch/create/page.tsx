@@ -1,22 +1,32 @@
 "use client";
 
 /**
- * /dashboard/merch/create — Full 6-step POD product creation wizard
+ * /dashboard/merch/create — Merch creation wizard
  *
- * Step 1 — Choose product type (catalog grid)
- * Step 2 — Upload design + placement + DesignPositioner
- * Step 3 — Generate + approve mockup
- * Step 4 — Select colors & sizes to offer
- * Step 5 — Set retail price per cost tier (with live profit calculator)
- * Step 6 — Product details (title, description) + publish / save as draft
+ * Mode picker → two flows:
+ *
+ * POD (Print-on-demand, Printful):
+ *   Step 1 — Choose product type (catalog grid)
+ *   Step 2 — Upload design + placement + DesignPositioner
+ *   Step 3 — Generate + approve mockup
+ *   Step 4 — Select colors & sizes to offer
+ *   Step 5 — Set retail price per cost tier (with live profit calculator)
+ *   Step 6 — Product details (title, description) + publish / save as draft
+ *
+ * Self-Fulfilled (artist ships):
+ *   SF Step 1 — Pick generic category
+ *   SF Step 2 — Upload product photos (up to 5)
+ *   SF Step 3 — Add variants (size, color, price, stock qty)
+ *   SF Step 4 — Return policy + processing days
+ *   SF Step 5 — Title, description + publish / save as draft
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Search, Loader2, CheckCircle2, ImageIcon, RefreshCw,
-  ArrowRight, ArrowLeft, Upload, X, Tag, DollarSign, ShoppingBag,
-  Eye, EyeOff,
+  ArrowRight, ArrowLeft, Upload, X, DollarSign, ShoppingBag,
+  Eye, EyeOff, Package, Truck, Plus, Trash2,
 } from "lucide-react";
 import { useMerchCatalog, type CatalogEntry } from "@/hooks/queries";
 import { useUploadThing } from "@/lib/uploadthing-client";
@@ -42,24 +52,30 @@ const SIZE_ORDER = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","One Size","OS
 /** IndieThis platform fee: 15% of gross profit */
 const INDIETHIS_FEE_RATE = 0.15;
 
+const SF_CATEGORIES = ["T-Shirt", "Hoodie", "Poster", "Vinyl", "Other"] as const;
+type SFCategory = typeof SF_CATEGORIES[number];
+
+type SFVariant = { id: number; size: string; color: string; colorCode: string; price: string; stockQty: string };
+
 // ─── Profit calculator ────────────────────────────────────────────────────────
 
 function calcProfit(retail: number, base: number) {
-  const gross      = retail - base;
-  const fee        = gross * INDIETHIS_FEE_RATE;
-  const profit     = gross - fee;
+  const gross  = retail - base;
+  const fee    = gross * INDIETHIS_FEE_RATE;
+  const profit = gross - fee;
   return { gross, fee, profit };
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// ─── Step indicators ──────────────────────────────────────────────────────────
 
-const STEP_LABELS = ["Product","Design","Mockup","Variants","Pricing","Publish"];
+const POD_STEP_LABELS = ["Product","Design","Mockup","Variants","Pricing","Publish"];
+const SF_STEP_LABELS  = ["Category","Photos","Variants","Details","Publish"];
 
-function StepIndicator({ current }: { current: number }) {
+function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
   return (
     <div className="flex items-center gap-0 overflow-x-auto pb-1 scrollbar-hide">
-      {STEP_LABELS.map((label, i) => {
-        const n = i + 1;
+      {labels.map((label, i) => {
+        const n      = i + 1;
         const done   = n < current;
         const active = n === current;
         return (
@@ -82,7 +98,7 @@ function StepIndicator({ current }: { current: number }) {
                 {label}
               </span>
             </div>
-            {i < STEP_LABELS.length - 1 && (
+            {i < labels.length - 1 && (
               <div className="w-5 sm:w-7 h-px mx-1.5" style={{ backgroundColor: done ? "#D4A843" : "var(--border)" }} />
             )}
           </div>
@@ -94,8 +110,15 @@ function StepIndicator({ current }: { current: number }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+let sfVarCounter = 0;
+
 export default function MerchCreatePage() {
   const router = useRouter();
+
+  // ── Mode picker ─────────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<"pod" | "self" | null>(null);
+
+  // ── POD state ───────────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
 
   // Step 1
@@ -128,7 +151,24 @@ export default function MerchCreatePage() {
   const [submitting,    setSubmitting   ] = useState(false);
   const [submitError,   setSubmitError  ] = useState("");
 
-  const { data: catalog = [], isLoading: loadingCatalog } = useMerchCatalog(true);
+  // ── Self-fulfilled state ─────────────────────────────────────────────────────
+  const [sfStep,           setSfStep          ] = useState(1);
+  const [sfCategory,       setSfCategory      ] = useState<SFCategory | null>(null);
+  const [sfPhotos,         setSfPhotos        ] = useState<string[]>([]);
+  const [sfPhotoUploading, setSfPhotoUploading] = useState(false);
+  const [sfPhotoError,     setSfPhotoError    ] = useState("");
+  const [sfVariants,       setSfVariants      ] = useState<SFVariant[]>([
+    { id: ++sfVarCounter, size: "", color: "", colorCode: "#000000", price: "", stockQty: "" },
+  ]);
+  const [sfReturnPolicy,   setSfReturnPolicy  ] = useState("");
+  const [sfProcessingDays, setSfProcessingDays] = useState("3");
+  const [sfTitle,          setSfTitle         ] = useState("");
+  const [sfDesc,           setSfDesc          ] = useState("");
+  const [sfSubmitting,     setSfSubmitting    ] = useState(false);
+  const [sfSubmitError,    setSfSubmitError   ] = useState("");
+
+  // ── Catalog ─────────────────────────────────────────────────────────────────
+  const { data: catalog = [], isLoading: loadingCatalog } = useMerchCatalog(mode === "pod");
 
   const filtered = catalog.filter((e) => {
     const matchCat    = categoryFilter === "All" || e.category === categoryFilter;
@@ -136,8 +176,7 @@ export default function MerchCreatePage() {
     return matchCat && matchSearch;
   });
 
-  // ── Derived variant data ──────────────────────────────────────────────────
-
+  // ── Derived variant data (POD) ───────────────────────────────────────────────
   const allColors = useMemo(() => {
     if (!selected) return [];
     const seen = new Set<string>();
@@ -164,7 +203,6 @@ export default function MerchCreatePage() {
     });
   }, [selected]);
 
-  // Variants matching the color × size selection
   const chosenVariants = useMemo(() => {
     if (!selected) return [] as PrintfulVariant[];
     return selected.variants.filter(
@@ -172,7 +210,6 @@ export default function MerchCreatePage() {
     );
   }, [selected, selectedColors, selectedSizes]);
 
-  // Unique pricing tiers — one entry per distinct base price
   const pricingTiers = useMemo(() => {
     const tiers = new Map<number, { basePrice: number; sizes: string[] }>();
     for (const v of chosenVariants) {
@@ -184,7 +221,7 @@ export default function MerchCreatePage() {
     return [...tiers.values()].sort((a, b) => a.basePrice - b.basePrice);
   }, [chosenVariants]);
 
-  // ── UploadThing ──────────────────────────────────────────────────────────
+  // ── UploadThing (POD design) ─────────────────────────────────────────────────
   const { startUpload, isUploading } = useUploadThing("merchDesign", {
     onClientUploadComplete: (files) => {
       const url = files[0]?.url;
@@ -193,30 +230,48 @@ export default function MerchCreatePage() {
     onUploadError: (err) => setUploadError(err.message ?? "Upload failed."),
   });
 
+  // ── UploadThing (self-fulfilled photos) ────────────────────────────────────
+  const { startUpload: startPhotoUpload } = useUploadThing("selfFulfilledProductImages", {
+    onClientUploadComplete: (files) => {
+      const newUrls = files.map((f) => f.url);
+      setSfPhotos((prev) => [...prev, ...newUrls].slice(0, 5));
+      setSfPhotoUploading(false);
+      setSfPhotoError("");
+    },
+    onUploadError: (err) => {
+      setSfPhotoError(err.message ?? "Upload failed.");
+      setSfPhotoUploading(false);
+    },
+  });
+
   const handlePositionChange = useCallback((pos: PrintPosition) => {
     setPrintPosition(pos);
   }, []);
 
-  // ── Navigation helpers ───────────────────────────────────────────────────
+  // ── POD Navigation ───────────────────────────────────────────────────────────
   function goBack() {
-    if (step === 1) router.push("/dashboard/merch");
-    else setStep((s) => s - 1);
+    if (mode === null) {
+      router.push("/dashboard/merch");
+    } else if (mode === "self") {
+      if (sfStep === 1) setMode(null);
+      else setSfStep((s) => s - 1);
+    } else {
+      if (step === 1) setMode(null);
+      else setStep((s) => s - 1);
+    }
   }
 
   function selectProduct(entry: CatalogEntry) {
     setSelected(entry);
     setProductTitle(entry.label);
     setProductDesc(entry.description ?? "");
-    // Pre-select all colors + sizes
     setSelectedColors(new Set(entry.variants.map((v) => v.color)));
     setSelectedSizes(new Set(entry.variants.map((v) => v.size)));
     setStep(2);
   }
 
-  // ── When moving to Step 5 — initialise pricing defaults ─────────────────
   function goToStep5() {
     if (chosenVariants.length === 0) return;
-    // Default retail = basePrice + $15 markup per tier
     const map = new Map<number, string>();
     for (const tier of pricingTiers) {
       if (!pricing.has(tier.basePrice)) {
@@ -229,7 +284,7 @@ export default function MerchCreatePage() {
     setStep(5);
   }
 
-  // ── Mockup generation ────────────────────────────────────────────────────
+  // ── POD Mockup generation ────────────────────────────────────────────────────
   async function generateMockup() {
     if (!selected || !designUrl) return;
     setMockupLoading(true);
@@ -267,13 +322,21 @@ export default function MerchCreatePage() {
     }
   }
 
-  // ── Publish / Draft ──────────────────────────────────────────────────────
+  // ── POD pricing validation ────────────────────────────────────────────────────
+  const pricingValid = useMemo(() => {
+    for (const tier of pricingTiers) {
+      const retail = parseFloat(pricing.get(tier.basePrice) ?? "0");
+      if (isNaN(retail) || retail <= tier.basePrice) return false;
+    }
+    return pricingTiers.length > 0;
+  }, [pricing, pricingTiers]);
+
+  // ── POD Submit ────────────────────────────────────────────────────────────────
   async function submitProduct(isActive: boolean) {
     if (!selected || !designUrl) return;
     setSubmitting(true);
     setSubmitError("");
 
-    // Build variant payload
     const variantPayload = chosenVariants.map((v) => {
       const bp = parseFloat(v.price);
       const retailStr = pricing.get(bp) ?? String(bp + 15);
@@ -295,6 +358,7 @@ export default function MerchCreatePage() {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
+          fulfillmentType:   "POD",
           printfulProductId: selected.printfulProductId,
           title:             productTitle.trim(),
           description:       productDesc.trim(),
@@ -319,16 +383,70 @@ export default function MerchCreatePage() {
     }
   }
 
-  // ── Pricing validation ───────────────────────────────────────────────────
-  const pricingValid = useMemo(() => {
-    for (const tier of pricingTiers) {
-      const retail = parseFloat(pricing.get(tier.basePrice) ?? "0");
-      if (isNaN(retail) || retail <= tier.basePrice) return false;
-    }
-    return pricingTiers.length > 0;
-  }, [pricing, pricingTiers]);
+  // ── SF variant helpers ────────────────────────────────────────────────────────
+  function updateSfVariant(id: number, field: keyof SFVariant, value: string) {
+    setSfVariants((prev) => prev.map((v) => v.id === id ? { ...v, [field]: value } : v));
+  }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  function addSfVariant() {
+    setSfVariants((prev) => [...prev, { id: ++sfVarCounter, size: "", color: "", colorCode: "#000000", price: "", stockQty: "" }]);
+  }
+
+  function removeSfVariant(id: number) {
+    setSfVariants((prev) => prev.filter((v) => v.id !== id));
+  }
+
+  const sfVariantsValid = useMemo(() => {
+    return sfVariants.length > 0 && sfVariants.every((v) => {
+      const p = parseFloat(v.price);
+      return v.size.trim() && !isNaN(p) && p > 0;
+    });
+  }, [sfVariants]);
+
+  // ── SF Submit ─────────────────────────────────────────────────────────────────
+  async function submitSelfFulfilled(isActive: boolean) {
+    if (!sfTitle.trim() || !sfReturnPolicy.trim() || sfPhotos.length === 0) return;
+    setSfSubmitting(true);
+    setSfSubmitError("");
+
+    try {
+      const res = await fetch("/api/dashboard/merch", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          fulfillmentType: "SELF_FULFILLED",
+          title:           sfTitle.trim(),
+          description:     sfDesc.trim(),
+          imageUrl:        sfPhotos[0],
+          imageUrls:       sfPhotos,
+          returnPolicy:    sfReturnPolicy.trim(),
+          processingDays:  parseInt(sfProcessingDays) || 3,
+          isActive,
+          variants:        sfVariants.map((v) => ({
+            size:          v.size.trim() || "One Size",
+            color:         v.color.trim() || "",
+            colorCode:     v.colorCode || "#000000",
+            basePrice:     0,
+            retailPrice:   parseFloat(v.price),
+            stockQuantity: v.stockQty ? parseInt(v.stockQty) : null,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to create product");
+      }
+
+      router.push("/dashboard/merch");
+    } catch (err) {
+      setSfSubmitError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSfSubmitting(false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen p-4 sm:p-6" style={{ backgroundColor: "var(--background)" }}>
       <div className="max-w-3xl mx-auto space-y-5">
@@ -344,16 +462,83 @@ export default function MerchCreatePage() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-foreground">Add Merch Product</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Print-on-demand — Printful fulfills every order</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {mode === "pod"  ? "Print-on-demand — Printful fulfills every order"  :
+               mode === "self" ? "Self-fulfilled — you ship, IndieThis processes payment" :
+               "Choose how you want to sell"}
+            </p>
           </div>
         </div>
 
-        <StepIndicator current={step} />
+        {/* Step indicator (only after mode is chosen) */}
+        {mode === "pod"  && <StepIndicator current={step}   labels={POD_STEP_LABELS} />}
+        {mode === "self" && <StepIndicator current={sfStep} labels={SF_STEP_LABELS} />}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 1 — Choose product
+            MODE PICKER
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 1 && (
+        {mode === null && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <button
+              onClick={() => setMode("pod")}
+              className="text-left rounded-2xl border p-6 space-y-4 transition-all hover:border-[#D4A843] group"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)" }}>
+                <Package size={22} style={{ color: "#D4A843" }} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Print-on-Demand</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Upload your design, we handle printing and shipping through Printful.
+                  No inventory. No upfront cost.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <ShoppingBag size={11} className="text-muted-foreground" />
+                <span className="text-[11px] text-muted-foreground">T-shirts, hoodies, mugs, posters &amp; more</span>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+                  IndieThis takes 15% of your profit →
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMode("self")}
+              className="text-left rounded-2xl border p-6 space-y-4 transition-all hover:border-[#D4A843] group"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)" }}>
+                <Truck size={22} style={{ color: "#D4A843" }} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Self-Fulfilled</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  You have your own merch and will ship it yourself. We collect payment
+                  and notify you with the buyer's shipping address.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <DollarSign size={11} className="text-muted-foreground" />
+                <span className="text-[11px] text-muted-foreground">Vinyl, custom apparel, handmade goods, etc.</span>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] font-semibold" style={{ color: "#D4A843" }}>
+                  IndieThis takes 15% of full sale price →
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            POD — STEP 1 — Choose product
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "pod" && step === 1 && (
           <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
             <div className="px-5 py-4 border-b space-y-3" style={{ borderColor: "var(--border)" }}>
               <h2 className="text-sm font-bold text-foreground">Choose a product type</h2>
@@ -417,13 +602,12 @@ export default function MerchCreatePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 2 — Upload design + position
+            POD — STEP 2 — Upload design + position
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 2 && selected && (
+        {mode === "pod" && step === 2 && selected && (
           <div className="space-y-4">
             <ProductPill product={selected} onChange={() => setStep(1)} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_280px]">
-              {/* Positioner */}
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
                 <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
                   <p className="text-xs font-semibold text-foreground">Position your design</p>
@@ -434,14 +618,13 @@ export default function MerchCreatePage() {
                 </div>
               </div>
 
-              {/* Upload + placement */}
               <div className="space-y-4">
                 <UploadZone
                   designUrl={designUrl}
                   isUploading={isUploading}
                   uploadError={uploadError}
                   onFileSelect={(file) => { setUploadError(""); startUpload([file]); }}
-                  onReplace={(file) => { setUploadError(""); startUpload([file]); }}
+                  onReplace={(file)    => { setUploadError(""); startUpload([file]); }}
                 />
                 <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
                   <div className="px-4 pt-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
@@ -472,9 +655,9 @@ export default function MerchCreatePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 3 — Mockup preview
+            POD — STEP 3 — Mockup preview
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 3 && selected && (
+        {mode === "pod" && step === 3 && selected && (
           <div className="space-y-4">
             <MountEffect onMount={generateMockup} />
             <ProductPill product={selected} onChange={() => setStep(1)} />
@@ -555,13 +738,12 @@ export default function MerchCreatePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 4 — Select colors + sizes
+            POD — STEP 4 — Select colors + sizes
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 4 && selected && (
+        {mode === "pod" && step === 4 && selected && (
           <div className="space-y-4">
             <ProductPill product={selected} onChange={() => setStep(1)} />
 
-            {/* Colors */}
             <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
               <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
                 <div>
@@ -610,7 +792,6 @@ export default function MerchCreatePage() {
               </div>
             </div>
 
-            {/* Sizes */}
             <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
               <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
                 <div>
@@ -645,7 +826,6 @@ export default function MerchCreatePage() {
               </div>
             </div>
 
-            {/* Summary + base costs */}
             {chosenVariants.length > 0 && (
               <div className="rounded-2xl border px-5 py-4 space-y-2"
                 style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
@@ -675,9 +855,9 @@ export default function MerchCreatePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 5 — Set pricing
+            POD — STEP 5 — Set pricing
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 5 && (
+        {mode === "pod" && step === 5 && (
           <div className="space-y-4">
             {selected && <ProductPill product={selected} onChange={() => setStep(1)} />}
 
@@ -692,15 +872,12 @@ export default function MerchCreatePage() {
                   style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
                 >
                   <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-                    <p className="text-sm font-bold text-foreground">
-                      {tier.sizes.join(" · ")}
-                    </p>
+                    <p className="text-sm font-bold text-foreground">{tier.sizes.join(" · ")}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Printful base cost: <span className="text-foreground font-semibold">${tier.basePrice.toFixed(2)}</span>
                     </p>
                   </div>
                   <div className="p-5 space-y-4">
-                    {/* Retail price input */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         Your Retail Price <span className="text-red-400">*</span>
@@ -728,7 +905,6 @@ export default function MerchCreatePage() {
                       )}
                     </div>
 
-                    {/* Profit calculator */}
                     {valid && (
                       <div className="space-y-2 px-4 py-3 rounded-xl"
                         style={{ backgroundColor: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.15)" }}
@@ -767,9 +943,9 @@ export default function MerchCreatePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 6 — Product details + publish
+            POD — STEP 6 — Product details + publish
         ══════════════════════════════════════════════════════════════════ */}
-        {step === 6 && selected && (
+        {mode === "pod" && step === 6 && selected && (
           <div className="space-y-4">
             <ProductPill product={selected} onChange={() => setStep(1)} />
 
@@ -792,9 +968,7 @@ export default function MerchCreatePage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Description
-                  </label>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
                   <textarea
                     value={productDesc}
                     onChange={(e) => setProductDesc(e.target.value)}
@@ -807,7 +981,6 @@ export default function MerchCreatePage() {
               </div>
             </div>
 
-            {/* Mockup review */}
             {mockups.length > 0 && (
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
                 <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
@@ -828,7 +1001,6 @@ export default function MerchCreatePage() {
               </div>
             )}
 
-            {/* Summary */}
             <div className="rounded-2xl border px-5 py-4 space-y-2"
               style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
             >
@@ -848,9 +1020,7 @@ export default function MerchCreatePage() {
               </div>
             </div>
 
-            {submitError && (
-              <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>
-            )}
+            {submitError && <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>}
 
             <div className="flex items-center gap-3">
               <button onClick={() => setStep(5)}
@@ -873,6 +1043,405 @@ export default function MerchCreatePage() {
                 style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
                 {submitting ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
+                Publish to Store
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SF — STEP 1 — Category
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "self" && sfStep === 1 && (
+          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <h2 className="text-sm font-bold text-foreground">What type of product is this?</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Just for categorization — fans won't see this label</p>
+            </div>
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {SF_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => { setSfCategory(cat); setSfStep(2); }}
+                  className="py-4 rounded-2xl border text-sm font-semibold transition-all hover:border-[#D4A843]"
+                  style={{
+                    backgroundColor: sfCategory === cat ? "#D4A843" : "var(--background)",
+                    color:           sfCategory === cat ? "#0A0A0A"  : "var(--foreground)",
+                    borderColor:     sfCategory === cat ? "#D4A843"  : "var(--border)",
+                  }}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SF — STEP 2 — Product photos
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "self" && sfStep === 2 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                <h2 className="text-sm font-bold text-foreground">Product photos</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload up to 5 photos · PNG or JPG · max 16MB each · {sfPhotos.length}/5 uploaded
+                </p>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Thumbnails */}
+                {sfPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                    {sfPhotos.map((url, i) => (
+                      <div key={url} className="relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Photo ${i + 1}`}
+                          className="w-full aspect-square rounded-xl object-cover"
+                          style={{ border: "1px solid var(--border)" }}
+                        />
+                        <button
+                          onClick={() => setSfPhotos((p) => p.filter((_, j) => j !== i))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ backgroundColor: "rgba(232,93,74,0.9)", color: "white" }}
+                        >
+                          <X size={10} />
+                        </button>
+                        {i === 0 && (
+                          <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>Main</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {sfPhotos.length < 5 && (
+                  <div className="rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    {sfPhotoUploading ? (
+                      <><Loader2 size={24} className="animate-spin" style={{ color: "#D4A843" }} />
+                      <p className="text-xs text-muted-foreground">Uploading…</p></>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                          style={{ backgroundColor: "rgba(212,168,67,0.1)" }}>
+                          <Upload size={18} style={{ color: "#D4A843" }} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs font-semibold text-foreground">Drop photos here</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            or click to browse · up to {5 - sfPhotos.length} more
+                          </p>
+                        </div>
+                        <label className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                          Browse files
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg"
+                            multiple
+                            className="sr-only"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []).slice(0, 5 - sfPhotos.length);
+                              if (files.length === 0) return;
+                              setSfPhotoUploading(true);
+                              setSfPhotoError("");
+                              startPhotoUpload(files);
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                )}
+                {sfPhotoError && <p className="text-xs text-red-400">{sfPhotoError}</p>}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSfStep(1)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--card)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              ><ArrowLeft size={13} /> Back</button>
+              <button onClick={() => setSfStep(3)}
+                disabled={sfPhotos.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >Add Variants <ArrowRight size={13} /></button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SF — STEP 3 — Variants
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "self" && sfStep === 3 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                <h2 className="text-sm font-bold text-foreground">Variants</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Add each size/color combination you're selling. Leave stock blank for unlimited.
+                </p>
+              </div>
+              <div className="p-5 space-y-3">
+                {/* Table header */}
+                <div className="hidden sm:grid grid-cols-[1fr_1fr_80px_80px_32px] gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  <span>Size</span>
+                  <span>Color</span>
+                  <span>Price</span>
+                  <span>Stock</span>
+                  <span></span>
+                </div>
+
+                {sfVariants.map((v) => (
+                  <div key={v.id} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_80px_80px_32px] gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Size (e.g. M)"
+                      value={v.size}
+                      onChange={(e) => updateSfVariant(v.id, "size", e.target.value)}
+                      className="px-3 py-2 rounded-xl border text-xs outline-none"
+                      style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={v.colorCode}
+                        onChange={(e) => updateSfVariant(v.id, "colorCode", e.target.value)}
+                        className="w-8 h-8 rounded-lg border cursor-pointer shrink-0"
+                        style={{ borderColor: "var(--border)", padding: "2px" }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Color name"
+                        value={v.color}
+                        onChange={(e) => updateSfVariant(v.id, "color", e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-xl border text-xs outline-none min-w-0"
+                        style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={v.price}
+                        onChange={(e) => updateSfVariant(v.id, "price", e.target.value)}
+                        className="w-full pl-6 pr-2 py-2 rounded-xl border text-xs outline-none"
+                        style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                      />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="∞"
+                      value={v.stockQty}
+                      onChange={(e) => updateSfVariant(v.id, "stockQty", e.target.value)}
+                      className="px-3 py-2 rounded-xl border text-xs outline-none"
+                      style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                    />
+                    <button
+                      onClick={() => removeSfVariant(v.id)}
+                      disabled={sfVariants.length <= 1}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  onClick={addSfVariant}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold w-full justify-center mt-2"
+                  style={{ backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "1px dashed var(--border)" }}
+                >
+                  <Plus size={13} /> Add variant
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSfStep(2)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--card)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              ><ArrowLeft size={13} /> Back</button>
+              <button onClick={() => setSfStep(4)}
+                disabled={!sfVariantsValid}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >Return Policy <ArrowRight size={13} /></button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SF — STEP 4 — Return policy + processing days
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "self" && sfStep === 4 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                <h2 className="text-sm font-bold text-foreground">Fulfillment Details</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Shown to buyers at checkout</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Processing time (business days) <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {["1","2","3","5","7","14"].map((d) => (
+                      <button key={d} onClick={() => setSfProcessingDays(d)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold transition-colors"
+                        style={sfProcessingDays === d
+                          ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                          : { backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                      >{d} day{d === "1" ? "" : "s"}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Return policy <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    value={sfReturnPolicy}
+                    onChange={(e) => setSfReturnPolicy(e.target.value)}
+                    placeholder="e.g. All sales are final. If your item arrives damaged, contact us within 7 days with photos and we'll make it right."
+                    rows={5}
+                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none resize-none"
+                    style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                  />
+                  <p className="text-[11px] text-muted-foreground">Required — fans will see this before purchasing.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSfStep(3)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--card)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              ><ArrowLeft size={13} /> Back</button>
+              <button onClick={() => setSfStep(5)}
+                disabled={!sfReturnPolicy.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >Product Details <ArrowRight size={13} /></button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SF — STEP 5 — Title, description + publish
+        ══════════════════════════════════════════════════════════════════ */}
+        {mode === "self" && sfStep === 5 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                <p className="text-sm font-bold text-foreground">Product Details</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Title <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={sfTitle}
+                    onChange={(e) => setSfTitle(e.target.value)}
+                    placeholder={`e.g. Signed ${sfCategory ?? "Item"} — Limited Run`}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none"
+                    style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
+                  <textarea
+                    value={sfDesc}
+                    onChange={(e) => setSfDesc(e.target.value)}
+                    placeholder="Tell fans about this item…"
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none resize-none"
+                    style={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Photo preview */}
+            {sfPhotos.length > 0 && (
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-sm font-bold text-foreground">Photos ({sfPhotos.length})</p>
+                </div>
+                <div className="p-5 flex gap-3 flex-wrap">
+                  {sfPhotos.map((url, i) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img key={url} src={url} alt={`photo ${i + 1}`}
+                      className="w-20 h-20 rounded-xl object-cover"
+                      style={{ border: "1px solid var(--border)" }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="rounded-2xl border px-5 py-4 space-y-2"
+              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <p className="text-xs font-semibold text-foreground">Summary</p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Category: {sfCategory}</p>
+                <p>{sfVariants.length} variant{sfVariants.length !== 1 ? "s" : ""}</p>
+                <p>Processing: {sfProcessingDays} business day{sfProcessingDays === "1" ? "" : "s"}</p>
+                {sfVariants.map((v) => {
+                  const price = parseFloat(v.price);
+                  if (isNaN(price)) return null;
+                  const { profit } = calcProfit(price, 0);
+                  return (
+                    <p key={v.id}>
+                      {v.size}{v.color ? ` / ${v.color}` : ""}:
+                      {" "}<span className="text-foreground font-semibold">${price.toFixed(2)}</span>
+                      {" "}· <span className="text-emerald-400 font-semibold">${profit.toFixed(2)} profit</span>
+                      {v.stockQty ? ` · ${v.stockQty} in stock` : ""}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
+
+            {sfSubmitError && <p className="text-xs text-red-400 font-semibold text-center">{sfSubmitError}</p>}
+
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSfStep(4)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--card)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              ><ArrowLeft size={13} /> Back</button>
+
+              <button onClick={() => submitSelfFulfilled(false)}
+                disabled={sfSubmitting || !sfTitle.trim()}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              >
+                {sfSubmitting ? <Loader2 size={13} className="animate-spin" /> : <EyeOff size={13} />}
+                Save Draft
+              </button>
+
+              <button onClick={() => submitSelfFulfilled(true)}
+                disabled={sfSubmitting || !sfTitle.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {sfSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
                 Publish to Store
               </button>
             </div>

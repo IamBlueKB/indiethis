@@ -14,19 +14,23 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json() as {
-    title?:       string;
-    description?: string;
-    isActive?:    boolean;
-    markup?:      number;
+    title?:          string;
+    description?:    string;
+    isActive?:       boolean;
+    markup?:         number;
+    returnPolicy?:   string;
+    processingDays?: number;
   };
 
   const updated = await db.merchProduct.updateMany({
     where: { id, artistId: session.user.id },
     data: {
-      ...(body.title       !== undefined && { title:       body.title.trim() }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.isActive    !== undefined && { isActive:    body.isActive }),
-      ...(body.markup      !== undefined && { markup:      body.markup }),
+      ...(body.title          !== undefined && { title:          body.title.trim() }),
+      ...(body.description    !== undefined && { description:    body.description }),
+      ...(body.isActive       !== undefined && { isActive:       body.isActive }),
+      ...(body.markup         !== undefined && { markup:         body.markup }),
+      ...(body.returnPolicy   !== undefined && { returnPolicy:   body.returnPolicy }),
+      ...(body.processingDays !== undefined && { processingDays: body.processingDays }),
     },
   });
 

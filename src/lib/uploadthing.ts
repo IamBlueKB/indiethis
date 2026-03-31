@@ -252,6 +252,17 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Self-fulfilled merch product photos (up to 5 images, 16MB each)
+  selfFulfilledProductImages: f({ image: { maxFileSize: "16MB", maxFileCount: 5 } })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Merch design upload (PNG/JPG, max 64MB — stored permanently for mockup generation)
   merchDesign: f({ image: { maxFileSize: "64MB", maxFileCount: 1 } })
     .middleware(async () => {

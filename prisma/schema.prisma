@@ -370,33 +370,38 @@ model DeliveredFile {
 }
 
 model MerchProduct {
-  id                String         @id @default(cuid())
+  id                String          @id @default(cuid())
   artistId          String
-  printfulProductId Int?           // Printful catalog product ID (null until linked)
+  fulfillmentType   FulfillmentType @default(POD)
+  printfulProductId Int?            // Printful catalog product ID (null for self-fulfilled)
   title             String
   description       String?
-  imageUrl          String         // mockup image URL
-  markup            Float          @default(0) // $ artist markup per item
-  isActive          Boolean        @default(true)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  artist            User           @relation(fields: [artistId], references: [id])
+  imageUrl          String          // primary/hero image URL
+  imageUrls         String[]        @default([]) // gallery (self-fulfilled products)
+  markup            Float           @default(0)  // $ artist markup per item (POD only)
+  returnPolicy      String?         // required for self-fulfilled
+  processingDays    Int             @default(3)  // estimated fulfillment days (self-fulfilled)
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  artist            User            @relation(fields: [artistId], references: [id])
   variants          MerchVariant[]
   orderItems        MerchOrderItem[]
-  videoMerchLinks   ArtistVideo[]  @relation("VideoMerchLink")
+  videoMerchLinks   ArtistVideo[]   @relation("VideoMerchLink")
 }
 
 model MerchVariant {
   id                String         @id @default(cuid())
   productId         String
-  printfulVariantId Int            // Printful catalog variant ID
+  printfulVariantId Int?           // Printful catalog variant ID (null for self-fulfilled)
   size              String
   color             String
   colorCode         String
   imageUrl          String?
-  basePrice         Float          // Printful base cost
-  retailPrice       Float          // basePrice + product.markup
+  basePrice         Float          // Printful base cost (0 for self-fulfilled)
+  retailPrice       Float          // artist-set sale price
   inStock           Boolean        @default(true)
+  stockQuantity     Int?           // null = unlimited (self-fulfilled only)
   createdAt         DateTime       @default(now())
   product           MerchProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems        MerchOrderItem[]
@@ -1843,6 +1848,11 @@ enum FulfillmentStatus {
   PROCESSING
   SHIPPED
   DELIVERED
+}
+
+enum FulfillmentType {
+  POD
+  SELF_FULFILLED
 }
 
 enum ArtistSiteTemplate {
