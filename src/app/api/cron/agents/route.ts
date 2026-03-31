@@ -97,6 +97,37 @@ export async function POST(req: NextRequest) {
     results.sessionFollowUp = "skipped (not due)";
   }
 
+  // ── A&R Intelligence — runs weekly (Friday) ───────────────────────────────
+  const isFriday    = day === 5;
+  const shouldRunAR = isFriday && await shouldRun("AR_INTELLIGENCE", 6 * 24); // 6d guard
+  if (shouldRunAR) {
+    try {
+      const { runArIntelligenceAgent } = await import("@/lib/agents/ar-intelligence");
+      await logAgentAction("AR_INTELLIGENCE", "AGENT_RUN_START");
+      const result = await runArIntelligenceAgent();
+      results.arIntelligence = `acted on ${result.acted} artists`;
+    } catch (err) {
+      results.arIntelligence = `error: ${String(err)}`;
+    }
+  } else {
+    results.arIntelligence = isFriday ? "skipped (not due)" : "skipped (not Friday)";
+  }
+
+  // ── Content Moderation — runs daily sweep ─────────────────────────────────
+  const shouldRunModeration = await shouldRun("CONTENT_MODERATION", 22); // 22h guard
+  if (shouldRunModeration) {
+    try {
+      const { runContentModerationAgent } = await import("@/lib/agents/content-moderation");
+      await logAgentAction("CONTENT_MODERATION", "AGENT_RUN_START");
+      const result = await runContentModerationAgent();
+      results.contentModeration = `flagged ${result.acted} items`;
+    } catch (err) {
+      results.contentModeration = `error: ${String(err)}`;
+    }
+  } else {
+    results.contentModeration = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,
