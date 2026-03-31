@@ -2,6 +2,8 @@ import React from "react";
 import { Composition } from "remotion";
 import { LyricVideoWithOutro } from "./LyricVideoWithOutro";
 import type { LyricVideoProps } from "./LyricVideoContent";
+import { TrackCanvas } from "./TrackCanvas";
+import type { TrackCanvasProps } from "./TrackCanvas";
 
 // ─── Video dimensions keyed by aspect ratio ───────────────────────────────────
 
@@ -29,8 +31,27 @@ const DEFAULT_PROPS: LyricVideoProps = {
   durationMs:     180000,
 };
 
+const DEFAULT_CANVAS_PROPS: TrackCanvasProps = {
+  coverArtUrl: "https://via.placeholder.com/1080x1920/0A0A0A/D4A843?text=Canvas",
+  audioUrl: "",
+  accentColor: "#D4A843",
+};
+
 export function Root() {
   return (
+    <>
+    {/* ── Track Canvas ── */}
+    <Composition
+      id="TrackCanvas"
+      component={TrackCanvas as unknown as React.ComponentType<Record<string, unknown>>}
+      fps={30}
+      width={1080}
+      height={1920}
+      durationInFrames={180}
+      defaultProps={DEFAULT_CANVAS_PROPS}
+    />
+
+    {/* ── Lyric Video ── */}
     <Composition
       id="LyricVideo"
       component={LyricVideoWithOutro}
@@ -52,5 +73,6 @@ export function Root() {
         };
       }}
     />
+    </>
   );
 }
