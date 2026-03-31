@@ -408,8 +408,7 @@ YoutubeReference
 | **Supabase PostgreSQL** | Primary database | ✅ Connected |
 | **YouTube Data API** | YouTube video sync/embed + DJ set seeding | ✅ Key set |
 | **AudD** | Track Shield — content recognition scanning against 80M+ songs | ✅ Key set |
-| **ACRCloud** | DJ mix track identification via audio fingerprint | ✅ Token set |
-| **Chromaprint / fpcalc** | Audio fingerprinting for track upload | ⚠️ Binary not on Vercel — falls back to SHA-256 + music-metadata |
+| **ACRCloud** | DJ mix track identification + track upload acoustic fingerprinting | ✅ Token set |
 | **Sentry** | Error monitoring | ❌ NOT INTEGRATED |
 | **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
 | **Stripe Connect** | DJ and producer direct payouts | ✅ Code complete — transfer.paid/failed webhook handlers wired |
@@ -577,7 +576,7 @@ YoutubeReference
 | "Picked by X DJs" badge on artist public page (shows when ≥3 DJs) | ✅ DONE |
 | Admin DJ analytics section (platform stats, top DJs, pending verification) | ✅ DONE |
 | Admin DJ verification queue (approve/deny) | ✅ DONE |
-| Audio fingerprinting on track upload (fpcalc → SHA-256 fallback for Vercel) | ✅ DONE |
+| Audio fingerprinting on track upload (fpcalc local → ACRCloud acoustic fingerprint on Vercel) | ✅ DONE |
 | DJ directory tab on Explore page | ✅ DONE |
 | Seed script with real YouTube DJ set data (`scripts/seed-dj.js`) | ✅ DONE |
 
@@ -628,7 +627,7 @@ YoutubeReference
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
 | 7 | ~~`STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME`~~ | **FIXED** — $0 Stripe prices created, IDs set in `.env.local`, billing + tier-drop logic fully wired |
 | 9 | `AudioFeatures` table | Sparse data — radar filter and similarity matching return few results |
-| 10 | Chromaprint / fpcalc not on Vercel | Audio fingerprinting falls back to SHA-256 hash — not a true acoustic fingerprint; future enhancement needed |
+| 10 | ~~Chromaprint / fpcalc not on Vercel~~ | **FIXED** — SHA-256 fallback replaced with ACRCloud File Scanning API; stores matched title/artist/ISRC/confidence as JSON |
 
 ---
 
