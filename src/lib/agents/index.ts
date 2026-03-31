@@ -74,7 +74,7 @@ export async function getStudioOwners() {
       name:       true,
       lastLoginAt: true,
       ownedStudios: {
-        select: { id: true, name: true, tier: true },
+        select: { id: true, name: true, studioTier: true },
         take: 1,
       },
     },
