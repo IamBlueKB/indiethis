@@ -553,7 +553,7 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
                     >
                       <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
                         {(mix.coverArtUrl || mix.canvasVideoUrl)
-                          ? <CanvasPlayer canvasVideoUrl={mix.canvasVideoUrl} coverArtUrl={mix.coverArtUrl} className="w-full h-full" />
+                          ? <CanvasPlayer canvasVideoUrl={mix.canvasVideoUrl} coverArtUrl={mix.coverArtUrl} className="w-full h-full" isPlaying={activeMixId === mix.id} />
                           : <span className="text-2xl">🎵</span>
                         }
                       </div>

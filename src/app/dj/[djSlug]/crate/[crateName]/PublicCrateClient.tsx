@@ -176,7 +176,7 @@ export default function PublicCrateClient({
                     style={{ backgroundColor: "#1a1a1a" }}
                   >
                     {(track.coverArtUrl || track.canvasVideoUrl)
-                      ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl} coverArtUrl={track.coverArtUrl} className="w-full h-full" />
+                      ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl} coverArtUrl={track.coverArtUrl} className="w-full h-full" isPlaying={isActive && isPlaying} />
                       : <div className="w-full h-full flex items-center justify-center"><Music2 size={14} style={{ color: "#444" }} /></div>
                     }
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">

@@ -970,7 +970,8 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
   const [tracks, setTracks]     = useState<BrowseTrack[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
-  const currentTrack            = useAudioStore((s) => s.currentTrack);
+  const currentTrack = useAudioStore((s) => s.currentTrack);
+  const audioIsPlaying = useAudioStore((s) => s.isPlaying);
 
   // License modal
   const [licenseTrack, setLicenseTrack] = useState<BrowseTrack | null>(null);
@@ -1081,7 +1082,7 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                 style={{ backgroundColor: "var(--card)", borderColor: isThis ? "#D4A843" : "var(--border)", transition: "border-color 0.2s" }}>
                 <div className="w-12 h-12 rounded-xl shrink-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: "var(--border)" }}>
                   {(t.coverArtUrl || t.canvasVideoUrl)
-                    ? <CanvasPlayer canvasVideoUrl={t.canvasVideoUrl} coverArtUrl={t.coverArtUrl} className="w-full h-full" />
+                    ? <CanvasPlayer canvasVideoUrl={t.canvasVideoUrl} coverArtUrl={t.coverArtUrl} className="w-full h-full" isPlaying={isThis && audioIsPlaying} />
                     : <Music2 size={18} className="text-muted-foreground" />
                   }
                 </div>

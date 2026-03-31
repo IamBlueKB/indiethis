@@ -192,7 +192,7 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 
 // ── Track Card ─────────────────────────────────────────────────────────────
 
-function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
+function TrackCard({ track, onPlay, isNew, activeTrackId, isAudioPlaying }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean; activeTrackId?: string | null; isAudioPlaying?: boolean }) {
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
   return (
     <div className="shrink-0 w-40 group">
@@ -202,7 +202,7 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
         onClick={() => onPlay(track)}
       >
         {(track.coverArtUrl || track.canvasVideoUrl)
-          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl ?? null} coverArtUrl={track.coverArtUrl} className="w-full h-full" />
+          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl ?? null} coverArtUrl={track.coverArtUrl} className="w-full h-full" isPlaying={activeTrackId === track.id && !!isAudioPlaying} />
           : <div className="w-full h-full flex items-center justify-center"><Music2 size={28} style={{ color: "#444" }} /></div>
         }
         {isNew && (
@@ -320,7 +320,7 @@ function FeaturedCarousel({ cards }: { cards: FeaturedCard[] }) {
 
 // ── Horizontal Track Scroll ─────────────────────────────────────────────────
 
-function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
+function TrackScroll({ tracks, onPlay, isNew, activeTrackId, isAudioPlaying }: { tracks: TrackItem[]; onPlay: (t: TrackItem) => void; isNew?: boolean; activeTrackId?: string | null; isAudioPlaying?: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 180, behavior: "smooth" });
 
@@ -342,7 +342,7 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
       <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollSnapType: "x mandatory" }}>
         {tracks.map((t) => (
           <div key={t.id} style={{ scrollSnapAlign: "start" }}>
-            <TrackCard track={t} onPlay={onPlay} isNew={isNew} />
+            <TrackCard track={t} onPlay={onPlay} isNew={isNew} activeTrackId={activeTrackId} isAudioPlaying={isAudioPlaying} />
           </div>
         ))}
       </div>
@@ -903,7 +903,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
 
 export default function ExploreClient() {
   const { data: session } = useSession();
-  const { play, currentTrack } = useAudioStore();
+  const { play, currentTrack, isPlaying: audioIsPlaying } = useAudioStore();
   const loggedIn = !!session?.user;
   const searchParams = useSearchParams();
 
@@ -1341,7 +1341,7 @@ export default function ExploreClient() {
             <SectionHeader label="TRENDING" title="What's hot right now" />
             {loadingTrending
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
-              : <TrackScroll tracks={trending} onPlay={handlePlay} />
+              : <TrackScroll tracks={trending} onPlay={handlePlay} activeTrackId={currentTrack?.id} isAudioPlaying={audioIsPlaying} />
             }
             <div className="mt-5 text-center">
               <Link
@@ -1361,7 +1361,7 @@ export default function ExploreClient() {
             <SectionHeader label="NEW" title="Just dropped" />
             {loadingNew
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
-              : <TrackScroll tracks={newReleases} onPlay={handlePlay} isNew />
+              : <TrackScroll tracks={newReleases} onPlay={handlePlay} isNew activeTrackId={currentTrack?.id} isAudioPlaying={audioIsPlaying} />
             }
           </section>
         )}
@@ -1370,7 +1370,7 @@ export default function ExploreClient() {
         {showSection("music") && loggedIn && recentPlays.length > 0 && (
           <section>
             <SectionHeader label="CONTINUE" title="Pick up where you left off" />
-            <TrackScroll tracks={recentPlays} onPlay={handlePlay} />
+            <TrackScroll tracks={recentPlays} onPlay={handlePlay} activeTrackId={currentTrack?.id} isAudioPlaying={audioIsPlaying} />
           </section>
         )}
 
