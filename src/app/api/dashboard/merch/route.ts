@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { moderateContent } from "@/lib/agents/content-moderation";
+import { getCatalogEntry } from "@/lib/printful-catalog";
 
 // GET /api/dashboard/merch
 export async function GET() {
@@ -41,16 +42,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title, imageUrl, and printfulProductId are required" }, { status: 400 });
   }
 
+  const printfulId  = parseInt(printfulProductId, 10);
+  const markupFloat = parseFloat(markup) || 0;
+
+  // Fetch catalog entry to get variant data before creating records
+  const catalogEntry = await getCatalogEntry(printfulId);
+
   const product = await db.merchProduct.create({
     data: {
       artistId:          session.user.id,
       title:             title.trim(),
       description:       description?.trim() ?? null,
       imageUrl:          imageUrl.trim(),
-      printfulProductId: parseInt(printfulProductId, 10),
-      markup:            parseFloat(markup) || 0,
+      printfulProductId: printfulId,
+      markup:            markupFloat,
     },
   });
+
+  // Create variants from Printful catalog data
+  if (catalogEntry && catalogEntry.variants.length > 0) {
+    await db.merchVariant.createMany({
+      data: catalogEntry.variants.map((v) => ({
+        productId:         product.id,
+        printfulVariantId: v.id,
+        size:              v.size || "One Size",
+        color:             v.color || "",
+        colorCode:         v.color_code || "#000000",
+        imageUrl:          v.image || null,
+        basePrice:         parseFloat(v.price),
+        retailPrice:       parseFloat(v.price) + markupFloat,
+        inStock:           v.in_stock,
+      })),
+    });
+  }
 
   // Content moderation scan — fire and forget
   void moderateContent(

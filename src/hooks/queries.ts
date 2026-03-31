@@ -60,6 +60,26 @@ export type MerchVariant = {
   inStock:     boolean;
 };
 
+export type CatalogVariant = {
+  id:         number;
+  size:       string;
+  color:      string;
+  color_code: string;
+  image:      string;
+  price:      string;
+  in_stock:   boolean;
+};
+
+export type CatalogEntry = {
+  printfulProductId: number;
+  label:             string;
+  category:          string;
+  description:       string;
+  image:             string;
+  variantCount:      number;
+  variants:          CatalogVariant[];
+};
+
 export type MerchProduct = {
   id:                string;
   title:             string;
@@ -212,6 +232,19 @@ export function useMerchOrders() {
       apiFetch<{ orders: MerchOrder[] }>("/api/dashboard/merch/orders").then(
         (d) => d.orders
       ),
+  });
+}
+
+/** Curated Printful catalog — fetched on demand, cached 1h client-side */
+export function useMerchCatalog(enabled = false) {
+  return useQuery({
+    queryKey: ["merch-catalog"],
+    queryFn: () =>
+      apiFetch<{ catalog: CatalogEntry[] }>("/api/merch/catalog").then(
+        (d) => d.catalog
+      ),
+    enabled,
+    staleTime: 60 * 60 * 1000, // 1h — matches server cache-control
   });
 }
 

@@ -36,7 +36,12 @@ export async function GET(req: NextRequest) {
           where:   { artistId, createdAt: { gte: since24h } },
           orderBy: { createdAt: "desc" },
           take:    5,
-          include: { merchProduct: { select: { title: true } } },
+          include: {
+            items: {
+              take: 1,
+              include: { product: { select: { title: true } } },
+            },
+          },
         }),
         // Recent pre-saves (via campaign → artist)
         db.preSaveClick.findMany({
@@ -60,7 +65,8 @@ export async function GET(req: NextRequest) {
     const items: string[] = [];
 
     for (const order of recentOrders) {
-      items.push(`Someone just bought ${order.merchProduct.title}`);
+      const productTitle = order.items[0]?.product.title ?? "merch";
+      items.push(`Someone just bought ${productTitle}`);
     }
     for (const click of recentPreSaves) {
       const platform = click.platform === "APPLE_MUSIC" ? "Apple Music" : "Spotify";
