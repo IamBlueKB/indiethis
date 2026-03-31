@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
 
   const now     = Date.now();
   const results: Record<string, string> = {};
+  const day     = new Date().getDay(); // 0=Sun, 1=Mon, ..., 3=Wed
 
   // ── Churn Prevention — runs daily ────────────────────────────────────────
   const shouldRunChurn = await shouldRun("CHURN_PREVENTION", 22); // 22h guard
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Revenue Optimization — runs weekly (Mon) ──────────────────────────────
-  const isMonday = new Date().getDay() === 1;
+  const isMonday = day === 1;
   const shouldRunRevenue = isMonday && await shouldRun("REVENUE_OPTIMIZATION", 6 * 24); // 6d guard
   if (shouldRunRevenue) {
     try {
@@ -48,6 +49,52 @@ export async function POST(req: NextRequest) {
     }
   } else {
     results.revenueOptimization = isMonday ? "skipped (not due)" : "skipped (not Monday)";
+  }
+
+  // ── Release Strategy — runs daily ────────────────────────────────────────
+  const shouldRunRelease = await shouldRun("RELEASE_STRATEGY", 22); // 22h guard
+  if (shouldRunRelease) {
+    try {
+      const { runReleaseStrategyAgent } = await import("@/lib/agents/release-strategy");
+      await logAgentAction("RELEASE_STRATEGY", "AGENT_RUN_START");
+      const result = await runReleaseStrategyAgent();
+      results.releaseStrategy = `acted on ${result.acted} plans`;
+    } catch (err) {
+      results.releaseStrategy = `error: ${String(err)}`;
+    }
+  } else {
+    results.releaseStrategy = "skipped (not due)";
+  }
+
+  // ── Fan Engagement — runs weekly (Wed) ───────────────────────────────────
+  const isWednesday = day === 3;
+  const shouldRunFan = isWednesday && await shouldRun("FAN_ENGAGEMENT", 6 * 24); // 6d guard
+  if (shouldRunFan) {
+    try {
+      const { runFanEngagementAgent } = await import("@/lib/agents/fan-engagement");
+      await logAgentAction("FAN_ENGAGEMENT", "AGENT_RUN_START");
+      const result = await runFanEngagementAgent();
+      results.fanEngagement = `acted on ${result.acted} users`;
+    } catch (err) {
+      results.fanEngagement = `error: ${String(err)}`;
+    }
+  } else {
+    results.fanEngagement = isWednesday ? "skipped (not due)" : "skipped (not Wednesday)";
+  }
+
+  // ── Session Follow-Up — runs daily ───────────────────────────────────────
+  const shouldRunFollowUp = await shouldRun("SESSION_FOLLOWUP", 22); // 22h guard
+  if (shouldRunFollowUp) {
+    try {
+      const { runSessionFollowUpAgent } = await import("@/lib/agents/session-followup");
+      await logAgentAction("SESSION_FOLLOWUP", "AGENT_RUN_START");
+      const result = await runSessionFollowUpAgent();
+      results.sessionFollowUp = `acted on ${result.acted} sessions`;
+    } catch (err) {
+      results.sessionFollowUp = `error: ${String(err)}`;
+    }
+  } else {
+    results.sessionFollowUp = "skipped (not due)";
   }
 
   return NextResponse.json({
