@@ -3,6 +3,7 @@
  * Shared utilities for all IndieThis platform agents.
  */
 import type { AgentType } from "@prisma/client";
+import { Prisma }         from "@prisma/client";
 import { db }                 from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail }          from "@/lib/brevo/email";
@@ -21,7 +22,13 @@ export async function logAgentAction(
   details?:    Record<string, unknown>,
 ): Promise<void> {
   await db.agentLog.create({
-    data: { agentType, action, targetType, targetId, details },
+    data: {
+      agentType,
+      action,
+      targetType,
+      targetId,
+      details: details !== undefined ? (details as Prisma.InputJsonValue) : Prisma.JsonNull,
+    },
   });
 }
 
