@@ -13,51 +13,27 @@ export default function CanvasPlayer({
   coverArtUrl,
   className,
 }: CanvasPlayerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !canvasVideoUrl) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0, rootMargin: "200px" }
-    );
-
-    observer.observe(container);
-
-    return () => {
-      observer.disconnect();
-    };
+    const v = videoRef.current;
+    if (!v || !canvasVideoUrl) return;
+    v.play().catch(() => {});
   }, [canvasVideoUrl]);
 
-  useEffect(() => {
-    if (isVisible && videoRef.current) {
-      videoRef.current.play().catch(() => {});
-      setIsLoaded(true);
-    }
-  }, [isVisible]);
-
   return (
-    <div ref={containerRef} className={className ?? ""}>
+    <div className={className ?? ""}>
       {canvasVideoUrl ? (
         <video
           ref={videoRef}
-          src={isVisible ? canvasVideoUrl : undefined}
+          src={canvasVideoUrl}
           autoPlay
           muted
           loop
           playsInline
           onLoadedData={() => setIsLoaded(true)}
+          style={{ opacity: isLoaded ? 1 : 0, transition: "opacity 0.4s" }}
           className="w-full h-full object-cover"
         />
       ) : coverArtUrl ? (
