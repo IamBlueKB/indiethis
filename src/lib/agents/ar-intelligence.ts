@@ -33,7 +33,7 @@ export async function runArIntelligenceAgent(): Promise<{ acted: number }> {
     where: {
       isSuspended: false,
       subscription: {
-        tier:   { in: QUALIFYING_TIERS },
+        tier:   { in: [...QUALIFYING_TIERS] },
         status: "ACTIVE",
       },
     },
