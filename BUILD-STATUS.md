@@ -460,7 +460,7 @@ YoutubeReference
 |---------|--------|
 | AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 | ✅ DONE |
 | AI Mastering (Auphonic) — $7.99 PPU | ✅ DONE |
-| AI Music Video (Kling via FAL / Runway fallback) | ✅ DONE |
+| AI Music Video (Kling via FAL) | ✅ DONE |
 | AI Lyric Video (Remotion Lambda) — $14.99 PPU | ✅ BUILT — Whisper via Replicate, multi-step UI, Remotion deployed |
 | A&R Report (Claude) | ✅ DONE |
 | Press Kit (Claude + PDF) — $9.99 PPU | ✅ DONE |

@@ -14,7 +14,7 @@ export interface MasteringVersion {
 }
 
 export interface MasteringComparisonPlayerProps {
-  /** Mastered versions to compare — typically the three Dolby.io profiles. */
+  /** Mastered versions to compare — typically the three Auphonic profiles. */
   versions: MasteringVersion[];
 }
 

@@ -325,7 +325,7 @@ export default function MasteringPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {jobData.status === "PROCESSING"
-                    ? "Running 3 Dolby mastering profiles in parallel. This usually takes 5–10 minutes."
+                    ? "Running 3 mastering profiles in parallel. This usually takes 5–10 minutes."
                     : "Job is waiting to start…"}
                 </p>
               </div>
