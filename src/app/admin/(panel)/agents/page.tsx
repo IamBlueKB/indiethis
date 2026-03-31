@@ -55,7 +55,7 @@ export default async function AgentsPage({
       by:        ["agentType"],
       _count:    { _all: true },
       where:     { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      orderBy:   { _count: { _all: "desc" } },
+      orderBy:   { _count: { agentType: "desc" } },
     }),
   ]);
 
