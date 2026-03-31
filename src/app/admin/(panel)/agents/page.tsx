@@ -183,7 +183,9 @@ export default async function AgentsPage({
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold" style={{ color }}>{AGENT_LABELS[type]}</p>
                   {isStale && (
-                    <AlertTriangle size={11} className="shrink-0" style={{ color: "#F87171" }} title={`No run in ${Math.round(hoursAgo)}h`} />
+                    <span title={`No run in ${Math.round(hoursAgo)}h`}>
+                      <AlertTriangle size={11} className="shrink-0" style={{ color: "#F87171" }} />
+                    </span>
                   )}
                 </div>
                 <p className="text-lg font-bold text-foreground">{count7d}</p>
