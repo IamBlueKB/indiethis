@@ -16,6 +16,7 @@ import SplitSheetModal from "./SplitSheetModal";
 import { triggerAudioAnalysis } from "@/lib/trigger-audio-analysis";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import SimilarTracks from "@/components/audio/SimilarTracks";
+import CanvasPlayer from "@/components/CanvasPlayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -448,8 +449,8 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
         className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
         style={{ backgroundColor: "var(--border)" }}
       >
-        {track.coverArtUrl
-          ? <img src={track.coverArtUrl} alt={track.title} className="w-full h-full object-cover" />
+        {(track.coverArtUrl || track.canvasVideoUrl)
+          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl} coverArtUrl={track.coverArtUrl} className="w-full h-full" />
           : <Music2 size={18} className="text-muted-foreground" />
         }
       </div>

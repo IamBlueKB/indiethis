@@ -70,7 +70,7 @@ async function ArtistSite({ slug }: { slug: string }) {
             where:   { status: "PUBLISHED" },
             orderBy: { createdAt: "asc" },
             take:    10,
-            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
+            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
           },
         },
       },
@@ -79,7 +79,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         where:   { status: "PUBLISHED", releaseId: null },
         orderBy: { createdAt: "desc" },
         take:    10,
-        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
+        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
       },
       merchProducts: {
         where:   { isActive: true },

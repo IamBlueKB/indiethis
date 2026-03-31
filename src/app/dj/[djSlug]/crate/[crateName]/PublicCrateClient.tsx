@@ -6,6 +6,7 @@ import { Play, Music2, Users } from "lucide-react";
 import { useAudioStore } from "@/store";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
+import CanvasPlayer from "@/components/CanvasPlayer";
 
 type TrackItem = {
   id: string;
@@ -15,6 +16,7 @@ type TrackItem = {
     id: string;
     title: string;
     coverArtUrl: string | null;
+    canvasVideoUrl: string | null;
     fileUrl: string;
     genre: string | null;
     bpm: number | null;
@@ -173,8 +175,8 @@ export default function PublicCrateClient({
                     className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative"
                     style={{ backgroundColor: "#1a1a1a" }}
                   >
-                    {track.coverArtUrl
-                      ? <img src={track.coverArtUrl} alt={track.title} className="w-full h-full object-cover" />
+                    {(track.coverArtUrl || track.canvasVideoUrl)
+                      ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl} coverArtUrl={track.coverArtUrl} className="w-full h-full" />
                       : <div className="w-full h-full flex items-center justify-center"><Music2 size={14} style={{ color: "#444" }} /></div>
                     }
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">

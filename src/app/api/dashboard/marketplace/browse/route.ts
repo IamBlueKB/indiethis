@@ -27,6 +27,7 @@ export async function GET() {
         description: true,
         fileUrl: true,
         coverArtUrl: true,
+        canvasVideoUrl: true,
         price: true,
         projectName: true,
         plays: true,

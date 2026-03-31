@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
       id: true,
       title: true,
       coverArtUrl: true,
+      canvasVideoUrl: true,
       plays: true,
       genre: true,
       fileUrl: true,

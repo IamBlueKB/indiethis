@@ -10,6 +10,7 @@ import LicenseAttachment from "@/components/shared/LicenseAttachment";
 import BeatLicenseModal, { LICENSE_OPTIONS, type StreamLeaseTarget } from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import SimilarTracks from "@/components/audio/SimilarTracks";
+import CanvasPlayer from "@/components/CanvasPlayer";
 
 type BeatPreview = {
   id: string;
@@ -37,6 +38,7 @@ type BrowseTrack = {
   description: string | null;
   fileUrl: string;
   coverArtUrl: string | null;
+  canvasVideoUrl: string | null;
   price: number | null;
   projectName: string | null;
   plays: number;
@@ -1077,9 +1079,11 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
             return (
               <div key={t.id} className="rounded-2xl border p-4 flex items-center gap-4"
                 style={{ backgroundColor: "var(--card)", borderColor: isThis ? "#D4A843" : "var(--border)", transition: "border-color 0.2s" }}>
-                <div className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center"
-                  style={{ backgroundImage: t.coverArtUrl ? `url(${t.coverArtUrl})` : undefined, backgroundSize: "cover", backgroundPosition: "center", backgroundColor: t.coverArtUrl ? undefined : "var(--border)" }}>
-                  {!t.coverArtUrl && <Music2 size={18} className="text-muted-foreground" />}
+                <div className="w-12 h-12 rounded-xl shrink-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: "var(--border)" }}>
+                  {(t.coverArtUrl || t.canvasVideoUrl)
+                    ? <CanvasPlayer canvasVideoUrl={t.canvasVideoUrl} coverArtUrl={t.coverArtUrl} className="w-full h-full" />
+                    : <Music2 size={18} className="text-muted-foreground" />
+                  }
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-foreground truncate">{t.title}</p>

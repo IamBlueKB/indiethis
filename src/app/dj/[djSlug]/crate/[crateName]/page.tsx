@@ -78,6 +78,7 @@ export default async function PublicCratePage({ params }: { params: Promise<{ dj
               id: true,
               title: true,
               coverArtUrl: true,
+              canvasVideoUrl: true,
               fileUrl: true,
               genre: true,
               bpm: true,

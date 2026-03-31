@@ -19,6 +19,7 @@ import {
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
   Disc, Disc3,
 } from "lucide-react";
+import CanvasPlayer from "@/components/CanvasPlayer";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ type TrackItem = {
   id: string;
   title: string;
   coverArtUrl: string | null;
+  canvasVideoUrl?: string | null;
   fileUrl: string;
   genre: string | null;
   plays: number;
@@ -199,8 +201,8 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
         style={{ backgroundColor: "#1a1a1a" }}
         onClick={() => onPlay(track)}
       >
-        {track.coverArtUrl
-          ? <img src={track.coverArtUrl} alt={track.title} className="w-full h-full object-cover" />
+        {(track.coverArtUrl || track.canvasVideoUrl)
+          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl ?? null} coverArtUrl={track.coverArtUrl} className="w-full h-full" />
           : <div className="w-full h-full flex items-center justify-center"><Music2 size={28} style={{ color: "#444" }} /></div>
         }
         {isNew && (

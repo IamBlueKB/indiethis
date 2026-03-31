@@ -84,6 +84,7 @@ export default async function DJProfilePage(
           title: true,
           audioUrl: true,
           coverArtUrl: true,
+          canvasVideoUrl: true,
           duration: true,
           description: true,
           tracklist: {
