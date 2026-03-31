@@ -147,6 +147,7 @@ model User {
   attribution              UserAttribution?
   youtubeSync              YouTubeSync?
   youtubeReferences        YoutubeReference[]
+  moderationFlags          ModerationFlag[]
 }
 
 model Studio {
@@ -2486,4 +2487,24 @@ model TrackShieldResult {
   matches    Json
   matchCount Int             @default(0)
   scannedAt  DateTime        @default(now())
+}
+
+// ─── Content Moderation ───────────────────────────────────────────────────────
+
+model ModerationFlag {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  contentType String    // TRACK, MERCH, PROFILE, DIGITAL_PRODUCT
+  contentId   String
+  reason      String
+  severity    String    // LOW, MEDIUM, HIGH
+  status      String    @default("PENDING") // PENDING, APPROVED, REMOVED
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([contentType, contentId])
 }
