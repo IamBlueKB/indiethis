@@ -88,7 +88,7 @@ export async function runRevenueOptimizationAgent(): Promise<{ acted: number }> 
         select: { isPublished: true },
       },
       broadcastLogs: {
-        where:  { createdAt: { gte: thisMonth } },
+        where:  { sentAt: { gte: thisMonth } },
         select: { id: true },
         take:   1,
       },

@@ -148,9 +148,9 @@ export async function runChurnPreventionAgent(): Promise<{ acted: number; scored
         select:  { createdAt: true, type: true },
       },
       broadcastLogs: {
-        orderBy: { createdAt: "desc" },
+        orderBy: { sentAt: "desc" },
         take:    1,
-        select:  { createdAt: true },
+        select:  { sentAt: true },
       },
     },
   });
@@ -181,8 +181,8 @@ export async function runChurnPreventionAgent(): Promise<{ acted: number; scored
     const lastAI = user.aiGenerations[0]?.createdAt
       ? (now - user.aiGenerations[0].createdAt.getTime()) / 86400000
       : 999;
-    const lastEmail = user.broadcastLogs[0]?.createdAt
-      ? (now - user.broadcastLogs[0].createdAt.getTime()) / 86400000
+    const lastEmail = user.broadcastLogs[0]?.sentAt
+      ? (now - user.broadcastLogs[0].sentAt.getTime()) / 86400000
       : 999;
 
     const score = calcChurnScore({
