@@ -208,13 +208,13 @@ export async function runReleaseStrategyAgent(): Promise<{ acted: number }> {
   // Press kits keyed by artistId (AI generation of type PRESS_KIT)
   const pressKits = await db.aIGeneration.findMany({
     where: {
-      userId: { in: [...new Set(plans.map((p) => p.artistId))] },
+      artistId: { in: [...new Set(plans.map((p) => p.artistId))] },
       type:   "PRESS_KIT",
       status: "COMPLETED",
     },
-    select: { userId: true },
+    select: { artistId: true },
   });
-  const artistsWithPressKit = new Set(pressKits.map((p) => p.userId));
+  const artistsWithPressKit = new Set(pressKits.map((p) => p.artistId));
 
   let acted = 0;
 
