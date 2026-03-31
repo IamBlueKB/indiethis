@@ -94,6 +94,16 @@ type DJItem = {
   totalCrateItems: number;
 };
 
+type MerchItem = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  imageUrls: string[];
+  fulfillmentType: string;
+  artist: { id: string; name: string; artistName: string | null; artistSlug: string | null };
+  variants: { id: string; retailPrice: number }[];
+};
+
 type DigitalProductItem = {
   id: string;
   title: string;
@@ -687,7 +697,7 @@ function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemoveP
 
 // ── Filter Pills ───────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store" | "djs";
+type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store" | "djs" | "merch";
 
 type FilterTabDef = { key: FilterTab; label: string; icon?: React.ElementType };
 
@@ -699,6 +709,7 @@ const FILTER_TABS: FilterTabDef[] = [
   { key: "beats",   label: "Beats",    icon: Headphones },
   { key: "djs",     label: "DJs",      icon: Disc3 },
   { key: "store",   label: "Store",    icon: ShoppingBag },
+  { key: "merch",   label: "Merch",    icon: ShoppingBag },
   { key: "studios", label: "Studios",  icon: Building2 },
   { key: "ai",      label: "AI Tools", icon: Wand2 },
 ];
@@ -921,6 +932,9 @@ export default function ExploreClient() {
   const [loadingStore, setLoadingStore] = useState(true);
   const [buyProduct, setBuyProduct] = useState<DigitalProductItem | null>(null);
 
+  const [merch, setMerch] = useState<MerchItem[]>([]);
+  const [loadingMerch, setLoadingMerch] = useState(true);
+
   const [studioQuery, setStudioQuery] = useState("");
   const [studioSearching, setStudioSearching] = useState(false);
 
@@ -960,6 +974,7 @@ export default function ExploreClient() {
     sound:   useRef<HTMLElement>(null),
     store:   useRef<HTMLElement>(null),
     djs:     useRef<HTMLElement>(null),
+    merch:   useRef<HTMLElement>(null),
   };
 
   useEffect(() => {
@@ -972,6 +987,7 @@ export default function ExploreClient() {
     fetch("/api/explore/studios").then(r => r.json()).then(d => { setStudios(d.studios ?? []); setLoadingStudios(false); });
     fetch("/api/explore/rising").then(r => r.json()).then(d => { setRising(d.artists ?? []); setLoadingRising(false); });
     fetch("/api/explore/digital-products").then(r => r.json()).then(d => { setDigitalProducts(d.products ?? []); setLoadingStore(false); });
+    fetch("/api/explore/merch").then(r => r.json()).then(d => { setMerch(d.products ?? []); setLoadingMerch(false); });
     fetch("/api/explore/djs").then(r => r.json()).then((d: { djs?: DJItem[]; rising?: DJItem[] }) => {
       setDjs(d.djs ?? []);
       setRisingDjs(d.rising ?? []);
@@ -1135,7 +1151,8 @@ export default function ExploreClient() {
   const showSection = (key: string) => activeFilter !== "sound" && (activeFilter === "all" || activeFilter === key || key === "featured");
 
   // Store section — shown on "all" or "store" filter only (not cluttering music/beats views)
-  const showStore = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "store");
+  const showStore  = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "store");
+  const showMerch  = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "merch");
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
@@ -1463,6 +1480,56 @@ export default function ExploreClient() {
                     {digitalProducts.map((p) => (
                       <DigitalProductCard key={p.id} product={p} onBuy={setBuyProduct} />
                     ))}
+                  </div>
+            }
+          </section>
+        )}
+
+        {/* Section: Merch */}
+        {showMerch && (
+          <section ref={sectionRefs.merch as React.RefObject<HTMLElement>}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>MERCH</p>
+                <h2 className="text-xl font-bold text-white">Artist Merch</h2>
+              </div>
+            </div>
+            {loadingMerch
+              ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
+              : merch.length === 0
+                ? <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#141414" }}>
+                    <p className="text-sm" style={{ color: "#555" }}>No merch available yet — check back soon.</p>
+                  </div>
+                : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {merch.map((item) => {
+                      const artistName = item.artist.artistName || item.artist.name;
+                      const price = item.variants[0]?.retailPrice;
+                      const thumb = item.imageUrls?.[0] ?? item.imageUrl;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`/${item.artist.artistSlug}`}
+                          className="group block rounded-xl overflow-hidden no-underline"
+                          style={{ backgroundColor: "#141414" }}
+                        >
+                          <div className="relative w-full aspect-square overflow-hidden">
+                            {thumb
+                              ? <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }}>
+                                  <ShoppingBag size={32} style={{ color: "#333" }} />
+                                </div>
+                            }
+                          </div>
+                          <div className="p-3">
+                            <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                            <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
+                            {price !== undefined && (
+                              <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+                            )}
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
             }
           </section>

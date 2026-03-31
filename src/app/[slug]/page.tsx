@@ -84,14 +84,14 @@ async function ArtistSite({ slug }: { slug: string }) {
       merchProducts: {
         where:   { isActive: true },
         orderBy: { createdAt: "desc" },
-        take:    6,
+        take:    8,
         select:  {
-          id: true, title: true, imageUrl: true, markup: true,
+          id: true, title: true, imageUrl: true, imageUrls: true,
+          description: true, markup: true, fulfillmentType: true,
           variants: {
             where:   { inStock: true },
             orderBy: { retailPrice: "asc" },
-            select:  { id: true, size: true, color: true, colorCode: true, retailPrice: true },
-            take:    1,
+            select:  { id: true, size: true, color: true, colorCode: true, retailPrice: true, stockQuantity: true },
           },
         },
       },

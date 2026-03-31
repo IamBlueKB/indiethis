@@ -22,12 +22,12 @@ export default async function MerchStorefront({
         where:   { isActive: true },
         orderBy: { createdAt: "desc" },
         select:  {
-          id: true, title: true, imageUrl: true, markup: true,
+          id: true, title: true, imageUrl: true, imageUrls: true,
+          description: true, markup: true, fulfillmentType: true,
           variants: {
             where:   { inStock: true },
             orderBy: { retailPrice: "asc" },
-            select:  { id: true, size: true, color: true, retailPrice: true, colorCode: true },
-            take:    1, // lowest-priced in-stock variant for display
+            select:  { id: true, size: true, color: true, colorCode: true, retailPrice: true, stockQuantity: true },
           },
         },
       },
