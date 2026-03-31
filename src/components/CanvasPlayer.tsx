@@ -41,26 +41,24 @@ export default function CanvasPlayer({
   }, [canvasVideoUrl]);
 
   useEffect(() => {
-    if (isVisible && videoRef.current && canvasVideoUrl) {
-      videoRef.current.src = canvasVideoUrl;
+    if (isVisible && videoRef.current) {
       videoRef.current.play().catch(() => {});
       setIsLoaded(true);
     }
-  }, [isVisible, canvasVideoUrl]);
+  }, [isVisible]);
 
   return (
     <div ref={containerRef} className={className ?? ""}>
       {canvasVideoUrl ? (
         <video
           ref={videoRef}
+          src={isVisible ? canvasVideoUrl : undefined}
           autoPlay
           muted
           loop
           playsInline
           onLoadedData={() => setIsLoaded(true)}
-          className={`w-full h-full object-cover transition-opacity duration-500 ${
-            isLoaded ? "opacity-100" : "opacity-0"
-          }`}
+          className="w-full h-full object-cover"
         />
       ) : coverArtUrl ? (
         <img
