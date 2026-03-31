@@ -81,6 +81,7 @@ model User {
   smsOptIn                 Boolean                @default(false)
   djMode                   Boolean                @default(false)
   djDiscoveryOptIn         Boolean                @default(false)
+  churnRiskScore           Int                    @default(0)
   aiGenerations            AIGeneration[]
   accounts                 Account[]
   affiliate                Affiliate?
@@ -2433,6 +2434,33 @@ enum TaskActionType {
   UPLOAD_TRACK
   SPLIT_SHEET
   CUSTOM
+}
+
+// ─── Platform Agents ──────────────────────────────────────────────────────────
+
+model AgentLog {
+  id         String    @id @default(cuid())
+  agentType  AgentType
+  action     String
+  targetType String?
+  targetId   String?
+  details    Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([agentType])
+  @@index([createdAt])
+  @@index([targetId])
+}
+
+enum AgentType {
+  CHURN_PREVENTION
+  REVENUE_OPTIMIZATION
+  RELEASE_STRATEGY
+  FAN_ENGAGEMENT
+  SESSION_FOLLOWUP
+  AR_INTELLIGENCE
+  CONTENT_MODERATION
+  LEAD_SCORING
 }
 
 model TrackShieldScan {

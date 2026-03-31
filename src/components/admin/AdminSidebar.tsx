@@ -27,6 +27,7 @@ import {
   Filter,
   Activity,
   Music2,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -62,6 +63,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Lead Value",       href: "/admin/lead-tracking/value", icon: DollarSign, page: "lead-tracking" },
   { label: "Attribution", href: "/admin/attribution",      icon: Target,      page: "attribution"      },
   { label: "DJ Verification", href: "/admin/dj-verification", icon: ShieldCheck, page: "dj-verification" },
+  { label: "Agents",      href: "/admin/agents",       icon: Bot,             page: "agents"       },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",         icon: Settings,    page: "settings"     },
   { label: "Pricing",     href: "/admin/settings/pricing", icon: DollarSign,  page: "settings"     },
