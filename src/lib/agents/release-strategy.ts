@@ -210,7 +210,7 @@ export async function runReleaseStrategyAgent(): Promise<{ acted: number }> {
     where: {
       userId: { in: [...new Set(plans.map((p) => p.artistId))] },
       type:   "PRESS_KIT",
-      status: "COMPLETE",
+      status: "COMPLETED",
     },
     select: { userId: true },
   });
