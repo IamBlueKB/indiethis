@@ -30,7 +30,7 @@ export default function CanvasPlayer({
           observer.disconnect();
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0, rootMargin: "200px" }
     );
 
     observer.observe(container);
@@ -43,6 +43,8 @@ export default function CanvasPlayer({
   useEffect(() => {
     if (isVisible && videoRef.current && canvasVideoUrl) {
       videoRef.current.src = canvasVideoUrl;
+      videoRef.current.play().catch(() => {});
+      setIsLoaded(true);
     }
   }, [isVisible, canvasVideoUrl]);
 
