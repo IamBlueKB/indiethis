@@ -32,6 +32,7 @@ export async function GET(
           stripeCustomerId: true,
           createdAt: true,
           lastLoginAt: true,
+          churnRiskScore: true,
           isComped: true,
           compExpiresAt: true,
           isSuspended: true,

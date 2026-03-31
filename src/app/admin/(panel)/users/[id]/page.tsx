@@ -48,6 +48,7 @@ type UserDetail = {
     smsBroadcastsUsed: number;
   } | null;
   smsLimit: number;
+  churnRiskScore: number;
   _count: { sessions: number; aiGenerations: number; tracks: number; receipts: number; merchProducts: number; producerLicenses: number };
   sessions: Array<{ id: string; dateTime: string; status: string; paymentStatus: string; sessionType: string | null; studio: { id: string; name: string; slug: string } }>;
   aiGenerations: Array<{ id: string; type: string; status: string; createdAt: string }>;
@@ -434,6 +435,29 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Joined</p><p className="text-foreground">{fmt(user.createdAt)}</p></div>
               <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Last Login</p><p className="text-foreground">{fmt(user.lastLoginAt)}</p></div>
+              <div className="col-span-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Churn Risk Score</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${user.churnRiskScore}%`,
+                        backgroundColor: user.churnRiskScore >= 81 ? "#F87171"
+                          : user.churnRiskScore >= 61 ? "#FB923C"
+                          : user.churnRiskScore >= 31 ? "#FBBF24"
+                          : "#4ADE80",
+                      }} />
+                  </div>
+                  <span className="text-xs font-bold" style={{
+                    color: user.churnRiskScore >= 81 ? "#F87171"
+                      : user.churnRiskScore >= 61 ? "#FB923C"
+                      : user.churnRiskScore >= 31 ? "#FBBF24"
+                      : "#4ADE80",
+                  }}>
+                    {user.churnRiskScore} — {user.churnRiskScore >= 81 ? "Critical" : user.churnRiskScore >= 61 ? "High" : user.churnRiskScore >= 31 ? "At Risk" : "Healthy"}
+                  </span>
+                </div>
+              </div>
               {user.stripeCustomerId && (
                 <div className="col-span-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Stripe Customer</p>
