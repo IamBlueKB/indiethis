@@ -126,6 +126,7 @@ export default function SettingsPage() {
   const [prodNonExclusivePrice, setProdNonExclusivePrice]   = useState("");
   const [prodExclusivePrice, setProdExclusivePrice]         = useState("");
   const [prodSeparatePayout, setProdSeparatePayout]         = useState(false);
+  const [connectingStripe, setConnectingStripe]             = useState(false);
 
   // YouTube Sync state
   const [ytStatus, setYtStatus]         = useState<YtStatus | null>(null);
@@ -880,15 +881,22 @@ export default function SettingsPage() {
                     </p>
                     <button
                       type="button"
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5"
+                      disabled={connectingStripe}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-white/5 disabled:opacity-50"
                       style={{ borderColor: "#D4A843", color: "#D4A843" }}
-                      onClick={() => {
-                        // Stripe Connect onboarding — will be wired in a future phase
-                        alert("Stripe Connect setup coming soon.");
+                      onClick={async () => {
+                        setConnectingStripe(true);
+                        try {
+                          const res = await fetch("/api/dashboard/stripe-connect", { method: "POST" });
+                          const data = await res.json() as { url?: string; error?: string };
+                          if (data.url) window.location.href = data.url;
+                        } finally {
+                          setConnectingStripe(false);
+                        }
                       }}
                     >
                       <CreditCard size={13} />
-                      Connect Stripe Account
+                      {connectingStripe ? "Redirecting…" : "Connect Stripe Account"}
                     </button>
                   </>
                 )}

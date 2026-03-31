@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { DollarSign, TrendingUp, AlertCircle, Disc3, ListMusic, User } from "lucide-react";
 import WithdrawButton from "./WithdrawButton";
+import ConnectStripeButton from "./ConnectStripeButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -126,9 +126,7 @@ export default async function DJEarningsPage() {
           <AlertCircle size={16} className="shrink-0" />
           <span>
             Connect your Stripe account to withdraw earnings.{" "}
-            <Link href="/dashboard/settings" className="underline font-medium">
-              Go to Settings
-            </Link>
+            <ConnectStripeButton />
           </span>
         </div>
       )}
