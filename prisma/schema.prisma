@@ -337,6 +337,7 @@ model Track {
   djMixTracks          DJMixTrack[]
   fingerprint          AudioFingerprint?
   shieldResults        TrackShieldResult[]
+  canvasVideoUrl       String?
 }
 
 model AudioFingerprint {
@@ -2375,9 +2376,10 @@ model DJMix {
   coverArtUrl String?
   duration    Int?
   description String?
-  tracklist   DJMixTrack[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  tracklist      DJMixTrack[]
+  canvasVideoUrl String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([djProfileId])
 }

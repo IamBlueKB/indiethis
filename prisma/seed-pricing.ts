@@ -38,6 +38,7 @@ const PRICING_SEED = [
   { key: "TRACK_SHIELD_5",           label: "Track Shield (5-Pack)",          value: 9.99,  display: "$9.99",    category: "ai_tools",        sortOrder: 25 },
   { key: "TRACK_SHIELD_10",          label: "Track Shield (10-Pack)",         value: 14.99, display: "$14.99",   category: "ai_tools",        sortOrder: 26 },
   { key: "TRACK_SHIELD_CATALOG",     label: "Track Shield (Full Catalog)",    value: 29.99, display: "$29.99",   category: "ai_tools",        sortOrder: 27 },
+  { key: "CANVAS_GENERATE",          label: "Canvas Video (AI Generate)",     value: 1.99,  display: "$1.99",    category: "ai_tools",        sortOrder: 28 },
 
   // ─── Platform Revenue Cuts ────────────────────────────────────────────────
   { key: "CUT_MUSIC_SALES",   label: "Music Sales Cut",       value: 10,    display: "10%",      category: "platform_cuts",   sortOrder: 20 },
