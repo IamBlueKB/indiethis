@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Wand2, Users, Loader2, CheckCircle2, AlertCircle, ChevronLeft,
   Upload, X, Download, Play, Music, FileText, Image, Film, Mic,
-  Sparkles, Clock, Shield,
+  Sparkles, Clock, Shield, Trash2, RefreshCw,
 } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
@@ -71,6 +71,17 @@ interface RecentJob {
   outputData:   Record<string, unknown> | null;
   artistId:     string | null;
   artist:       { id: string; name: string; email: string } | null;
+}
+
+// ─── Canvas types ──────────────────────────────────────────────────────────────
+
+interface CanvasTrack {
+  id:             string;
+  title:          string;
+  fileUrl:        string;
+  coverArtUrl:    string | null;
+  canvasVideoUrl: string | null;
+  createdAt:      string;
 }
 
 // ─── Tool cards config ─────────────────────────────────────────────────────────
@@ -872,6 +883,49 @@ export default function StudioAIToolsPage() {
   const [contactDropOpen, setContactDropOpen] = useState(false);
   const contactDropRef = useRef<HTMLDivElement>(null);
 
+  // ── Canvas Video section state ───────────────────────────────────────────────
+  const [canvasArtistId,    setCanvasArtistId]    = useState<string>("");
+  const [canvasTracks,      setCanvasTracks]      = useState<CanvasTrack[]>([]);
+  const [canvasTracksLoading, setCanvasTracksLoading] = useState(false);
+  const [canvasTrackId,     setCanvasTrackId]     = useState<string>("");
+  const [canvasUploading,   setCanvasUploading]   = useState(false);
+  const [canvasUploadError, setCanvasUploadError] = useState<string | null>(null);
+  const [canvasCheckoutLoading, setCanvasCheckoutLoading] = useState(false);
+  const [canvasRemoving,    setCanvasRemoving]    = useState(false);
+  const [canvasActionMsg,   setCanvasActionMsg]   = useState<string | null>(null);
+
+  const { startUpload: uploadCanvasVideo } = useUploadThing("trackCanvas", {
+    onClientUploadComplete: async (res) => {
+      const url = res[0]?.url;
+      if (!url || !canvasTrackId) { setCanvasUploading(false); return; }
+      try {
+        const r = await fetch("/api/studio/canvas/upload", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ trackId: canvasTrackId, videoUrl: url }),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          setCanvasUploadError(data.error ?? "Upload save failed");
+        } else {
+          setCanvasActionMsg("Canvas uploaded successfully.");
+          // Refresh track list
+          setCanvasTracks(prev =>
+            prev.map(t => t.id === canvasTrackId ? { ...t, canvasVideoUrl: url } : t),
+          );
+        }
+      } catch {
+        setCanvasUploadError("Failed to save canvas URL");
+      } finally {
+        setCanvasUploading(false);
+      }
+    },
+    onUploadError: (err) => {
+      setCanvasUploadError(err.message ?? "Upload failed");
+      setCanvasUploading(false);
+    },
+  });
+
   // ── Load roster + history ────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/studio/ai-tools/roster")
@@ -995,6 +1049,78 @@ export default function StudioAIToolsPage() {
     setActiveJobId(null);
     setJobData(null);
     setSubmitError(null);
+  }
+
+  // ── Canvas: load tracks when artist changes ───────────────────────────────────
+  useEffect(() => {
+    setCanvasTracks([]);
+    setCanvasTrackId("");
+    setCanvasActionMsg(null);
+    setCanvasUploadError(null);
+    if (!canvasArtistId) return;
+    setCanvasTracksLoading(true);
+    fetch(`/api/studio/canvas/tracks?artistUserId=${encodeURIComponent(canvasArtistId)}`)
+      .then(r => r.json())
+      .then(d => { setCanvasTracks(d.tracks ?? []); })
+      .catch(() => {})
+      .finally(() => setCanvasTracksLoading(false));
+  }, [canvasArtistId]);
+
+  // ── Canvas: generate checkout ─────────────────────────────────────────────────
+  async function handleCanvasCheckout() {
+    if (!canvasTrackId) return;
+    setCanvasCheckoutLoading(true);
+    setCanvasUploadError(null);
+    setCanvasActionMsg(null);
+    try {
+      const res = await fetch("/api/studio/canvas/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ trackId: canvasTrackId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCanvasUploadError(data.error ?? "Checkout failed");
+        return;
+      }
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+    } finally {
+      setCanvasCheckoutLoading(false);
+    }
+  }
+
+  // ── Canvas: remove canvas ─────────────────────────────────────────────────────
+  async function handleCanvasRemove(trackId: string) {
+    setCanvasRemoving(true);
+    setCanvasActionMsg(null);
+    setCanvasUploadError(null);
+    try {
+      const res = await fetch(`/api/studio/canvas/${trackId}`, { method: "DELETE" });
+      if (res.ok) {
+        setCanvasActionMsg("Canvas removed.");
+        setCanvasTracks(prev =>
+          prev.map(t => t.id === trackId ? { ...t, canvasVideoUrl: null } : t),
+        );
+      } else {
+        const data = await res.json();
+        setCanvasUploadError(data.error ?? "Remove failed");
+      }
+    } finally {
+      setCanvasRemoving(false);
+    }
+  }
+
+  // ── Canvas: handle file upload ─────────────────────────────────────────────────
+  function handleCanvasFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !canvasTrackId) return;
+    setCanvasUploading(true);
+    setCanvasUploadError(null);
+    setCanvasActionMsg(null);
+    uploadCanvasVideo([file]);
+    e.target.value = "";
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1255,6 +1381,226 @@ export default function StudioAIToolsPage() {
                 <span style={{ color: "#D4A843" }}>/dashboard/ai/track-shield</span> to run a scan.
                 Pricing starts at $2.99 per track.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Canvas Video ──────────────────────────────────────────────────── */}
+        {!activeTool && (
+          <div className="rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(212,168,67,0.1)" }}>
+                <Film size={20} style={{ color: "#D4A843" }} />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#D4A843" }}>
+                  CANVAS VIDEO
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                  Attach a looping canvas video to an artist&apos;s track
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Artist selector — only linked roster artists */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+                  Roster Artist
+                </label>
+                {rosterLoading ? (
+                  <div className="flex items-center gap-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
+                    <Loader2 size={13} className="animate-spin" /> Loading roster…
+                  </div>
+                ) : (
+                  <select
+                    value={canvasArtistId}
+                    onChange={e => { setCanvasArtistId(e.target.value); }}
+                    className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                    style={{
+                      background: "var(--background)",
+                      borderColor: "var(--border)",
+                      color: "var(--foreground)",
+                    }}
+                  >
+                    <option value="">— Select an artist —</option>
+                    {roster
+                      .filter(c => c.isLinked && c.indieThisUserId)
+                      .map(c => (
+                        <option key={c.id} value={c.indieThisUserId!}>
+                          {c.name}{c.genre ? ` · ${c.genre}` : ""}
+                        </option>
+                      ))
+                    }
+                  </select>
+                )}
+                {!rosterLoading && roster.filter(c => c.isLinked).length === 0 && (
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    No linked artists on your roster. Artists must have an IndieThis account to use Canvas Video.
+                  </p>
+                )}
+              </div>
+
+              {/* Track selector */}
+              {canvasArtistId && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+                    Track
+                  </label>
+                  {canvasTracksLoading ? (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      <Loader2 size={13} className="animate-spin" /> Loading tracks…
+                    </div>
+                  ) : canvasTracks.length === 0 ? (
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      This artist has no tracks yet.
+                    </p>
+                  ) : (
+                    <select
+                      value={canvasTrackId}
+                      onChange={e => {
+                        setCanvasTrackId(e.target.value);
+                        setCanvasActionMsg(null);
+                        setCanvasUploadError(null);
+                      }}
+                      className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                      style={{
+                        background: "var(--background)",
+                        borderColor: "var(--border)",
+                        color: "var(--foreground)",
+                      }}
+                    >
+                      <option value="">— Select a track —</option>
+                      {canvasTracks.map(t => (
+                        <option key={t.id} value={t.id}>{t.title}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Canvas status + actions */}
+              {canvasArtistId && canvasTrackId && (() => {
+                const track = canvasTracks.find(t => t.id === canvasTrackId);
+                if (!track) return null;
+                const hasCanvas = !!track.canvasVideoUrl;
+                return (
+                  <div className="space-y-4">
+                    {/* Status badge */}
+                    <div className="flex items-center gap-2">
+                      {hasCanvas ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full"
+                          style={{ background: "rgba(52,199,89,0.12)", color: "#34C759" }}>
+                          <CheckCircle2 size={12} /> Has canvas ✓
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full"
+                          style={{ background: "rgba(255,255,255,0.06)", color: "var(--muted-foreground)" }}>
+                          No canvas
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Preview if canvas exists */}
+                    {hasCanvas && track.canvasVideoUrl && (
+                      <div className="space-y-2">
+                        <video
+                          src={track.canvasVideoUrl}
+                          loop muted autoPlay playsInline
+                          className="w-full max-w-xs rounded-xl object-cover"
+                          style={{ aspectRatio: "9/16", maxHeight: "200px" }}
+                        />
+                        <div className="flex gap-2">
+                          {/* Replace */}
+                          <label
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-semibold cursor-pointer transition-colors"
+                            style={{ borderColor: "#D4A843", color: "#D4A843", background: "transparent" }}
+                          >
+                            {canvasUploading
+                              ? <><Loader2 size={12} className="animate-spin" /> Uploading…</>
+                              : <><RefreshCw size={12} /> Replace</>
+                            }
+                            <input
+                              type="file"
+                              accept="video/*"
+                              className="sr-only"
+                              disabled={canvasUploading}
+                              onChange={handleCanvasFileChange}
+                            />
+                          </label>
+                          {/* Remove */}
+                          <button
+                            type="button"
+                            disabled={canvasRemoving}
+                            onClick={() => handleCanvasRemove(track.id)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                            style={{ background: "rgba(232,93,74,0.12)", color: "#E85D4A", border: "1px solid #E85D4A" }}
+                          >
+                            {canvasRemoving
+                              ? <><Loader2 size={12} className="animate-spin" /> Removing…</>
+                              : <><Trash2 size={12} /> Remove</>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons when no canvas */}
+                    {!hasCanvas && (
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        {/* Upload (free) */}
+                        <label
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors"
+                          style={{ borderColor: "#D4A843", color: "#D4A843", background: "rgba(212,168,67,0.05)" }}
+                        >
+                          {canvasUploading
+                            ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                            : <><Upload size={14} /> Upload Video</>
+                          }
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="sr-only"
+                            disabled={canvasUploading}
+                            onChange={handleCanvasFileChange}
+                          />
+                        </label>
+
+                        {/* Generate — paid */}
+                        <button
+                          type="button"
+                          disabled={canvasCheckoutLoading}
+                          onClick={handleCanvasCheckout}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                          style={{ background: "#E85D4A", color: "#fff" }}
+                        >
+                          {canvasCheckoutLoading
+                            ? <><Loader2 size={14} className="animate-spin" /> Redirecting…</>
+                            : <><Film size={14} /> Generate Canvas — $1.99</>
+                          }
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Replace option when canvas exists but user wants new one */}
+                    {hasCanvas && !track.canvasVideoUrl && null}
+
+                    {/* Messages */}
+                    {canvasActionMsg && (
+                      <div className="flex items-center gap-2 text-xs" style={{ color: "#34C759" }}>
+                        <CheckCircle2 size={12} /> {canvasActionMsg}
+                      </div>
+                    )}
+                    {canvasUploadError && (
+                      <div className="flex items-center gap-2 text-xs" style={{ color: "#E85D4A" }}>
+                        <AlertCircle size={12} /> {canvasUploadError}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

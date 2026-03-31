@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import {
   Music2, Link2, X, FolderOpen, Tag, Youtube, Plus, Loader2, Check,
   Upload, Trash2, Globe, Lock, DollarSign, CheckCircle2, ImagePlus, Pencil, Play, Zap, Users,
+  ChevronDown, Film,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useSearchParams, useRouter } from "next/navigation";
 import PreSaveTab from "./PreSaveTab";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import LicenseAttachment from "@/components/shared/LicenseAttachment";
@@ -22,6 +24,7 @@ type Track = {
   title: string;
   fileUrl: string;
   coverArtUrl: string | null;
+  canvasVideoUrl: string | null;
   price: number | null;
   status: "DRAFT" | "PUBLISHED";
   projectName: string | null;
@@ -103,12 +106,69 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
   const [editCoverArt, setEditCoverArt] = useState<string | null>(track.coverArtUrl);
   const [editSaving, setEditSaving] = useState(false);
 
+  // Canvas state
+  const [canvasUrl, setCanvasUrl] = useState<string | null>(track.canvasVideoUrl ?? null);
+  const [canvasReplaceOpen, setCanvasReplaceOpen] = useState(false);
+  const [canvasRemoving, setCanvasRemoving] = useState(false);
+  const replaceDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { startUpload: uploadCanvas, isUploading: canvasUploading } = useUploadThing("trackCanvas", {
+    onClientUploadComplete: async (res) => {
+      const url = res[0]?.url;
+      if (!url) return;
+      await fetch("/api/dashboard/music/canvas/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id, videoUrl: url }),
+      });
+      setCanvasUrl(url);
+      onUpdate({ ...track, canvasVideoUrl: url });
+    },
+  });
+
   const { startUpload: uploadCoverArt, isUploading: coverArtUploading } = useUploadThing("trackCoverArt", {
     onClientUploadComplete: (res) => {
       const url = res[0]?.url;
       if (url) setEditCoverArt(url);
     },
   });
+
+  // Close replace dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (replaceDropdownRef.current && !replaceDropdownRef.current.contains(e.target as Node)) {
+        setCanvasReplaceOpen(false);
+      }
+    }
+    if (canvasReplaceOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [canvasReplaceOpen]);
+
+  async function handleCanvasGenerate() {
+    setCanvasReplaceOpen(false);
+    try {
+      const res = await fetch("/api/dashboard/music/canvas/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { checkoutUrl: string };
+        window.location.href = data.checkoutUrl;
+      }
+    } catch { /* silent */ }
+  }
+
+  async function handleCanvasRemove() {
+    setCanvasRemoving(true);
+    try {
+      await fetch(`/api/dashboard/music/canvas/${track.id}`, { method: "DELETE" });
+      setCanvasUrl(null);
+      onUpdate({ ...track, canvasVideoUrl: null });
+    } finally {
+      setCanvasRemoving(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -158,6 +218,7 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
           price: editPrice ? parseFloat(editPrice) : null,
           status: editStatus,
           coverArtUrl: editCoverArt,
+          canvasVideoUrl: canvasUrl,
         });
         setEditing(false);
       }
@@ -248,6 +309,110 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
             <button onClick={() => setEditCoverArt(null)} className="text-muted-foreground hover:text-foreground" title="Remove art">
               <X size={12} />
             </button>
+          )}
+        </div>
+
+        {/* Canvas */}
+        <div className="space-y-2 pt-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#D4A843" }}>Canvas</label>
+
+          {canvasUrl ? (
+            <div className="space-y-2">
+              <video
+                src={canvasUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full rounded-lg"
+                style={{ maxHeight: 120, objectFit: "cover" }}
+              />
+              <div className="flex items-center gap-2">
+                {/* Replace dropdown */}
+                <div className="relative" ref={replaceDropdownRef}>
+                  <button
+                    onClick={() => setCanvasReplaceOpen(v => !v)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors hover:bg-white/5"
+                    style={{ borderColor: "#D4A843", color: "#D4A843" }}
+                  >
+                    Replace <ChevronDown size={11} />
+                  </button>
+                  {canvasReplaceOpen && (
+                    <div
+                      className="absolute left-0 top-full mt-1 z-20 rounded-xl border overflow-hidden w-44 shadow-lg"
+                      style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+                    >
+                      <label className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium cursor-pointer hover:bg-white/5 transition-colors">
+                        <Upload size={12} style={{ color: "#D4A843" }} />
+                        <span>Upload Video</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          className="sr-only"
+                          disabled={canvasUploading}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) { uploadCanvas([f]); setCanvasReplaceOpen(false); }
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <button
+                        onClick={handleCanvasGenerate}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5"
+                        style={{ color: "#E85D4A" }}
+                      >
+                        <Film size={12} />
+                        Generate  $1.99
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Remove */}
+                <button
+                  onClick={handleCanvasRemove}
+                  disabled={canvasRemoving}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors hover:bg-white/5"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                >
+                  {canvasRemoving ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {/* Upload Video */}
+              <label
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors hover:bg-white/5"
+                style={{ borderColor: "#D4A843", color: "#D4A843" }}
+              >
+                {canvasUploading
+                  ? <><Loader2 size={11} className="animate-spin" /> Uploading…</>
+                  : <><Upload size={11} /> Upload Video</>
+                }
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="sr-only"
+                  disabled={canvasUploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadCanvas([f]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {/* Generate */}
+              <button
+                onClick={handleCanvasGenerate}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+                style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+              >
+                <Film size={11} />
+                Generate Canvas  $1.99
+              </button>
+            </div>
           )}
         </div>
 
@@ -890,6 +1055,57 @@ function ReferencesTab() {
   );
 }
 
+// ─── Canvas paid-return handler ───────────────────────────────────────────────
+
+function CanvasPaidHandler() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [banner, setBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    const paid = searchParams.get("paid");
+    const trackId = searchParams.get("trackId");
+    const sessionId = searchParams.get("session_id");
+    if (paid !== "1" || !trackId) return;
+
+    setBanner("Generating your canvas…");
+
+    fetch("/api/dashboard/music/canvas/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackId, ...(sessionId ? { sessionId } : {}) }),
+    })
+      .then(async (res) => {
+        if (res.ok) setBanner("Canvas generation started! It will appear once ready.");
+        else setBanner("Canvas generation queued. Check back shortly.");
+      })
+      .catch(() => setBanner("Canvas generation queued. Check back shortly."))
+      .finally(() => {
+        // Clean URL params after a short delay
+        setTimeout(() => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("paid");
+          url.searchParams.delete("trackId");
+          url.searchParams.delete("session_id");
+          router.replace(url.pathname + (url.search || ""));
+        }, 3000);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!banner) return null;
+
+  return (
+    <div
+      className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium"
+      style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.3)" }}
+    >
+      <Loader2 size={14} className="animate-spin shrink-0" />
+      {banner}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MusicPage() {
@@ -905,6 +1121,11 @@ export default function MusicPage() {
         <h1 className="text-2xl font-bold text-foreground">Music</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Upload and manage your tracks</p>
       </div>
+
+      {/* Stripe canvas paid-return banner */}
+      <Suspense fallback={null}>
+        <CanvasPaidHandler />
+      </Suspense>
 
       {/* Tab nav */}
       <div className="flex gap-1 p-1 rounded-xl border w-fit" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
