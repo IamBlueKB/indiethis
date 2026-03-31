@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-03-30 (session 2)_
+_Last updated: 2026-03-30 (session 3)_
 
 ---
 
@@ -435,6 +435,10 @@ YoutubeReference
 |---------|--------|
 | Dashboard home with stats | ✅ DONE |
 | Track/release management | ✅ DONE |
+| Digital products (Singles $0.99–$49.99 / EP $4.99–$99.99 / Albums $4.99–$99.99) | ✅ DONE |
+| Digital product metadata + ID3 tag embedding on download | ✅ DONE |
+| Buyer email receipt on purchase (Brevo) | ✅ DONE |
+| Artist sale notification on purchase | ✅ DONE |
 | Artist public mini-site (dynamic `/[slug]`) | ✅ DONE |
 | Pre-save campaigns | ✅ DONE |
 | Artist shows and events | ✅ DONE |
@@ -467,6 +471,12 @@ YoutubeReference
 | Split Sheet Generator (free PDF) | ✅ DONE |
 | Vocal Remover (Replicate Demucs, PPU) | ✅ DONE |
 | Track Shield (AudD content scan) — Single $2.99 / 5-pack $9.99 / 10-pack $14.99 / Catalog $29.99 | ✅ DONE |
+| Canvas Video — upload free / AI generate $1.99 PPU (Remotion Lambda TrackCanvas, 9:16 looping, Ken Burns + beat pulse) | ✅ DONE |
+| Canvas Video — artist dashboard UI (upload + generate, preview, replace, remove, paid return handler) | ✅ DONE |
+| Canvas Video — DJ mix dashboard UI (per-row panel, same flow) | ✅ DONE |
+| Canvas Video — studio AI tools (roster artist + track selector, upload/generate) | ✅ DONE |
+| Canvas Video — CanvasPlayer component (lazy load via IntersectionObserver, fade-in, cover art fallback) | ✅ DONE |
+| Canvas Video — wired across platform (public page, explore, DJ crate, marketplace, dashboard, DJ profile) | ✅ DONE |
 | Credit system (used/limit per tier) | ✅ DONE |
 | Credit reset on monthly renewal (`invoice.paid`) | ✅ DONE |
 | PPU Stripe Checkout flow | ✅ DONE |
@@ -555,6 +565,7 @@ YoutubeReference
 | Public crate page (`/dj/[djSlug]/crate/[crateName]`) | ✅ DONE |
 | DJ crate management + CrateItem tracking | ✅ DONE |
 | DJ mix uploads with ACRCloud auto-tracklist identification | ✅ DONE |
+| DJ mix canvas video (upload free / generate $1.99) | ✅ DONE |
 | DJ set management (YouTube-linked, real thumbnail data) | ✅ DONE |
 | DJ events listing | ✅ DONE |
 | DJ verification flow (NONE → PENDING → APPROVED/DENIED) | ✅ DONE |
