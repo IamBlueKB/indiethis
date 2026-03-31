@@ -320,12 +320,17 @@ export function useToggleMerchProduct() {
   });
 }
 
-/** Delete merch product with optimistic remove */
+/** Delete merch product with optimistic remove. Throws with server error message on 409. */
 export function useDeleteMerchProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/dashboard/merch/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/dashboard/merch/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to delete product");
+      }
+    },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["merch-products"] });
       const prev = qc.getQueryData<MerchProduct[]>(["merch-products"]);

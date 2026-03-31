@@ -14,10 +14,10 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json() as {
-    title?: string;
+    title?:       string;
     description?: string;
-    isActive?: boolean;
-    markup?: number;
+    isActive?:    boolean;
+    markup?:      number;
   };
 
   const updated = await db.merchProduct.updateMany({
@@ -34,6 +34,7 @@ export async function PATCH(
 }
 
 // DELETE /api/dashboard/merch/[id]
+// Returns 409 if the product has existing orders (cannot delete).
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -44,6 +45,23 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  await db.merchProduct.deleteMany({ where: { id, artistId: session.user.id } });
+
+  // Verify ownership
+  const product = await db.merchProduct.findFirst({
+    where: { id, artistId: session.user.id },
+    select: { id: true },
+  });
+  if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Block delete if any orders have been placed for this product
+  const orderCount = await db.merchOrderItem.count({ where: { productId: id } });
+  if (orderCount > 0) {
+    return NextResponse.json(
+      { error: `Cannot delete — this product has ${orderCount} order${orderCount === 1 ? "" : "s"}. Unpublish it instead.` },
+      { status: 409 },
+    );
+  }
+
+  await db.merchProduct.delete({ where: { id } });
   return NextResponse.json({ deleted: true });
 }

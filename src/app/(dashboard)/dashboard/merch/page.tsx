@@ -49,6 +49,7 @@ export default function MerchPage() {
   const { mutate: updateFulfillment } = useUpdateOrderFulfillment();
 
   const [tab, setTab] = useState<Tab>("products");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const totalEarnings = orders.reduce((s, o) => s + o.artistEarnings, 0);
   const totalOrders   = orders.length;
@@ -70,6 +71,17 @@ export default function MerchPage() {
           Add Product
         </Link>
       </div>
+
+      {/* Delete error banner */}
+      {deleteError && (
+        <div
+          className="rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
+          style={{ backgroundColor: "rgba(232,93,74,0.15)", border: "1px solid rgba(232,93,74,0.4)", color: "#F87171" }}
+        >
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="text-xs opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -165,7 +177,9 @@ export default function MerchPage() {
                         {p.isActive ? <EyeOff size={12} /> : <Eye size={12} />}
                       </button>
                       <button
-                        onClick={() => deleteProduct(p.id)}
+                        onClick={() => deleteProduct(p.id, {
+                          onError: (err) => setDeleteError(err instanceof Error ? err.message : "Failed to delete product"),
+                        })}
                         className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ backgroundColor: "rgba(232,93,74,0.8)", color: "white" }}
                         title="Delete product"
