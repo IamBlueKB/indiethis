@@ -1,8 +1,8 @@
-import { db }                   from "@/lib/db";
-import { requireAdminAccess }   from "@/lib/require-admin-access";
-import Link                     from "next/link";
-import { Bot, Filter }          from "lucide-react";
-import type { AgentType }       from "@prisma/client";
+import { db }                 from "@/lib/db";
+import { requireAdminAccess } from "@/lib/require-admin-access";
+import Link                   from "next/link";
+import { Bot, Filter, AlertTriangle, ShieldAlert, TrendingUp, Activity, Clock, Users } from "lucide-react";
+import type { AgentType }     from "@prisma/client";
 
 const AGENT_LABELS: Record<AgentType, string> = {
   CHURN_PREVENTION:    "Churn Prevention",
@@ -26,6 +26,20 @@ const AGENT_COLORS: Record<AgentType, string> = {
   LEAD_SCORING:        "#38BDF8",
 };
 
+const ALL_AGENT_TYPES = Object.keys(AGENT_LABELS) as AgentType[];
+
+function fmtDate(d: Date) {
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function timeSince(d: Date): string {
+  const ms  = Date.now() - d.getTime();
+  const hrs = ms / 3600_000;
+  if (hrs < 1)  return `${Math.round(ms / 60_000)}m ago`;
+  if (hrs < 24) return `${Math.round(hrs)}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
 export default async function AgentsPage({
   searchParams,
 }: {
@@ -38,11 +52,25 @@ export default async function AgentsPage({
   const perPage = 50;
   const skip    = (page - 1) * perPage;
 
-  const where = agentFilter
-    ? { agentType: agentFilter as AgentType }
-    : {};
+  const now       = new Date();
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const weekStart  = new Date(now.getTime() - 7  * 86400_000);
+  const monthStart = new Date(now.getTime() - 30 * 86400_000);
 
-  const [logs, total, summary] = await Promise.all([
+  const where = agentFilter ? { agentType: agentFilter as AgentType } : {};
+
+  const [
+    logs,
+    total,
+    todayCount,
+    weekCount,
+    monthCount,
+    weekSummary,
+    lastRuns,
+    churnCounts,
+    pendingFlags,
+  ] = await Promise.all([
+    // Paginated activity feed
     db.agentLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -50,45 +78,173 @@ export default async function AgentsPage({
       skip,
     }),
     db.agentLog.count({ where }),
-    // Summary: count per agent type in last 7 days
+
+    // Overview counts
+    db.agentLog.count({ where: { createdAt: { gte: todayStart } } }),
+    db.agentLog.count({ where: { createdAt: { gte: weekStart  } } }),
+    db.agentLog.count({ where: { createdAt: { gte: monthStart } } }),
+
+    // Per-agent summary (7 days)
     db.agentLog.groupBy({
-      by:        ["agentType"],
-      _count:    { _all: true },
-      where:     { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      orderBy:   { _count: { agentType: "desc" } },
+      by:      ["agentType"],
+      _count:  { _all: true },
+      where:   { createdAt: { gte: weekStart } },
+      orderBy: { _count: { agentType: "desc" } },
     }),
+
+    // Last run time per agent (most recent AGENT_RUN_START)
+    db.agentLog.findMany({
+      where:   { action: "AGENT_RUN_START" },
+      orderBy: { createdAt: "desc" },
+      distinct: ["agentType"],
+      select:  { agentType: true, createdAt: true },
+    }),
+
+    // Churn risk distribution
+    db.user.groupBy({
+      by: ["churnRiskScore"],
+      _count: { _all: true },
+    }).then((rows) => {
+      let healthy = 0, atRisk = 0, high = 0, critical = 0;
+      for (const r of rows) {
+        const s = r.churnRiskScore ?? 0;
+        if (s <= 30)       healthy  += r._count._all;
+        else if (s <= 60)  atRisk   += r._count._all;
+        else if (s <= 80)  high     += r._count._all;
+        else               critical += r._count._all;
+      }
+      return { healthy, atRisk, high, critical };
+    }),
+
+    // Pending moderation flags
+    db.moderationFlag.count({ where: { status: "PENDING" } }),
   ]);
 
-  const totalPages = Math.ceil(total / perPage);
+  const totalPages    = Math.ceil(total / perPage);
+  const lastRunMap    = new Map(lastRuns.map((r) => [r.agentType, r.createdAt]));
+  const weekCountMap  = new Map(weekSummary.map((s) => [s.agentType, s._count._all]));
+  const STALE_HOURS   = 48;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Bot size={20} style={{ color: "#D4A843" }} />
-          <h1 className="text-xl font-bold text-foreground">Platform Agents</h1>
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}>
-            {total.toLocaleString()} total actions
-          </span>
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Bot size={20} style={{ color: "#D4A843" }} />
+        <h1 className="text-xl font-bold text-foreground">Platform Agents</h1>
+        {pendingFlags > 0 && (
+          <Link
+            href="/admin/moderation?tab=flags"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+            style={{ backgroundColor: "rgba(232,93,74,0.15)", color: "#E85D4A", border: "1px solid rgba(232,93,74,0.3)" }}
+          >
+            <ShieldAlert size={11} />
+            {pendingFlags} pending flag{pendingFlags !== 1 ? "s" : ""}
+          </Link>
+        )}
+      </div>
+
+      {/* Overview cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Actions today",    value: todayCount,  icon: Activity,    color: "#D4A843" },
+          { label: "Actions this week", value: weekCount,  icon: TrendingUp,  color: "#4ADE80" },
+          { label: "Actions this month",value: monthCount, icon: Clock,       color: "#60A5FA" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <Icon size={14} style={{ color }} />
+            </div>
+            <p className="text-3xl font-bold text-foreground">{value.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Agent health grid */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Agent Health</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {ALL_AGENT_TYPES.map((type) => {
+            const lastRun   = lastRunMap.get(type);
+            const count7d   = weekCountMap.get(type) ?? 0;
+            const hoursAgo  = lastRun ? (Date.now() - lastRun.getTime()) / 3600_000 : Infinity;
+            const isStale   = hoursAgo > STALE_HOURS;
+            const color     = AGENT_COLORS[type];
+            return (
+              <Link
+                key={type}
+                href={`/admin/agents?agent=${type}`}
+                className="rounded-xl border p-3 hover:bg-white/[0.02] transition-colors"
+                style={{
+                  borderColor: isStale ? "rgba(248,113,113,0.4)" : "var(--border)",
+                  backgroundColor: "var(--card)",
+                }}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold" style={{ color }}>{AGENT_LABELS[type]}</p>
+                  {isStale && (
+                    <AlertTriangle size={11} className="shrink-0" style={{ color: "#F87171" }} title={`No run in ${Math.round(hoursAgo)}h`} />
+                  )}
+                </div>
+                <p className="text-lg font-bold text-foreground">{count7d}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {lastRun ? `Last run ${timeSince(lastRun)}` : "Never run"}
+                </p>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
-      {/* 7-day summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {summary.map((s) => (
-          <Link
-            key={s.agentType}
-            href={`/admin/agents?agent=${s.agentType}`}
-            className="rounded-xl border p-4 hover:bg-white/[0.02] transition-colors"
-            style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-          >
-            <p className="text-xs font-semibold mb-1" style={{ color: AGENT_COLORS[s.agentType] }}>
-              {AGENT_LABELS[s.agentType]}
-            </p>
-            <p className="text-2xl font-bold text-foreground">{s._count._all}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">actions (7d)</p>
-          </Link>
-        ))}
+      {/* Churn risk + moderation row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Churn risk overview */}
+        <div className="rounded-xl border p-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={14} style={{ color: "#F87171" }} />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Churn Risk Overview</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: "Healthy",   value: churnCounts.healthy,  color: "#4ADE80" },
+              { label: "At Risk",   value: churnCounts.atRisk,   color: "#FBBF24" },
+              { label: "High Risk", value: churnCounts.high,     color: "#FB923C" },
+              { label: "Critical",  value: churnCounts.critical, color: "#F87171" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="text-center">
+                <p className="text-xl font-bold" style={{ color }}>{value}</p>
+                <p className="text-[10px] text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Moderation queue */}
+        <div className="rounded-xl border p-4" style={{ borderColor: pendingFlags > 0 ? "rgba(232,93,74,0.4)" : "var(--border)", backgroundColor: "var(--card)" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldAlert size={14} style={{ color: "#FB923C" }} />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Moderation Queue</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-3xl font-bold" style={{ color: pendingFlags > 0 ? "#E85D4A" : "#4ADE80" }}>
+                {pendingFlags}
+              </p>
+              <p className="text-xs text-muted-foreground">pending review</p>
+            </div>
+            <Link
+              href="/admin/moderation?tab=flags"
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+              style={{
+                backgroundColor: pendingFlags > 0 ? "rgba(232,93,74,0.12)" : "rgba(255,255,255,0.05)",
+                color: pendingFlags > 0 ? "#E85D4A" : "var(--muted-foreground)",
+                border: `1px solid ${pendingFlags > 0 ? "rgba(232,93,74,0.3)" : "var(--border)"}`,
+              }}
+            >
+              Review →
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -100,7 +256,7 @@ export default async function AgentsPage({
           style={{
             backgroundColor: !agentFilter ? "#D4A843" : "var(--card)",
             color:            !agentFilter ? "#0A0A0A"  : "var(--muted-foreground)",
-            border:           "1px solid var(--border)",
+            border: "1px solid var(--border)",
           }}
         >
           All
@@ -113,7 +269,7 @@ export default async function AgentsPage({
             style={{
               backgroundColor: agentFilter === key ? AGENT_COLORS[key as AgentType] : "var(--card)",
               color:            agentFilter === key ? "#0A0A0A" : "var(--muted-foreground)",
-              border:           "1px solid var(--border)",
+              border: "1px solid var(--border)",
             }}
           >
             {label}
@@ -121,53 +277,73 @@ export default async function AgentsPage({
         ))}
       </div>
 
-      {/* Log table */}
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)", backgroundColor: "var(--card)" }}>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Agent</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Action</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Target</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                  No agent actions yet.
-                </td>
+      {/* Recent activity feed */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Recent Activity
+          {agentFilter && (
+            <span className="ml-2 font-normal normal-case" style={{ color: AGENT_COLORS[agentFilter as AgentType] }}>
+              — {AGENT_LABELS[agentFilter as AgentType]}
+            </span>
+          )}
+        </p>
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)", backgroundColor: "var(--card)" }}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Agent</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Action</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Target</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Details</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Date</th>
               </tr>
-            )}
-            {logs.map((log) => (
-              <tr key={log.id} style={{ borderBottom: "1px solid var(--border)" }} className="hover:bg-white/[0.02] transition-colors">
-                <td className="px-4 py-3">
-                  <span
-                    className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                    style={{
-                      backgroundColor: `${AGENT_COLORS[log.agentType]}20`,
-                      color:           AGENT_COLORS[log.agentType],
-                    }}
-                  >
-                    {AGENT_LABELS[log.agentType]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-foreground font-mono text-xs">{log.action}</td>
-                <td className="px-4 py-3 text-muted-foreground text-xs">
-                  {log.targetType && log.targetId
-                    ? `${log.targetType} · ${log.targetId.slice(0, 8)}…`
-                    : log.targetType ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
-                  {log.createdAt.toLocaleString("en-US", {
-                    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                  })}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    No agent actions yet.
+                  </td>
+                </tr>
+              )}
+              {logs.map((log) => {
+                const color   = AGENT_COLORS[log.agentType];
+                const details = log.details as Record<string, unknown> | null;
+                const detailStr = details
+                  ? Object.entries(details)
+                      .filter(([, v]) => v != null && v !== "")
+                      .slice(0, 3)
+                      .map(([k, v]) => `${k}: ${String(v)}`)
+                      .join(" · ")
+                  : null;
+                return (
+                  <tr key={log.id} style={{ borderBottom: "1px solid var(--border)" }} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 py-3">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ backgroundColor: `${color}20`, color }}
+                      >
+                        {AGENT_LABELS[log.agentType]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-foreground font-mono text-xs">{log.action}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                      {log.targetType && log.targetId
+                        ? `${log.targetType} · ${log.targetId.slice(0, 8)}…`
+                        : log.targetType ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs max-w-[220px] truncate" title={detailStr ?? ""}>
+                      {detailStr ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                      {fmtDate(log.createdAt)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pagination */}
