@@ -31,7 +31,7 @@ export default async function AgentsPage({
 }: {
   searchParams: Promise<{ agent?: string; page?: string }>;
 }) {
-  await requireAdminAccess();
+  await requireAdminAccess("agents");
 
   const { agent: agentFilter, page: pageStr } = await searchParams;
   const page    = Math.max(1, parseInt(pageStr ?? "1", 10));

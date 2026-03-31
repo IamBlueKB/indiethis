@@ -6,7 +6,7 @@
  * Pages / sections recognised by this module:
  *   dashboard | users | studios | moderation | content | affiliates | attribution |
  *   support-chat | ai-usage | revenue | settings | team |
- *   promo-codes | ambassadors | promo-analytics | explore | lead-tracking
+ *   promo-codes | ambassadors | promo-analytics | explore | lead-tracking | agents
  *
  * Access matrix:
  * ┌──────────────┬─────────────┬───────────┬───────────────┐
@@ -133,6 +133,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
   "dj-verification": {
     SUPER_ADMIN:   "full",
     OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
+  agents: {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "view-only",
     SUPPORT_ADMIN: "none",
   },
 };
