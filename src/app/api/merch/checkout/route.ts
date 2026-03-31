@@ -6,15 +6,15 @@ export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   try {
     const body = await req.json() as {
-      productId: string;
+      variantId:  string;
       buyerEmail: string;
-      quantity: number;
+      quantity:   number;
       artistSlug: string;
     };
 
-    const { productId, buyerEmail, quantity = 1, artistSlug } = body;
+    const { variantId, buyerEmail, quantity = 1, artistSlug } = body;
 
-    if (!productId || !buyerEmail || !artistSlug) {
+    if (!variantId || !buyerEmail || !artistSlug) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
@@ -24,24 +24,33 @@ export async function POST(req: NextRequest) {
 
     const qty = Math.max(1, Math.min(10, Math.round(Number(quantity))));
 
-    const product = await db.merchProduct.findUnique({
-      where: { id: productId },
+    const variant = await db.merchVariant.findUnique({
+      where: { id: variantId },
       select: {
         id: true,
-        title: true,
-        imageUrl: true,
-        basePrice: true,
-        artistMarkup: true,
-        isActive: true,
-        artistId: true,
+        retailPrice: true,
+        inStock: true,
+        size: true,
+        color: true,
+        product: {
+          select: {
+            id: true,
+            title: true,
+            imageUrl: true,
+            isActive: true,
+            artistId: true,
+            markup: true,
+          },
+        },
       },
     });
 
-    if (!product || !product.isActive) {
+    if (!variant || !variant.product.isActive || !variant.inStock) {
       return NextResponse.json({ error: "Product not available." }, { status: 404 });
     }
 
-    const unitPriceCents = Math.round((product.basePrice + product.artistMarkup) * 100);
+    const product = variant.product;
+    const unitPriceCents = Math.round(variant.retailPrice * 100);
 
     if (unitPriceCents < 50) {
       return NextResponse.json({ error: "Product price is too low." }, { status: 400 });
@@ -52,6 +61,8 @@ export async function POST(req: NextRequest) {
     const proto   = host.startsWith("localhost") ? "http" : "https";
     const origin  = process.env.NEXTAUTH_URL ?? `${proto}://${host}`;
 
+    const variantLabel = [variant.size, variant.color !== "N/A" ? variant.color : ""].filter(Boolean).join(" · ");
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: buyerEmail,
@@ -61,7 +72,7 @@ export async function POST(req: NextRequest) {
             currency: "usd",
             unit_amount: unitPriceCents,
             product_data: {
-              name: product.title,
+              name: `${product.title}${variantLabel ? ` (${variantLabel})` : ""}`,
               images: product.imageUrl ? [product.imageUrl] : [],
             },
           },
@@ -69,11 +80,12 @@ export async function POST(req: NextRequest) {
         },
       ],
       metadata: {
-        type: "MERCH",
+        type:      "MERCH",
+        variantId: variant.id,
         productId: product.id,
-        artistId: product.artistId,
+        artistId:  product.artistId,
         buyerEmail,
-        quantity: String(qty),
+        quantity:  String(qty),
       },
       success_url: `${origin}/${artistSlug}?merch_success=1`,
       cancel_url:  `${origin}/${artistSlug}`,

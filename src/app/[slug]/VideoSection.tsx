@@ -39,12 +39,11 @@ type LinkedBeat = {
 };
 
 type LinkedMerch = {
-  id:           string;
-  title:        string;
-  imageUrl:     string;
-  basePrice:    number;
-  artistMarkup: number;
-  productType:  string;
+  id:       string;
+  title:    string;
+  imageUrl: string;
+  markup:   number;
+  variants: { id: string; retailPrice: number }[];
 };
 
 export type ArtistVideo = {
@@ -78,15 +77,6 @@ const CATEGORY_STYLES: Record<string, { bg: string; color: string }> = {
   REHEARSAL: { bg: "rgba(127,119,221,0.85)", color: "#fff"    },
 };
 
-const SIZED_TYPES = new Set(["TSHIRT", "HOODIE"]);
-const HAT_TYPES   = new Set(["HAT"]);
-const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "2XL"];
-const HAT_SIZES     = ["S/M", "L/XL"];
-function getSizes(productType: string): string[] | null {
-  if (SIZED_TYPES.has(productType)) return APPAREL_SIZES;
-  if (HAT_TYPES.has(productType))   return HAT_SIZES;
-  return null;
-}
 
 // ─── Track Buy Modal ──────────────────────────────────────────────────────────
 
@@ -167,26 +157,26 @@ function MerchQuickAdd({
   artistSlug: string;
   onClose:    () => void;
 }) {
-  const sizes   = getSizes(product.productType);
-  const [size,     setSize]     = useState<string>(sizes?.[2] ?? "");
+  const defaultVariant = product.variants[0] ?? null;
   const [quantity, setQuantity] = useState(1);
   const [email,    setEmail]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
 
-  const sellingPrice = product.basePrice + product.artistMarkup;
+  const sellingPrice = defaultVariant?.retailPrice ?? 0;
   const totalPrice   = sellingPrice * quantity;
 
   async function handleCheckout() {
     if (!email.trim()) { setError("Please enter your email."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Please enter a valid email."); return; }
+    if (!defaultVariant) { setError("Product not available."); return; }
     setLoading(true);
     setError("");
     try {
       const res  = await fetch("/api/merch/checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ productId: product.id, buyerEmail: email.trim(), quantity, artistSlug, size: size || undefined }),
+        body:    JSON.stringify({ variantId: defaultVariant.id, buyerEmail: email.trim(), quantity, artistSlug }),
       });
       const data = await res.json();
       if (data.url) { window.location.href = data.url; }
@@ -221,25 +211,6 @@ function MerchQuickAdd({
           <button onClick={onClose} className="text-white/40 hover:text-white/80 p-1"><X size={15} /></button>
         </div>
 
-        {sizes && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Size</p>
-            <div className="flex flex-wrap gap-2">
-              {sizes.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSize(s)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
-                  style={{
-                    borderColor:     size === s ? "#D4A843" : "rgba(255,255,255,0.12)",
-                    backgroundColor: size === s ? "rgba(212,168,67,0.12)" : "transparent",
-                    color:           size === s ? "#D4A843" : "rgba(255,255,255,0.5)",
-                  }}
-                >{s}</button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="flex items-center gap-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-white/40 mr-auto">Qty</p>
@@ -477,7 +448,7 @@ function ProductCTA({
   // Merch CTA
   if (video.linkedMerch) {
     const merch = video.linkedMerch;
-    const price = merch.basePrice + merch.artistMarkup;
+    const price = merch.variants[0]?.retailPrice ?? 0;
 
     return (
       <>

@@ -55,7 +55,7 @@ type UserDetail = {
   receipts: Array<{ id: string; type: string; description: string; amount: number; createdAt: string }>;
   artistSite: { id: string; template: string; isPublished: boolean; draftMode: boolean; customDomain: string | null; showMusic: boolean; showVideos: boolean; showMerch: boolean; showContact: boolean; followGateEnabled: boolean } | null;
   tracks: Array<{ id: string; title: string; status: string; plays: number; downloads: number; earnings: number; createdAt: string }>;
-  merchProducts: Array<{ id: string; title: string; productType: string; basePrice: number; isActive: boolean; _count: { orders: number } }>;
+  merchProducts: Array<{ id: string; title: string; markup: number; isActive: boolean; _count: { orderItems: number } }>;
   ownedStudios: Array<{ id: string; name: string; slug: string; studioTier: string; tierOverride: string | null; isPublished: boolean; createdAt: string; _count: { artists: number; sessions: number; contacts: number; emailCampaigns: number } }>;
   artistLicenses: Array<{ id: string; licenseType: string; price: number; status: string; createdAt: string; track: { title: string } }>;
   aiBreakdown: Array<{ type: string; _count: { type: number } }>;
@@ -613,7 +613,7 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
                       <span className="text-foreground truncate">{p.title}</span>
                       {!p.isActive && <span className="text-[9px] text-muted-foreground">(inactive)</span>}
                     </div>
-                    <span className="text-muted-foreground">{p._count.orders} orders · ${p.basePrice.toFixed(0)}</span>
+                    <span className="text-muted-foreground">{p._count.orderItems} orders · +${p.markup.toFixed(0)} markup</span>
                   </div>
                 ))}
               </div>

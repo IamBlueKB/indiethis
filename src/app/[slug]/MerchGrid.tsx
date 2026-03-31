@@ -6,39 +6,21 @@ import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type MerchVariantSummary = {
+  id:          string;
+  size:        string;
+  color:       string;
+  colorCode:   string;
+  retailPrice: number;
+};
+
 type MerchProduct = {
-  id:           string;
-  title:        string;
-  imageUrl:     string;
-  basePrice:    number;
-  artistMarkup: number;
-  productType:  string;
+  id:       string;
+  title:    string;
+  imageUrl: string;
+  markup:   number;
+  variants: MerchVariantSummary[];
 };
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const TYPE_LABELS: Record<string, string> = {
-  TSHIRT:    "T-Shirt",
-  HOODIE:    "Hoodie",
-  POSTER:    "Poster",
-  PHONECASE: "Phone Case",
-  HAT:       "Hat",
-  STICKER:   "Sticker",
-  MUG:       "Mug",
-};
-
-/** Product types that have size options */
-const SIZED_TYPES = new Set(["TSHIRT", "HOODIE"]);
-const HAT_TYPES   = new Set(["HAT"]);
-
-const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "2XL"];
-const HAT_SIZES    = ["S/M", "L/XL"];
-
-function getSizes(productType: string): string[] | null {
-  if (SIZED_TYPES.has(productType)) return APPAREL_SIZES;
-  if (HAT_TYPES.has(productType))   return HAT_SIZES;
-  return null;
-}
 
 // ─── Glass card ───────────────────────────────────────────────────────────────
 
@@ -58,7 +40,7 @@ function ProductCard({
   product:    MerchProduct;
   onQuickAdd: (p: MerchProduct) => void;
 }) {
-  const price = product.basePrice + product.artistMarkup;
+  const lowestPrice = product.variants[0]?.retailPrice ?? 0;
 
   return (
     <button
@@ -89,7 +71,7 @@ function ProductCard({
           {product.title}
         </p>
         <p style={{ fontSize: 11, color: "#D4A843", marginTop: 2 }}>
-          ${price.toFixed(2)}
+          {lowestPrice > 0 ? `From $${lowestPrice.toFixed(2)}` : "—"}
         </p>
       </div>
     </button>
@@ -130,14 +112,15 @@ function QuickAddOverlay({
   artistSlug: string;
   onClose:    () => void;
 }) {
-  const sizes          = getSizes(product.productType);
-  const [size,     setSize]     = useState<string>(sizes?.[2] ?? "");   // default M / S/M
+  const [selectedVariant, setSelectedVariant] = useState<MerchVariantSummary | null>(
+    product.variants[0] ?? null
+  );
   const [quantity, setQuantity] = useState(1);
   const [email,    setEmail]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
 
-  const sellingPrice = product.basePrice + product.artistMarkup;
+  const sellingPrice = selectedVariant?.retailPrice ?? 0;
   const totalPrice   = sellingPrice * quantity;
 
   async function handleCheckout() {
@@ -146,6 +129,7 @@ function QuickAddOverlay({
       setError("Please enter a valid email address.");
       return;
     }
+    if (!selectedVariant) { setError("Please select a variant."); return; }
     setLoading(true);
     setError("");
     try {
@@ -153,11 +137,10 @@ function QuickAddOverlay({
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          productId:  product.id,
+          variantId:  selectedVariant.id,
           buyerEmail: email.trim(),
           quantity,
           artistSlug,
-          size: size || undefined,
         }),
       });
       const data = await res.json();
@@ -203,9 +186,8 @@ function QuickAddOverlay({
             <div>
               <p className="text-sm font-bold text-white leading-snug line-clamp-2">{product.title}</p>
               <p className="text-xs text-white/40 mt-0.5">
-                {TYPE_LABELS[product.productType] ?? product.productType}
-                {" · "}
-                <span style={{ color: "#D4A843" }}>${sellingPrice.toFixed(2)}</span>
+                {selectedVariant ? `${selectedVariant.color} · ` : ""}
+                <span style={{ color: "#D4A843" }}>{sellingPrice > 0 ? `$${sellingPrice.toFixed(2)}` : "—"}</span>
               </p>
             </div>
           </div>
@@ -217,23 +199,23 @@ function QuickAddOverlay({
           </button>
         </div>
 
-        {/* Size selector */}
-        {sizes && (
+        {/* Variant selector */}
+        {product.variants.length > 1 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Size</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Option</p>
             <div className="flex flex-wrap gap-2">
-              {sizes.map((s) => (
+              {product.variants.map((v) => (
                 <button
-                  key={s}
-                  onClick={() => setSize(s)}
+                  key={v.id}
+                  onClick={() => setSelectedVariant(v)}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
                   style={{
-                    borderColor:     size === s ? "#D4A843" : "rgba(255,255,255,0.12)",
-                    backgroundColor: size === s ? "rgba(212,168,67,0.12)" : "transparent",
-                    color:           size === s ? "#D4A843" : "rgba(255,255,255,0.5)",
+                    borderColor:     selectedVariant?.id === v.id ? "#D4A843" : "rgba(255,255,255,0.12)",
+                    backgroundColor: selectedVariant?.id === v.id ? "rgba(212,168,67,0.12)" : "transparent",
+                    color:           selectedVariant?.id === v.id ? "#D4A843" : "rgba(255,255,255,0.5)",
                   }}
                 >
-                  {s}
+                  {v.size} {v.color !== "N/A" ? `· ${v.color}` : ""}
                 </button>
               ))}
             </div>

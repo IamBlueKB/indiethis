@@ -2,26 +2,17 @@
 
 import { useState } from "react";
 import {
-  ShoppingBag, Plus, X, Package, DollarSign, Tag, ImagePlus,
+  ShoppingBag, Package, DollarSign,
   Loader2, Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
 } from "lucide-react";
-import { useUploadThing } from "@/lib/uploadthing-client";
 import {
   useMerchProducts,
   useMerchOrders,
   useToggleMerchProduct,
   useDeleteMerchProduct,
-  useCreateMerchProduct,
   useUpdateOrderFulfillment,
   type MerchOrder,
 } from "@/hooks/queries";
-
-const PRODUCT_TYPES = ["TSHIRT", "HOODIE", "POSTER", "PHONECASE", "HAT", "STICKER", "MUG"];
-
-const TYPE_LABELS: Record<string, string> = {
-  TSHIRT: "T-Shirt", HOODIE: "Hoodie", POSTER: "Poster",
-  PHONECASE: "Phone Case", HAT: "Hat", STICKER: "Sticker", MUG: "Mug",
-};
 
 const FULFILLMENT_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING:    { label: "Pending",    color: "text-yellow-400",  icon: Clock        },
@@ -38,42 +29,12 @@ export default function MerchPage() {
 
   const { mutate: toggleActive  } = useToggleMerchProduct();
   const { mutate: deleteProduct } = useDeleteMerchProduct();
-  const { mutate: createProduct, isPending: saving } = useCreateMerchProduct();
   const { mutate: updateFulfillment } = useUpdateOrderFulfillment();
 
-  const [tab, setTab]             = useState<Tab>("products");
-  const [composing, setComposing] = useState(false);
+  const [tab, setTab] = useState<Tab>("products");
 
-  // New product form state
-  const [title, setTitle]           = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl]     = useState("");
-  const [basePrice, setBasePrice]   = useState("");
-  const [markup, setMarkup]         = useState("");
-  const [productType, setProductType] = useState("TSHIRT");
-
-  const { startUpload: uploadImage, isUploading: imageUploading } = useUploadThing("merchImage", {
-    onClientUploadComplete: (res) => {
-      const url = res[0]?.url;
-      if (url) setImageUrl(url);
-    },
-  });
-
-  function handleCreate() {
-    if (!title.trim() || !imageUrl.trim()) return;
-    createProduct(
-      { title, description, imageUrl, basePrice, artistMarkup: markup, productType },
-      {
-        onSuccess: () => {
-          setTitle(""); setDescription(""); setImageUrl("");
-          setBasePrice(""); setMarkup(""); setComposing(false);
-        },
-      }
-    );
-  }
-
-  const totalEarnings = products.flatMap((p) => p.orders).reduce((s, o) => s + o.artistEarnings, 0);
-  const totalOrders   = products.flatMap((p) => p.orders).length;
+  const totalEarnings = orders.reduce((s, o) => s + o.artistEarnings, 0);
+  const totalOrders   = orders.length;
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -81,17 +42,8 @@ export default function MerchPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Merch Store</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Sell merch directly to your fans</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Sell print-on-demand merch directly to your fans</p>
         </div>
-        {tab === "products" && (
-          <button
-            onClick={() => setComposing(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            <Plus size={14} /> Add Product
-          </button>
-        )}
       </div>
 
       {/* Stats */}
@@ -139,163 +91,27 @@ export default function MerchPage() {
       {/* ── Products Tab ─────────────────────────────────────────────────── */}
       {tab === "products" && (
         <>
-          {/* Add product form */}
-          {composing && (
-            <div
-              className="rounded-2xl border p-5 space-y-4"
-              style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag size={15} className="text-accent" />
-                  <h2 className="text-sm font-semibold text-foreground">New Product</h2>
-                </div>
-                <button onClick={() => setComposing(false)} className="text-muted-foreground hover:text-foreground">
-                  <X size={15} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Product Name
-                  </label>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Tour Hoodie 2026"
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Product Type
-                  </label>
-                  <select
-                    value={productType}
-                    onChange={(e) => setProductType(e.target.value)}
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm text-foreground outline-none"
-                    style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-                  >
-                    {PRODUCT_TYPES.map((t) => (
-                      <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Image upload */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Product Image
-                </label>
-                <div className="flex items-center gap-3">
-                  {imageUrl ? (
-                    <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border" style={{ borderColor: "var(--border)" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setImageUrl("")}
-                        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 flex items-center justify-center text-white text-[9px]"
-                      >✕</button>
-                    </div>
-                  ) : (
-                    <div
-                      className="w-16 h-16 rounded-xl border flex items-center justify-center shrink-0"
-                      style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
-                    >
-                      <ImagePlus size={18} className="text-muted-foreground opacity-40" />
-                    </div>
-                  )}
-                  <label className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer border transition-colors hover:bg-white/5"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
-                    {imageUploading
-                      ? <><Loader2 size={12} className="animate-spin" /> Uploading…</>
-                      : <><ImagePlus size={12} /> {imageUrl ? "Replace" : "Upload Image"}</>}
-                    <input
-                      type="file" accept="image/*" className="sr-only" disabled={imageUploading}
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage([f]); e.target.value = ""; }}
-                    />
-                  </label>
-                  <p className="text-xs text-muted-foreground">Max 16 MB</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Base Price ($)
-                  </label>
-                  <input
-                    value={basePrice}
-                    onChange={(e) => setBasePrice(e.target.value)}
-                    placeholder="25.00" type="number" min="0" step="0.01"
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Your Markup ($)
-                  </label>
-                  <input
-                    value={markup}
-                    onChange={(e) => setMarkup(e.target.value)}
-                    placeholder="15.00" type="number" min="0" step="0.01"
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50"
-                    style={{ borderColor: "var(--border)" }}
-                  />
-                </div>
-              </div>
-
-              {basePrice && markup && (
-                <p className="text-xs text-muted-foreground">
-                  Selling price:{" "}
-                  <span className="text-foreground font-semibold">
-                    ${(parseFloat(basePrice || "0") + parseFloat(markup || "0")).toFixed(2)}
-                  </span>
-                  {" "}· Your earnings:{" "}
-                  <span className="text-emerald-400 font-semibold">
-                    ${parseFloat(markup || "0").toFixed(2)}
-                  </span>{" "}
-                  per sale
-                </p>
-              )}
-
-              <button
-                onClick={handleCreate}
-                disabled={saving || imageUploading || !title.trim() || !imageUrl.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-              >
-                <Plus size={14} />
-                {saving ? "Creating…" : imageUploading ? "Uploading image…" : "Create Product"}
-              </button>
-            </div>
-          )}
-
-          {/* Product grid */}
           {loadingProducts ? (
             <div className="py-10 flex justify-center">
               <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
             </div>
           ) : products.length === 0 ? (
             <div
-              className="rounded-2xl border py-14 text-center space-y-2"
+              className="rounded-2xl border py-14 text-center space-y-3"
               style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
             >
               <ShoppingBag size={32} className="mx-auto text-muted-foreground opacity-40" />
               <p className="text-sm font-semibold text-foreground">No products yet</p>
-              <p className="text-xs text-muted-foreground">Add your first merch item to start selling.</p>
+              <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                Browse the catalog to add print-on-demand products to your store.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {products.map((p) => {
-                const sellingPrice = p.basePrice + p.artistMarkup;
-                const orderCount   = p.orders.length;
-                const earnings     = p.orders.reduce((s, o) => s + o.artistEarnings, 0);
+                const lowestPrice  = p.variants[0]?.retailPrice ?? 0;
+                const orderCount   = p.orderItems.length;
+                const earnings     = p.orderItems.reduce((s, oi) => s + oi.order.artistEarnings, 0);
                 return (
                   <div
                     key={p.id}
@@ -341,14 +157,13 @@ export default function MerchPage() {
                         <p className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">{p.title}</p>
                         <span className={`shrink-0 w-2 h-2 rounded-full mt-1.5 ${p.isActive ? "bg-emerald-400" : "bg-red-400"}`} />
                       </div>
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border text-muted-foreground"
-                        style={{ borderColor: "var(--border)" }}
-                      >
-                        <Tag size={8} /> {TYPE_LABELS[p.productType] ?? p.productType}
-                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                      </p>
                       <div className="flex items-center justify-between pt-0.5">
-                        <p className="text-sm font-bold text-foreground">${sellingPrice.toFixed(2)}</p>
+                        <p className="text-sm font-bold text-foreground">
+                          {lowestPrice > 0 ? `From $${lowestPrice.toFixed(2)}` : "—"}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {orderCount} {orderCount === 1 ? "order" : "orders"}
                         </p>
@@ -429,6 +244,13 @@ function OrderRow({
     PROCESSING: "Mark Processing", SHIPPED: "Mark Shipped", DELIVERED: "Mark Delivered",
   };
 
+  // First item's product info for display
+  const firstItem = order.items[0];
+  const productTitle  = firstItem?.product.title  ?? "Merch Order";
+  const productImage  = firstItem?.product.imageUrl ?? "";
+  const variantLabel  = firstItem ? `${firstItem.variant.size} · ${firstItem.variant.color}` : "";
+  const totalQty      = order.items.reduce((s, i) => s + i.quantity, 0);
+
   return (
     <div
       className="border-b last:border-b-0"
@@ -441,17 +263,17 @@ function OrderRow({
         {/* Product image */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={order.merchProduct.imageUrl}
-          alt={order.merchProduct.title}
+          src={productImage}
+          alt={productTitle}
           className="w-10 h-10 rounded-xl object-cover shrink-0"
           onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23222'/%3E%3C/svg%3E"; }}
         />
 
         {/* Order info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{order.merchProduct.title}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{productTitle}</p>
           <p className="text-xs text-muted-foreground truncate">
-            {order.buyerEmail} · Qty {order.quantity}
+            {order.buyerEmail} · {variantLabel} · Qty {totalQty}
           </p>
         </div>
 
@@ -484,7 +306,14 @@ function OrderRow({
             </p>
             {order.trackingNumber && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                Tracking: <span className="text-foreground font-mono">{order.trackingNumber}</span>
+                Tracking:{" "}
+                {order.trackingUrl ? (
+                  <a href={order.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-mono underline">
+                    {order.trackingNumber}
+                  </a>
+                ) : (
+                  <span className="text-foreground font-mono">{order.trackingNumber}</span>
+                )}
               </p>
             )}
           </div>

@@ -85,7 +85,15 @@ async function ArtistSite({ slug }: { slug: string }) {
         where:   { isActive: true },
         orderBy: { createdAt: "desc" },
         take:    6,
-        select:  { id: true, title: true, imageUrl: true, basePrice: true, artistMarkup: true, productType: true },
+        select:  {
+          id: true, title: true, imageUrl: true, markup: true,
+          variants: {
+            where:   { inStock: true },
+            orderBy: { retailPrice: "asc" },
+            select:  { id: true, size: true, color: true, colorCode: true, retailPrice: true },
+            take:    1,
+          },
+        },
       },
       studios: { take: 1, include: { studio: { select: { slug: true, name: true } } } },
       // New content
@@ -155,8 +163,13 @@ async function ArtistSite({ slug }: { slug: string }) {
           },
           linkedMerch: {
             select: {
-              id: true, title: true, imageUrl: true,
-              basePrice: true, artistMarkup: true, productType: true,
+              id: true, title: true, imageUrl: true, markup: true,
+              variants: {
+                where:   { inStock: true },
+                orderBy: { retailPrice: "asc" },
+                select:  { id: true, retailPrice: true },
+                take:    1,
+              },
             },
           },
         },

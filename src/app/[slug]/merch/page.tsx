@@ -21,7 +21,15 @@ export default async function MerchStorefront({
       merchProducts: {
         where:   { isActive: true },
         orderBy: { createdAt: "desc" },
-        select:  { id: true, title: true, imageUrl: true, basePrice: true, artistMarkup: true, productType: true },
+        select:  {
+          id: true, title: true, imageUrl: true, markup: true,
+          variants: {
+            where:   { inStock: true },
+            orderBy: { retailPrice: "asc" },
+            select:  { id: true, size: true, color: true, retailPrice: true, colorCode: true },
+            take:    1, // lowest-priced in-stock variant for display
+          },
+        },
       },
     },
   });

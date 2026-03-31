@@ -63,7 +63,10 @@ export async function GET(
     // Merch orders this year
     db.merchOrder.findMany({
       where:  { artistId: userId, createdAt: { gte: yearStart, lte: yearEnd } },
-      select: { artistEarnings: true, quantity: true, createdAt: true, buyerEmail: true },
+      select: {
+        artistEarnings: true, createdAt: true, buyerEmail: true,
+        items: { select: { quantity: true } },
+      },
     }),
     // Tips this year
     db.artistSupport.findMany({
@@ -150,7 +153,7 @@ export async function GET(
   const totalFansGained = uniqueFanEmails.size;
 
   // ── Merch ─────────────────────────────────────────────────────────────────
-  const totalMerchSold = merchOrders.reduce((s, o) => s + o.quantity, 0);
+  const totalMerchSold = merchOrders.reduce((s, o) => s + o.items.reduce((q, i) => q + i.quantity, 0), 0);
 
   // ── Tips ─────────────────────────────────────────────────────────────────
   const totalTips      = tips.length;

@@ -201,14 +201,9 @@ export async function runFanEngagementAgent(): Promise<{ acted: number }> {
       _count: {
         select: { fanContacts: true },
       },
-      // Merch orders this week
+      // Merch products (just IDs for order counting)
       merchProducts: {
-        select: {
-          orders: {
-            where:  { createdAt: { gte: oneWeekAgo } },
-            select: { id: true },
-          },
-        },
+        select: { id: true },
       },
       // Last broadcast
       broadcastLogs: {
@@ -267,7 +262,12 @@ export async function runFanEngagementAgent(): Promise<{ acted: number }> {
     const lastBc  = user.broadcastLogs[0]?.sentAt ?? null;
     const daysAgo = lastBc ? Math.floor((now - lastBc.getTime()) / (24 * 60 * 60 * 1000)) : null;
 
-    const orderCount = user.merchProducts.reduce((acc, p) => acc + p.orders.length, 0);
+    const productIds = user.merchProducts.map((p) => p.id);
+    const orderCount = productIds.length > 0
+      ? await db.merchOrderItem.count({
+          where: { productId: { in: productIds }, order: { createdAt: { gte: new Date(Date.now() - 7 * 86400_000) } } },
+        })
+      : 0;
 
     const summary: FanSummary = {
       newFansThisWeek:     user.fanContacts.length,

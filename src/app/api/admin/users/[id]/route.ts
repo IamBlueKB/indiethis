@@ -106,10 +106,9 @@ export async function GET(
             select: {
               id: true,
               title: true,
-              productType: true,
-              basePrice: true,
+              markup: true,
               isActive: true,
-              _count: { select: { orders: true } },
+              _count: { select: { orderItems: true } },
             },
           },
           ownedStudios: {

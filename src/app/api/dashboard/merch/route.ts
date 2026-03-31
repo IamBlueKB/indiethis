@@ -14,8 +14,12 @@ export async function GET() {
     where: { artistId: session.user.id },
     orderBy: { createdAt: "desc" },
     include: {
-      orders: {
-        select: { id: true, totalPrice: true, artistEarnings: true },
+      variants: {
+        select: { id: true, size: true, color: true, retailPrice: true, inStock: true },
+        orderBy: { retailPrice: "asc" },
+      },
+      orderItems: {
+        select: { id: true, unitPrice: true, subtotal: true, order: { select: { artistEarnings: true } } },
       },
     },
   });
@@ -31,21 +35,20 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, description, imageUrl, basePrice, artistMarkup, productType } = body;
+  const { title, description, imageUrl, printfulProductId, markup } = body;
 
-  if (!title?.trim() || !imageUrl?.trim() || !productType) {
-    return NextResponse.json({ error: "title, imageUrl, and productType are required" }, { status: 400 });
+  if (!title?.trim() || !imageUrl?.trim() || !printfulProductId) {
+    return NextResponse.json({ error: "title, imageUrl, and printfulProductId are required" }, { status: 400 });
   }
 
   const product = await db.merchProduct.create({
     data: {
-      artistId: session.user.id,
-      title: title.trim(),
-      description: description?.trim() ?? null,
-      imageUrl: imageUrl.trim(),
-      basePrice: parseFloat(basePrice) || 0,
-      artistMarkup: parseFloat(artistMarkup) || 0,
-      productType,
+      artistId:          session.user.id,
+      title:             title.trim(),
+      description:       description?.trim() ?? null,
+      imageUrl:          imageUrl.trim(),
+      printfulProductId: parseInt(printfulProductId, 10),
+      markup:            parseFloat(markup) || 0,
     },
   });
 

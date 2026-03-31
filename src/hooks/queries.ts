@@ -51,31 +51,51 @@ export type ArtistSite = {
   createdAt: string;
 };
 
+export type MerchVariant = {
+  id:          string;
+  size:        string;
+  color:       string;
+  colorCode:   string;
+  retailPrice: number;
+  inStock:     boolean;
+};
+
 export type MerchProduct = {
-  id: string;
-  title: string;
-  description: string | null;
-  imageUrl: string;
-  basePrice: number;
-  artistMarkup: number;
-  productType: string;
-  isActive: boolean;
-  createdAt: string;
-  orders: { id: string; totalPrice: number; artistEarnings: number }[];
+  id:                string;
+  title:             string;
+  description:       string | null;
+  imageUrl:          string;
+  printfulProductId: number;
+  markup:            number;
+  isActive:          boolean;
+  createdAt:         string;
+  variants:          MerchVariant[];
+  orderItems:        { id: string; unitPrice: number; subtotal: number; order: { artistEarnings: number } }[];
+};
+
+export type MerchOrderItem = {
+  id:       string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  product:  { title: string; imageUrl: string };
+  variant:  { size: string; color: string };
 };
 
 export type MerchOrder = {
-  id: string;
-  buyerEmail: string;
-  quantity: number;
-  totalPrice: number;
-  artistEarnings: number;
-  platformCut: number;
+  id:                string;
+  buyerEmail:        string;
+  buyerName:         string | null;
+  totalPrice:        number;
+  artistEarnings:    number;
+  platformCut:       number;
   fulfillmentStatus: "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED";
-  trackingNumber: string | null;
-  stripePaymentId: string | null;
-  createdAt: string;
-  merchProduct: { title: string; imageUrl: string; productType: string };
+  trackingNumber:    string | null;
+  trackingUrl:       string | null;
+  stripePaymentId:   string | null;
+  printfulOrderId:   number | null;
+  createdAt:         string;
+  items:             MerchOrderItem[];
 };
 
 export type Track = {
@@ -293,12 +313,11 @@ export function useCreateMerchProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: {
-      title: string;
-      description: string;
-      imageUrl: string;
-      basePrice: string;
-      artistMarkup: string;
-      productType: string;
+      title:             string;
+      description:       string;
+      imageUrl:          string;
+      printfulProductId: number;
+      markup:            number;
     }) =>
       fetch("/api/dashboard/merch", {
         method: "POST",

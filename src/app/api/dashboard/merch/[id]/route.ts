@@ -17,16 +17,16 @@ export async function PATCH(
     title?: string;
     description?: string;
     isActive?: boolean;
-    artistMarkup?: number;
+    markup?: number;
   };
 
   const updated = await db.merchProduct.updateMany({
     where: { id, artistId: session.user.id },
     data: {
-      ...(body.title       !== undefined && { title:         body.title.trim() }),
-      ...(body.description !== undefined && { description:   body.description }),
-      ...(body.isActive    !== undefined && { isActive:      body.isActive }),
-      ...(body.artistMarkup!== undefined && { artistMarkup:  body.artistMarkup }),
+      ...(body.title       !== undefined && { title:       body.title.trim() }),
+      ...(body.description !== undefined && { description: body.description }),
+      ...(body.isActive    !== undefined && { isActive:    body.isActive }),
+      ...(body.markup      !== undefined && { markup:      body.markup }),
     },
   });
 

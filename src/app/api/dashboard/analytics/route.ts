@@ -136,9 +136,9 @@ export async function GET() {
         select: { zip: true },
       }),
 
-      db.merchOrder.findMany({
-        where:  { artistId },
-        select: { merchProductId: true, artistEarnings: true },
+      db.merchOrderItem.findMany({
+        where:  { order: { artistId } },
+        select: { productId: true, subtotal: true, order: { select: { artistEarnings: true } } },
         take:   1000,
       }),
 
@@ -180,7 +180,7 @@ export async function GET() {
     ]);
 
     // ── Merch product titles ────────────────────────────────────────────────
-    const productIds = [...new Set(merchOrdersRaw.map((o) => o.merchProductId))];
+    const productIds = [...new Set(merchOrdersRaw.map((o) => o.productId))];
     const products   = productIds.length
       ? await db.merchProduct.findMany({
           where:  { id: { in: productIds } },
@@ -271,10 +271,10 @@ export async function GET() {
     // ── Transform: merch performance ───────────────────────────────────────
     const merchByProduct = new Map<string, { sales: number; revenue: number }>();
     for (const o of merchOrdersRaw) {
-      const existing = merchByProduct.get(o.merchProductId) ?? { sales: 0, revenue: 0 };
-      merchByProduct.set(o.merchProductId, {
+      const existing = merchByProduct.get(o.productId) ?? { sales: 0, revenue: 0 };
+      merchByProduct.set(o.productId, {
         sales:   existing.sales + 1,
-        revenue: existing.revenue + o.artistEarnings,
+        revenue: existing.revenue + o.order.artistEarnings,
       });
     }
     const topMerch = Array.from(merchByProduct.entries())

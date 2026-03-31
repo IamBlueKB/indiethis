@@ -244,25 +244,26 @@ export async function POST(req: NextRequest) {
 
       // --- Merch purchase (no userId — buyer is a fan, not a platform user) ---
       if (checkSession.metadata?.type === "MERCH") {
-        const { productId, artistId, buyerEmail, quantity: qtyStr } = checkSession.metadata;
+        const { variantId, productId, artistId, buyerEmail, quantity: qtyStr } = checkSession.metadata;
         const qty = Math.max(1, parseInt(qtyStr ?? "1", 10));
 
-        const product = await db.merchProduct.findUnique({
-          where: { id: productId },
-          select: { basePrice: true, artistMarkup: true },
-        });
+        const variant = variantId
+          ? await db.merchVariant.findUnique({
+              where:  { id: variantId },
+              select: { retailPrice: true, basePrice: true, product: { select: { title: true, markup: true } } },
+            })
+          : null;
 
-        if (product) {
-          const totalPrice      = (product.basePrice + product.artistMarkup) * qty;
-          const artistEarnings  = product.artistMarkup * qty;
-          const platformCut     = product.basePrice * 0.15 * qty; // 15% of base price
+        if (variant) {
+          const unitPrice     = variant.retailPrice;
+          const totalPrice    = unitPrice * qty;
+          const artistEarnings= variant.product.markup * qty;
+          const platformCut   = variant.basePrice * 0.15 * qty; // 15% of Printful base
 
-          await db.merchOrder.create({
+          const order = await db.merchOrder.create({
             data: {
-              merchProductId: productId,
               artistId,
               buyerEmail,
-              quantity: qty,
               totalPrice,
               platformCut,
               artistEarnings,
@@ -273,6 +274,18 @@ export async function POST(req: NextRequest) {
             },
           });
 
+          // Create order item
+          await db.merchOrderItem.create({
+            data: {
+              orderId:   order.id,
+              variantId,
+              productId,
+              quantity:  qty,
+              unitPrice,
+              subtotal:  totalPrice,
+            },
+          });
+
           // Update fan spend ranking
           if (buyerEmail) void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
 
@@ -280,16 +293,12 @@ export async function POST(req: NextRequest) {
           if (buyerEmail) void triggerMerchAutomations(artistId, buyerEmail);
 
           // Notify artist of merch order
-          const soldProduct = await db.merchProduct.findUnique({
-            where: { id: productId },
-            select: { title: true },
-          });
           void createNotification({
-            userId: artistId,
-            type: "MERCH_ORDER",
-            title: "New merch order!",
-            message: `Someone ordered${soldProduct?.title ? ` "${soldProduct.title}"` : " your merch"} — you earn $${artistEarnings.toFixed(2)}`,
-            link: "/dashboard/merch/orders",
+            userId:  artistId,
+            type:    "MERCH_ORDER",
+            title:   "New merch order!",
+            message: `Someone ordered "${variant.product.title}" — you earn $${artistEarnings.toFixed(2)}`,
+            link:    "/dashboard/merch/orders",
           }).catch(() => {});
         }
         break;

@@ -14,8 +14,15 @@ export async function GET() {
     where: { artistId: session.user.id },
     orderBy: { createdAt: "desc" },
     include: {
-      merchProduct: {
-        select: { title: true, imageUrl: true, productType: true },
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          subtotal: true,
+          product: { select: { title: true, imageUrl: true } },
+          variant: { select: { size: true, color: true } },
+        },
       },
     },
   });
