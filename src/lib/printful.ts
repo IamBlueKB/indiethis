@@ -175,7 +175,7 @@ export async function createMockup(
   variantIds: number[],
   files:      MockupFile[],
 ): Promise<string> {
-  const result = await pf<{ task_key: string }>("/mockup-generator/create-task", {
+  const result = await pf<{ task_key: string }>(`/mockup-generator/create-task/${productId}`, {
     method: "POST",
     body:   JSON.stringify({ variant_ids: variantIds, files }),
   });

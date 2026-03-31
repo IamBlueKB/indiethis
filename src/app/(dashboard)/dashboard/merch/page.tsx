@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import {
   ShoppingBag, Package, DollarSign,
   Loader2, Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
-  Plus, X, ChevronLeft, Search, Tag,
+  Plus,
 } from "lucide-react";
 import {
   useMerchProducts,
@@ -12,10 +13,7 @@ import {
   useToggleMerchProduct,
   useDeleteMerchProduct,
   useUpdateOrderFulfillment,
-  useCreateMerchProduct,
-  useMerchCatalog,
   type MerchOrder,
-  type CatalogEntry,
 } from "@/hooks/queries";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -50,8 +48,7 @@ export default function MerchPage() {
   const { mutate: deleteProduct } = useDeleteMerchProduct();
   const { mutate: updateFulfillment } = useUpdateOrderFulfillment();
 
-  const [tab,          setTab         ] = useState<Tab>("products");
-  const [addOpen,      setAddOpen     ] = useState(false);
+  const [tab, setTab] = useState<Tab>("products");
 
   const totalEarnings = orders.reduce((s, o) => s + o.artistEarnings, 0);
   const totalOrders   = orders.length;
@@ -64,14 +61,14 @@ export default function MerchPage() {
           <h1 className="text-2xl font-bold text-foreground">Merch Store</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Sell print-on-demand merch directly to your fans</p>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
+        <Link
+          href="/dashboard/merch/create"
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
           style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
         >
           <Plus size={15} />
           Add Product
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}
@@ -133,13 +130,13 @@ export default function MerchPage() {
               <p className="text-xs text-muted-foreground max-w-xs mx-auto">
                 Browse the catalog to add print-on-demand products to your store.
               </p>
-              <button
-                onClick={() => setAddOpen(true)}
+              <Link
+                href="/dashboard/merch/create"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold mt-2 transition-colors"
                 style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
               >
                 <Plus size={14} /> Browse Catalog
-              </button>
+              </Link>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -257,10 +254,6 @@ export default function MerchPage() {
         </>
       )}
 
-      {/* Add Product modal */}
-      {addOpen && (
-        <AddProductModal onClose={() => setAddOpen(false)} />
-      )}
     </div>
   );
 }
@@ -374,382 +367,3 @@ function OrderRow({
   );
 }
 
-// ─── AddProductModal ──────────────────────────────────────────────────────────
-
-type AddStep = "pick" | "configure";
-
-function AddProductModal({ onClose }: { onClose: () => void }) {
-  const [step,           setStep         ] = useState<AddStep>("pick");
-  const [categoryFilter, setCategoryFilter] = useState<string>("All");
-  const [search,         setSearch       ] = useState("");
-  const [selected,       setSelected     ] = useState<CatalogEntry | null>(null);
-
-  // Form state
-  const [title,       setTitle      ] = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl,    setImageUrl   ] = useState("");
-  const [markup,      setMarkup     ] = useState("15");
-  const [error,       setError      ] = useState("");
-
-  // Fetch catalog when modal opens
-  const { data: catalog = [], isLoading: loadingCatalog } = useMerchCatalog(true);
-
-  const { mutate: createProduct, isPending: creating } = useCreateMerchProduct();
-
-  // Close on escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  // Filtered catalog entries
-  const filtered = catalog.filter((entry) => {
-    const matchCat = categoryFilter === "All" || entry.category === categoryFilter;
-    const matchSearch = !search || entry.label.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
-  function selectProduct(entry: CatalogEntry) {
-    setSelected(entry);
-    setTitle(entry.label);
-    setDescription(entry.description);
-    setStep("configure");
-    setError("");
-  }
-
-  function handleBack() {
-    setStep("pick");
-    setError("");
-  }
-
-  function handleSubmit() {
-    setError("");
-    if (!title.trim())    { setError("Product title is required."); return; }
-    if (!imageUrl.trim()) { setError("Design image URL is required."); return; }
-    if (!selected)        { setError("No product selected."); return; }
-
-    const markupNum = parseFloat(markup) || 0;
-    if (markupNum < 0)    { setError("Markup cannot be negative."); return; }
-
-    createProduct(
-      {
-        title:             title.trim(),
-        description:       description.trim(),
-        imageUrl:          imageUrl.trim(),
-        printfulProductId: selected.printfulProductId,
-        markup:            markupNum,
-      },
-      {
-        onSuccess: () => onClose(),
-        onError:   () => setError("Failed to add product. Please try again."),
-      },
-    );
-  }
-
-  // Lowest base price in selected product
-  const lowestBase   = selected?.variants.length
-    ? Math.min(...selected.variants.map((v) => parseFloat(v.price)))
-    : 0;
-  const markupNum    = parseFloat(markup) || 0;
-  const lowestRetail = lowestBase + markupNum;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border overflow-hidden"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-      >
-        {/* Modal header */}
-        <div
-          className="flex items-center justify-between px-6 py-4 border-b shrink-0"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div className="flex items-center gap-3">
-            {step === "configure" && (
-              <button
-                onClick={handleBack}
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                <ChevronLeft size={16} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-base font-bold text-foreground">
-                {step === "pick" ? "Choose a Product Type" : "Configure Product"}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                {step === "pick"
-                  ? "Select a print-on-demand product to add to your store"
-                  : selected?.label}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            <X size={15} />
-          </button>
-        </div>
-
-        {/* ── Step 1: Pick product ─────────────────────────────────────── */}
-        {step === "pick" && (
-          <div className="flex flex-col flex-1 min-h-0">
-            {/* Search + category filters */}
-            <div className="px-6 pt-4 pb-3 space-y-3 shrink-0">
-              {/* Search */}
-              <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 rounded-xl border text-sm outline-none transition-colors"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    borderColor: "var(--border)",
-                    color: "var(--foreground)",
-                  }}
-                />
-              </div>
-
-              {/* Category tabs — horizontal scroll */}
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategoryFilter(cat)}
-                    className="shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
-                    style={
-                      categoryFilter === cat
-                        ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
-                        : { backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }
-                    }
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Product grid */}
-            <div className="flex-1 overflow-y-auto px-6 pb-6">
-              {loadingCatalog ? (
-                <div className="py-16 flex flex-col items-center gap-3">
-                  <Loader2 size={24} className="animate-spin text-accent" />
-                  <p className="text-xs text-muted-foreground">Loading catalog…</p>
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm text-muted-foreground">No products match your search.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {filtered.map((entry) => (
-                    <button
-                      key={entry.printfulProductId}
-                      onClick={() => selectProduct(entry)}
-                      className="text-left rounded-2xl border overflow-hidden transition-all hover:border-accent group"
-                      style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={entry.image}
-                        alt={entry.label}
-                        className="w-full aspect-square object-cover group-hover:opacity-90 transition-opacity"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23222'/%3E%3C/svg%3E";
-                        }}
-                      />
-                      <div className="p-3 space-y-1">
-                        <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">
-                          {entry.label}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {entry.variantCount} variants
-                        </p>
-                        {entry.variants[0] && (
-                          <p className="text-xs font-bold" style={{ color: "#D4A843" }}>
-                            From ${parseFloat(entry.variants[0].price).toFixed(2)}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 2: Configure product ────────────────────────────────── */}
-        {step === "configure" && selected && (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Selected product preview */}
-            <div
-              className="flex items-center gap-4 p-4 rounded-2xl border"
-              style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selected.image}
-                alt={selected.label}
-                className="w-16 h-16 rounded-xl object-cover shrink-0"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect width='64' height='64' fill='%23222'/%3E%3C/svg%3E";
-                }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{selected.label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{selected.category}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{selected.variantCount} variants</p>
-              </div>
-            </div>
-
-            {/* Form */}
-            <div className="space-y-4">
-              {/* Title */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Product Title <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. My Band Tee — Summer 2025"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    borderColor: "var(--border)",
-                    color: "var(--foreground)",
-                  }}
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Description <span className="text-muted-foreground font-normal">(optional)</span>
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Tell fans about this product…"
-                  rows={2}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors resize-none"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    borderColor: "var(--border)",
-                    color: "var(--foreground)",
-                  }}
-                />
-              </div>
-
-              {/* Design image URL */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Design Image URL <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://... (your artwork for this product)"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors font-mono"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    borderColor: "var(--border)",
-                    color: "var(--foreground)",
-                  }}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Paste a publicly accessible URL to your design file (PNG or JPG, 300dpi+).
-                </p>
-              </div>
-
-              {/* Markup */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Your Markup ($ per item)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={markup}
-                    onChange={(e) => setMarkup(e.target.value)}
-                    className="w-full pl-7 pr-4 py-2.5 rounded-xl border text-sm outline-none transition-colors"
-                    style={{
-                      backgroundColor: "var(--background)",
-                      borderColor: "var(--border)",
-                      color: "var(--foreground)",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Price preview */}
-              {lowestBase > 0 && (
-                <div
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl border"
-                  style={{ borderColor: "rgba(212,168,67,0.3)", backgroundColor: "rgba(212,168,67,0.06)" }}
-                >
-                  <Tag size={14} style={{ color: "#D4A843" }} />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>
-                      Fans pay from ${lowestRetail.toFixed(2)}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Base cost ${lowestBase.toFixed(2)} + your ${markupNum.toFixed(2)} markup
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Error */}
-            {error && (
-              <p className="text-xs text-red-400 font-semibold">{error}</p>
-            )}
-
-            {/* Actions */}
-            <div className="flex items-center gap-3 pt-1 pb-2">
-              <button
-                onClick={handleBack}
-                className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                style={{ backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
-              >
-                Back
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={creating}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-              >
-                {creating ? (
-                  <><Loader2 size={14} className="animate-spin" /> Adding to Store…</>
-                ) : (
-                  <><ShoppingBag size={14} /> Add to Store</>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
