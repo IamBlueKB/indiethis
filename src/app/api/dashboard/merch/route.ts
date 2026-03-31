@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { moderateContent } from "@/lib/agents/content-moderation";
 
 // GET /api/dashboard/merch
 export async function GET() {
@@ -47,6 +48,14 @@ export async function POST(req: NextRequest) {
       productType,
     },
   });
+
+  // Content moderation scan — fire and forget
+  void moderateContent(
+    session.user.id,
+    "MERCH",
+    product.id,
+    [product.title, product.description].filter(Boolean).join(" "),
+  ).catch(() => {});
 
   return NextResponse.json({ product }, { status: 201 });
 }

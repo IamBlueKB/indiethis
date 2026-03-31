@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
+import { moderateContent } from "@/lib/agents/content-moderation";
 
 export async function GET() {
   const session = await auth();
@@ -49,6 +50,14 @@ export async function POST(req: NextRequest) {
   if (track.fileUrl) {
     fingerprintTrack(track.id, track.fileUrl).catch(() => {});
   }
+
+  // Content moderation scan — fire and forget
+  void moderateContent(
+    session.user.id,
+    "TRACK",
+    track.id,
+    [track.title, track.description].filter(Boolean).join(" "),
+  ).catch(() => {});
 
   // Record first content upload timestamp — fire and forget
   void db.user.updateMany({

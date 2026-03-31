@@ -1233,10 +1233,33 @@ type IntakeSubmissionItem = {
   bpmDetected: number | null;
   keyDetected: string | null;
   status: string;
+  leadScore: number | null;
   createdAt: string;
   contact: { name: string; email: string; phone: string | null } | null;
   intakeLink: { sessionDate: string | null; sessionTime: string | null; endTime: string | null; hourlyRate: number | null; sessionHours: number | null } | null;
 };
+
+function LeadScoreDot({ score }: { score: number | null | undefined }) {
+  if (score == null) return null;
+  const tier =
+    score > 80 ? { label: "Fire", color: "#EF4444" } :
+    score > 60 ? { label: "Hot",  color: "#F97316" } :
+    score > 30 ? { label: "Warm", color: "#F59E0B" } :
+                 { label: "Cold", color: "#6B7280" };
+  return (
+    <span
+      title={`Lead score: ${score} — ${tier.label}`}
+      className="inline-flex items-center gap-1 text-[10px] font-bold"
+      style={{ color: tier.color }}
+    >
+      <span
+        className="inline-block w-2 h-2 rounded-full"
+        style={{ backgroundColor: tier.color }}
+      />
+      {tier.label}
+    </span>
+  );
+}
 
 function TrackAnalysisSection({
   intake,
@@ -1413,9 +1436,10 @@ export default function StudioBookingsPage() {
     }
   }, []);
 
-  const filteredIntakes = filter === "ALL"
+  const filteredIntakes = (filter === "ALL"
     ? intakeSubmissions
-    : intakeSubmissions.filter((s) => s.status === filter);
+    : intakeSubmissions.filter((s) => s.status === filter)
+  ).slice().sort((a, b) => (b.leadScore ?? 0) - (a.leadScore ?? 0));
 
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
@@ -1579,7 +1603,10 @@ export default function StudioBookingsPage() {
                   style={{ borderColor: "var(--border)" }}
                 >
                   <div>
-                    <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground">{s.artistName}</p>
+                      <LeadScoreDot score={s.leadScore} />
+                    </div>
                     <p className="text-xs text-muted-foreground">{s.contact?.email ?? "—"}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {s.depositPaid && s.paymentMethod && s.paymentMethod !== "stripe" && (() => {

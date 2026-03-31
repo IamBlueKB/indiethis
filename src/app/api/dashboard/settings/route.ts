@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { moderateContent } from "@/lib/agents/content-moderation";
 
 // GET /api/dashboard/settings
 export async function GET() {
@@ -86,6 +87,11 @@ export async function PATCH(req: NextRequest) {
       djDiscoveryOptIn: true,
     },
   });
+
+  // Scan updated bio for violations — fire and forget
+  if (body.bio?.trim()) {
+    void moderateContent(session.user.id, "PROFILE", user.id, body.bio.trim()).catch(() => {});
+  }
 
   return NextResponse.json({ user });
 }

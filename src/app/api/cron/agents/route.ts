@@ -128,6 +128,21 @@ export async function POST(req: NextRequest) {
     results.contentModeration = "skipped (not due)";
   }
 
+  // ── Lead Scoring — daily rescore of stale PENDING inquiries ───────────────
+  const shouldRunLeadScore = await shouldRun("LEAD_SCORING", 22); // 22h guard
+  if (shouldRunLeadScore) {
+    try {
+      const { runLeadScoringAgent } = await import("@/lib/agents/lead-scoring");
+      await logAgentAction("LEAD_SCORING", "AGENT_RUN_START");
+      const result = await runLeadScoringAgent();
+      results.leadScoring = `rescored ${result.acted} inquiries`;
+    } catch (err) {
+      results.leadScoring = `error: ${String(err)}`;
+    }
+  } else {
+    results.leadScoring = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

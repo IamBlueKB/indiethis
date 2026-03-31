@@ -44,6 +44,7 @@ export async function GET() {
         bpmDetected: true,
         keyDetected: true,
         status: true,
+        leadScore: true,
         createdAt: true,
         contact: { select: { name: true, email: true, phone: true } },
         intakeLink: { select: { sessionDate: true, sessionTime: true, endTime: true, hourlyRate: true, sessionHours: true } },

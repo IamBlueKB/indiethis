@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { sendEmail } from "@/lib/brevo/email";
 import { sendSMS } from "@/lib/brevo/sms";
 import { toE164 } from "@/lib/formatPhone";
+import { scoreLead } from "@/lib/agents/lead-scoring";
 
 // GET /api/intake/[token] — fetch intake link details (public)
 export async function GET(
@@ -361,6 +362,22 @@ export async function POST(
       // Fall through if Stripe fails — still a successful submission
     }
   }
+
+  // Score the lead in background
+  void scoreLead(
+    "INTAKE",
+    submission.id,
+    link.email ?? "",
+    submission.notes ?? submission.projectDesc ?? "",
+    {
+      genre:         submission.genre,
+      projectDesc:   submission.projectDesc,
+      instagram:     submission.instagram,
+      tiktok:        submission.tiktok,
+      youtubeHandle: submission.youtubeHandle,
+    },
+    link.studioId,
+  ).catch(() => {});
 
   return NextResponse.json({ submission }, { status: 201 });
 }

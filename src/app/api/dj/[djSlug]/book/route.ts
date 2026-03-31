@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
+import { scoreLead } from "@/lib/agents/lead-scoring";
 
 // POST /api/dj/[djSlug]/book — public, creates DJBookingInquiry record
 export async function POST(
@@ -49,6 +50,19 @@ export async function POST(
     message: `${body.name.trim()} sent a booking inquiry.`,
     link: "/dashboard/dj/bookings",
   }).catch(() => {});
+
+  // Score the lead in background — don't block response
+  void scoreLead(
+    "DJ_BOOKING",
+    inquiry.id,
+    body.email!.trim(),
+    body.message!.trim(),
+    {
+      phone:     body.phone?.trim() || null,
+      venue:     body.venue?.trim() || null,
+      eventDate: body.eventDate || null,
+    },
+  ).catch(() => {});
 
   return NextResponse.json({ success: true, id: inquiry.id });
 }

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import type { DigitalProductType } from "@prisma/client";
+import { moderateContent } from "@/lib/agents/content-moderation";
 
 // GET /api/dashboard/digital-products
 export async function GET() {
@@ -94,6 +95,14 @@ export async function POST(req: NextRequest) {
     },
     include: { _count: { select: { tracks: true, purchases: true } } },
   });
+
+  // Content moderation scan — fire and forget
+  void moderateContent(
+    session.user.id,
+    "DIGITAL_PRODUCT",
+    product.id,
+    [product.title, product.description].filter(Boolean).join(" "),
+  ).catch(() => {});
 
   return NextResponse.json({ product }, { status: 201 });
 }

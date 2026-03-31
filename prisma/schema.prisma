@@ -586,6 +586,7 @@ model IntakeSubmission {
   aiVideoRequested     Boolean    @default(false)
   convertedToBookingId String?
   status               String     @default("PENDING")
+  leadScore            Int?
   createdAt            DateTime   @default(now())
   contact              Contact?   @relation(fields: [contactId], references: [id])
   intakeLink           IntakeLink @relation(fields: [intakeLinkId], references: [id])
@@ -1091,6 +1092,7 @@ model ArtistBookingInquiry {
   email       String
   inquiryType String
   message     String
+  leadScore   Int?
   createdAt   DateTime @default(now())
   artist      User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
@@ -2333,6 +2335,7 @@ model DJBookingInquiry {
   venue       String?
   message     String
   status      String    @default("PENDING")
+  leadScore   Int?
   createdAt   DateTime  @default(now())
 
   @@index([djProfileId])
