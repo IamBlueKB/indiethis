@@ -17,9 +17,13 @@ if (process.env.NODE_ENV !== "production" && stripe) globalThis.stripe = stripe;
 // STRIPE_PRICE_LAUNCH=price_xxx
 // STRIPE_PRICE_PUSH=price_xxx
 // STRIPE_PRICE_REIGN=price_xxx
+// STRIPE_PRICE_STUDIO_PRO=price_xxx
+// STRIPE_PRICE_STUDIO_ELITE=price_xxx
 
 export const PLAN_PRICES: Record<string, { priceId: string; tier: string; amount: number }> = {
-  launch: { priceId: process.env.STRIPE_PRICE_LAUNCH ?? "", tier: "LAUNCH", amount: 1900 },
-  push:   { priceId: process.env.STRIPE_PRICE_PUSH   ?? "", tier: "PUSH",   amount: 4900 },
-  reign:  { priceId: process.env.STRIPE_PRICE_REIGN  ?? "", tier: "REIGN",  amount: 9900 },
+  launch:       { priceId: process.env.STRIPE_PRICE_LAUNCH       ?? "", tier: "LAUNCH",       amount: 1900 },
+  push:         { priceId: process.env.STRIPE_PRICE_PUSH         ?? "", tier: "PUSH",         amount: 4900 },
+  reign:        { priceId: process.env.STRIPE_PRICE_REIGN        ?? "", tier: "REIGN",        amount: 9900 },
+  studio_pro:   { priceId: process.env.STRIPE_PRICE_STUDIO_PRO   ?? "", tier: "STUDIO_PRO",   amount: 4900 },
+  studio_elite: { priceId: process.env.STRIPE_PRICE_STUDIO_ELITE ?? "", tier: "STUDIO_ELITE", amount: 9900 },
 };
