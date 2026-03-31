@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ShoppingBag, Package, DollarSign,
-  Loader2, Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
-  Plus,
+  Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
+  Plus, MapPin,
 } from "lucide-react";
 import {
   useMerchProducts,
@@ -258,8 +258,8 @@ export default function MerchPage() {
                 <OrderRow
                   key={order.id}
                   order={order}
-                  onUpdateFulfillment={(id, status) =>
-                    updateFulfillment({ id, fulfillmentStatus: status })
+                  onUpdateFulfillment={(id, status, tracking, trackingUrl, carrier) =>
+                    updateFulfillment({ id, fulfillmentStatus: status, trackingNumber: tracking, trackingUrl, carrier })
                   }
                 />
               ))}
@@ -279,11 +279,19 @@ function OrderRow({
   onUpdateFulfillment,
 }: {
   order: MerchOrder;
-  onUpdateFulfillment: (id: string, status: string) => void;
+  onUpdateFulfillment: (id: string, status: string, tracking?: string, trackingUrl?: string, carrier?: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded,      setExpanded    ] = useState(false);
+  const [trackingInput, setTrackingInput] = useState("");
+  const [trackingUrlIn, setTrackingUrlIn] = useState("");
+  const [carrierInput,  setCarrierInput ] = useState("");
+
   const cfg = FULFILLMENT_CONFIG[order.fulfillmentStatus] ?? FULFILLMENT_CONFIG.PENDING;
   const Icon = cfg.icon;
+
+  // Self-fulfilled orders get manual shipping controls
+  const hasSelfFulfilled = order.items.some((i) => i.product.fulfillmentType === "SELF_FULFILLED");
+  const isPOD            = !hasSelfFulfilled;
 
   const NEXT_STATUS: Record<string, string> = {
     PENDING: "PROCESSING", PROCESSING: "SHIPPED", SHIPPED: "DELIVERED",
@@ -294,22 +302,19 @@ function OrderRow({
   };
 
   // First item's product info for display
-  const firstItem = order.items[0];
-  const productTitle  = firstItem?.product.title  ?? "Merch Order";
-  const productImage  = firstItem?.product.imageUrl ?? "";
-  const variantLabel  = firstItem ? `${firstItem.variant.size} · ${firstItem.variant.color}` : "";
-  const totalQty      = order.items.reduce((s, i) => s + i.quantity, 0);
+  const firstItem    = order.items[0];
+  const productTitle = firstItem?.product.title  ?? "Merch Order";
+  const productImage = firstItem?.product.imageUrl ?? "";
+  const totalQty     = order.items.reduce((s, i) => s + i.quantity, 0);
+
+  const shippingAddr = order.shippingAddress as { name?: string; address1?: string; city?: string; state?: string; zip?: string } | null;
 
   return (
-    <div
-      className="border-b last:border-b-0"
-      style={{ borderColor: "var(--border)" }}
-    >
+    <div className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
       <button
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-white/3 transition-colors"
       >
-        {/* Product image */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={productImage}
@@ -317,64 +322,147 @@ function OrderRow({
           className="w-10 h-10 rounded-xl object-cover shrink-0"
           onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23222'/%3E%3C/svg%3E"; }}
         />
-
-        {/* Order info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{productTitle}</p>
+          <p className="text-sm font-semibold text-foreground truncate">
+            {order.items.length > 1 ? `${order.items.length} items` : productTitle}
+          </p>
           <p className="text-xs text-muted-foreground truncate">
-            {order.buyerEmail} · {variantLabel} · Qty {totalQty}
+            {order.buyerName ?? order.buyerEmail} · Qty {totalQty} · {hasSelfFulfilled ? "Self-Fulfilled" : "Print-on-Demand"}
           </p>
         </div>
-
-        {/* Status + earnings */}
         <div className="text-right shrink-0 space-y-0.5">
           <div className={`flex items-center gap-1 justify-end text-xs font-semibold ${cfg.color}`}>
             <Icon size={11} /> {cfg.label}
           </div>
-          <p className="text-xs text-emerald-400 font-semibold">
-            +${order.artistEarnings.toFixed(2)}
-          </p>
+          <p className="text-xs text-emerald-400 font-semibold">+${order.artistEarnings.toFixed(2)}</p>
         </div>
-
-        {/* Date */}
         <p className="text-[10px] text-muted-foreground shrink-0 ml-1">
           {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
         </p>
       </button>
 
-      {/* Expanded row: fulfillment actions */}
+      {/* Expanded detail */}
       {expanded && (
-        <div
-          className="px-5 pb-4 pt-1 border-t flex items-center gap-3 flex-wrap"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div className="flex-1 min-w-0">
+        <div className="px-5 pb-4 pt-2 border-t space-y-4" style={{ borderColor: "var(--border)" }}>
+          {/* Items list */}
+          {order.items.length > 1 && (
+            <div className="space-y-1">
+              {order.items.map((item) => (
+                <div key={item.id} className="flex justify-between text-xs text-muted-foreground">
+                  <span>{item.product.title} · {item.variant.size} {item.variant.color} × {item.quantity}</span>
+                  <span>${item.subtotal.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Financial summary */}
+          <p className="text-xs text-muted-foreground">
+            Subtotal: <span className="text-foreground font-semibold">${(order.totalPrice - order.shippingCost).toFixed(2)}</span>
+            {order.shippingCost > 0 && <> · Shipping: <span className="text-foreground font-semibold">${order.shippingCost.toFixed(2)}</span></>}
+            {" "}· Your cut: <span className="text-emerald-400 font-semibold">${order.artistEarnings.toFixed(2)}</span>
+          </p>
+
+          {/* Shipping address */}
+          {shippingAddr && (
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <MapPin size={12} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="text-foreground font-medium">{shippingAddr.name ?? order.buyerName}</p>
+                <p>{shippingAddr.address1}</p>
+                <p>{shippingAddr.city}, {shippingAddr.state} {shippingAddr.zip}</p>
+                <p className="text-accent">{order.buyerEmail}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Existing tracking */}
+          {order.trackingNumber && (
             <p className="text-xs text-muted-foreground">
-              Total: <span className="text-foreground font-semibold">${order.totalPrice.toFixed(2)}</span>
-              {" "}· Your cut: <span className="text-emerald-400 font-semibold">${order.artistEarnings.toFixed(2)}</span>
+              Tracking:{" "}
+              {order.trackingUrl ? (
+                <a href={order.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-mono underline">
+                  {order.trackingNumber}
+                </a>
+              ) : (
+                <span className="text-foreground font-mono">{order.trackingNumber}</span>
+              )}
             </p>
-            {order.trackingNumber && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tracking:{" "}
-                {order.trackingUrl ? (
-                  <a href={order.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-accent font-mono underline">
-                    {order.trackingNumber}
-                  </a>
-                ) : (
-                  <span className="text-foreground font-mono">{order.trackingNumber}</span>
-                )}
-              </p>
+          )}
+
+          {/* Self-fulfilled: tracking entry when marking shipped */}
+          {hasSelfFulfilled && nextStatus === "SHIPPED" && (
+            <div className="space-y-2 p-3 rounded-xl" style={{ backgroundColor: "var(--background)" }}>
+              <p className="text-xs font-semibold text-foreground">Enter tracking to mark as shipped</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Carrier</p>
+                  <input
+                    value={carrierInput}
+                    onChange={(e) => setCarrierInput(e.target.value)}
+                    placeholder="USPS, UPS…"
+                    className="w-full rounded-lg border px-2 py-1.5 text-xs bg-transparent text-foreground outline-none"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Tracking # *</p>
+                  <input
+                    value={trackingInput}
+                    onChange={(e) => setTrackingInput(e.target.value)}
+                    placeholder="1Z999AA1…"
+                    className="w-full rounded-lg border px-2 py-1.5 text-xs bg-transparent text-foreground outline-none"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1">Tracking URL (optional)</p>
+                <input
+                  value={trackingUrlIn}
+                  onChange={(e) => setTrackingUrlIn(e.target.value)}
+                  placeholder="https://tools.usps.com/…"
+                  className="w-full rounded-lg border px-2 py-1.5 text-xs bg-transparent text-foreground outline-none"
+                  style={{ borderColor: "var(--border)" }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-2">
+            {/* For self-fulfilled "Mark Shipped": require tracking */}
+            {hasSelfFulfilled && nextStatus === "SHIPPED" && (
+              <button
+                onClick={() => onUpdateFulfillment(order.id, "SHIPPED", trackingInput || undefined, trackingUrlIn || undefined, carrierInput || undefined)}
+                disabled={!trackingInput.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
+              >
+                <Truck size={11} /> Mark Shipped
+              </button>
+            )}
+            {/* For POD or non-shipping steps */}
+            {(isPOD || nextStatus !== "SHIPPED") && nextStatus && (
+              <button
+                onClick={() => onUpdateFulfillment(order.id, nextStatus)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
+              >
+                <Truck size={11} /> {nextLabel[nextStatus]}
+              </button>
+            )}
+            {/* Delivered */}
+            {hasSelfFulfilled && nextStatus === "DELIVERED" && (
+              <button
+                onClick={() => onUpdateFulfillment(order.id, "DELIVERED")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "#34d399" }}
+              >
+                <CheckCircle2 size={11} /> Mark Delivered
+              </button>
             )}
           </div>
-          {nextStatus && (
-            <button
-              onClick={() => onUpdateFulfillment(order.id, nextStatus)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-              style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
-            >
-              <Truck size={11} /> {nextLabel[nextStatus]}
-            </button>
-          )}
         </div>
       )}
     </div>

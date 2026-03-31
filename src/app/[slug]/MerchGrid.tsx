@@ -333,6 +333,33 @@ function ProductModal({
 
 // ─── Cart Drawer ──────────────────────────────────────────────────────────────
 
+type DrawerStep = "cart" | "address" | "review";
+
+type ShippingAddr = {
+  name: string; address1: string; address2: string;
+  city: string; state: string; zip: string; country: string;
+};
+
+const EMPTY_ADDR: ShippingAddr = { name: "", address1: "", address2: "", city: "", state: "", zip: "", country: "US" };
+
+function Field({ label, value, onChange, placeholder, type = "text" }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] text-white/40 uppercase tracking-wider">{label}</p>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent text-white outline-none placeholder:text-white/20 focus:ring-1"
+        style={{ borderColor: "rgba(255,255,255,0.12)", focusRingColor: "#D4A843" } as React.CSSProperties}
+      />
+    </div>
+  );
+}
+
 function CartDrawer({
   cart,
   artistSlug,
@@ -348,25 +375,62 @@ function CartDrawer({
   onRemove:    (variantId: string) => void;
   onClear:     () => void;
 }) {
-  const [email,   setEmail  ] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error,   setError  ] = useState("");
+  const [step,         setStep        ] = useState<DrawerStep>("cart");
+  const [email,        setEmail       ] = useState("");
+  const [addr,         setAddr        ] = useState<ShippingAddr>(EMPTY_ADDR);
+  const [shippingCost, setShippingCost] = useState<number | null>(null);
+  const [estimating,   setEstimating  ] = useState(false);
+  const [loading,      setLoading     ] = useState(false);
+  const [error,        setError       ] = useState("");
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const total    = subtotal + (shippingCost ?? 0);
 
-  async function handleCheckout() {
+  function setAddrField(field: keyof ShippingAddr) {
+    return (v: string) => setAddr((prev) => ({ ...prev, [field]: v }));
+  }
+
+  async function handleGetShipping() {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError("Enter a valid email address."); return;
     }
+    if (!addr.name || !addr.address1 || !addr.city || !addr.state || !addr.zip) {
+      setError("Please fill in all required address fields."); return;
+    }
+    setEstimating(true); setError("");
+    try {
+      const res = await fetch("/api/merch/shipping-estimate", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items:      cart.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+          address:    addr,
+          artistSlug,
+        }),
+      });
+      const data = await res.json() as { shippingCost?: number; error?: string };
+      if (!res.ok) { setError(data.error ?? "Could not estimate shipping."); return; }
+      setShippingCost(data.shippingCost ?? 0);
+      setStep("review");
+    } catch {
+      setError("Could not estimate shipping. Please try again.");
+    } finally {
+      setEstimating(false);
+    }
+  }
+
+  async function handleCheckout() {
     setLoading(true); setError("");
     try {
       const res = await fetch("/api/merch/checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items:      cart.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
-          buyerEmail: email.trim(),
+          items:           cart.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+          buyerEmail:      email.trim(),
           artistSlug,
+          shippingAddress: addr,
+          shippingCost:    shippingCost ?? 0,
         }),
       });
       const data = await res.json() as { url?: string; error?: string };
@@ -382,6 +446,8 @@ function CartDrawer({
     }
   }
 
+  const BORDER = { borderColor: "rgba(255,255,255,0.08)" };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Scrim */}
@@ -393,82 +459,182 @@ function CartDrawer({
         style={{ backgroundColor: "#121212", borderLeft: "1px solid rgba(212,168,67,0.2)" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={BORDER}>
           <div className="flex items-center gap-2">
+            {step !== "cart" && (
+              <button onClick={() => setStep(step === "review" ? "address" : "cart")}
+                className="text-white/40 hover:text-white/80 transition-colors mr-1">
+                <ChevronLeft size={16} />
+              </button>
+            )}
             <ShoppingBag size={16} style={{ color: "#D4A843" }} />
-            <span className="text-sm font-bold text-white">Cart ({cart.length} item{cart.length !== 1 ? "s" : ""})</span>
+            <span className="text-sm font-bold text-white">
+              {step === "cart" ? `Cart (${cart.length} item${cart.length !== 1 ? "s" : ""})` : step === "address" ? "Shipping" : "Review Order"}
+            </span>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {cart.map((item) => (
-            <div key={item.variantId} className="flex items-start gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.productImage} alt={item.productTitle}
-                className="w-14 h-14 rounded-lg object-cover shrink-0"
-                style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white truncate">{item.productTitle}</p>
-                <p className="text-[11px] text-white/40 mt-0.5">
-                  {item.size}{item.color ? ` · ${item.color}` : ""}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <button onClick={() => onUpdateQty(item.variantId, Math.max(1, item.quantity - 1))}
-                    className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
-                    <Minus size={10} className="text-white/60" />
-                  </button>
-                  <span className="text-xs text-white tabular-nums w-4 text-center">{item.quantity}</span>
-                  <button onClick={() => onUpdateQty(item.variantId, Math.min(10, item.quantity + 1))}
-                    className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
-                    <Plus size={10} className="text-white/60" />
-                  </button>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs font-bold text-white tabular-nums">${(item.price * item.quantity).toFixed(2)}</p>
-                <button onClick={() => onRemove(item.variantId)} className="mt-1 text-white/25 hover:text-red-400 transition-colors">
-                  <Trash2 size={12} />
-                </button>
-              </div>
+        {/* Step indicator */}
+        <div className="flex items-center gap-1 px-5 py-2 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+          {(["cart","address","review"] as DrawerStep[]).map((s, i) => (
+            <div key={s} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full transition-colors" style={{ backgroundColor: step === s ? "#D4A843" : s === "cart" || (s === "address" && (step === "review" || step === "address")) ? "rgba(212,168,67,0.4)" : "rgba(255,255,255,0.1)" }} />
+              {i < 2 && <div className="w-4 h-px" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />}
             </div>
           ))}
+          <span className="text-[10px] text-white/30 ml-1 capitalize">{step}</span>
         </div>
 
-        {/* Footer */}
-        <div className="border-t px-5 py-5 space-y-4" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-white/60">Subtotal</span>
-            <span className="text-sm font-bold text-white tabular-nums">${subtotal.toFixed(2)}</span>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-[11px] text-white/40">Email for order confirmation</p>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-white outline-none placeholder:text-white/25 focus:ring-1"
-              style={{ borderColor: "rgba(255,255,255,0.12)" }}
-            />
-          </div>
-          {error && <p className="text-xs" style={{ color: "#E85D4A" }}>{error}</p>}
-          <button
-            onClick={handleCheckout}
-            disabled={loading || !email.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition-all hover:brightness-110"
-            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-          >
-            {loading ? <><Loader2 size={14} className="animate-spin" /> Redirecting…</> : <><ShoppingBag size={14} /> Checkout · ${subtotal.toFixed(2)}</>}
-          </button>
-          <button onClick={() => { onClear(); onClose(); }} className="w-full text-xs text-white/25 hover:text-white/50 transition-colors py-1">
-            Clear cart
-          </button>
-        </div>
+        {/* ── STEP 1: Cart ─────────────────────────── */}
+        {step === "cart" && (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {cart.map((item) => (
+                <div key={item.variantId} className="flex items-start gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.productImage} alt={item.productTitle}
+                    className="w-14 h-14 rounded-lg object-cover shrink-0"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{item.productTitle}</p>
+                    <p className="text-[11px] text-white/40 mt-0.5">
+                      {item.size}{item.color && item.color !== "N/A" ? ` · ${item.color}` : ""}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button onClick={() => onUpdateQty(item.variantId, Math.max(1, item.quantity - 1))}
+                        className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
+                        <Minus size={10} className="text-white/60" />
+                      </button>
+                      <span className="text-xs text-white tabular-nums w-4 text-center">{item.quantity}</span>
+                      <button onClick={() => onUpdateQty(item.variantId, Math.min(10, item.quantity + 1))}
+                        className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.06)" }}>
+                        <Plus size={10} className="text-white/60" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-bold text-white tabular-nums">${(item.price * item.quantity).toFixed(2)}</p>
+                    <button onClick={() => onRemove(item.variantId)} className="mt-1 text-white/25 hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t px-5 py-4 space-y-3 shrink-0" style={BORDER}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/60">Subtotal</span>
+                <span className="text-sm font-bold text-white tabular-nums">${subtotal.toFixed(2)}</span>
+              </div>
+              <p className="text-[11px] text-white/30">+ shipping calculated at next step</p>
+              <button
+                onClick={() => { setError(""); setStep("address"); }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all hover:brightness-110"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                <ChevronRight size={14} /> Continue to Shipping
+              </button>
+              <button onClick={() => { onClear(); onClose(); }} className="w-full text-xs text-white/25 hover:text-white/50 transition-colors py-1">
+                Clear cart
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP 2: Shipping Address ──────────────── */}
+        {step === "address" && (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              <Field label="Email *" value={email} onChange={setEmail} placeholder="you@example.com" type="email" />
+              <Field label="Full name *" value={addr.name} onChange={setAddrField("name")} placeholder="Jane Smith" />
+              <Field label="Address line 1 *" value={addr.address1} onChange={setAddrField("address1")} placeholder="123 Main St" />
+              <Field label="Address line 2" value={addr.address2} onChange={setAddrField("address2")} placeholder="Apt 4B (optional)" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="City *" value={addr.city} onChange={setAddrField("city")} placeholder="Chicago" />
+                <Field label="State *" value={addr.state} onChange={setAddrField("state")} placeholder="IL" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="ZIP *" value={addr.zip} onChange={setAddrField("zip")} placeholder="60601" />
+                <Field label="Country *" value={addr.country} onChange={setAddrField("country")} placeholder="US" />
+              </div>
+            </div>
+            <div className="border-t px-5 py-4 space-y-3 shrink-0" style={BORDER}>
+              {error && <p className="text-xs" style={{ color: "#E85D4A" }}>{error}</p>}
+              <button
+                onClick={handleGetShipping}
+                disabled={estimating}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition-all hover:brightness-110"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {estimating ? <><Loader2 size={14} className="animate-spin" /> Calculating…</> : <><ChevronRight size={14} /> Get Shipping Rate</>}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP 3: Review + Pay ─────────────────── */}
+        {step === "review" && (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {/* Items summary */}
+              <div className="space-y-2">
+                <p className="text-[10px] text-white/40 uppercase tracking-wider">Items</p>
+                {cart.map((item) => (
+                  <div key={item.variantId} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{item.productTitle}</p>
+                      <p className="text-[11px] text-white/40">
+                        {item.size}{item.color && item.color !== "N/A" ? ` · ${item.color}` : ""} × {item.quantity}
+                      </p>
+                    </div>
+                    <p className="text-xs font-bold text-white tabular-nums shrink-0">${(item.price * item.quantity).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Shipping address summary */}
+              <div className="space-y-1 rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider">Ships to</p>
+                <p className="text-xs text-white">{addr.name}</p>
+                <p className="text-[11px] text-white/50">{addr.address1}{addr.address2 ? `, ${addr.address2}` : ""}</p>
+                <p className="text-[11px] text-white/50">{addr.city}, {addr.state} {addr.zip}, {addr.country}</p>
+                <p className="text-[11px] text-white/40">{email}</p>
+              </div>
+
+              {/* Order total */}
+              <div className="space-y-1.5 border-t pt-3" style={BORDER}>
+                <div className="flex justify-between text-xs text-white/50">
+                  <span>Subtotal</span><span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-white/50">
+                  <span>Shipping</span>
+                  <span className="tabular-nums">{shippingCost === 0 ? "Free" : `$${(shippingCost ?? 0).toFixed(2)}`}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-white border-t pt-2" style={BORDER}>
+                  <span>Total</span><span className="tabular-nums">${total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="border-t px-5 py-4 space-y-3 shrink-0" style={BORDER}>
+              {error && <p className="text-xs" style={{ color: "#E85D4A" }}>{error}</p>}
+              <button
+                onClick={handleCheckout}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition-all hover:brightness-110"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {loading
+                  ? <><Loader2 size={14} className="animate-spin" /> Redirecting…</>
+                  : <><ShoppingBag size={14} /> Pay ${total.toFixed(2)}</>}
+              </button>
+              <p className="text-[10px] text-white/20 text-center">Secure checkout powered by Stripe</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

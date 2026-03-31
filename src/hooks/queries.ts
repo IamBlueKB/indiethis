@@ -94,19 +94,21 @@ export type MerchProduct = {
 };
 
 export type MerchOrderItem = {
-  id:       string;
-  quantity: number;
+  id:        string;
+  quantity:  number;
   unitPrice: number;
-  subtotal: number;
-  product:  { title: string; imageUrl: string };
-  variant:  { size: string; color: string };
+  subtotal:  number;
+  product:   { title: string; imageUrl: string; fulfillmentType: string };
+  variant:   { size: string; color: string };
 };
 
 export type MerchOrder = {
   id:                string;
   buyerEmail:        string;
   buyerName:         string | null;
+  shippingAddress:   Record<string, string> | null;
   totalPrice:        number;
+  shippingCost:      number;
   artistEarnings:    number;
   platformCut:       number;
   fulfillmentStatus: "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED";
@@ -374,17 +376,21 @@ export function useUpdateOrderFulfillment() {
       id,
       fulfillmentStatus,
       trackingNumber,
+      trackingUrl,
+      carrier,
     }: {
       id: string;
       fulfillmentStatus: string;
       trackingNumber?: string;
+      trackingUrl?: string;
+      carrier?: string;
     }) =>
       fetch(`/api/dashboard/merch/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fulfillmentStatus, trackingNumber }),
+        body: JSON.stringify({ fulfillmentStatus, trackingNumber, trackingUrl, carrier }),
       }),
-    onMutate: async ({ id, fulfillmentStatus, trackingNumber }) => {
+    onMutate: async ({ id, fulfillmentStatus, trackingNumber, trackingUrl }) => {
       await qc.cancelQueries({ queryKey: ["merch-orders"] });
       const prev = qc.getQueryData<MerchOrder[]>(["merch-orders"]);
       qc.setQueryData<MerchOrder[]>(["merch-orders"], (old = []) =>
@@ -394,6 +400,7 @@ export function useUpdateOrderFulfillment() {
                 ...o,
                 fulfillmentStatus: fulfillmentStatus as MerchOrder["fulfillmentStatus"],
                 ...(trackingNumber !== undefined && { trackingNumber }),
+                ...(trackingUrl    !== undefined && { trackingUrl }),
               }
             : o
         )

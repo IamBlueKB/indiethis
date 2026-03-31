@@ -20,7 +20,7 @@ export async function GET() {
           quantity: true,
           unitPrice: true,
           subtotal: true,
-          product: { select: { title: true, imageUrl: true } },
+          product: { select: { title: true, imageUrl: true, fulfillmentType: true } },
           variant: { select: { size: true, color: true } },
         },
       },

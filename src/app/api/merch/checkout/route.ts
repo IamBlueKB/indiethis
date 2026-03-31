@@ -2,18 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
+type ShippingAddressInput = {
+  name:      string;
+  address1:  string;
+  address2?: string;
+  city:      string;
+  state:     string;
+  zip:       string;
+  country:   string;
+};
+
 // Supports two shapes:
 //   Legacy: { variantId, buyerEmail, quantity, artistSlug }
-//   Cart:   { items: [{variantId, quantity}], buyerEmail, artistSlug }
+//   Cart:   { items: [{variantId, quantity}], buyerEmail, artistSlug, shippingAddress, shippingCost }
 export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   try {
     const body = await req.json() as {
-      variantId?:  string;
-      quantity?:   number;
-      items?:      { variantId: string; quantity: number }[];
-      buyerEmail:  string;
-      artistSlug:  string;
+      variantId?:      string;
+      quantity?:       number;
+      items?:          { variantId: string; quantity: number }[];
+      buyerEmail:      string;
+      artistSlug:      string;
+      shippingAddress?: ShippingAddressInput;
+      shippingCost?:   number;
     };
 
     const { buyerEmail, artistSlug } = body;
@@ -100,21 +112,43 @@ export async function POST(req: NextRequest) {
       };
     });
 
+    // Add shipping as a separate line item if applicable
+    const shippingCost = body.shippingCost ?? 0;
+    if (shippingCost > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "usd",
+          unit_amount: Math.round(shippingCost * 100),
+          product_data: {
+            name: "Shipping",
+            images: [],
+          },
+        },
+        quantity: 1,
+      });
+    }
+
     // Metadata: store items as JSON (Stripe metadata values are strings, max 500 chars)
     const metaItems = rawItems.map((i) => ({ v: i.variantId, q: i.quantity }));
+    const shippingMeta = body.shippingAddress
+      ? JSON.stringify(body.shippingAddress).slice(0, 490)
+      : "";
+
     const session = await stripe.checkout.sessions.create({
       mode:           "payment",
       customer_email: buyerEmail,
       line_items:     lineItems,
       metadata: {
-        type:       "MERCH",
+        type:            "MERCH",
         artistId,
         buyerEmail,
-        items:      JSON.stringify(metaItems).slice(0, 490),
+        items:           JSON.stringify(metaItems).slice(0, 490),
+        shippingAddress: shippingMeta,
+        shippingCost:    String(shippingCost),
         // Legacy single-item fields kept for backward compat with webhook
-        variantId:  rawItems[0]!.variantId,
-        productId:  variants.find((v) => v.id === rawItems[0]!.variantId)!.product.id,
-        quantity:   String(rawItems[0]!.quantity ?? 1),
+        variantId:       rawItems[0]!.variantId,
+        productId:       variants.find((v) => v.id === rawItems[0]!.variantId)!.product.id,
+        quantity:        String(rawItems[0]!.quantity ?? 1),
       },
       success_url: `${origin}/${artistSlug}?merch_success=1`,
       cancel_url:  `${origin}/${artistSlug}/merch`,

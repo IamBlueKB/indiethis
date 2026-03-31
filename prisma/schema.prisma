@@ -379,6 +379,7 @@ model MerchProduct {
   imageUrl          String          // primary/hero image URL
   imageUrls         String[]        @default([]) // gallery (self-fulfilled products)
   markup            Float           @default(0)  // $ artist markup per item (POD only)
+  shippingCost      Float           @default(5.99) // flat-rate shipping for self-fulfilled
   returnPolicy      String?         // required for self-fulfilled
   processingDays    Int             @default(3)  // estimated fulfillment days (self-fulfilled)
   isActive          Boolean         @default(true)
@@ -419,6 +420,7 @@ model MerchOrder {
   trackingNumber    String?
   trackingUrl       String?
   totalPrice        Float
+  shippingCost      Float           @default(0)
   platformCut       Float
   artistEarnings    Float
   createdAt         DateTime          @default(now())

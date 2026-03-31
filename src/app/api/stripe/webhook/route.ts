@@ -18,7 +18,11 @@ import {
 import { upsertFanScore } from "@/lib/fan-scores";
 import { triggerMerchAutomations, triggerTipAutomations } from "@/lib/fan-automation-triggers";
 import { processAmbassadorReward } from "@/lib/ambassador-rewards";
-import { sendEmail, sendOnboardingWelcomeEmail } from "@/lib/brevo/email";
+import {
+  sendEmail, sendOnboardingWelcomeEmail,
+  sendMerchOrderConfirmationEmail, sendSelfFulfilledOrderEmail,
+} from "@/lib/brevo/email";
+import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
@@ -244,29 +248,92 @@ export async function POST(req: NextRequest) {
 
       // --- Merch purchase (no userId — buyer is a fan, not a platform user) ---
       if (checkSession.metadata?.type === "MERCH") {
-        const { variantId, productId, artistId, buyerEmail, quantity: qtyStr } = checkSession.metadata;
-        const qty = Math.max(1, parseInt(qtyStr ?? "1", 10));
+        const meta = checkSession.metadata;
+        const { artistId, buyerEmail } = meta;
 
-        const variant = variantId
-          ? await db.merchVariant.findUnique({
-              where:  { id: variantId },
-              select: { retailPrice: true, basePrice: true, product: { select: { title: true, markup: true } } },
-            })
-          : null;
+        // Parse multi-item array from metadata; fall back to legacy single-item
+        let rawItems: { v: string; q: number }[] = [];
+        try { rawItems = meta.items ? JSON.parse(meta.items) : []; } catch { /* */ }
+        if (rawItems.length === 0 && meta.variantId) {
+          rawItems = [{ v: meta.variantId, q: Math.max(1, parseInt(meta.quantity ?? "1", 10)) }];
+        }
 
-        if (variant) {
-          const unitPrice     = variant.retailPrice;
-          const totalPrice    = unitPrice * qty;
-          const artistEarnings= variant.product.markup * qty;
-          const platformCut   = variant.basePrice * 0.15 * qty; // 15% of Printful base
+        // Parse shipping address + cost
+        let shippingAddress: Record<string, string> | null = null;
+        try { shippingAddress = meta.shippingAddress ? JSON.parse(meta.shippingAddress) : null; } catch { /* */ }
+        const shippingCost = parseFloat(meta.shippingCost ?? "0") || 0;
+
+        // Fetch all variants with product info
+        const variantIds = rawItems.map((i) => i.v);
+        const variants = await db.merchVariant.findMany({
+          where: { id: { in: variantIds } },
+          select: {
+            id: true,
+            retailPrice: true,
+            basePrice: true,
+            printfulVariantId: true,
+            size: true,
+            color: true,
+            product: {
+              select: {
+                id: true,
+                title: true,
+                imageUrl: true,
+                markup: true,
+                fulfillmentType: true,
+              },
+            },
+          },
+        });
+
+        if (variants.length > 0 && artistId && buyerEmail) {
+          // Compute totals
+          let itemsSubtotal = 0;
+          let artistEarningsTotal = 0;
+          let platformCutTotal = 0;
+
+          const itemsData: {
+            orderId: string;
+            variantId: string;
+            productId: string;
+            quantity: number;
+            unitPrice: number;
+            subtotal: number;
+          }[] = [];
+
+          for (const ri of rawItems) {
+            const v = variants.find((v) => v.id === ri.v);
+            if (!v) continue;
+            const qty      = Math.max(1, ri.q);
+            const subtotal = v.retailPrice * qty;
+            itemsSubtotal += subtotal;
+            artistEarningsTotal += v.product.markup * qty;
+            platformCutTotal    += v.basePrice * 0.15 * qty;
+            itemsData.push({
+              orderId:   "", // filled after order creation
+              variantId: v.id,
+              productId: v.product.id,
+              quantity:  qty,
+              unitPrice: v.retailPrice,
+              subtotal,
+            });
+          }
+
+          const totalPrice = itemsSubtotal + shippingCost;
+
+          // Buyer name from shipping address
+          const buyerName = (shippingAddress?.name as string | undefined) ?? buyerEmail.split("@")[0] ?? "Buyer";
 
           const order = await db.merchOrder.create({
             data: {
               artistId,
               buyerEmail,
+              buyerName,
+              shippingAddress: shippingAddress ?? undefined,
+              shippingCost,
               totalPrice,
-              platformCut,
-              artistEarnings,
+              platformCut:    platformCutTotal,
+              artistEarnings: artistEarningsTotal,
               stripePaymentId:
                 typeof checkSession.payment_intent === "string"
                   ? checkSession.payment_intent
@@ -274,32 +341,136 @@ export async function POST(req: NextRequest) {
             },
           });
 
-          // Create order item
-          await db.merchOrderItem.create({
-            data: {
-              orderId:   order.id,
-              variantId,
-              productId,
-              quantity:  qty,
-              unitPrice,
-              subtotal:  totalPrice,
-            },
+          // Create order items
+          await db.merchOrderItem.createMany({
+            data: itemsData.map((d) => ({ ...d, orderId: order.id })),
           });
 
-          // Update fan spend ranking
-          if (buyerEmail) void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
+          // Fan scoring + automations
+          void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
+          void triggerMerchAutomations(artistId, buyerEmail);
 
-          // Fan automation triggers
-          if (buyerEmail) void triggerMerchAutomations(artistId, buyerEmail);
-
-          // Notify artist of merch order
+          // Notify artist
+          const firstProduct = variants[0]!.product;
+          const artistEarningsDisplay = artistEarningsTotal.toFixed(2);
           void createNotification({
             userId:  artistId,
             type:    "MERCH_ORDER",
             title:   "New merch order!",
-            message: `Someone ordered "${variant.product.title}" — you earn $${artistEarnings.toFixed(2)}`,
-            link:    "/dashboard/merch/orders",
+            message: rawItems.length === 1
+              ? `Someone ordered "${firstProduct.title}" — you earn $${artistEarningsDisplay}`
+              : `New ${rawItems.length}-item order — you earn $${artistEarningsDisplay}`,
+            link:    "/dashboard/merch",
           }).catch(() => {});
+
+          // Build item summaries for emails
+          const emailItems = itemsData.map((d) => {
+            const v = variants.find((v) => v.id === d.variantId)!;
+            return { title: v.product.title, size: v.size, color: v.color, quantity: d.quantity, unitPrice: d.unitPrice };
+          });
+
+          // Get artist info for emails
+          const artist = await db.user.findUnique({
+            where:  { id: artistId },
+            select: { email: true, name: true, artistName: true, artistSlug: true },
+          });
+
+          // Send buyer confirmation email
+          if (shippingAddress) {
+            const addr = shippingAddress as { name?: string; address1: string; address2?: string; city: string; state: string; zip: string; country: string };
+            void sendMerchOrderConfirmationEmail({
+              buyerEmail,
+              buyerName,
+              orderId:     order.id,
+              artistName:  artist?.artistName ?? artist?.name ?? "Artist",
+              artistSlug:  artist?.artistSlug ?? "",
+              shippingAddress: {
+                line1:   addr.address1,
+                line2:   addr.address2,
+                city:    addr.city,
+                state:   addr.state,
+                zip:     addr.zip,
+                country: addr.country,
+              },
+              items:        emailItems,
+              subtotal:     itemsSubtotal,
+              shippingCost,
+              total:        totalPrice,
+            }).catch(() => {});
+          }
+
+          // For self-fulfilled items: notify artist with shipping details
+          const hasSelfFulfilled = variants.some((v) => v.product.fulfillmentType === "SELF_FULFILLED");
+          if (hasSelfFulfilled && artist?.email && shippingAddress) {
+            const sfAddr = shippingAddress as { name?: string; address1: string; address2?: string; city: string; state: string; zip: string; country: string };
+            void sendSelfFulfilledOrderEmail({
+              artistEmail: artist.email,
+              artistName:  artist.artistName ?? artist.name ?? "Artist",
+              orderId:     order.id,
+              buyerName,
+              buyerEmail,
+              shippingAddress: {
+                line1:   sfAddr.address1,
+                line2:   sfAddr.address2,
+                city:    sfAddr.city,
+                state:   sfAddr.state,
+                zip:     sfAddr.zip,
+                country: sfAddr.country,
+              },
+              items:       emailItems.filter((_, i) => variants[i]?.product.fulfillmentType === "SELF_FULFILLED"),
+              totalPrice,
+            }).catch(() => {});
+          }
+
+          // For POD items: submit to Printful
+          const podVariants = variants.filter((v) => v.product.fulfillmentType === "POD" && v.printfulVariantId);
+          if (podVariants.length > 0 && shippingAddress && process.env.PRINTFUL_API_KEY) {
+            void (async () => {
+              try {
+                const sfAddr = shippingAddress as { name?: string; address1: string; address2?: string; city: string; state: string; zip: string; country: string };
+                const printfulItems = itemsData
+                  .filter((d) => podVariants.find((v) => v.id === d.variantId))
+                  .map((d) => {
+                    const v = podVariants.find((pv) => pv.id === d.variantId)!;
+                    return {
+                      variant_id:   v.printfulVariantId!,
+                      quantity:     d.quantity,
+                      retail_price: d.unitPrice.toFixed(2),
+                      files:        [] as { url: string; placement: string }[],
+                    };
+                  });
+
+                const printfulOrder = await createPrintfulOrder(
+                  order.id,
+                  {
+                    name:         buyerName,
+                    address1:     sfAddr.address1,
+                    address2:     sfAddr.address2,
+                    city:         sfAddr.city,
+                    state_code:   sfAddr.state,
+                    country_code: sfAddr.country || "US",
+                    zip:          sfAddr.zip,
+                    email:        buyerEmail,
+                  },
+                  printfulItems,
+                  {
+                    subtotal: itemsSubtotal.toFixed(2),
+                    shipping: shippingCost.toFixed(2),
+                  },
+                );
+
+                await db.merchOrder.update({
+                  where: { id: order.id },
+                  data:  {
+                    printfulOrderId:   printfulOrder.id,
+                    fulfillmentStatus: "PROCESSING",
+                  },
+                });
+              } catch (printfulErr) {
+                console.error("[webhook/merch] Printful order failed:", printfulErr);
+              }
+            })();
+          }
         }
         break;
       }

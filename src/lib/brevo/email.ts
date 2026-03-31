@@ -358,6 +358,134 @@ export async function sendSelfFulfilledOrderEmail(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Buyer merch order confirmation
+// ---------------------------------------------------------------------------
+
+export async function sendMerchOrderConfirmationEmail(params: {
+  buyerEmail:  string;
+  buyerName:   string;
+  orderId:     string;
+  artistName:  string;
+  artistSlug:  string;
+  shippingAddress: {
+    line1:   string;
+    line2?:  string;
+    city:    string;
+    state:   string;
+    zip:     string;
+    country: string;
+  };
+  items: { title: string; size: string; color: string; quantity: number; unitPrice: number }[];
+  subtotal:     number;
+  shippingCost: number;
+  total:        number;
+}): Promise<void> {
+  const itemsHtml = params.items
+    .map((i) => `<tr>
+      <td style="padding:4px 8px">${i.title}</td>
+      <td style="padding:4px 8px">${i.size}${i.color && i.color !== "N/A" ? ` / ${i.color}` : ""}</td>
+      <td style="padding:4px 8px">×${i.quantity}</td>
+      <td style="padding:4px 8px;text-align:right">$${i.unitPrice.toFixed(2)}</td>
+    </tr>`)
+    .join("");
+
+  const addr = params.shippingAddress;
+  const addressHtml = [addr.line1, addr.line2, `${addr.city}, ${addr.state} ${addr.zip}`, addr.country]
+    .filter(Boolean).join("<br>");
+
+  const orderUrl = `${APP_URL()}/order/${params.orderId}`;
+
+  await sendEmail({
+    to: { email: params.buyerEmail, name: params.buyerName },
+    subject: `Your order from ${params.artistName} is confirmed!`,
+    htmlContent: `
+      <h1 style="color:#0A0A0A">Order Confirmed</h1>
+      <p>Hi ${params.buyerName}, thanks for supporting ${params.artistName}! Your order has been received.</p>
+
+      <h2 style="margin-top:24px">Order #${params.orderId.slice(-8).toUpperCase()}</h2>
+      <table style="border-collapse:collapse;width:100%;max-width:480px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:4px 8px;text-align:left">Item</th>
+            <th style="padding:4px 8px;text-align:left">Variant</th>
+            <th style="padding:4px 8px;text-align:left">Qty</th>
+            <th style="padding:4px 8px;text-align:right">Price</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="padding:4px 8px;text-align:right;color:#666">Subtotal</td>
+            <td style="padding:4px 8px;text-align:right">$${params.subtotal.toFixed(2)}</td>
+          </tr>
+          ${params.shippingCost > 0 ? `<tr>
+            <td colspan="3" style="padding:4px 8px;text-align:right;color:#666">Shipping</td>
+            <td style="padding:4px 8px;text-align:right">$${params.shippingCost.toFixed(2)}</td>
+          </tr>` : ""}
+          <tr>
+            <td colspan="3" style="padding:4px 8px;text-align:right;font-weight:bold">Total</td>
+            <td style="padding:4px 8px;text-align:right;font-weight:bold">$${params.total.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <h2 style="margin-top:24px">Shipping To</h2>
+      <p>${params.buyerName}<br>${addressHtml}</p>
+
+      <p style="margin-top:24px">
+        <a href="${orderUrl}" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
+          Track Your Order →
+        </a>
+      </p>
+
+      <p style="margin-top:24px;color:#888;font-size:12px">
+        Questions? Reply to this email or visit
+        <a href="${APP_URL()}/${params.artistSlug}">the artist's page</a>.
+      </p>
+    `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["merch", "order", "buyer-confirmation"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Buyer merch shipped notification
+// ---------------------------------------------------------------------------
+
+export async function sendMerchShippedEmail(params: {
+  buyerEmail:    string;
+  buyerName:     string;
+  orderId:       string;
+  artistName:    string;
+  trackingNumber: string;
+  trackingUrl?:  string;
+  carrier?:      string;
+}): Promise<void> {
+  const orderUrl = `${APP_URL()}/order/${params.orderId}`;
+  const trackingLink = params.trackingUrl
+    ? `<a href="${params.trackingUrl}" style="color:#D4A843">${params.trackingNumber}</a>`
+    : `<strong>${params.trackingNumber}</strong>`;
+
+  await sendEmail({
+    to: { email: params.buyerEmail, name: params.buyerName },
+    subject: `Your order from ${params.artistName} has shipped!`,
+    htmlContent: `
+      <h1>Your Order is on the Way!</h1>
+      <p>Hi ${params.buyerName}, great news — ${params.artistName} has shipped your order.</p>
+      ${params.carrier ? `<p><strong>Carrier:</strong> ${params.carrier}</p>` : ""}
+      <p><strong>Tracking:</strong> ${trackingLink}</p>
+      <p style="margin-top:24px">
+        <a href="${orderUrl}" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
+          View Order Status →
+        </a>
+      </p>
+    `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["merch", "order", "shipped"],
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Intake form link emails
 // ---------------------------------------------------------------------------
 
