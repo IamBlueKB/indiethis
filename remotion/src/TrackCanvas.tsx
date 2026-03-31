@@ -1,14 +1,11 @@
 import React from "react";
 import {
   AbsoluteFill,
-  Audio,
   Img,
   interpolate,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface TrackCanvasProps {
   coverArtUrl: string;
@@ -16,155 +13,107 @@ export interface TrackCanvasProps {
   accentColor?: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const TOTAL_FRAMES = 180; // 6 s @ 30 fps
 
-// ─── Particle ─────────────────────────────────────────────────────────────────
-
-interface Particle {
-  x: number;
-  y: number;
-  radius: number;
-  speed: number;
-  angle: number;
-  opacity: number;
-  color: string;
-}
-
-function generateParticles(seed: number, accent: string): Particle[] {
-  const particles: Particle[] = [];
-  for (let i = 0; i < 40; i++) {
-    const s = (seed * (i + 1) * 9301 + 49297) % 233280;
-    const r = s / 233280;
-    const s2 = (s * 9301 + 49297) % 233280;
-    const r2 = s2 / 233280;
-    const s3 = (s2 * 9301 + 49297) % 233280;
-    const r3 = s3 / 233280;
-    particles.push({
-      x: r * 1080,
-      y: r2 * 1920,
-      radius: 2 + r3 * 4,
-      speed: 0.3 + r * 0.7,
-      angle: r2 * Math.PI * 2,
-      opacity: 0.3 + r3 * 0.5,
-      color: i % 4 === 0 ? accent : "rgba(255,255,255,0.6)",
-    });
-  }
-  return particles;
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-export function TrackCanvas({ coverArtUrl, audioUrl, accentColor = "#D4A843" }: TrackCanvasProps) {
+export function TrackCanvas({ coverArtUrl, accentColor = "#D4A843" }: TrackCanvasProps) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // ── Ken Burns: slow zoom 1.0 → 1.08 over 6s, then loops ──────────────────
+  // Loop-safe progress (0 → 1, resets cleanly)
   const loopFrame = frame % TOTAL_FRAMES;
-  const progress = loopFrame / TOTAL_FRAMES; // 0 → 1
-  const scale = interpolate(progress, [0, 1], [1.0, 1.08]);
+  const progress = loopFrame / TOTAL_FRAMES;
 
-  // ── Audio amplitude sampling ──────────────────────────────────────────────
-  // Remotion renders server-side; we approximate amplitude from frame position
-  // using a sine-based envelope that simulates a typical musical energy curve.
-  // When rendered via Lambda, getAudioData() is available; we gracefully fall back.
-  // Simulate amplitude: combination of base pulse + transients at typical beat intervals
-  const bpm = 128; // default; will be visually plausible for most music
+  // Ken Burns: barely perceptible zoom, 1.0 → 1.04 over 6s
+  const scale = interpolate(progress, [0, 1], [1.0, 1.04]);
+
+  // Very slow pan offset — shifts 8px right over 6s then resets
+  const panX = interpolate(progress, [0, 1], [0, 8]);
+
+  // Subtle breathing pulse — simulates audio energy at 128bpm
+  const bpm = 128;
   const framesPerBeat = (fps * 60) / bpm;
   const beatPhase = (loopFrame % framesPerBeat) / framesPerBeat;
-  const beatPulse = Math.max(0, Math.cos(beatPhase * Math.PI * 2) * 0.5 + 0.5);
-  const energy = 0.3 + beatPulse * 0.7;
+  // Soft cosine pulse, 0 → 1
+  const pulse = Math.max(0, Math.cos(beatPhase * Math.PI * 2) * 0.5 + 0.5);
 
-  // ── Glow intensity driven by energy ──────────────────────────────────────
-  const glowOpacity = interpolate(energy, [0, 1], [0.15, 0.55]);
-  const glowRadius = interpolate(energy, [0, 1], [40, 120]);
+  // Vignette strength pulses very gently — barely visible
+  const vignetteOpacity = interpolate(pulse, [0, 1], [0.55, 0.65]);
 
-  // ── Color shift overlay ───────────────────────────────────────────────────
-  // Subtle accent-color tint that pulses with energy
-  const colorShiftOpacity = interpolate(energy, [0, 1], [0.0, 0.12]);
+  // Accent shimmer: a very faint rim light on one edge, almost invisible
+  const shimmerOpacity = interpolate(pulse, [0, 1], [0.0, 0.04]);
 
-  // ── Particles ─────────────────────────────────────────────────────────────
-  const particles = generateParticles(42, accentColor);
-  const particleSpeed = interpolate(energy, [0, 1], [0.5, 2.5]);
+  // Floating orbs (3 large, soft, blurred — like bokeh)
+  const orbs = [
+    { x: 0.2, y: 0.35, size: 280, startAngle: 0 },
+    { x: 0.75, y: 0.6, size: 220, startAngle: 2.1 },
+    { x: 0.5, y: 0.85, size: 180, startAngle: 4.2 },
+  ];
 
   return (
     <AbsoluteFill style={{ background: "#000", overflow: "hidden" }}>
-      {/* Audio (silent during render preview, active in output) */}
-      {audioUrl && (
-        <Audio src={audioUrl} startFrom={0} volume={0} />
-      )}
-
-      {/* ── Cover art with Ken Burns zoom ── */}
+      {/* Cover art — full bleed with Ken Burns */}
       <AbsoluteFill
         style={{
-          transform: `scale(${scale})`,
+          transform: `scale(${scale}) translateX(${panX}px)`,
           transformOrigin: "center center",
         }}
       >
         <Img
           src={coverArtUrl}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       </AbsoluteFill>
 
-      {/* ── Dark vignette to give depth ── */}
+      {/* Dark vignette — keeps cover art center readable */}
       <AbsoluteFill
         style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.65) 100%)",
+          background: "radial-gradient(ellipse at 50% 50%, transparent 25%, rgba(0,0,0,0.72) 100%)",
+          opacity: vignetteOpacity,
         }}
       />
 
-      {/* ── Glow / bloom on edges ── */}
+      {/* Bottom gradient for depth */}
       <AbsoluteFill
         style={{
-          boxShadow: `inset 0 0 ${glowRadius}px ${glowRadius / 2}px ${accentColor}`,
-          opacity: glowOpacity,
-          borderRadius: 0,
+          background: "linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 45%)",
         }}
       />
 
-      {/* ── Color shift overlay ── */}
+      {/* Bokeh orbs — very blurred, drift slowly */}
+      {orbs.map((orb, i) => {
+        const angle = orb.startAngle + (loopFrame / TOTAL_FRAMES) * Math.PI * 0.4;
+        const driftX = orb.x * 1080 + Math.cos(angle) * 18;
+        const driftY = orb.y * 1920 + Math.sin(angle) * 14;
+        const orbPulse = interpolate(
+          Math.sin((loopFrame / TOTAL_FRAMES) * Math.PI * 2 + orb.startAngle),
+          [-1, 1],
+          [0.06, 0.14]
+        );
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: driftX - orb.size / 2,
+              top: driftY - orb.size / 2,
+              width: orb.size,
+              height: orb.size,
+              borderRadius: "50%",
+              background: accentColor,
+              opacity: orbPulse,
+              filter: `blur(${orb.size * 0.45}px)`,
+            }}
+          />
+        );
+      })}
+
+      {/* Accent shimmer — barely-there rim on top edge */}
       <AbsoluteFill
         style={{
-          background: accentColor,
-          opacity: colorShiftOpacity,
-          mixBlendMode: "overlay",
+          background: `linear-gradient(to bottom, ${accentColor} 0%, transparent 8%)`,
+          opacity: shimmerOpacity,
         }}
       />
-
-      {/* ── Particles ── */}
-      <AbsoluteFill style={{ position: "relative" }}>
-        {particles.map((p, i) => {
-          // Drift each particle along its angle; wrap around edges
-          const drift = (loopFrame * p.speed * particleSpeed) % 1920;
-          const px = (p.x + Math.cos(p.angle) * drift) % 1080;
-          const py = (p.y + Math.sin(p.angle) * drift) % 1920;
-          const particleGlow = interpolate(energy, [0, 1], [0, 6]);
-          return (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                left: Math.abs(px),
-                top: Math.abs(py),
-                width: p.radius * 2,
-                height: p.radius * 2,
-                borderRadius: "50%",
-                background: p.color,
-                opacity: p.opacity * (0.5 + energy * 0.5),
-                filter: `blur(${p.radius * 0.3 + particleGlow}px)`,
-                transform: `translate(-50%, -50%)`,
-              }}
-            />
-          );
-        })}
-      </AbsoluteFill>
     </AbsoluteFill>
   );
 }
