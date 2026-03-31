@@ -2,6 +2,7 @@
 
 import { useAudioStore } from "@/store";
 import AudioPlayer from "./AudioPlayer";
+import CanvasPlayer from "@/components/CanvasPlayer";
 import { Play, Pause, X, Volume2, VolumeX, SkipBack, SkipForward } from "lucide-react";
 
 /**
@@ -45,21 +46,14 @@ export default function MiniPlayer() {
       {/* ── Cover art + track info ────────────────────────────────────────── */}
       {/* Mobile: flex-1 so it takes remaining space. Desktop: fixed 196px */}
       <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-none sm:w-[196px] sm:shrink-0">
-        {currentTrack.coverArt ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentTrack.coverArt}
-            alt=""
-            className="w-10 h-10 rounded-xl object-cover shrink-0"
+        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
+          <CanvasPlayer
+            canvasVideoUrl={currentTrack.canvasVideoUrl}
+            coverArtUrl={currentTrack.coverArt}
+            className="w-full h-full"
+            isPlaying={isPlaying}
           />
-        ) : (
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-base select-none"
-            style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}
-          >
-            ♪
-          </div>
-        )}
+        </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground truncate leading-snug">
             {currentTrack.title}

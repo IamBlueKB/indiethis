@@ -6,7 +6,6 @@ import {
   CheckCircle, Instagram, Music2, MapPin, Ticket, Calendar, Clock,
   Play, Video, Loader2, Send,
 } from "lucide-react";
-import CanvasPlayer from "@/components/CanvasPlayer";
 
 type Crate = {
   id: string;
@@ -553,7 +552,7 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
                     >
                       <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
                         {(mix.coverArtUrl || mix.canvasVideoUrl)
-                          ? <CanvasPlayer canvasVideoUrl={mix.canvasVideoUrl} coverArtUrl={mix.coverArtUrl} className="w-full h-full" isPlaying={activeMixId === mix.id} />
+                          ? <img src={mix.coverArtUrl ?? ''} alt="" className="w-full h-full object-cover" />
                           : <span className="text-2xl">🎵</span>
                         }
                       </div>

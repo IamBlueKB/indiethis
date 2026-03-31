@@ -8,7 +8,6 @@ import type { AudioTrack } from "@/store";
 import { detectDevice, buildStreamingLinks } from "@/lib/smart-links";
 import type { DeviceType } from "@/lib/smart-links";
 import AddToCrateButton from "@/components/dj/AddToCrateButton";
-import CanvasPlayer from "@/components/CanvasPlayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,7 +179,7 @@ function TrackRow({
       {/* Cover */}
       <button onClick={onPlay} className="shrink-0 relative rounded-[4px] overflow-hidden transition-transform hover:scale-105" style={{ width: 36, height: 36 }}>
         {(track.coverArtUrl || track.canvasVideoUrl)
-          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl} coverArtUrl={track.coverArtUrl} className="w-full h-full" isPlaying={isActive && trackIsPlaying} />
+          ? <img src={track.coverArtUrl ?? ''} alt="" className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "rgba(212,168,67,0.08)" }}><Music2 size={12} style={{ color: "rgba(212,168,67,0.4)" }} /></div>
         }
         <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -303,7 +302,7 @@ export default function TrackList({
   }
 
   function playTrack(track: InternalTrack) {
-    playInContext({ id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }, audioContext);
+    playInContext({ id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined, canvasVideoUrl: track.canvasVideoUrl ?? null }, audioContext);
     firePlay(track);
   }
 
@@ -346,7 +345,7 @@ export default function TrackList({
           {/* Cover art */}
           <div className="shrink-0 rounded-[8px] overflow-hidden flex items-center justify-center" style={{ width: 100, height: 100, backgroundColor: "rgba(212,168,67,0.06)" }}>
             {(featured.coverUrl || (featured.tracks[0] as TrackData | undefined)?.canvasVideoUrl)
-              ? <CanvasPlayer canvasVideoUrl={(featured.tracks[0] as TrackData | undefined)?.canvasVideoUrl ?? null} coverArtUrl={featured.coverUrl ?? null} className="w-full h-full" isPlaying={currentId === (featured.tracks[0] as TrackData | undefined)?.id && isPlaying} />
+              ? <img src={featured.coverUrl ?? ''} alt="" className="w-full h-full object-cover" />
               : <Music2 size={24} style={{ color: "rgba(212,168,67,0.3)" }} />
             }
           </div>
@@ -478,7 +477,7 @@ export default function TrackList({
       <div className="rounded-[10px] flex gap-3.5 mb-3" style={{ backgroundColor: "#111", padding: 14 }}>
         <div className="shrink-0 rounded-[8px] overflow-hidden flex items-center justify-center" style={{ width: 100, height: 100, backgroundColor: "rgba(212,168,67,0.06)" }}>
           {(featured.coverArtUrl || featured.canvasVideoUrl)
-            ? <CanvasPlayer canvasVideoUrl={featured.canvasVideoUrl} coverArtUrl={featured.coverArtUrl} className="w-full h-full" isPlaying={currentId === featured.id && isPlaying} />
+            ? <img src={featured.coverArtUrl ?? ''} alt="" className="w-full h-full object-cover" />
             : <Music2 size={24} style={{ color: "rgba(212,168,67,0.3)" }} />
           }
         </div>

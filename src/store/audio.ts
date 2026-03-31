@@ -7,6 +7,7 @@ export type AudioTrack = {
   artist: string;
   src: string;
   coverArt?: string;
+  canvasVideoUrl?: string | null;
   duration?: number;
 };
 

@@ -398,10 +398,8 @@ YoutubeReference
 |---------|---------|--------|
 | **Stripe** | Subscriptions, PPU, payouts, webhooks | ✅ Keys set — test mode |
 | **Anthropic Claude** | Contract Scanner, Bio Generator, A&R Report, Press Kit | ✅ Key set |
-| **OpenAI** | A&R Report Whisper transcription | ✅ Key set |
-| **Replicate** | Vocal Remover (Demucs) + Lyric Video Whisper transcription | ✅ Key set |
+| **Replicate** | Vocal Remover (Demucs) + Lyric Video Whisper (`openai/whisper` model path, no OpenAI key needed) | ✅ Key set |
 | **FAL.ai / Kling** | AI Music Video (primary provider) | ✅ Key set |
-| **Runway** | AI Music Video (fallback provider) | ✅ Key set |
 | **Auphonic** | AI Mastering | ✅ Key set |
 | **Remotion** | Lyric Video rendering (Lambda) — ✅ DEPLOYED, serveUrl set | ✅ Keys set |
 | **Brevo** | Transactional email, SMS, campaigns | ✅ Keys set |
@@ -409,8 +407,8 @@ YoutubeReference
 | **AWS S3** | Stem/audio file storage | ✅ Keys set |
 | **Supabase PostgreSQL** | Primary database | ✅ Connected |
 | **YouTube Data API** | YouTube video sync/embed + DJ set seeding | ✅ Key set |
-| **AudD** | Track Shield — content recognition scanning against 80M+ songs | ⚠️ AUDD_API_KEY needed |
-| **ACRCloud** | DJ mix track identification via audio fingerprint | ⚠️ Keys needed |
+| **AudD** | Track Shield — content recognition scanning against 80M+ songs | ✅ Key set |
+| **ACRCloud** | DJ mix track identification via audio fingerprint | ✅ Token set |
 | **Chromaprint / fpcalc** | Audio fingerprinting for track upload | ⚠️ Binary not on Vercel — falls back to SHA-256 + music-metadata |
 | **Sentry** | Error monitoring | ❌ NOT INTEGRATED |
 | **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
@@ -475,7 +473,7 @@ YoutubeReference
 | Canvas Video — artist dashboard UI (upload + generate, preview, replace, remove, paid return handler) | ✅ DONE |
 | Canvas Video — DJ mix dashboard UI (per-row panel, same flow) | ✅ DONE |
 | Canvas Video — studio AI tools (roster artist + track selector, upload/generate) | ✅ DONE |
-| Canvas Video — CanvasPlayer component (lazy load via IntersectionObserver, fade-in, cover art fallback) | ✅ DONE |
+| Canvas Video — CanvasPlayer plays only in MiniPlayer Now Playing area; all cards show static cover art | ✅ DONE |
 | Canvas Video — wired across platform (public page, explore, DJ crate, marketplace, dashboard, DJ profile) | ✅ DONE |
 | Credit system (used/limit per tier) | ✅ DONE |
 | Credit reset on monthly renewal (`invoice.paid`) | ✅ DONE |
@@ -647,10 +645,8 @@ YoutubeReference
 | `ADMIN_EMAIL` | Admin account bootstrap | ✅ SET |
 | `ADMIN_PASSWORD` | Admin account bootstrap | ✅ SET |
 | `ANTHROPIC_API_KEY` | Claude (A&R, Press Kit, Bio, Contract) | ✅ SET |
-| `OPENAI_API_KEY` | OpenAI calls in AI processor | ✅ SET |
-| `REPLICATE_API_TOKEN` | Vocal Remover (Demucs) | ✅ SET |
+| `REPLICATE_API_TOKEN` | Vocal Remover (Demucs) + Whisper transcription | ✅ SET |
 | `FAL_KEY` | AI Music Video (Kling via FAL) | ✅ SET |
-| `RUNWAY_API_KEY` | AI Music Video fallback | ✅ SET |
 | `AUPHONIC_API_KEY` | AI Mastering | ✅ SET |
 | `REMOTION_FUNCTION_NAME` | Lyric Video Lambda (`remotion-render-4-0-436-mem2048mb-disk2048mb-120sec`) | ✅ SET |
 | `REMOTION_SERVE_URL` | Lyric Video Lambda serve URL | ✅ SET |
@@ -674,7 +670,6 @@ YoutubeReference
 | `STRIPE_PRICE_REIGN` | Reign plan Stripe price ID | ✅ SET |
 | `STRIPE_PRICE_ID_PUSH_LIFETIME` | $0 Push lifetime price (`price_1TGonsCnAaQlzZZifcbsXKba`) | ✅ SET |
 | `STRIPE_PRICE_ID_REIGN_LIFETIME` | $0 Reign lifetime price (`price_1TGontCnAaQlzZZiZvBCO8of`) | ✅ SET |
-| `STRIPE_PRICE_ID_REIGN_LIFETIME` | Lifetime Reign price (if applicable) | ❌ MISSING |
 | `CRON_SECRET` | Cron route authentication | ✅ SET |
 | `YOUTUBE_API_KEY` | YouTube video sync + DJ set seeding | ✅ SET |
 | `AUDD_API_KEY` | Track Shield — AudD content recognition API | ✅ SET |
@@ -693,7 +688,7 @@ YoutubeReference
 - [ ] Create products + prices for Studio Pro ($49), Studio Elite ($99) → add to `PLAN_PRICES` in `stripe.ts`
 - [x] Create $0 lifetime prices for Push + Reign referral rewards → price IDs set in env
 - [x] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
-- [ ] Add `invoice.created` to webhook subscribed events (required for stream lease billing)
+- [x] Add `invoice.created` to webhook subscribed events — handler at line 913 in `src/app/api/stripe/webhook/route.ts`
 - [ ] Configure Stripe Connect for DJ + producer direct payouts
 - [x] Add `transfer.paid` and `transfer.failed` to webhook subscribed events (DJ payouts)
 - [ ] Set webhook endpoint to `https://indiethis.com/api/stripe/webhook` (production)

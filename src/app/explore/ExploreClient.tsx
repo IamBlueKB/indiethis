@@ -19,7 +19,6 @@ import {
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
   Disc, Disc3,
 } from "lucide-react";
-import CanvasPlayer from "@/components/CanvasPlayer";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -193,8 +192,6 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 // ── Track Card ─────────────────────────────────────────────────────────────
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
-  const activeTrackId = useAudioStore((s) => s.currentTrack?.id);
-  const isAudioPlaying = useAudioStore((s) => s.isPlaying);
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
   return (
     <div className="shrink-0 w-40 group">
@@ -203,8 +200,8 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
         style={{ backgroundColor: "#1a1a1a" }}
         onClick={() => onPlay(track)}
       >
-        {(track.coverArtUrl || track.canvasVideoUrl)
-          ? <CanvasPlayer canvasVideoUrl={track.canvasVideoUrl ?? null} coverArtUrl={track.coverArtUrl} className="w-full h-full" isPlaying={activeTrackId === track.id && !!isAudioPlaying} />
+        {track.coverArtUrl
+          ? <img src={track.coverArtUrl} alt="" className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Music2 size={28} style={{ color: "#444" }} /></div>
         }
         {isNew && (
@@ -1022,7 +1019,7 @@ export default function ExploreClient() {
   }, [searchParams]);
 
   function handlePlay(track: TrackItem) {
-    play({ id: track.id, title: track.title, artist: track.artist.name, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined });
+    play({ id: track.id, title: track.title, artist: track.artist.name, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined, canvasVideoUrl: track.canvasVideoUrl ?? null });
     if (loggedIn) {
       fetch("/api/explore/record-play", {
         method: "POST",
