@@ -531,27 +531,39 @@ export default async function SlugPage({
   const { preview } = await searchParams;
 
   // ── Studio? ───────────────────────────────────────────────────────────────
-  const studio = await db.studio.findUnique({
-    where: { slug },
-    include: {
-      artists: {
-        take: 12,
-        include: {
-          artist: {
-            select: {
-              id: true, name: true, artistName: true, photo: true,
-              instagramHandle: true, artistSlug: true,
-              artistSite: { select: { isPublished: true } },
+  let studio;
+  try {
+    studio = await db.studio.findUnique({
+      where: { slug },
+      include: {
+        artists: {
+          take: 12,
+          include: {
+            artist: {
+              select: {
+                id: true, name: true, artistName: true, photo: true,
+                instagramHandle: true, artistSlug: true,
+                artistSite: { select: { isPublished: true } },
+              },
             },
           },
         },
+        portfolioTracks: { orderBy: { sortOrder: "asc" }, take: 6 },
+        credits:         { orderBy: { sortOrder: "asc" }, take: 12 },
+        engineers:       { orderBy: { sortOrder: "asc" }, take: 6 },
+        equipment:       { orderBy: [{ category: "asc" }, { sortOrder: "asc" }] },
       },
-      portfolioTracks: { orderBy: { sortOrder: "asc" }, take: 6 },
-      credits:         { orderBy: { sortOrder: "asc" }, take: 12 },
-      engineers:       { orderBy: { sortOrder: "asc" }, take: 6 },
-      equipment:       { orderBy: [{ category: "asc" }, { sortOrder: "asc" }] },
-    },
-  });
+    });
+  } catch (err) {
+    console.error("[slug/page] studio query failed:", err);
+    // DB connection spike — return a retryable error page rather than a crash
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: "#0A0A0A" }}>
+        <p style={{ color: "#666", fontSize: "1rem" }}>Something went wrong loading this page. Please try again in a moment.</p>
+        <a href={`/${slug}`} style={{ color: "#D4A843", marginTop: "1rem", fontSize: "0.9rem" }}>Retry →</a>
+      </div>
+    );
+  }
 
   if (studio) {
     if (!studio.isPublished) notFound();

@@ -17,8 +17,8 @@ type Props = {
 export default function AddToCrateButton({ trackId }: Props) {
   const { data: session } = useSession();
   const [crates, setCrates] = useState<CrateSummary[]>([]);
-  const [djMode, setDjMode] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [fetched, setFetched] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
@@ -26,21 +26,6 @@ export default function AddToCrateButton({ trackId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
-
-  useEffect(() => {
-    if (!session?.user) { setLoaded(true); return; }
-
-    // Fetch crates (will include djMode check server-side via DJProfile)
-    fetch("/api/dashboard/dj/crates")
-      .then(r => r.json())
-      .then((data: { crates?: CrateSummary[] }) => {
-        const list = data.crates ?? [];
-        if (list.length > 0) setDjMode(true);
-        setCrates(list);
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
-  }, [session?.user]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -54,7 +39,30 @@ export default function AddToCrateButton({ trackId }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  if (!loaded || !session?.user || !djMode) return null;
+  // Only show button for logged-in users
+  if (!session?.user) return null;
+
+  async function handleOpen() {
+    setError(null);
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
+    }
+    // Lazy-fetch crates on first open — prevents N concurrent requests on pages with many tracks
+    if (!fetched && !fetching) {
+      setFetching(true);
+      try {
+        const data = await fetch("/api/dashboard/dj/crates").then(r => r.json()) as { crates?: CrateSummary[] };
+        setCrates(data.crates ?? []);
+      } catch {
+        // silently ignore
+      } finally {
+        setFetched(true);
+        setFetching(false);
+      }
+    }
+    setOpen(v => !v);
+  }
 
   async function handleAdd(crateId: string) {
     setAdding(crateId);
@@ -79,14 +87,7 @@ export default function AddToCrateButton({ trackId }: Props) {
     <div ref={containerRef} className="relative">
       <button
         ref={buttonRef}
-        onClick={() => {
-          setError(null);
-          if (!open && buttonRef.current) {
-            const rect = buttonRef.current.getBoundingClientRect();
-            setDropdownPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right });
-          }
-          setOpen(v => !v);
-        }}
+        onClick={handleOpen}
         className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-colors"
         style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
         title="Add to Crate"
@@ -106,7 +107,12 @@ export default function AddToCrateButton({ trackId }: Props) {
           className="fixed rounded-xl border shadow-xl overflow-hidden min-w-[160px]"
           style={{ backgroundColor: "#141414", borderColor: "#2a2a2a", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
         >
-          {crates.length === 0 ? (
+          {fetching ? (
+            <div className="px-3 py-2 flex items-center gap-2 text-xs" style={{ color: "#888" }}>
+              <Loader2 size={11} className="animate-spin" style={{ color: "#D4A843" }} />
+              Loading…
+            </div>
+          ) : crates.length === 0 ? (
             <p className="px-3 py-2 text-xs" style={{ color: "#888" }}>No crates yet.</p>
           ) : (
             <div className="py-1">
