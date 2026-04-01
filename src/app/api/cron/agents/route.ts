@@ -172,6 +172,20 @@ export async function POST(req: NextRequest) {
     results.inactiveContent = "skipped (not due or not Tuesday)";
   }
 
+  // ── Payment Recovery — daily sweep (Day 2/5/10 escalation emails) ──────────
+  const shouldRunPaymentRecovery = await shouldRun("PAYMENT_RECOVERY", 22); // 22h guard
+  if (shouldRunPaymentRecovery) {
+    try {
+      const { runPaymentRecoveryAgent } = await import("@/lib/agents/payment-recovery");
+      const result = await runPaymentRecoveryAgent();
+      results.paymentRecovery = `day2=${result.day2Sent} day5=${result.day5Sent} winBack=${result.winBackSent} reEngage=${result.reEngageSent}`;
+    } catch (err) {
+      results.paymentRecovery = `error: ${String(err)}`;
+    }
+  } else {
+    results.paymentRecovery = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

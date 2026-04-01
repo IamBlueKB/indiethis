@@ -26,6 +26,7 @@ import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
+import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -1062,6 +1063,20 @@ export async function POST(req: NextRequest) {
               }).catch((err) => console.error("[stream-lease] payment failed email error:", err));
             }
           }
+        }
+      }
+
+      // ── Payment Recovery Sequence: Day 0 ──────────────────────────────────
+      // Kick off the escalation email sequence for any subscription payment failure.
+      if (failedCustomerId) {
+        const recoveryUser = await db.user.findFirst({
+          where:  { stripeCustomerId: failedCustomerId },
+          select: { id: true },
+        });
+        if (recoveryUser) {
+          void startPaymentRecoverySequence(recoveryUser.id).catch(
+            (err) => console.error("[payment-recovery] Day0 error:", err)
+          );
         }
       }
       break;
