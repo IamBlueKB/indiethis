@@ -6,15 +6,13 @@ import {
   Search, Headphones, Loader2, X, ChevronDown,
   Radio, ShoppingBag, TrendingUp,
 } from "lucide-react";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
 import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import PublicNav from "@/components/layout/PublicNav";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import ExpandedCardContent from "@/components/tracks/ExpandedCardContent";
-import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
+import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -99,10 +97,7 @@ function BeatCard({
   const monthlyRate   = 1;
   const artistSlug    = beat.artist.artistSlug;
 
-  const isMobile = useIsMobile();
-  const { expandedId, open, close } = useExpandedCard();
-  const isExpanded = expandedId === beat.id;
-  const cardRef = useRef<HTMLDivElement>(null);
+  const { open } = useExpandedCard();
 
   const cardData: TrackCardData = {
     id:            beat.id,
@@ -121,30 +116,13 @@ function BeatCard({
     },
   };
 
-  function handleCardClick() {
-    if (isMobile) { open(cardData); return; }
-    isExpanded ? close() : open(cardData);
-  }
-
-  // Close on outside click (desktop)
-  useEffect(() => {
-    if (!isExpanded || isMobile) return;
-    function onDocClick(e: MouseEvent) {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) close();
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [isExpanded, isMobile, close]);
-
   return (
     <motion.div
-      ref={cardRef}
-      layout
       className="rounded-2xl border overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.25)] cursor-pointer"
-      style={{ backgroundColor: "#141414", borderColor: isExpanded ? "rgba(212,168,67,0.3)" : "#2a2a2a" }}
-      whileHover={!isExpanded ? { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" } : {}}
+      style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
-      onClick={handleCardClick}
+      onClick={() => open(cardData)}
     >
       {/* Cover art */}
       <HoverCardCover
@@ -227,21 +205,6 @@ function BeatCard({
         </div>
       </div>
 
-      {/* Desktop expanded view — inline in grid */}
-      <AnimatePresence>
-        {isExpanded && !isMobile && (
-          <motion.div
-            key="expanded"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden" }}
-          >
-            <ExpandedCardContent data={cardData} onClose={close} />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
@@ -595,19 +558,17 @@ export default function BeatsClient() {
           </div>
         ) : (
           <>
-            <LayoutGroup>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-start">
-                {beats.map((b) => (
-                  <BeatCard
-                    key={b.id}
-                    beat={b}
-                    isPlaying={currentTrack?.id === b.id}
-                    onPlay={handlePlay}
-                    onLicense={setLicenseBeat}
-                  />
-                ))}
-              </div>
-            </LayoutGroup>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {beats.map((b) => (
+                <BeatCard
+                  key={b.id}
+                  beat={b}
+                  isPlaying={currentTrack?.id === b.id}
+                  onPlay={handlePlay}
+                  onLicense={setLicenseBeat}
+                />
+              ))}
+            </div>
 
             {page < pages && (
               <div className="mt-10 text-center">
@@ -645,8 +606,7 @@ export default function BeatsClient() {
         />
       )}
 
-      {/* Mobile bottom sheet for expanded card detail */}
-      <TrackCardSheet />
+      <TrackDetailOverlay />
     </div>
   );
 }

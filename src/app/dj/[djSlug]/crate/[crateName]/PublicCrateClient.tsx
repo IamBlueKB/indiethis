@@ -8,7 +8,7 @@ import { useExpandedCard } from "@/store/expandedCard";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
+import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 
 type TrackItem = {
   id: string;
@@ -240,6 +240,6 @@ export default function PublicCrateClient({
       <Footer />
     </div>
 
-    <TrackCardSheet />
+    <TrackDetailOverlay />
   );
 }

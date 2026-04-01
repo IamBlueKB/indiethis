@@ -9,6 +9,7 @@ export type TrackCardData = {
   genre: string | null;
   bpm: number | null;
   musicalKey: string | null;
+  mood?: string | null;
   plays?: number;
   artist: {
     id: string;
@@ -18,24 +19,22 @@ export type TrackCardData = {
   };
 };
 
-type ExpandedCardStore = {
-  // Canvas video — which card's canvas is playing right now
+type OverlayStore = {
+  // Canvas video — which card's canvas is currently playing
   activeCanvasId: string | null;
   setActiveCanvas: (id: string | null) => void;
 
-  // Expanded card — the card showing full detail
-  expandedId: string | null;
-  expandedData: TrackCardData | null;
+  // Track detail overlay
+  overlayData: TrackCardData | null;
   open: (data: TrackCardData) => void;
   close: () => void;
 };
 
-export const useExpandedCard = create<ExpandedCardStore>((set) => ({
+export const useExpandedCard = create<OverlayStore>((set) => ({
   activeCanvasId: null,
   setActiveCanvas: (id) => set({ activeCanvasId: id }),
 
-  expandedId: null,
-  expandedData: null,
-  open: (data) => set({ expandedId: data.id, expandedData: data }),
-  close: () => set({ expandedId: null, expandedData: null }),
+  overlayData: null,
+  open: (data) => set({ overlayData: data }),
+  close: () => set({ overlayData: null }),
 }));

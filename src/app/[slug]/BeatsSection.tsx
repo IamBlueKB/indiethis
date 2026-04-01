@@ -6,8 +6,7 @@ import { useExpandedCard } from "@/store/expandedCard";
 import { Music2, Radio } from "lucide-react";
 import Link from "next/link";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,8 +35,7 @@ const GLASS: React.CSSProperties = {
 
 function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
-  const { open: openDetail } = useExpandedCard();
-  const isMobile = useIsMobile();
+  const { open } = useExpandedCard();
 
   const isThis        = currentTrack?.id === beat.id;
   const isThisPlaying = isThis && isPlaying;
@@ -55,14 +53,12 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
   }
 
   function handleCardClick() {
-    if (isMobile) {
-      openDetail({
-        id: beat.id, title: beat.title,
-        coverArtUrl: beat.coverArtUrl, canvasVideoUrl: null,
-        fileUrl: beat.fileUrl, genre: null, bpm: beat.bpm, musicalKey: beat.musicalKey,
-        artist: { id: "", name: artistSlug, artistSlug },
-      });
-    }
+    open({
+      id: beat.id, title: beat.title,
+      coverArtUrl: beat.coverArtUrl, canvasVideoUrl: null,
+      fileUrl: beat.fileUrl, genre: null, bpm: beat.bpm, musicalKey: beat.musicalKey,
+      artist: { id: "", name: artistSlug, artistSlug },
+    });
   }
 
   const meta = [beat.bpm && `${beat.bpm} BPM`, beat.musicalKey].filter(Boolean).join(" · ");
@@ -208,7 +204,7 @@ export default function BeatsSection({
         </Link>
       </div>
 
-      <TrackCardSheet />
+      <TrackDetailOverlay />
     </section>
   );
 }

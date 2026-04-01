@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Music2, Loader2, Sliders } from "lucide-react";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { motion } from "framer-motion";
 import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
 import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import ExpandedCardContent from "@/components/tracks/ExpandedCardContent";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import type { RadarFilterState }   from "./InteractiveRadarFilter";
 
@@ -138,13 +136,11 @@ export default function RadarFilterResults({
       )}
 
       {/* Grid */}
-      <LayoutGroup>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
-          {results.map(r => (
-            <ResultCard key={r.id} result={r} onPlay={onPlay} />
-          ))}
-        </div>
-      </LayoutGroup>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {results.map(r => (
+          <ResultCard key={r.id} result={r} onPlay={onPlay} />
+        ))}
+      </div>
 
       {/* Load More */}
       {hasMore && !loading && (
@@ -176,10 +172,7 @@ function ResultCard({
   onPlay:  RadarFilterResultsProps["onPlay"];
 }) {
   const matchPct = Math.round(result.similarity * 100);
-  const isMobile = useIsMobile();
-  const { expandedId, open, close } = useExpandedCard();
-  const isExpanded = expandedId === result.id;
-  const cardRef = useRef<HTMLDivElement>(null);
+  const { open } = useExpandedCard();
 
   const cardData: TrackCardData = {
     id:            result.id,
@@ -197,29 +190,13 @@ function ResultCard({
     },
   };
 
-  function handleCardClick() {
-    if (isMobile) { open(cardData); return; }
-    isExpanded ? close() : open(cardData);
-  }
-
-  useEffect(() => {
-    if (!isExpanded || isMobile) return;
-    function onDocClick(e: MouseEvent) {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) close();
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [isExpanded, isMobile, close]);
-
   return (
     <motion.div
-      ref={cardRef}
-      layout
       className="rounded-xl border flex flex-col overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.35)] cursor-pointer"
-      style={{ background: "#111111", borderColor: isExpanded ? "rgba(212,168,67,0.3)" : "#1A1A1A" }}
-      whileHover={!isExpanded ? { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" } : {}}
+      style={{ background: "#111111", borderColor: "#1A1A1A" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
-      onClick={handleCardClick}
+      onClick={() => open(cardData)}
     >
       {/* Artwork + play overlay */}
       <HoverCardCover
@@ -245,7 +222,7 @@ function ResultCard({
       </HoverCardCover>
 
       {/* Info */}
-      <div className="p-3 flex flex-col gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+      <div className="p-3 flex flex-col gap-2 flex-1" onClick={e => e.stopPropagation()}>
         <div>
           <p className="text-sm font-semibold truncate" style={{ color: "#FFFFFF" }}>{result.title}</p>
           {result.artistSlug ? (
@@ -270,21 +247,6 @@ function ResultCard({
         </div>
       </div>
 
-      {/* Desktop expanded view */}
-      <AnimatePresence>
-        {isExpanded && !isMobile && (
-          <motion.div
-            key="expanded"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden" }}
-          >
-            <ExpandedCardContent data={cardData} onClose={close} />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

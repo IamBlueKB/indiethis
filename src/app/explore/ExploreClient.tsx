@@ -6,12 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
-import { useExpandedCard } from "@/store/expandedCard";
+import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
+import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 import SimilarTracks from "@/components/audio/SimilarTracks";
 import SimilarArtists from "@/components/audio/SimilarArtists";
 import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
@@ -212,17 +212,12 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
 
   function handleCardClick() {
-    // On mobile, open sheet. On desktop, play directly (horizontal scroll — no inline expand).
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      open({
-        id: track.id, title: track.title,
-        coverArtUrl: track.coverArtUrl, canvasVideoUrl: track.canvasVideoUrl,
-        fileUrl: track.fileUrl, genre: track.genre, bpm: null, musicalKey: null, plays: track.plays,
-        artist: { id: track.artist.id, name: track.artist.name, artistSlug: track.artist.artistSlug ?? null, artistSite: track.artist.artistSite ?? null },
-      });
-    } else {
-      onPlay(track);
-    }
+    open({
+      id: track.id, title: track.title,
+      coverArtUrl: track.coverArtUrl, canvasVideoUrl: track.canvasVideoUrl,
+      fileUrl: track.fileUrl, genre: track.genre, bpm: null, musicalKey: null, plays: track.plays,
+      artist: { id: track.artist.id, name: track.artist.name, artistSlug: track.artist.artistSlug ?? null, artistSite: track.artist.artistSite ?? null },
+    });
   }
 
   return (
@@ -392,18 +387,25 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
 function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPlaying: boolean; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
   const artistSlug = beat.artist.artistSite?.isPublished ? beat.artist.artistSlug : null;
+  const { open } = useExpandedCard();
+  const cardData: TrackCardData = {
+    id: beat.id, title: beat.title, coverArtUrl: beat.coverArtUrl, canvasVideoUrl: null,
+    fileUrl: beat.fileUrl, genre: beat.genre, bpm: beat.bpm, musicalKey: beat.musicalKey,
+    artist: { id: beat.artist.id, name: beat.artist.name, artistSlug: beat.artist.artistSlug ?? null, artistSite: beat.artist.artistSite ?? null },
+  };
   return (
     <motion.div
-      className="rounded-xl border p-3 transition-[border-color] hover:border-accent/40"
+      className="rounded-xl border p-3 transition-[border-color] hover:border-[rgba(212,168,67,0.25)] cursor-pointer"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
       whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      onClick={() => open(cardData)}
     >
       <HoverCardCover
         id={beat.id}
         coverArtUrl={beat.coverArtUrl}
         isPlaying={isPlaying}
-        onPlay={() => onPlay(beat)}
+        onPlay={(e) => { e.stopPropagation(); onPlay(beat); }}
         className="w-full aspect-square rounded-lg overflow-hidden mb-2.5 cursor-pointer"
       >
         {!beat.coverArtUrl && (
@@ -417,7 +419,7 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
           </span>
         )}
       </HoverCardCover>
-      <p className="text-xs font-semibold text-white truncate cursor-pointer" onClick={() => onPlay(beat)}>{beat.title}</p>
+      <p className="text-xs font-semibold text-white truncate" onClick={(e) => { e.stopPropagation(); onPlay(beat); }}>{beat.title}</p>
       {artistSlug ? (
         <Link href={`/${artistSlug}`} className="text-[10px] truncate mb-1 block hover:underline" style={{ color: "#888" }}>
           {beat.artist.name}
@@ -445,7 +447,7 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
       </div>
       <SimilarTracks sourceId={beat.id} sourceType="beat" limit={3} />
       <button
-        onClick={() => onLicense(beat)}
+        onClick={(e) => { e.stopPropagation(); onLicense(beat); }}
         className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors"
         style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
       >
@@ -1806,8 +1808,7 @@ export default function ExploreClient() {
         />
       )}
 
-      {/* Mobile bottom sheet for track/beat detail */}
-      <TrackCardSheet />
+      <TrackDetailOverlay />
     </div>
   );
 }
