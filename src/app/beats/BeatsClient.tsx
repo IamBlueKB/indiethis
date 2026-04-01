@@ -14,6 +14,7 @@ import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import PublicNav from "@/components/layout/PublicNav";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 import ExpandedCardContent from "@/components/tracks/ExpandedCardContent";
+import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -643,6 +644,9 @@ export default function BeatsClient() {
           onClose={() => setLicenseBeat(null)}
         />
       )}
+
+      {/* Mobile bottom sheet for expanded card detail */}
+      <TrackCardSheet />
     </div>
   );
 }

@@ -6,10 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
+import { useExpandedCard } from "@/store/expandedCard";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
+import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
 import SimilarTracks from "@/components/audio/SimilarTracks";
 import SimilarArtists from "@/components/audio/SimilarArtists";
 import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
@@ -205,20 +207,37 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
   const { currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
+  const { open } = useExpandedCard();
   const isPlaying = currentTrack?.id === track.id && storeIsPlaying;
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
+
+  function handleCardClick() {
+    // On mobile, open sheet. On desktop, play directly (horizontal scroll — no inline expand).
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      open({
+        id: track.id, title: track.title,
+        coverArtUrl: track.coverArtUrl, canvasVideoUrl: track.canvasVideoUrl,
+        fileUrl: track.fileUrl, genre: track.genre, bpm: null, musicalKey: null, plays: track.plays,
+        artist: { id: track.artist.id, name: track.artist.name, artistSlug: track.artist.artistSlug ?? null, artistSite: track.artist.artistSite ?? null },
+      });
+    } else {
+      onPlay(track);
+    }
+  }
+
   return (
     <motion.div
       className="shrink-0 w-40 cursor-pointer"
       whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      onClick={handleCardClick}
     >
       <HoverCardCover
         id={track.id}
         coverArtUrl={track.coverArtUrl}
         canvasVideoUrl={track.canvasVideoUrl}
         isPlaying={isPlaying}
-        onPlay={() => onPlay(track)}
+        onPlay={(e) => { e.stopPropagation(); onPlay(track); }}
         className="w-40 h-40 rounded-xl overflow-hidden mb-2.5"
       >
         {isNew && (
@@ -1786,6 +1805,9 @@ export default function ExploreClient() {
           onClose={() => setLicenseBeat(null)}
         />
       )}
+
+      {/* Mobile bottom sheet for track/beat detail */}
+      <TrackCardSheet />
     </div>
   );
 }

@@ -4,9 +4,11 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Music2, Users } from "lucide-react";
 import { useAudioStore } from "@/store";
+import { useExpandedCard } from "@/store/expandedCard";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
+import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
 
 type TrackItem = {
   id: string;
@@ -69,6 +71,7 @@ export default function PublicCrateClient({
   crate: CrateData;
 }) {
   const { play, currentTrack, isPlaying } = useAudioStore();
+  const { open: openDetail } = useExpandedCard();
   const didSetCookie = useRef(false);
 
   const djDisplayName = djProfile.user.artistName ?? djProfile.user.name;
@@ -157,10 +160,16 @@ export default function PublicCrateClient({
               return (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 p-3 rounded-xl transition-all group"
+                  className="flex items-center gap-3 p-3 rounded-xl transition-all group cursor-pointer"
                   style={{ backgroundColor: isActive ? "rgba(212,168,67,0.08)" : "transparent" }}
                   onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.03)"; }}
                   onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                  onClick={() => openDetail({
+                    id: track.id, title: track.title,
+                    coverArtUrl: track.coverArtUrl, canvasVideoUrl: track.canvasVideoUrl,
+                    fileUrl: track.fileUrl, genre: track.genre, bpm: track.bpm, musicalKey: track.musicalKey,
+                    artist: { id: artist.id, name: artistName, artistSlug: artistSlug },
+                  })}
                 >
                   {/* Number */}
                   <div className="w-6 text-center text-xs shrink-0" style={{ color: "#555" }}>
@@ -175,7 +184,7 @@ export default function PublicCrateClient({
                     coverArtUrl={track.coverArtUrl}
                     canvasVideoUrl={track.canvasVideoUrl}
                     isPlaying={isActive && isPlaying}
-                    onPlay={() => play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined })}
+                    onPlay={(e) => { e.stopPropagation(); play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }); }}
                     buttonSize="sm"
                     className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
                   >
@@ -191,7 +200,7 @@ export default function PublicCrateClient({
                     <p className="text-sm font-semibold truncate" style={{ color: isActive ? "#D4A843" : "white" }}>{track.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {artistSlug
-                        ? <Link href={`/${artistSlug}`} className="text-xs hover:underline" style={{ color: "#888" }}>{artistName}</Link>
+                        ? <Link href={`/${artistSlug}`} className="text-xs hover:underline" style={{ color: "#888" }} onClick={e => e.stopPropagation()}>{artistName}</Link>
                         : <span className="text-xs" style={{ color: "#888" }}>{artistName}</span>
                       }
                     </div>
@@ -230,5 +239,7 @@ export default function PublicCrateClient({
 
       <Footer />
     </div>
+
+    <TrackCardSheet />
   );
 }

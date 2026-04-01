@@ -2,9 +2,12 @@
 
 import { motion } from "framer-motion";
 import { useAudioStore, type AudioTrack } from "@/store";
+import { useExpandedCard } from "@/store/expandedCard";
 import { Music2, Radio } from "lucide-react";
 import Link from "next/link";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
+import { TrackCardSheet } from "@/components/tracks/TrackCardSheet";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +36,8 @@ const GLASS: React.CSSProperties = {
 
 function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
+  const { open: openDetail } = useExpandedCard();
+  const isMobile = useIsMobile();
 
   const isThis        = currentTrack?.id === beat.id;
   const isThisPlaying = isThis && isPlaying;
@@ -49,22 +54,34 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
     play(track);
   }
 
+  function handleCardClick() {
+    if (isMobile) {
+      openDetail({
+        id: beat.id, title: beat.title,
+        coverArtUrl: beat.coverArtUrl, canvasVideoUrl: null,
+        fileUrl: beat.fileUrl, genre: null, bpm: beat.bpm, musicalKey: beat.musicalKey,
+        artist: { id: "", name: artistSlug, artistSlug },
+      });
+    }
+  }
+
   const meta = [beat.bpm && `${beat.bpm} BPM`, beat.musicalKey].filter(Boolean).join(" · ");
 
   return (
     <motion.div
       id={`beat-${beat.id}`}
-      className="shrink-0 w-[200px] rounded-2xl overflow-hidden flex flex-col"
+      className="shrink-0 w-[200px] rounded-2xl overflow-hidden flex flex-col cursor-pointer"
       style={{ ...GLASS, scrollMarginTop: "80px" }}
       whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      onClick={handleCardClick}
     >
       {/* Cover art + play button */}
       <HoverCardCover
         id={beat.id}
         coverArtUrl={beat.coverArtUrl}
         isPlaying={isThisPlaying}
-        onPlay={handlePlay}
+        onPlay={(e) => { e.stopPropagation(); handlePlay(); }}
         className="w-full aspect-square bg-white/5 shrink-0 overflow-hidden"
       >
         {!beat.coverArtUrl && (
@@ -102,7 +119,7 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
         )}
 
         {/* CTA buttons */}
-        <div className="flex gap-1.5 mt-auto pt-1.5">
+        <div className="flex gap-1.5 mt-auto pt-1.5" onClick={e => e.stopPropagation()}>
           <Link
             href="/beats"
             className="flex-1 text-center py-1.5 rounded-lg text-[11px] font-semibold no-underline transition-colors hover:brightness-110"
@@ -190,6 +207,8 @@ export default function BeatsSection({
           </p>
         </Link>
       </div>
+
+      <TrackCardSheet />
     </section>
   );
 }
