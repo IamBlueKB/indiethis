@@ -14,6 +14,8 @@ import Features from "@/components/public/Features";
 import ForArtists from "@/components/public/ForArtists";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "About IndieThis — The Label You Don't Need",
   description:
