@@ -57,24 +57,24 @@ function Transport({ data }: { data: TrackCardData }) {
           }
         </button>
 
-        {/* Scrubber */}
+        {/* Scrubber + time */}
         <div className="flex-1 flex flex-col gap-1.5">
+          {/* Hit area is taller than visual bar */}
           <div
-            className="w-full h-1 rounded-full cursor-pointer group/scrub"
-            style={{ backgroundColor: "#2a2a2a" }}
+            className="w-full py-2 cursor-pointer"
             onClick={handleScrub}
           >
-            <div
-              className="h-full rounded-full pointer-events-none"
-              style={{ width: `${progress * 100}%`, backgroundColor: "#D4A843", transition: "width 0.25s linear" }}
-            />
-          </div>
-          {isLoaded && duration > 0 && (
-            <div className="flex justify-between text-[10px] tabular-nums" style={{ color: "#555" }}>
-              <span>{fmt(currentTime)}</span>
-              <span>{fmt(duration)}</span>
+            <div className="w-full h-1 rounded-full" style={{ backgroundColor: "#2a2a2a" }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${progress * 100}%`, backgroundColor: "#D4A843", transition: "width 0.25s linear" }}
+              />
             </div>
-          )}
+          </div>
+          <div className="flex justify-between text-[10px] tabular-nums" style={{ color: "#555" }}>
+            <span>{isLoaded ? fmt(currentTime) : "0:00"}</span>
+            <span>{isLoaded && duration > 0 ? fmt(duration) : "--:--"}</span>
+          </div>
         </div>
       </div>
     </div>
