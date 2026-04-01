@@ -38,6 +38,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/dl/digital/")) return true;
   // Public studio contact form — /api/studio/[studioId]/contact
   if (/^\/api\/studio\/[^/]+\/contact$/.test(pathname)) return true;
+  // Public studio booking request — /api/studio/[studioId]/book-request
+  if (/^\/api\/studio\/[^/]+\/book-request$/.test(pathname)) return true;
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/favicon")) return true;
   // Quick send download links — no auth required
