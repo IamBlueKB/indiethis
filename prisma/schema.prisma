@@ -346,6 +346,9 @@ model Track {
   fingerprint          AudioFingerprint?
   shieldResults        TrackShieldResult[]
   canvasVideoUrl       String?
+  producer             String?
+  songwriter           String?
+  featuredArtists      String?
 }
 
 model AudioFingerprint {
@@ -2519,6 +2522,8 @@ enum AgentType {
   PAYMENT_RECOVERY
   TREND_FORECASTER
   PRODUCER_ARTIST_MATCH
+  BOOKING_AGENT
+  COLLABORATION_MATCHMAKER
 }
 
 model TrackShieldScan {
