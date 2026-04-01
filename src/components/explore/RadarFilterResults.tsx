@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Play, Music2, Loader2, Sliders } from "lucide-react";
+import { Music2, Loader2, Sliders } from "lucide-react";
+import { motion } from "framer-motion";
 import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import type { RadarFilterState }   from "./InteractiveRadarFilter";
 
@@ -171,56 +173,40 @@ function ResultCard({
   const matchPct = Math.round(result.similarity * 100);
 
   return (
-    <div
-      className="rounded-xl border flex flex-col overflow-hidden transition-all hover:border-[rgba(212,168,67,0.35)]"
+    <motion.div
+      className="rounded-xl border flex flex-col overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.35)]"
       style={{ background: "#111111", borderColor: "#1A1A1A" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
       {/* Artwork + play overlay */}
-      <div className="relative aspect-square">
-        {result.artworkUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={result.artworkUrl}
-            alt={result.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"
+      <HoverCardCover
+        id={result.id}
+        coverArtUrl={result.artworkUrl}
+        onPlay={() => onPlay(result.id, result.title, result.artistName, result.fileUrl, result.artworkUrl ?? undefined)}
+        className="relative aspect-square overflow-hidden"
+      >
+        {!result.artworkUrl && (
+          <div className="absolute inset-0 flex items-center justify-center"
             style={{ background: "linear-gradient(135deg,#1a1a1a,#111)" }}>
             <Music2 size={28} style={{ color: "#333" }} />
           </div>
         )}
-
         {/* Match badge */}
         <div
-          className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold"
+          className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
           style={{ background: "rgba(0,0,0,0.7)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.4)" }}
         >
           {matchPct}% match
         </div>
-
         {/* Type badge */}
         <div
-          className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase"
+          className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase"
           style={{ background: "rgba(0,0,0,0.7)", color: "#888" }}
         >
           {result.type}
         </div>
-
-        {/* Play button */}
-        <button
-          onClick={() => onPlay(result.id, result.title, result.artistName, result.fileUrl, result.artworkUrl ?? undefined)}
-          className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-          style={{ background: "rgba(0,0,0,0.45)" }}
-        >
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(212,168,67,0.9)" }}
-          >
-            <Play size={18} fill="#0A0A0A" style={{ color: "#0A0A0A", marginLeft: 2 }} />
-          </div>
-        </button>
-      </div>
+      </HoverCardCover>
 
       {/* Info */}
       <div className="p-3 flex flex-col gap-2 flex-1">
@@ -272,6 +258,6 @@ function ResultCard({
           />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -4,10 +4,12 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 import SimilarTracks from "@/components/audio/SimilarTracks";
 import SimilarArtists from "@/components/audio/SimilarArtists";
 import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
@@ -202,29 +204,29 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 // ── Track Card ─────────────────────────────────────────────────────────────
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
+  const { currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
+  const isPlaying = currentTrack?.id === track.id && storeIsPlaying;
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
   return (
-    <div className="shrink-0 w-40 group">
-      <div
-        className="relative w-40 h-40 rounded-xl overflow-hidden mb-2.5 cursor-pointer"
-        style={{ backgroundColor: "#1a1a1a" }}
-        onClick={() => onPlay(track)}
+    <motion.div
+      className="shrink-0 w-40 cursor-pointer"
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
+    >
+      <HoverCardCover
+        id={track.id}
+        coverArtUrl={track.coverArtUrl}
+        canvasVideoUrl={track.canvasVideoUrl}
+        isPlaying={isPlaying}
+        onPlay={() => onPlay(track)}
+        className="w-40 h-40 rounded-xl overflow-hidden mb-2.5"
       >
-        {track.coverArtUrl
-          ? <img src={track.coverArtUrl} alt="" className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center"><Music2 size={28} style={{ color: "#444" }} /></div>
-        }
         {isNew && (
-          <span className="absolute top-2 left-2 text-[9px] font-black px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+          <span className="absolute top-2 left-2 z-10 text-[9px] font-black px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
             NEW
           </span>
         )}
-        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/40">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: "#D4A843" }}>
-            <Play size={16} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
-          </div>
-        </div>
-      </div>
+      </HoverCardCover>
       <p className="text-sm font-semibold text-white truncate cursor-pointer" onClick={() => onPlay(track)}>{track.title}</p>
       {artistSlug ? (
         <Link href={`/${artistSlug}`} className="text-[11px] truncate mt-0.5 block hover:underline" style={{ color: "#888" }}>
@@ -242,7 +244,7 @@ function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: Tra
           More from {track.artist.name} →
         </Link>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -372,40 +374,30 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
   const artistSlug = beat.artist.artistSite?.isPublished ? beat.artist.artistSlug : null;
   return (
-    <div
-      className="rounded-xl border p-3 group transition-all hover:border-accent/40"
+    <motion.div
+      className="rounded-xl border p-3 transition-[border-color] hover:border-accent/40"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
-      <div
-        className="relative w-full aspect-square rounded-lg overflow-hidden mb-2.5 cursor-pointer"
-        style={{ backgroundColor: "#1a1a1a" }}
-        onClick={() => onPlay(beat)}
+      <HoverCardCover
+        id={beat.id}
+        coverArtUrl={beat.coverArtUrl}
+        isPlaying={isPlaying}
+        onPlay={() => onPlay(beat)}
+        className="w-full aspect-square rounded-lg overflow-hidden mb-2.5 cursor-pointer"
       >
-        {beat.coverArtUrl
-          ? <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center"><Headphones size={24} style={{ color: "#444" }} /></div>
-        }
-        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/50">
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ backgroundColor: isPlaying ? "#E85D4A" : "#D4A843" }}
-          >
-            {isPlaying ? (
-              <span className="flex gap-0.5">
-                <span className="w-0.5 h-3 rounded-sm animate-pulse" style={{ backgroundColor: "#0A0A0A" }} />
-                <span className="w-0.5 h-3 rounded-sm animate-pulse delay-75" style={{ backgroundColor: "#0A0A0A" }} />
-              </span>
-            ) : (
-              <Play size={14} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
-            )}
+        {!beat.coverArtUrl && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Headphones size={24} style={{ color: "#444" }} />
           </div>
-        </div>
+        )}
         {beat.beatLeaseSettings?.streamLeaseEnabled && (
-          <span className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(52,199,89,0.15)", color: "#34C759", border: "1px solid rgba(52,199,89,0.3)" }}>
+          <span className="absolute top-1.5 right-1.5 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(52,199,89,0.15)", color: "#34C759", border: "1px solid rgba(52,199,89,0.3)" }}>
             LEASE
           </span>
         )}
-      </div>
+      </HoverCardCover>
       <p className="text-xs font-semibold text-white truncate cursor-pointer" onClick={() => onPlay(beat)}>{beat.title}</p>
       {artistSlug ? (
         <Link href={`/${artistSlug}`} className="text-[10px] truncate mb-1 block hover:underline" style={{ color: "#888" }}>
@@ -440,7 +432,7 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
       >
         License
       </button>
-    </div>
+    </motion.div>
   );
 }
 

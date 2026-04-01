@@ -3,12 +3,14 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
-  Search, Play, Headphones, Loader2, X, ChevronDown,
+  Search, Headphones, Loader2, X, ChevronDown,
   Radio, ShoppingBag, TrendingUp,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import PublicNav from "@/components/layout/PublicNav";
+import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -94,42 +96,29 @@ function BeatCard({
   const artistSlug     = beat.artist.artistSlug;
 
   return (
-    <div
-      className="rounded-2xl border overflow-hidden transition-all hover:border-[rgba(212,168,67,0.25)]"
+    <motion.div
+      className="rounded-2xl border overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.25)]"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
       {/* Cover art */}
-      <div
-        className="relative w-full aspect-square overflow-hidden group cursor-pointer"
-        style={{ backgroundColor: "#1a1a1a" }}
-        onClick={() => onPlay(beat)}
+      <HoverCardCover
+        id={beat.id}
+        coverArtUrl={beat.coverArtUrl}
+        isPlaying={isPlaying}
+        onPlay={() => onPlay(beat)}
+        className="w-full aspect-square overflow-hidden cursor-pointer"
       >
-        {beat.coverArtUrl ? (
-          <img src={beat.coverArtUrl} alt={beat.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
+        {/* Fallback icon when no cover */}
+        {!beat.coverArtUrl && (
+          <div className="absolute inset-0 flex items-center justify-center">
             <Headphones size={32} style={{ color: "#2a2a2a" }} />
           </div>
         )}
-        {/* Play overlay — always visible at 80%, full on hover */}
-        <div className="absolute inset-0 flex items-center justify-center transition-all bg-black/0 group-hover:bg-black/50">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg opacity-80 group-hover:opacity-100 transition-opacity"
-            style={{ backgroundColor: isPlaying ? "#E85D4A" : "#D4A843" }}
-          >
-            {isPlaying ? (
-              <span className="flex gap-0.5">
-                <span className="w-1 h-4 rounded-sm animate-pulse" style={{ backgroundColor: "#0A0A0A" }} />
-                <span className="w-1 h-4 rounded-sm animate-pulse delay-75" style={{ backgroundColor: "#0A0A0A" }} />
-              </span>
-            ) : (
-              <Play size={18} fill="#0A0A0A" style={{ color: "#0A0A0A", marginLeft: 2 }} />
-            )}
-          </div>
-        </div>
         {/* Stream Lease badge */}
         {streamEnabled && (
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 z-10">
             <span
               className="text-[9px] font-black px-2 py-0.5 rounded-full"
               style={{ backgroundColor: "rgba(212,168,67,0.9)", color: "#0A0A0A" }}
@@ -138,7 +127,7 @@ function BeatCard({
             </span>
           </div>
         )}
-      </div>
+      </HoverCardCover>
 
       {/* Card body */}
       <div className="p-3 space-y-1.5">
@@ -220,7 +209,7 @@ function BeatCard({
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

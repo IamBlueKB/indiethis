@@ -1,8 +1,10 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { useAudioStore, type AudioTrack } from "@/store";
-import { Play, Pause, Music2, Radio } from "lucide-react";
+import { Music2, Radio } from "lucide-react";
 import Link from "next/link";
+import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,62 +52,37 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
   const meta = [beat.bpm && `${beat.bpm} BPM`, beat.musicalKey].filter(Boolean).join(" · ");
 
   return (
-    <div
+    <motion.div
       id={`beat-${beat.id}`}
       className="shrink-0 w-[200px] rounded-2xl overflow-hidden flex flex-col"
       style={{ ...GLASS, scrollMarginTop: "80px" }}
+      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
       {/* Cover art + play button */}
-      <div className="relative w-full aspect-square bg-white/5 shrink-0">
-        {beat.coverArtUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={beat.coverArtUrl}
-            alt={beat.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
+      <HoverCardCover
+        id={beat.id}
+        coverArtUrl={beat.coverArtUrl}
+        isPlaying={isThisPlaying}
+        onPlay={handlePlay}
+        className="w-full aspect-square bg-white/5 shrink-0 overflow-hidden"
+      >
+        {!beat.coverArtUrl && (
+          <div className="absolute inset-0 flex items-center justify-center">
             <Music2 size={28} style={{ color: "rgba(255,255,255,0.2)" }} />
           </div>
         )}
-
-        {/* Play overlay */}
-        <button
-          onClick={handlePlay}
-          className="absolute inset-0 flex items-center justify-center transition-opacity"
-          style={{
-            backgroundColor: isThisPlaying ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0)",
-          }}
-          onMouseEnter={(e) => { if (!isThisPlaying) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(0,0,0,0.35)"; }}
-          onMouseLeave={(e) => { if (!isThisPlaying) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(0,0,0,0)"; }}
-          aria-label={isThisPlaying ? "Pause" : "Play"}
-        >
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-105"
-            style={{
-              backgroundColor: isThis ? "var(--accent)" : "rgba(255,255,255,0.9)",
-              opacity: isThisPlaying ? 1 : 0.92,
-            }}
-          >
-            {isThisPlaying
-              ? <Pause size={16} fill="#0A0A0A" style={{ color: "#0A0A0A" }} />
-              : <Play  size={16} fill="#0A0A0A" style={{ color: "#0A0A0A", marginLeft: 2 }} />
-            }
-          </div>
-        </button>
-
         {/* Stream Lease badge */}
         {beat.streamLeaseEnabled && (
           <div
-            className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+            className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
             style={{ backgroundColor: "rgba(232,112,64,0.9)", color: "#fff" }}
           >
             <Radio size={8} />
             $1/mo
           </div>
         )}
-      </div>
+      </HoverCardCover>
 
       {/* Info */}
       <div className="flex flex-col gap-1.5 p-3 flex-1">
@@ -145,7 +122,7 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

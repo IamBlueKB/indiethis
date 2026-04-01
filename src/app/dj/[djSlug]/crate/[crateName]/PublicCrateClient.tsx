@@ -2,10 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Play, Music2, Users } from "lucide-react";
+import { Music2, Users } from "lucide-react";
 import { useAudioStore } from "@/store";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
+import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 
 type TrackItem = {
   id: string;
@@ -169,19 +170,21 @@ export default function PublicCrateClient({
                   </div>
 
                   {/* Cover + play */}
-                  <button
-                    onClick={() => play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined })}
-                    className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative"
-                    style={{ backgroundColor: "#1a1a1a" }}
+                  <HoverCardCover
+                    id={track.id}
+                    coverArtUrl={track.coverArtUrl}
+                    canvasVideoUrl={track.canvasVideoUrl}
+                    isPlaying={isActive && isPlaying}
+                    onPlay={() => play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined })}
+                    buttonSize="sm"
+                    className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
                   >
-                    {(track.coverArtUrl || track.canvasVideoUrl)
-                      ? <img src={track.coverArtUrl ?? ''} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><Music2 size={14} style={{ color: "#444" }} /></div>
-                    }
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
-                      <Play size={12} fill="#D4A843" style={{ color: "#D4A843" }} />
-                    </div>
-                  </button>
+                    {!track.coverArtUrl && !track.canvasVideoUrl && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Music2 size={14} style={{ color: "#444" }} />
+                      </div>
+                    )}
+                  </HoverCardCover>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
