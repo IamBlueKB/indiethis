@@ -28,6 +28,7 @@ import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
 import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
 import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
+import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -862,6 +863,16 @@ export async function POST(req: NextRequest) {
           if (userId) {
             void generateTrendReport(userId).catch(
               (err) => console.error("[webhook] TREND_REPORT error:", err)
+            );
+          }
+          break;
+        }
+
+        // --- Producer-Artist Match: generate match report asynchronously ---
+        if (tool === "PRODUCER_ARTIST_MATCH") {
+          if (userId) {
+            void generateProducerArtistMatch(userId).catch(
+              (err) => console.error("[webhook] PRODUCER_ARTIST_MATCH error:", err)
             );
           }
           break;

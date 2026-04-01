@@ -186,6 +186,21 @@ export async function POST(req: NextRequest) {
     results.trendForecaster = isFriday ? "skipped (not due)" : "skipped (not Friday)";
   }
 
+  // ── Producer-Artist Match — weekly teaser (Thursday) ─────────────────────────
+  const isThursday = day === 4;
+  const shouldRunProducerMatch = isThursday && await shouldRun("PRODUCER_ARTIST_MATCH", 6 * 24); // 6d guard
+  if (shouldRunProducerMatch) {
+    try {
+      const { runProducerArtistMatchAgent } = await import("@/lib/agents/producer-artist-match");
+      const result = await runProducerArtistMatchAgent();
+      results.producerArtistMatch = `checked ${result.checked}, teasers=${result.teasersSent}`;
+    } catch (err) {
+      results.producerArtistMatch = `error: ${String(err)}`;
+    }
+  } else {
+    results.producerArtistMatch = isThursday ? "skipped (not due)" : "skipped (not Thursday)";
+  }
+
   // ── Payment Recovery — daily sweep (Day 2/5/10 escalation emails) ──────────
   const shouldRunPaymentRecovery = await shouldRun("PAYMENT_RECOVERY", 22); // 22h guard
   if (shouldRunPaymentRecovery) {
