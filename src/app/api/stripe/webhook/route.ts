@@ -406,6 +406,28 @@ export async function POST(req: NextRequest) {
           void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
           void triggerMerchAutomations(artistId, buyerEmail);
 
+          // Decrement stock for self-fulfilled variants
+          for (const ri of rawItems) {
+            const v = variants.find((vv) => vv.id === ri.v);
+            if (!v || v.product.fulfillmentType !== "SELF_FULFILLED") continue;
+            const qty = Math.max(1, ri.q);
+            void db.merchVariant.update({
+              where: { id: v.id },
+              data:  { stockQuantity: { decrement: qty } },
+            }).then(async (updated) => {
+              const remaining = updated.stockQuantity ?? 0;
+              if (remaining <= 3 && remaining >= 0) {
+                void createNotification({
+                  userId:  artistId,
+                  type:    "MERCH_ORDER",
+                  title:   "Low stock warning",
+                  message: `Your "${v.product.title}" has only ${remaining} left in stock`,
+                  link:    "/dashboard/merch",
+                }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
+
           // Notify artist
           const firstProduct = variants[0]!.product;
           const artistEarningsDisplay = artistEarningsTotal.toFixed(2);
@@ -414,8 +436,8 @@ export async function POST(req: NextRequest) {
             type:    "MERCH_ORDER",
             title:   "New merch order!",
             message: rawItems.length === 1
-              ? `Someone ordered "${firstProduct.title}" — you earn $${artistEarningsDisplay}`
-              : `New ${rawItems.length}-item order — you earn $${artistEarningsDisplay}`,
+              ? `You sold a "${firstProduct.title}" to ${buyerName}! You earn $${artistEarningsDisplay}`
+              : `You sold ${rawItems.length} items to ${buyerName}! You earn $${artistEarningsDisplay}`,
             link:    "/dashboard/merch",
           }).catch(() => {});
 

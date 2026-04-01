@@ -19,6 +19,10 @@ import {
   Disc3,
   AlertTriangle,
   MessageSquare,
+  ShoppingBag,
+  Package,
+  Truck,
+  CircleDot,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -72,6 +76,13 @@ export default async function AdminDashboardPage({
     totalConvertedThisMonth,
     studioLeadBreakdown,
     smsSentThisMonth,
+    merchOrdersThisMonth,
+    merchRevenueAgg,
+    merchStatusBreakdown,
+    merchTopProductsAgg,
+    merchOverdueCount,
+    lastPrintfulOrder,
+    allMerchProducts,
   ] = await Promise.all([
     db.user.count({ where: { role: "ARTIST" } }),
     db.studio.count(),
@@ -135,6 +146,31 @@ export default async function AdminDashboardPage({
     db.broadcastLog.aggregate({
       where: { sentAt: { gte: startOfMonth } },
       _sum:  { recipientCount: true },
+    }),
+    // Merch: orders + revenue this month
+    db.merchOrder.count({ where: { createdAt: { gte: startOfMonth } } }),
+    db.merchOrder.aggregate({ where: { createdAt: { gte: startOfMonth } }, _sum: { platformCut: true } }),
+    // Merch: status breakdown
+    db.merchOrder.groupBy({ by: ["fulfillmentStatus"], _count: { _all: true } }),
+    // Merch: top 5 selling products this month by units sold
+    db.merchOrderItem.groupBy({
+      by: ["productId"],
+      where: { order: { createdAt: { gte: startOfMonth } } },
+      _sum:  { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 5,
+    }),
+    // Merch: overdue orders (PENDING > 7 days = flagged)
+    db.merchOrder.count({ where: { fulfillmentStatus: "PENDING", createdAt: { lt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } } }),
+    // Merch: Printful health — last POD order
+    db.merchOrder.findFirst({
+      where:   { printfulOrderId: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select:  { id: true, createdAt: true, printfulOrderId: true, fulfillmentStatus: true },
+    }),
+    // Merch: top product titles (for top products display)
+    db.merchProduct.findMany({
+      select: { id: true, title: true, artistId: true },
     }),
   ]);
 
@@ -210,6 +246,19 @@ export default async function AdminDashboardPage({
     const rate  = s.averageSessionRate ?? 150;
     return sum + leads * rate;
   }, 0);
+
+  // Merch computed values
+  const merchRevenue = merchRevenueAgg._sum.platformCut ?? 0;
+  const statusMap: Record<string, number> = {};
+  for (const row of merchStatusBreakdown) statusMap[row.fulfillmentStatus] = row._count._all;
+
+  const productTitleMap = Object.fromEntries(allMerchProducts.map((p) => [p.id, p.title]));
+  const topMerchProducts = merchTopProductsAgg
+    .filter((r) => r._sum.quantity && r._sum.quantity > 0)
+    .map((r) => ({ title: productTitleMap[r.productId] ?? "Unknown", units: r._sum.quantity ?? 0 }));
+
+  const printfulHealthy = lastPrintfulOrder !== null;
+  const printfulLastDate = lastPrintfulOrder ? new Date(lastPrintfulOrder.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
 
   const artistDelta = pctDelta(artistCount, artistCountLastMonth);
   const studioDelta = pctDelta(studioCount, studioCountLastMonth);
@@ -437,6 +486,74 @@ export default async function AdminDashboardPage({
             </Link>
           );
         })}
+      </div>
+
+      {/* Merch Overview */}
+      <div>
+        <p className="text-sm font-semibold text-foreground mb-3">Merch Overview — This Month</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Orders This Month", value: merchOrdersThisMonth, sub: "new merch purchases", icon: ShoppingBag, color: "#D4A843" },
+            { label: "Platform Cut", value: `$${merchRevenue.toFixed(2)}`, sub: "platform earnings from merch", icon: DollarSign, color: "#34C759" },
+            { label: "Overdue Orders", value: merchOverdueCount, sub: "PENDING > 7 days", icon: AlertTriangle, color: merchOverdueCount > 0 ? "#E85D4A" : "#34C759" },
+            { label: "Printful Health", value: printfulHealthy ? "OK" : "No Orders", sub: printfulHealthy ? `Last POD: ${printfulLastDate}` : "No POD orders yet", icon: CircleDot, color: printfulHealthy ? "#34C759" : "#888" },
+          ].map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div key={stat.label} className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${stat.color}18` }}>
+                    <Icon size={15} style={{ color: stat.color }} strokeWidth={1.75} />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-foreground font-display">{stat.value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Merch status breakdown + top products */}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          {/* Status breakdown */}
+          <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Order Status Breakdown</p>
+            <div className="space-y-2">
+              {[
+                { label: "Pending",    key: "PENDING",    icon: CircleDot, color: "#888" },
+                { label: "Processing", key: "PROCESSING", icon: Package,   color: "#FB923C" },
+                { label: "Shipped",    key: "SHIPPED",    icon: Truck,     color: "#5AC8FA" },
+                { label: "Delivered",  key: "DELIVERED",  icon: CheckCircle2, color: "#34C759" },
+              ].map(({ label, key, icon: Icon, color }) => (
+                <div key={key} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <Icon size={12} style={{ color }} />
+                    {label}
+                  </span>
+                  <span className="font-semibold text-foreground">{(statusMap[key] ?? 0).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top products */}
+          <div className="rounded-2xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Top Products This Month</p>
+            {topMerchProducts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No orders yet this month.</p>
+            ) : (
+              <div className="space-y-2">
+                {topMerchProducts.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground truncate pr-2">{p.title}</span>
+                    <span className="font-semibold text-foreground shrink-0">{p.units} sold</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Per-studio lead breakdown */}
