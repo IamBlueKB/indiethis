@@ -29,6 +29,7 @@ import { createUserFromPending } from "@/lib/create-user-from-pending";
 import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
 import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
+import { generateBookingReport }        from "@/lib/agents/booking-agent";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -873,6 +874,17 @@ export async function POST(req: NextRequest) {
           if (userId) {
             void generateProducerArtistMatch(userId).catch(
               (err) => console.error("[webhook] PRODUCER_ARTIST_MATCH error:", err)
+            );
+          }
+          break;
+        }
+
+        // --- Booking Report: generate opportunity report asynchronously ---
+        if (tool === "BOOKING_REPORT") {
+          if (userId) {
+            const bookingMode = (checkSession.metadata?.mode === "DJ" ? "DJ" : "ARTIST") as "ARTIST" | "DJ";
+            void generateBookingReport(userId, bookingMode).catch(
+              (err) => console.error("[webhook] BOOKING_REPORT error:", err)
             );
           }
           break;

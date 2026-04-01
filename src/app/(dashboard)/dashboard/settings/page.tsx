@@ -89,6 +89,9 @@ export default function SettingsPage() {
   // DJ Discovery opt-in state
   const [djDiscoveryOptIn, setDjDiscoveryOptIn] = useState(false);
 
+  // Collaboration opt-in state
+  const [openToCollaborations, setOpenToCollaborations] = useState(false);
+
   const [name, setName] = useState("");
   const [artistName, setArtistName] = useState("");
   const [phone, setPhone] = useState("");
@@ -197,6 +200,7 @@ export default function SettingsPage() {
         setPhoto(u.photo ?? null);
         setDjMode(u.djMode ?? false);
         setDjDiscoveryOptIn(u.djDiscoveryOptIn ?? false);
+        setOpenToCollaborations(u.openToCollaborations ?? false);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -297,7 +301,7 @@ export default function SettingsPage() {
           instagramHandle: instagram, tiktokHandle: tiktok,
           youtubeChannel: youtube, spotifyUrl: spotify,
           appleMusicUrl: appleMusic, artistSlug: slug,
-          djDiscoveryOptIn,
+          djDiscoveryOptIn, openToCollaborations,
         }),
       });
       if (res.status === 409) {
@@ -969,6 +973,29 @@ export default function SettingsPage() {
             <span
               className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
               style={{ transform: djDiscoveryOptIn ? "translateX(16px)" : "translateX(0)" }}
+            />
+          </button>
+        </div>
+      </Section>
+
+      {/* Collaboration Opt-In */}
+      <Section title="Collaboration Matching" icon={<Music2 size={15} className="text-accent" />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Open to Collaborations</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Let us match you with other IndieThis artists for features, joint releases, and collaborations. We&apos;ll introduce you to artists whose sound complements yours. Free for all plans.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenToCollaborations((prev) => !prev)}
+            className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+            style={{ backgroundColor: openToCollaborations ? "#D4A843" : "var(--border)" }}
+          >
+            <span
+              className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+              style={{ transform: openToCollaborations ? "translateX(16px)" : "translateX(0)" }}
             />
           </button>
         </div>

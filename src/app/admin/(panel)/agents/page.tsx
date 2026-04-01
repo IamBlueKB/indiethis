@@ -15,9 +15,11 @@ const AGENT_LABELS: Record<string, string> = {
   LEAD_SCORING:        "Lead Scoring",
   CREATIVE_PROMPT:     "Creative Prompt",
   INACTIVE_CONTENT:    "Inactive Content",
-  PAYMENT_RECOVERY:    "Payment Recovery",
-  TREND_FORECASTER:    "Trend Forecaster",
-  PRODUCER_ARTIST_MATCH: "Producer-Artist Match",
+  PAYMENT_RECOVERY:         "Payment Recovery",
+  TREND_FORECASTER:         "Trend Forecaster",
+  PRODUCER_ARTIST_MATCH:    "Producer-Artist Match",
+  BOOKING_AGENT:            "Booking Agent",
+  COLLABORATION_MATCHMAKER: "Collaboration Matchmaker",
 };
 
 const AGENT_COLORS: Record<string, string> = {
@@ -31,9 +33,11 @@ const AGENT_COLORS: Record<string, string> = {
   LEAD_SCORING:        "#38BDF8",
   CREATIVE_PROMPT:        "#D4A843",
   INACTIVE_CONTENT:       "#E879F9",
-  PAYMENT_RECOVERY:       "#F87171",
-  TREND_FORECASTER:       "#34D399",
-  PRODUCER_ARTIST_MATCH:  "#60A5FA",
+  PAYMENT_RECOVERY:         "#F87171",
+  TREND_FORECASTER:         "#34D399",
+  PRODUCER_ARTIST_MATCH:    "#60A5FA",
+  BOOKING_AGENT:            "#FB923C",
+  COLLABORATION_MATCHMAKER: "#A78BFA",
 };
 
 const ALL_AGENT_TYPES = Object.keys(AGENT_LABELS) as AgentType[];

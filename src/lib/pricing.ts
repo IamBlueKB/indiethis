@@ -104,6 +104,7 @@ export const PRICING_DEFAULTS = {
   TREND_REPORT:           { value: 4.99,  display: "$4.99"    },
   PRODUCER_ARTIST_MATCH:  { value: 9.99,  display: "$9.99"    },
   CANVAS_GENERATE:        { value: 1.99,  display: "$1.99"    },
+  BOOKING_REPORT:         { value: 14.99, display: "$14.99"   },
 } as const;
 
 export type PricingKey = keyof typeof PRICING_DEFAULTS;

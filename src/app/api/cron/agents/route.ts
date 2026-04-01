@@ -215,6 +215,22 @@ export async function POST(req: NextRequest) {
     results.paymentRecovery = "skipped (not due)";
   }
 
+  // ── Collaboration Matchmaker — monthly (1st of month) ─────────────────────
+  const dayOfMonth     = new Date().getDate();
+  const isFirstOfMonth = dayOfMonth === 1;
+  const shouldRunCollab = isFirstOfMonth && await shouldRun("COLLABORATION_MATCHMAKER", 25 * 24); // 25d guard
+  if (shouldRunCollab) {
+    try {
+      const { runCollaborationMatchmakerAgent } = await import("@/lib/agents/collaboration-matchmaker");
+      const result = await runCollaborationMatchmakerAgent();
+      results.collaborationMatchmaker = `checked ${result.checked}, matchesSent=${result.matchesSent}`;
+    } catch (err) {
+      results.collaborationMatchmaker = `error: ${String(err)}`;
+    }
+  } else {
+    results.collaborationMatchmaker = isFirstOfMonth ? "skipped (not due)" : "skipped (not 1st of month)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

@@ -85,6 +85,7 @@ model User {
   artistBalance            Float                  @default(0)
   artistTotalEarnings      Float                  @default(0)
   winBackUsed              Boolean                @default(false)
+  openToCollaborations     Boolean                @default(false)
   aiGenerations            AIGeneration[]
   artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]
