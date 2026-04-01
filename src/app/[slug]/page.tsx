@@ -615,23 +615,28 @@ export default async function SlugPage({
     }));
 
     // Fetch averaged audio features of artist tracks linked to this studio
-    const studioSoundRes = await db.audioFeatures.findMany({
-      where: {
-        track: {
-          artistId: { in: studio.artists.map(a => a.artistId) },
-          status:   "PUBLISHED",
+    let studioSoundProfile = null;
+    try {
+      const studioSoundRes = await db.audioFeatures.findMany({
+        where: {
+          track: {
+            artistId: { in: studio.artists.map(a => a.artistId) },
+            status:   "PUBLISHED",
+          },
         },
-      },
-      select: {
-        loudness: true, energy: true, danceability: true, acousticness: true,
-        instrumentalness: true, speechiness: true, liveness: true, valence: true,
-        genre: true, mood: true, isVocal: true,
-      },
-      take: 50,
-    });
-    const studioSoundProfile = studioSoundRes.length >= 3
-      ? calculateAverageFeatures(studioSoundRes as AudioFeatureScores[])
-      : null;
+        select: {
+          loudness: true, energy: true, danceability: true, acousticness: true,
+          instrumentalness: true, speechiness: true, liveness: true, valence: true,
+          genre: true, mood: true, isVocal: true,
+        },
+        take: 50,
+      });
+      studioSoundProfile = studioSoundRes.length >= 3
+        ? calculateAverageFeatures(studioSoundRes as AudioFeatureScores[])
+        : null;
+    } catch {
+      // Non-critical — sound profile is decorative, page still renders
+    }
 
     const templateProps = {
       studio, slug, services, testimonials, featuredArtists, fullAddress, mapQuery, socials, galleryImages,
