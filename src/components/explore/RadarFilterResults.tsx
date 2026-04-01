@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Music2, Loader2, Sliders } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
+import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
+import ExpandedCardContent from "@/components/tracks/ExpandedCardContent";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import type { RadarFilterState }   from "./InteractiveRadarFilter";
 
@@ -135,11 +138,13 @@ export default function RadarFilterResults({
       )}
 
       {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {results.map(r => (
-          <ResultCard key={r.id} result={r} onPlay={onPlay} />
-        ))}
-      </div>
+      <LayoutGroup>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
+          {results.map(r => (
+            <ResultCard key={r.id} result={r} onPlay={onPlay} />
+          ))}
+        </div>
+      </LayoutGroup>
 
       {/* Load More */}
       {hasMore && !loading && (
@@ -171,19 +176,56 @@ function ResultCard({
   onPlay:  RadarFilterResultsProps["onPlay"];
 }) {
   const matchPct = Math.round(result.similarity * 100);
+  const isMobile = useIsMobile();
+  const { expandedId, open, close } = useExpandedCard();
+  const isExpanded = expandedId === result.id;
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const cardData: TrackCardData = {
+    id:            result.id,
+    title:         result.title,
+    coverArtUrl:   result.artworkUrl,
+    canvasVideoUrl: null,
+    fileUrl:       result.fileUrl,
+    genre:         result.genre,
+    bpm:           result.bpm,
+    musicalKey:    result.key,
+    artist: {
+      id:          "",
+      name:        result.artistName,
+      artistSlug:  result.artistSlug,
+    },
+  };
+
+  function handleCardClick() {
+    if (isMobile) { open(cardData); return; }
+    isExpanded ? close() : open(cardData);
+  }
+
+  useEffect(() => {
+    if (!isExpanded || isMobile) return;
+    function onDocClick(e: MouseEvent) {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) close();
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [isExpanded, isMobile, close]);
 
   return (
     <motion.div
-      className="rounded-xl border flex flex-col overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.35)]"
-      style={{ background: "#111111", borderColor: "#1A1A1A" }}
-      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      ref={cardRef}
+      layout
+      className="rounded-xl border flex flex-col overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.35)] cursor-pointer"
+      style={{ background: "#111111", borderColor: isExpanded ? "rgba(212,168,67,0.3)" : "#1A1A1A" }}
+      whileHover={!isExpanded ? { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" } : {}}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      onClick={handleCardClick}
     >
       {/* Artwork + play overlay */}
       <HoverCardCover
         id={result.id}
         coverArtUrl={result.artworkUrl}
-        onPlay={() => onPlay(result.id, result.title, result.artistName, result.fileUrl, result.artworkUrl ?? undefined)}
+        onPlay={(e) => { e.stopPropagation(); onPlay(result.id, result.title, result.artistName, result.fileUrl, result.artworkUrl ?? undefined); }}
         className="relative aspect-square overflow-hidden"
       >
         {!result.artworkUrl && (
@@ -192,72 +234,57 @@ function ResultCard({
             <Music2 size={28} style={{ color: "#333" }} />
           </div>
         )}
-        {/* Match badge */}
-        <div
-          className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
-          style={{ background: "rgba(0,0,0,0.7)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.4)" }}
-        >
+        <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
+          style={{ background: "rgba(0,0,0,0.7)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.4)" }}>
           {matchPct}% match
         </div>
-        {/* Type badge */}
-        <div
-          className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase"
-          style={{ background: "rgba(0,0,0,0.7)", color: "#888" }}
-        >
+        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase"
+          style={{ background: "rgba(0,0,0,0.7)", color: "#888" }}>
           {result.type}
         </div>
       </HoverCardCover>
 
       {/* Info */}
-      <div className="p-3 flex flex-col gap-2 flex-1">
+      <div className="p-3 flex flex-col gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
         <div>
-          <p className="text-sm font-semibold truncate" style={{ color: "#FFFFFF" }}>
-            {result.title}
-          </p>
+          <p className="text-sm font-semibold truncate" style={{ color: "#FFFFFF" }}>{result.title}</p>
           {result.artistSlug ? (
-            <Link href={`/${result.artistSlug}`}
-              className="text-xs truncate hover:underline block"
-              style={{ color: "#888" }}
-            >
+            <Link href={`/${result.artistSlug}`} className="text-xs truncate hover:underline block" style={{ color: "#888" }} onClick={e => e.stopPropagation()}>
               {result.artistName}
             </Link>
           ) : (
             <p className="text-xs truncate" style={{ color: "#888" }}>{result.artistName}</p>
           )}
         </div>
-
-        {/* Genre + mood pills */}
         <div className="flex flex-wrap gap-1">
-          {result.genre && (
-            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
-              {result.genre}
-            </span>
-          )}
-          {result.mood && (
-            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(255,255,255,0.05)", color: "#666" }}>
-              {result.mood}
-            </span>
-          )}
+          {result.genre && <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(212,168,67,0.1)", color: "#D4A843" }}>{result.genre}</span>}
+          {result.mood  && <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.05)", color: "#666" }}>{result.mood}</span>}
         </div>
-
-        {/* BPM + key */}
         {(result.bpm || result.key) && (
           <p className="text-[10px]" style={{ color: "#555" }}>
             {[result.bpm && `${result.bpm} BPM`, result.key].filter(Boolean).join(" · ")}
           </p>
         )}
-
-        {/* sm radar */}
         <div className="flex justify-center mt-auto pt-1">
-          <AudioFeaturesRadar
-            features={result.features}
-            size="sm"
-            animated={false}
-          />
+          <AudioFeaturesRadar features={result.features} size="sm" animated={false} />
         </div>
       </div>
+
+      {/* Desktop expanded view */}
+      <AnimatePresence>
+        {isExpanded && !isMobile && (
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
+            <ExpandedCardContent data={cardData} onClose={close} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -6,11 +6,14 @@ import {
   Search, Headphones, Loader2, X, ChevronDown,
   Radio, ShoppingBag, TrendingUp,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { useAudioStore } from "@/store";
+import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import PublicNav from "@/components/layout/PublicNav";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
+import ExpandedCardContent from "@/components/tracks/ExpandedCardContent";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -90,33 +93,71 @@ function BeatCard({
   onPlay:    (b: BeatItem) => void;
   onLicense: (b: BeatItem) => void;
 }) {
-  const totalUses      = beat._count.beatLicenses + beat._count.streamLeases;
-  const streamEnabled  = beat.beatLeaseSettings?.streamLeaseEnabled ?? false;
-  const monthlyRate    = 1; // fixed $1/mo stream lease rate
-  const artistSlug     = beat.artist.artistSlug;
+  const totalUses     = beat._count.beatLicenses + beat._count.streamLeases;
+  const streamEnabled = beat.beatLeaseSettings?.streamLeaseEnabled ?? false;
+  const monthlyRate   = 1;
+  const artistSlug    = beat.artist.artistSlug;
+
+  const isMobile = useIsMobile();
+  const { expandedId, open, close } = useExpandedCard();
+  const isExpanded = expandedId === beat.id;
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const cardData: TrackCardData = {
+    id:            beat.id,
+    title:         beat.title,
+    coverArtUrl:   beat.coverArtUrl,
+    canvasVideoUrl: null,
+    fileUrl:       beat.fileUrl,
+    genre:         beat.genre,
+    bpm:           beat.bpm,
+    musicalKey:    beat.musicalKey,
+    plays:         beat.plays,
+    artist: {
+      id:          beat.artist.id,
+      name:        beat.artist.name,
+      artistSlug:  beat.artist.artistSlug ?? null,
+    },
+  };
+
+  function handleCardClick() {
+    if (isMobile) { open(cardData); return; }
+    isExpanded ? close() : open(cardData);
+  }
+
+  // Close on outside click (desktop)
+  useEffect(() => {
+    if (!isExpanded || isMobile) return;
+    function onDocClick(e: MouseEvent) {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) close();
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [isExpanded, isMobile, close]);
 
   return (
     <motion.div
-      className="rounded-2xl border overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.25)]"
-      style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
-      whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+      ref={cardRef}
+      layout
+      className="rounded-2xl border overflow-hidden transition-[border-color] hover:border-[rgba(212,168,67,0.25)] cursor-pointer"
+      style={{ backgroundColor: "#141414", borderColor: isExpanded ? "rgba(212,168,67,0.3)" : "#2a2a2a" }}
+      whileHover={!isExpanded ? { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" } : {}}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      onClick={handleCardClick}
     >
       {/* Cover art */}
       <HoverCardCover
         id={beat.id}
         coverArtUrl={beat.coverArtUrl}
         isPlaying={isPlaying}
-        onPlay={() => onPlay(beat)}
-        className="w-full aspect-square overflow-hidden cursor-pointer"
+        onPlay={(e) => { e.stopPropagation(); onPlay(beat); }}
+        className="w-full aspect-square overflow-hidden"
       >
-        {/* Fallback icon when no cover */}
         {!beat.coverArtUrl && (
           <div className="absolute inset-0 flex items-center justify-center">
             <Headphones size={32} style={{ color: "#2a2a2a" }} />
           </div>
         )}
-        {/* Stream Lease badge */}
         {streamEnabled && (
           <div className="absolute top-2 left-2 z-10">
             <span
@@ -130,57 +171,34 @@ function BeatCard({
       </HoverCardCover>
 
       {/* Card body */}
-      <div className="p-3 space-y-1.5">
-        {/* Title */}
+      <div className="p-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
         <button
-          onClick={() => onLicense(beat)}
+          onClick={(e) => { e.stopPropagation(); onLicense(beat); }}
           className="w-full text-left font-bold text-white text-sm truncate hover:underline block"
         >
           {beat.title}
         </button>
-
-        {/* Producer */}
         {artistSlug ? (
-          <Link href={`/${artistSlug}`} className="text-[11px] block hover:underline truncate" style={{ color: "#888" }}>
+          <Link href={`/${artistSlug}`} className="text-[11px] block hover:underline truncate" style={{ color: "#888" }} onClick={e => e.stopPropagation()}>
             {beat.artist.name}
           </Link>
         ) : (
           <p className="text-[11px] truncate" style={{ color: "#888" }}>{beat.artist.name}</p>
         )}
         {artistSlug && (
-          <Link href={`/${artistSlug}`} className="text-[9px] block hover:underline" style={{ color: "#D4A843" }}>
+          <Link href={`/${artistSlug}`} className="text-[9px] block hover:underline" style={{ color: "#D4A843" }} onClick={e => e.stopPropagation()}>
             More from {beat.artist.name} →
           </Link>
         )}
-
-        {/* BPM + Key badges */}
         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-          {beat.bpm && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
-              {beat.bpm} BPM
-            </span>
-          )}
-          {beat.musicalKey && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1e1e1e", color: "#777" }}>
-              {beat.musicalKey}
-            </span>
-          )}
-          {beat.genre && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1e1e1e", color: "#777" }}>
-              {beat.genre}
-            </span>
-          )}
+          {beat.bpm && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>{beat.bpm} BPM</span>}
+          {beat.musicalKey && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1e1e1e", color: "#777" }}>{beat.musicalKey}</span>}
+          {beat.genre && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1e1e1e", color: "#777" }}>{beat.genre}</span>}
         </div>
-
-        {/* Price + social proof */}
         <div className="flex items-center justify-between pt-0.5">
           {beat.price != null ? (
-            <span className="text-sm font-bold" style={{ color: "#D4A843" }}>
-              From ${beat.price.toFixed(0)}
-            </span>
-          ) : (
-            <span />
-          )}
+            <span className="text-sm font-bold" style={{ color: "#D4A843" }}>From ${beat.price.toFixed(0)}</span>
+          ) : <span />}
           {totalUses > 0 && (
             <span className="text-[9px] flex items-center gap-1" style={{ color: "#555" }}>
               <TrendingUp size={9} />
@@ -188,11 +206,9 @@ function BeatCard({
             </span>
           )}
         </div>
-
-        {/* Action buttons */}
         <div className="flex gap-2 pt-1">
           <button
-            onClick={() => onLicense(beat)}
+            onClick={(e) => { e.stopPropagation(); onLicense(beat); }}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
             style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A", border: "1px solid rgba(232,93,74,0.25)" }}
           >
@@ -200,7 +216,7 @@ function BeatCard({
           </button>
           {streamEnabled && (
             <button
-              onClick={() => onLicense(beat)}
+              onClick={(e) => { e.stopPropagation(); onLicense(beat); }}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-colors"
               style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
             >
@@ -209,6 +225,22 @@ function BeatCard({
           )}
         </div>
       </div>
+
+      {/* Desktop expanded view — inline in grid */}
+      <AnimatePresence>
+        {isExpanded && !isMobile && (
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
+            <ExpandedCardContent data={cardData} onClose={close} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -562,17 +594,19 @@ export default function BeatsClient() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {beats.map((b) => (
-                <BeatCard
-                  key={b.id}
-                  beat={b}
-                  isPlaying={currentTrack?.id === b.id}
-                  onPlay={handlePlay}
-                  onLicense={setLicenseBeat}
-                />
-              ))}
-            </div>
+            <LayoutGroup>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-start">
+                {beats.map((b) => (
+                  <BeatCard
+                    key={b.id}
+                    beat={b}
+                    isPlaying={currentTrack?.id === b.id}
+                    onPlay={handlePlay}
+                    onLicense={setLicenseBeat}
+                  />
+                ))}
+              </div>
+            </LayoutGroup>
 
             {page < pages && (
               <div className="mt-10 text-center">
