@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-03-30 (session 3)_
+_Last updated: 2026-03-31 (session 6)_
 
 ---
 
@@ -79,6 +79,9 @@ _Last updated: 2026-03-30 (session 3)_
 | `/dashboard/dj/sets` | DJ set management (YouTube-linked) |
 | `/dashboard/dj/events` | DJ event listings |
 | `/dashboard/dj/bookings` | DJ booking requests |
+| `/dashboard/dj/merch` | DJ merch product + order management |
+| `/dashboard/merch` | Artist merch dashboard — products, orders, defect claims, earnings |
+| `/dashboard/earnings` | Artist earnings — merch balance, withdrawal history, earnings projector |
 
 ---
 
@@ -109,6 +112,7 @@ _Last updated: 2026-03-30 (session 3)_
 | `/studio/settings/engineers` | Engineer profile management |
 | `/studio/settings/equipment` | Equipment list editor |
 | `/studio/preview-frame` | Public page iframe preview |
+| `/studio/merch` | Studio merch product + order management |
 
 ---
 
@@ -137,6 +141,7 @@ _Last updated: 2026-03-30 (session 3)_
 | `/admin/settings/pricing` | PlatformPricing live editor |
 | `/admin/analytics/funnel` | Conversion funnel analytics |
 | `/admin/dj-verification` | DJ verification queue (approve/deny applications) |
+| `/admin` | Admin dashboard now includes Merch Overview section (orders, revenue, status breakdown, top products, Printful health) |
 
 ---
 
@@ -158,6 +163,7 @@ _Last updated: 2026-03-30 (session 3)_
 | `/ambassador/[code]` | Ambassador referral landing |
 | `/ref/[customSlug]` | Custom referral link |
 | `/[slug]` | Artist public site (dynamic) — with Store section (digital products) and "Picked by X DJs" badge |
+| `/[slug]/merch` | Artist public merch storefront |
 | `/[slug]/intake/[token]` | Studio intake submission form |
 | `/dl/[token]` | File download by token |
 | `/invoice/[id]` | Public invoice view and Stripe payment |
@@ -236,11 +242,25 @@ _Last updated: 2026-03-30 (session 3)_
 | `POST /api/admin/dj-verification/[id]/deny` | Admin: deny DJ verification |
 | `POST /api/admin/audio-fingerprints/backfill` | Admin: backfill fingerprints for existing tracks |
 
+### Merch
+| Endpoint | Description |
+|----------|-------------|
+| `GET/POST /api/dashboard/merch` | Merch product CRUD |
+| `GET/PUT/DELETE /api/dashboard/merch/[id]` | Individual product management |
+| `GET /api/dashboard/merch/orders` | List artist's merch orders |
+| `GET /api/dashboard/merch/orders/[id]` | Order detail |
+| `PATCH /api/dashboard/merch/orders/[id]` | Update fulfillment status/tracking + send shipped/delivered emails |
+| `POST /api/dashboard/merch/orders/defect-claim` | Submit defect/replacement claim to Printful |
+| `GET /api/dashboard/merch/balance` | Artist merch balance + earnings summary |
+| `GET/POST /api/dashboard/merch/withdrawal` | Withdrawal history + request payout via Stripe Connect |
+| `GET /api/merch/catalog` | Public: Printful curated catalog with base prices |
+| `POST /api/merch/checkout` | Create Stripe Checkout session for merch purchase |
+| `POST /api/merch/printful-webhook` | Receive Printful fulfillment webhooks (status, tracking, shipping) |
+
 ### Dashboard — Artist Content
 | Endpoint | Description |
 |----------|-------------|
 | `GET/POST /api/dashboard/music` | Track CRUD |
-| `GET/POST /api/dashboard/merch` | Merch product CRUD |
 | `GET/POST /api/dashboard/shows` | Artist show management |
 | `GET/POST /api/dashboard/splits` | Split sheet management |
 | `POST /api/dashboard/splits/[id]/agree` | Agree to split |
@@ -326,6 +346,20 @@ _Last updated: 2026-03-30 (session 3)_
 | `GET/POST /api/admin/moderation` | Studio content moderation |
 | `GET/POST /api/admin/settings/pricing` | Live PlatformPricing editor |
 
+### AI Agent Platform
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/agents/master-cron` | Master cron — routes to all agents on schedule |
+| `POST /api/agents/churn-prevention` | Churn Prevention Agent — detects at-risk users, sends re-engagement |
+| `POST /api/agents/revenue-optimization` | Revenue Optimization Agent — upsell nudges, upgrade prompts |
+| `POST /api/agents/release-strategy` | Release Strategy Agent — pre-release coaching per artist |
+| `POST /api/agents/fan-engagement` | Fan Engagement Agent — tip/merch automations, milestone alerts |
+| `POST /api/agents/session-followup` | Session Follow-Up Agent — studio post-session email + review request |
+| `POST /api/agents/anr-intelligence` | A&R Intelligence Agent — weekly play/revenue/collab insights (Push/Reign) |
+| `POST /api/agents/content-moderation` | Content Moderation Agent — studio profile/portfolio review queue |
+| `POST /api/agents/lead-scoring` | Lead Scoring Agent — scores studio contacts for conversion likelihood |
+| `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
+
 ### Cron Jobs (protected by CRON_SECRET)
 | Endpoint | Description |
 |----------|-------------|
@@ -349,7 +383,7 @@ _Last updated: 2026-03-30 (session 3)_
 
 ---
 
-## PRISMA MODELS (110 total)
+## PRISMA MODELS (115 total)
 
 ```
 Account              ActivityLog          AdminAccount
@@ -358,19 +392,20 @@ AIInsightsLog        AIJob                Ambassador
 AmbassadorPayout     ArtistBookingInquiry ArtistCollaborator
 ArtistPhoto          ArtistPressItem      ArtistRelease
 ArtistShow           ArtistSite           ArtistSupport
-ArtistTestimonial    ArtistVideo          AudioFeatures
-AudioFingerprint     BeatLeaseSettings    BeatLicense
-BeatPreview          BookingSession       BroadcastLog
-Contact              ContactSubmission    CrateItem
-DeliveredFile        DigitalProduct       DigitalPurchase
-DJAttribution        DJCrate              DJEvent
-DJMix                DJMixTrack           DJProfile
-DJSet                DJVerificationApplication DJWithdrawal
-EmailCampaign        ExploreFeatureCard   FanAutomation
-FanContact           FanScore             GenerationFeedback
-GenerationLog        IntakeLink           IntakeSubmission
-Invoice              LicenseDocument      LinkClick
-MerchOrder           MerchProduct         Notification
+ArtistTestimonial    ArtistVideo          ArtistWithdrawal
+AudioFeatures        AudioFingerprint     BeatLeaseSettings
+BeatLicense          BeatPreview          BookingSession
+BroadcastLog         Contact              ContactSubmission
+CrateItem            DeliveredFile        DigitalProduct
+DigitalPurchase      DJAttribution        DJCrate
+DJEvent              DJMix                DJMixTrack
+DJProfile            DJSet                DJVerificationApplication
+DJWithdrawal         EmailCampaign        ExploreFeatureCard
+FanAutomation        FanContact           FanScore
+GenerationFeedback   GenerationLog        IntakeLink
+IntakeSubmission     Invoice              LicenseDocument
+LinkClick            MerchOrder           MerchOrderItem
+MerchProduct         MerchVariant         Notification
 OnboardingEmailLog   PageView             Payment
 PendingSignup        PlatformPricing      PreSaveCampaign
 PreSaveClick         ProducerLeaseSettings ProducerProfile
@@ -412,6 +447,7 @@ YoutubeReference
 | **Sentry** | Error monitoring | ❌ NOT INTEGRATED |
 | **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
 | **Stripe Connect** | DJ and producer direct payouts | ✅ Code complete — transfer.paid/failed webhook handlers wired |
+| **Printful** | Print-on-demand merch fulfillment (order creation, webhook status updates, issue/defect claims) | ✅ Key set — `PRINTFUL_API_KEY` |
 
 ---
 
@@ -441,7 +477,7 @@ YoutubeReference
 | Artist shows and events | ✅ DONE |
 | Fan database and engagement scoring | ✅ DONE |
 | Fan automation triggers (tip/merch) | ✅ DONE |
-| Merch storefront + orders | ✅ DONE |
+| Merch storefront + full order system (see Merch section below) | ✅ DONE |
 | QR code generator | ✅ DONE |
 | Year-in-review stats page | ✅ DONE |
 | Release planner with task tracking | ✅ DONE |
@@ -545,6 +581,56 @@ YoutubeReference
 | Artist roster management | ✅ DONE |
 | Studio referral credit system | ✅ DONE |
 
+### Merch System (Steps 1–15)
+| Feature | Status |
+|---------|--------|
+| Printful API client (`src/lib/printful.ts`) — order creation, catalog, webhooks, issue claims | ✅ DONE |
+| Schema: `MerchProduct`, `MerchVariant`, `MerchOrder`, `MerchOrderItem` | ✅ DONE |
+| Curated Printful catalog (`GET /api/merch/catalog`) — t-shirts, hoodies, posters, hats, mugs | ✅ DONE |
+| POD product creation — 6-step wizard (category → product → variants → design upload → mockup → publish) | ✅ DONE |
+| Self-fulfilled product creation — title, description, images, variants, stock quantity | ✅ DONE |
+| Design upload + Printful mockup preview | ✅ DONE |
+| Public merch storefront (`/[slug]/merch`) — gallery, size/color picker, cart | ✅ DONE |
+| Merch section on artist public page (`/[slug]`) with "View All" link | ✅ DONE |
+| Merch grid on DJ public profile with link to artist merch store | ✅ DONE |
+| Stripe Checkout for merch (with shipping address collection) | ✅ DONE |
+| Printful order auto-submission on `checkout.session.completed` webhook | ✅ DONE |
+| Artist merch dashboard — product list, order list, status management, tracking entry | ✅ DONE |
+| Artist order management — update fulfillment status, tracking number, tracking URL, carrier | ✅ DONE |
+| Self-fulfilled stock decrement on purchase; `stockQuantity` tracked per variant | ✅ DONE |
+| Low stock warning notification when self-fulfilled stock drops to ≤3 | ✅ DONE |
+| Defect/replacement claim (`POST /api/dashboard/merch/orders/defect-claim` → Printful issues API) | ✅ DONE |
+| Return policy per product (POD standard / self-fulfilled custom / default) | ✅ DONE |
+| Revenue split: POD = `(retailPrice − basePrice) × 85%` artist; self-fulfilled = `retailPrice × 85% + shipping` | ✅ DONE |
+| `artistBalance` + `artistTotalEarnings` on User — incremented on every order | ✅ DONE |
+| `ArtistWithdrawal` model — request payout via Stripe Connect ($25 minimum) | ✅ DONE |
+| Merch balance page + withdrawal history on `/dashboard/earnings` | ✅ DONE |
+| DJ Attribution for merch — 10% of artist earnings credited to DJ if `djDiscoveryOptIn=true` | ✅ DONE |
+| DJ merch page (`/dashboard/dj/merch`) — same product + order management | ✅ DONE |
+| Studio merch page (`/studio/merch`) — same product + order management | ✅ DONE |
+| Buyer order confirmation email (gold IndieThis branding) | ✅ DONE |
+| Buyer shipped email with tracking link | ✅ DONE |
+| Buyer delivered email (`sendMerchDeliveredEmail`) | ✅ DONE |
+| Artist new-order notification: "You sold a [product] to [buyer]!" | ✅ DONE |
+| Artist self-fulfilled order email with buyer shipping address | ✅ DONE |
+| Admin merch overview — orders/month, platform cut, overdue orders, Printful health, status breakdown, top products | ✅ DONE |
+
+### AI Agent Platform (Steps 1–11)
+| Feature | Status |
+|---------|--------|
+| Agent infrastructure — `AgentLog` model, `logAgentAction()`, admin agent log page | ✅ DONE |
+| Master cron (`POST /api/agents/master-cron`) — routes to all agents by schedule | ✅ DONE |
+| Churn Prevention Agent — detects subscribers inactive >14 days, sends re-engagement sequence | ✅ DONE |
+| Revenue Optimization Agent — upgrade nudges for near-limit users, upsell prompts | ✅ DONE |
+| Release Strategy Agent — pre-release coaching emails (Mon/Wed/Fri cadence) | ✅ DONE |
+| Fan Engagement Agent — tip/merch milestone automations | ✅ DONE |
+| Session Follow-Up Agent — studio post-session email + review request | ✅ DONE |
+| A&R Intelligence Agent — weekly play/revenue/collab insights (Push/Reign only, Fridays) | ✅ DONE |
+| Content Moderation Agent — studio profile/portfolio queue for admin review | ✅ DONE |
+| Lead Scoring Agent — scores studio CRM contacts for conversion likelihood | ✅ DONE |
+| Enhanced Admin Dashboard Agent — weekly KPI summary email to admin | ✅ DONE |
+| Admin agent log page — per-agent history, action counts, status | ✅ DONE |
+
 ### Ambassador / Affiliate
 | Feature | Status |
 |---------|--------|
@@ -594,6 +680,12 @@ YoutubeReference
 | Content moderation queue | ✅ DONE |
 | Admin team management with roles | ✅ DONE |
 | DJ analytics stats + verification queue | ✅ DONE |
+| Merch overview — orders, platform cut, status breakdown, top products, Printful health | ✅ DONE |
+| Agent log — per-agent action history and status counts | ✅ DONE |
+| AI Insights Card (cached 24h Claude summary of platform KPIs) | ✅ DONE |
+| Churn prediction table (at-risk subscribers) | ✅ DONE |
+| Stream lease stats (active leases, plays, duplicate flags) | ✅ DONE |
+| Booking lead tracking — platform-wide leads, potential value, per-studio breakdown | ✅ DONE |
 
 ### Artist Public Page UX
 | Feature | Status |
@@ -673,6 +765,9 @@ YoutubeReference
 | `YOUTUBE_API_KEY` | YouTube video sync + DJ set seeding | ✅ SET |
 | `AUDD_API_KEY` | Track Shield — AudD content recognition API | ✅ SET |
 | `ACRCLOUD_TOKEN` | ACRCloud JWT token for mix track identification | ✅ SET |
+| `PRINTFUL_API_KEY` | Printful print-on-demand order creation + webhooks | ✅ SET |
+| `STRIPE_PRICE_STUDIO_PRO` | Studio Pro plan Stripe price ID | ⚠️ TODO — not yet created |
+| `STRIPE_PRICE_STUDIO_ELITE` | Studio Elite plan Stripe price ID | ⚠️ TODO — not yet created |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
