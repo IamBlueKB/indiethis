@@ -23,7 +23,7 @@
  */
 
 import { db } from "@/lib/db";
-import { logAgentAction, sendAgentEmail, agentEmailBase } from "@/lib/agents";
+import { logAgentAction, sendAgentEmail, agentEmailBase, AT } from "@/lib/agents";
 import { createNotification } from "@/lib/notifications";
 import { stripe } from "@/lib/stripe";
 
@@ -149,7 +149,7 @@ export async function startPaymentRecoverySequence(userId: string): Promise<void
   // Guard: already started?
   const existing = await db.agentLog.findFirst({
     where: {
-      agentType: "PAYMENT_RECOVERY",
+      agentType: AT("PAYMENT_RECOVERY"),
       action:    "PAYMENT_FAILED_DAY0",
       targetId:  userId,
       createdAt: { gte: new Date(Date.now() - 7 * DAY) }, // within last 7 days
@@ -193,7 +193,7 @@ export async function runPaymentRecoveryAgent(): Promise<PaymentRecoveryResult> 
   // ── Day 2: find Day0 logs from 44–56 h ago ──────────────────────────────────
   const day0Logs = await db.agentLog.findMany({
     where: {
-      agentType: "PAYMENT_RECOVERY",
+      agentType: AT("PAYMENT_RECOVERY"),
       action:    "PAYMENT_FAILED_DAY0",
       createdAt: { gte: new Date(now - 56 * HOUR), lte: new Date(now - 44 * HOUR) },
     },
@@ -205,7 +205,7 @@ export async function runPaymentRecoveryAgent(): Promise<PaymentRecoveryResult> 
     if (!userId) continue;
 
     const alreadySent = await db.agentLog.findFirst({
-      where: { agentType: "PAYMENT_RECOVERY", action: "PAYMENT_FAILED_DAY2", targetId: userId },
+      where: { agentType: AT("PAYMENT_RECOVERY"), action: "PAYMENT_FAILED_DAY2", targetId: userId },
     });
     if (alreadySent) continue;
 
@@ -228,7 +228,7 @@ export async function runPaymentRecoveryAgent(): Promise<PaymentRecoveryResult> 
   // ── Day 5: find Day0 logs from 5–6 days ago ─────────────────────────────────
   const day0Logs5 = await db.agentLog.findMany({
     where: {
-      agentType: "PAYMENT_RECOVERY",
+      agentType: AT("PAYMENT_RECOVERY"),
       action:    "PAYMENT_FAILED_DAY0",
       createdAt: { gte: new Date(now - 6 * DAY), lte: new Date(now - 5 * DAY) },
     },
@@ -240,7 +240,7 @@ export async function runPaymentRecoveryAgent(): Promise<PaymentRecoveryResult> 
     if (!userId) continue;
 
     const alreadySent = await db.agentLog.findFirst({
-      where: { agentType: "PAYMENT_RECOVERY", action: "PAYMENT_FAILED_DAY5", targetId: userId },
+      where: { agentType: AT("PAYMENT_RECOVERY"), action: "PAYMENT_FAILED_DAY5", targetId: userId },
     });
     if (alreadySent) continue;
 
@@ -274,13 +274,13 @@ export async function runPaymentRecoveryAgent(): Promise<PaymentRecoveryResult> 
 
     // Only process users who had a payment failure sequence (not voluntary cancels)
     const hadFailure = await db.agentLog.findFirst({
-      where: { agentType: "PAYMENT_RECOVERY", action: "PAYMENT_FAILED_DAY0", targetId: userId },
+      where: { agentType: AT("PAYMENT_RECOVERY"), action: "PAYMENT_FAILED_DAY0", targetId: userId },
     });
     if (!hadFailure) continue;
 
     const alreadySent = await db.agentLog.findFirst({
       where: {
-        agentType: "PAYMENT_RECOVERY",
+        agentType: AT("PAYMENT_RECOVERY"),
         action:    { in: ["WIN_BACK_SENT", "RE_ENGAGEMENT_SENT"] },
         targetId:  userId,
       },

@@ -11,7 +11,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { generateCreativePrompt } from "@/lib/agents/creative-prompt";
-import { logAgentAction } from "@/lib/agents";
+import { logAgentAction, AT } from "@/lib/agents";
 
 type PromptType = "cover_art" | "video" | "lyric_video";
 const VALID_TYPES: PromptType[] = ["cover_art", "video", "lyric_video"];
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   if (type === "cover_art") {
     const preloaded = await db.agentLog.findFirst({
       where: {
-        agentType: "CREATIVE_PROMPT",
+        agentType: AT("CREATIVE_PROMPT"),
         action:    "PROACTIVE_NOTIFIED",
         targetId:  trackId,
       },

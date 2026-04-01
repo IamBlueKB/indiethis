@@ -11,6 +11,7 @@ import { auth }                        from "@/lib/auth";
 import { db }                          from "@/lib/db";
 import { NextResponse }                from "next/server";
 import type { ProducerArtistMatchReport } from "@/lib/agents/producer-artist-match";
+import { AT }                          from "@/lib/agents";
 
 export async function GET() {
   const session = await auth();
@@ -18,7 +19,7 @@ export async function GET() {
 
   const log = await db.agentLog.findFirst({
     where: {
-      agentType: "PRODUCER_ARTIST_MATCH",
+      agentType: AT("PRODUCER_ARTIST_MATCH"),
       action:    "MATCH_REPORT_GENERATED",
       targetId:  session.user.id,
     },

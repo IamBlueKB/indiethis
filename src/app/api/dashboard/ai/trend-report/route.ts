@@ -11,13 +11,14 @@ import { auth }                      from "@/lib/auth";
 import { db }                        from "@/lib/db";
 import { NextResponse }              from "next/server";
 import type { TrendReport }          from "@/lib/agents/trend-forecaster";
+import { AT }                        from "@/lib/agents";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const log = await db.agentLog.findFirst({
-    where:   { agentType: "TREND_FORECASTER", action: "TREND_REPORT_GENERATED", targetId: session.user.id },
+    where:   { agentType: AT("TREND_FORECASTER"), action: "TREND_REPORT_GENERATED", targetId: session.user.id },
     orderBy: { createdAt: "desc" },
     select:  { details: true, createdAt: true },
   });

@@ -84,6 +84,7 @@ model User {
   churnRiskScore           Int                    @default(0)
   artistBalance            Float                  @default(0)
   artistTotalEarnings      Float                  @default(0)
+  winBackUsed              Boolean                @default(false)
   aiGenerations            AIGeneration[]
   artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]
@@ -2514,6 +2515,9 @@ enum AgentType {
   LEAD_SCORING
   CREATIVE_PROMPT
   INACTIVE_CONTENT
+  PAYMENT_RECOVERY
+  TREND_FORECASTER
+  PRODUCER_ARTIST_MATCH
 }
 
 model TrackShieldScan {

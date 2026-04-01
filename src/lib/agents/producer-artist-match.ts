@@ -32,6 +32,7 @@ import {
   logAgentAction,
   sendAgentEmail,
   agentEmailBase,
+  AT,
 }                            from "@/lib/agents";
 import { createNotification } from "@/lib/notifications";
 import { claude }             from "@/lib/claude";
@@ -326,7 +327,7 @@ export async function runProducerArtistMatchAgent(): Promise<ProducerArtistMatch
 
     const recentLog = await db.agentLog.findFirst({
       where: {
-        agentType: "PRODUCER_ARTIST_MATCH",
+        agentType: AT("PRODUCER_ARTIST_MATCH"),
         action:    "TEASER_SENT",
         targetId:  artist.id,
         createdAt: { gte: daysAgo(6) },

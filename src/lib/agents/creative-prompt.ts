@@ -21,7 +21,7 @@
 
 import { db } from "@/lib/db";
 import { claude } from "@/lib/claude";
-import { logAgentAction } from "@/lib/agents";
+import { logAgentAction, AT } from "@/lib/agents";
 import { createNotification } from "@/lib/notifications";
 
 const HAIKU = "claude-3-5-haiku-20241022";
@@ -186,7 +186,7 @@ export async function runCreativePromptAgent(): Promise<CreativePromptAgentResul
     // Skip if already notified for this track
     const alreadyLogged = await db.agentLog.findFirst({
       where: {
-        agentType: "CREATIVE_PROMPT",
+        agentType: AT("CREATIVE_PROMPT"),
         action:    "PROACTIVE_NOTIFIED",
         targetId:  track.id,
       },

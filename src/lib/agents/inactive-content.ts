@@ -7,7 +7,7 @@
  */
 
 import { db } from "@/lib/db";
-import { logAgentAction } from "@/lib/agents";
+import { logAgentAction, AT } from "@/lib/agents";
 import { createNotification } from "@/lib/notifications";
 import { claude } from "@/lib/claude";
 
@@ -88,7 +88,7 @@ export async function runInactiveContentAgent(): Promise<InactiveContentAgentRes
     // Guard: already acted this week?
     const recentLog = await db.agentLog.findFirst({
       where: {
-        agentType: "INACTIVE_CONTENT",
+        agentType: AT("INACTIVE_CONTENT"),
         action:    "DIGEST_SENT",
         targetId:  artist.id,
         createdAt: { gte: daysAgo(6) },

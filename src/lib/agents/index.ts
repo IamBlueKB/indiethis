@@ -12,6 +12,13 @@ import type { NotificationType } from "@prisma/client";
 const FROM_NAME = "The IndieThis Team";
 const APP_URL   = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
 
+/**
+ * Cast a string to AgentType for Prisma where-clause compatibility.
+ * Required when Vercel's build cache has a stale @prisma/client that doesn't
+ * yet include newly-added enum values. Safe to use — values ARE in the DB.
+ */
+export const AT = (s: string): AgentType => s as unknown as AgentType;
+
 // ─── Agent Logging ────────────────────────────────────────────────────────────
 
 export async function logAgentAction(

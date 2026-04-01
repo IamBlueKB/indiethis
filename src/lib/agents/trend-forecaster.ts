@@ -25,6 +25,7 @@ import {
   logAgentAction,
   sendAgentEmail,
   agentEmailBase,
+  AT,
 }                            from "@/lib/agents";
 import { createNotification } from "@/lib/notifications";
 import { claude }             from "@/lib/claude";
@@ -223,7 +224,7 @@ export async function runTrendForecasterAgent(): Promise<TrendForecasterResult> 
     // 6-day dedup guard — don't resend teaser within the same week
     const recentLog = await db.agentLog.findFirst({
       where: {
-        agentType: "TREND_FORECASTER",
+        agentType: AT("TREND_FORECASTER"),
         action:    "TEASER_SENT",
         targetId:  artist.id,
         createdAt: { gte: daysAgo(6) },
