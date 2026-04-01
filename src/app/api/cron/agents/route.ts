@@ -172,6 +172,20 @@ export async function POST(req: NextRequest) {
     results.inactiveContent = "skipped (not due or not Tuesday)";
   }
 
+  // ── Trend Forecaster — weekly teaser (Friday) ────────────────────────────────
+  const shouldRunTrend = isFriday && await shouldRun("TREND_FORECASTER", 6 * 24); // 6d guard
+  if (shouldRunTrend) {
+    try {
+      const { runTrendForecasterAgent } = await import("@/lib/agents/trend-forecaster");
+      const result = await runTrendForecasterAgent();
+      results.trendForecaster = `checked ${result.checked}, teasers=${result.teasersSent}`;
+    } catch (err) {
+      results.trendForecaster = `error: ${String(err)}`;
+    }
+  } else {
+    results.trendForecaster = isFriday ? "skipped (not due)" : "skipped (not Friday)";
+  }
+
   // ── Payment Recovery — daily sweep (Day 2/5/10 escalation emails) ──────────
   const shouldRunPaymentRecovery = await shouldRun("PAYMENT_RECOVERY", 22); // 22h guard
   if (shouldRunPaymentRecovery) {

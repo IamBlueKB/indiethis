@@ -100,6 +100,10 @@ export const PRICING_DEFAULTS = {
   DJ_CRATE_LIMIT_REIGN:   { value: 0,    display: "Unlimited" },
   // Release bundle (cover art + canvas + lyric video) — saves $2.99 vs individual
   AI_RELEASE_BUNDLE:      { value: 18.99, display: "$18.99"   },
+  // Trend Forecaster & Producer-Artist Match PPU reports
+  TREND_REPORT:           { value: 4.99,  display: "$4.99"    },
+  PRODUCER_ARTIST_MATCH:  { value: 9.99,  display: "$9.99"    },
+  CANVAS_GENERATE:        { value: 1.99,  display: "$1.99"    },
 } as const;
 
 export type PricingKey = keyof typeof PRICING_DEFAULTS;

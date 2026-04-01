@@ -27,6 +27,7 @@ import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
 import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
+import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 
 type TierCredits = {
   aiVideoCreditsLimit: number;
@@ -852,6 +853,16 @@ export async function POST(req: NextRequest) {
                 console.error("[webhook] RELEASE_BUNDLE queue error:", e);
               }
             })();
+          }
+          break;
+        }
+
+        // --- Trend Report: generate personalised report asynchronously ---
+        if (tool === "TREND_REPORT") {
+          if (userId) {
+            void generateTrendReport(userId).catch(
+              (err) => console.error("[webhook] TREND_REPORT error:", err)
+            );
           }
           break;
         }
