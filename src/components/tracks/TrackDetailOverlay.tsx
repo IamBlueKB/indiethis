@@ -3,13 +3,83 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Play, Pause } from "lucide-react";
 import Link from "next/link";
 import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
 import { useAudioStore } from "@/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import AddToCrateButton from "@/components/dj/AddToCrateButton";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmt(s: number) {
+  const m = Math.floor(s / 60);
+  return `${m}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+}
+
+// ── Inline transport (play/pause + scrubber + time) ───────────────────────────
+
+function Transport({ data }: { data: TrackCardData }) {
+  const { play, pause, resume, currentTrack, isPlaying, currentTime, duration, seekTo } =
+    useAudioStore();
+  const isLoaded      = currentTrack?.id === data.id;
+  const isThisPlaying = isLoaded && isPlaying;
+  const progress      = isLoaded && duration > 0 ? currentTime / duration : 0;
+
+  function handlePlayPause() {
+    if (!isLoaded) {
+      play({ id: data.id, title: data.title, artist: data.artist.name, src: data.fileUrl, coverArt: data.coverArtUrl ?? undefined });
+    } else {
+      isThisPlaying ? pause() : resume();
+    }
+  }
+
+  function handleScrub(e: React.MouseEvent<HTMLDivElement>) {
+    const rect  = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekTo(ratio * duration);
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-3">
+        {/* Play / pause */}
+        <button
+          onClick={handlePlayPause}
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
+          style={{ backgroundColor: "#D4A843" }}
+          aria-label={isThisPlaying ? "Pause" : "Play"}
+        >
+          {isThisPlaying
+            ? <Pause  size={17} fill="#0A0A0A" color="#0A0A0A" />
+            : <Play   size={17} fill="#0A0A0A" color="#0A0A0A" style={{ marginLeft: 2 }} />
+          }
+        </button>
+
+        {/* Scrubber */}
+        <div className="flex-1 flex flex-col gap-1.5">
+          <div
+            className="w-full h-1 rounded-full cursor-pointer group/scrub"
+            style={{ backgroundColor: "#2a2a2a" }}
+            onClick={handleScrub}
+          >
+            <div
+              className="h-full rounded-full pointer-events-none"
+              style={{ width: `${progress * 100}%`, backgroundColor: "#D4A843", transition: "width 0.25s linear" }}
+            />
+          </div>
+          {isLoaded && duration > 0 && (
+            <div className="flex justify-between text-[10px] tabular-nums" style={{ color: "#555" }}>
+              <span>{fmt(currentTime)}</span>
+              <span>{fmt(duration)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -31,9 +101,6 @@ function PanelContent({
   detail:  CardDetail | null;
   onClose: () => void;
 }) {
-  const { play, pause, currentTrack, isPlaying } = useAudioStore();
-  const isThisPlaying = currentTrack?.id === data.id && isPlaying;
-
   // Respect artistSite.isPublished if provided; otherwise use slug as-is
   const artistSlug =
     data.artist.artistSite != null
@@ -50,20 +117,6 @@ function PanelContent({
   const hasBuyButton = !!detail?.digitalProductId;
   const showDJBadge  = (detail?.crateCount ?? 0) >= 3;
   const hasCredits   = !!(detail?.producer || detail?.songwriter);
-
-  function handlePlay() {
-    if (isThisPlaying) {
-      pause();
-    } else {
-      play({
-        id:       data.id,
-        title:    data.title,
-        artist:   data.artist.name,
-        src:      data.fileUrl,
-        coverArt: data.coverArtUrl ?? undefined,
-      });
-    }
-  }
 
   return (
     <div className="relative">
@@ -118,14 +171,8 @@ function PanelContent({
           )}
         </div>
 
-        {/* Play button */}
-        <button
-          onClick={handlePlay}
-          className="w-full h-11 rounded-lg text-sm font-semibold transition-colors hover:bg-[rgba(212,168,67,0.08)]"
-          style={{ border: "1px solid #D4A843", color: "#D4A843" }}
-        >
-          {isThisPlaying ? "Pause" : "Play in Player"}
-        </button>
+        {/* Transport */}
+        <Transport data={data} />
 
         {/* Metadata pills */}
         {pills.length > 0 && (
