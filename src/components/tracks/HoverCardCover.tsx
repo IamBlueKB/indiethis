@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback } from "react";
 import { Play, Pause } from "lucide-react";
 import { useExpandedCard } from "@/store/expandedCard";
+import TrackArtwork from "@/components/tracks/TrackArtwork";
 
 interface Props {
   id: string;
@@ -70,20 +71,15 @@ export function HoverCardCover({
       onMouseLeave={handleMouseLeave}
     >
       {/* Static cover art */}
-      {coverArtUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={coverArtUrl}
-          alt=""
-          className="w-full h-full object-cover"
-          style={{
-            opacity: isCanvasActive && canvasVideoUrl ? 0 : 1,
-            transition: "opacity 0.2s",
-          }}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }} />
-      )}
+      <TrackArtwork
+        coverArtUrl={coverArtUrl}
+        className="w-full h-full"
+        style={
+          coverArtUrl
+            ? { opacity: isCanvasActive && canvasVideoUrl ? 0 : 1, transition: "opacity 0.2s" }
+            : undefined
+        }
+      />
 
       {/* Canvas video — lazy-loaded, only rendered when URL present */}
       {canvasVideoUrl && (

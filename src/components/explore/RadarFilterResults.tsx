@@ -2,10 +2,11 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Music2, Loader2, Sliders } from "lucide-react";
+import { Loader2, Sliders } from "lucide-react";
 import { motion } from "framer-motion";
 import AudioFeaturesRadar from "@/components/audio/AudioFeaturesRadar";
-import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
+import { type TrackCardData } from "@/store/expandedCard";
+import { useTrackOverlay } from "@/hooks/useTrackOverlay";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import type { RadarFilterState }   from "./InteractiveRadarFilter";
@@ -172,7 +173,7 @@ function ResultCard({
   onPlay:  RadarFilterResultsProps["onPlay"];
 }) {
   const matchPct = Math.round(result.similarity * 100);
-  const { open } = useExpandedCard();
+  const { openOverlay: open } = useTrackOverlay();
 
   const cardData: TrackCardData = {
     id:            result.id,
@@ -205,12 +206,6 @@ function ResultCard({
         onPlay={(e) => { e.stopPropagation(); onPlay(result.id, result.title, result.artistName, result.fileUrl, result.artworkUrl ?? undefined); }}
         className="relative aspect-square overflow-hidden"
       >
-        {!result.artworkUrl && (
-          <div className="absolute inset-0 flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg,#1a1a1a,#111)" }}>
-            <Music2 size={28} style={{ color: "#333" }} />
-          </div>
-        )}
         <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
           style={{ background: "rgba(0,0,0,0.7)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.4)" }}>
           {matchPct}% match

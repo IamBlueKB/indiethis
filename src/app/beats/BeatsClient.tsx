@@ -8,11 +8,11 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
-import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
+import { type TrackCardData } from "@/store/expandedCard";
+import { useTrackOverlay } from "@/hooks/useTrackOverlay";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import PublicNav from "@/components/layout/PublicNav";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ function BeatCard({
   const monthlyRate   = 1;
   const artistSlug    = beat.artist.artistSlug;
 
-  const { open } = useExpandedCard();
+  const { openOverlay: open } = useTrackOverlay();
 
   const cardData: TrackCardData = {
     id:            beat.id,
@@ -289,6 +289,7 @@ function FilterDropdown({
 
 export default function BeatsClient() {
   const { play, currentTrack } = useAudioStore();
+  const { OverlayComponent } = useTrackOverlay();
 
   // Filters
   const [query,      setQuery]      = useState("");
@@ -606,7 +607,7 @@ export default function BeatsClient() {
         />
       )}
 
-      <TrackDetailOverlay />
+      <OverlayComponent />
     </div>
   );
 }

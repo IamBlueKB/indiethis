@@ -85,15 +85,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id!;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        token.role = (user as any).role as Role;
+        token.role   = (user as any).role   as Role;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        token.djMode = (user as any).djMode as boolean ?? false;
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id as string;
+        session.user.id     = token.id as string;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (session.user as any).role = token.role as Role;
+        (session.user as any).role   = token.role   as Role;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).djMode = token.djMode as boolean ?? false;
       }
       return session;
     },

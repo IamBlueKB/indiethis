@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 /**
  * Displays track/beat cover art with an IndieThis logo placeholder
  * when no coverArtUrl is provided. Drop-in for any card or detail view.
@@ -8,17 +10,21 @@ export default function TrackArtwork({
   coverArtUrl,
   alt = "Track artwork",
   className = "",
+  style,
 }: {
   coverArtUrl: string | null | undefined;
   alt?:        string;
   className?:  string;
+  style?:      React.CSSProperties;
 }) {
   if (coverArtUrl) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={coverArtUrl}
         alt={alt}
         className={`w-full h-full object-cover ${className}`}
+        style={style}
       />
     );
   }

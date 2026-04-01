@@ -4,11 +4,10 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Music2, Users } from "lucide-react";
 import { useAudioStore } from "@/store";
-import { useExpandedCard } from "@/store/expandedCard";
+import { useTrackOverlay } from "@/hooks/useTrackOverlay";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 
 type TrackItem = {
   id: string;
@@ -71,7 +70,7 @@ export default function PublicCrateClient({
   crate: CrateData;
 }) {
   const { play, currentTrack, isPlaying } = useAudioStore();
-  const { open: openDetail } = useExpandedCard();
+  const { openOverlay: openDetail, OverlayComponent } = useTrackOverlay();
   const didSetCookie = useRef(false);
 
   const djDisplayName = djProfile.user.artistName ?? djProfile.user.name;
@@ -187,13 +186,8 @@ export default function PublicCrateClient({
                     onPlay={(e) => { e.stopPropagation(); play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }); }}
                     buttonSize="sm"
                     className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
-                  >
-                    {!track.coverArtUrl && !track.canvasVideoUrl && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Music2 size={14} style={{ color: "#444" }} />
-                      </div>
-                    )}
-                  </HoverCardCover>
+                  />
+
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -240,6 +234,6 @@ export default function PublicCrateClient({
       <Footer />
     </div>
 
-    <TrackDetailOverlay />
+    <OverlayComponent />
   );
 }

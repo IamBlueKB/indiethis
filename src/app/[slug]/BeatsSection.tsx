@@ -2,11 +2,11 @@
 
 import { motion } from "framer-motion";
 import { useAudioStore, type AudioTrack } from "@/store";
-import { useExpandedCard } from "@/store/expandedCard";
-import { Music2, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 import Link from "next/link";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
+import { useTrackOverlay } from "@/hooks/useTrackOverlay";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ const GLASS: React.CSSProperties = {
 
 function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }) {
   const { play, pause, resume, currentTrack, isPlaying } = useAudioStore();
-  const { open } = useExpandedCard();
+  const { openOverlay: open } = useTrackOverlay();
 
   const isThis        = currentTrack?.id === beat.id;
   const isThisPlaying = isThis && isPlaying;
@@ -78,13 +78,8 @@ function BeatCard({ beat, artistSlug }: { beat: PublicBeat; artistSlug: string }
         coverArtUrl={beat.coverArtUrl}
         isPlaying={isThisPlaying}
         onPlay={(e) => { e.stopPropagation(); handlePlay(); }}
-        className="w-full aspect-square bg-white/5 shrink-0 overflow-hidden"
+        className="w-full aspect-square shrink-0 overflow-hidden"
       >
-        {!beat.coverArtUrl && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Music2 size={28} style={{ color: "rgba(255,255,255,0.2)" }} />
-          </div>
-        )}
         {/* Stream Lease badge */}
         {beat.streamLeaseEnabled && (
           <div
@@ -152,6 +147,7 @@ export default function BeatsSection({
   producerBio:  string | null;
   artistSlug:   string;
 }) {
+  const { OverlayComponent } = useTrackOverlay();
   if (beats.length === 0) return null;
 
   return (
@@ -204,7 +200,7 @@ export default function BeatsSection({
         </Link>
       </div>
 
-      <TrackDetailOverlay />
+      <OverlayComponent />
     </section>
   );
 }

@@ -6,18 +6,19 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { useAudioStore } from "@/store";
-import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
+import { type TrackCardData } from "@/store/expandedCard";
+import { useTrackOverlay } from "@/hooks/useTrackOverlay";
 import Footer from "@/components/layout/Footer";
 import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
 import { HoverCardCover } from "@/components/tracks/HoverCardCover";
-import { TrackDetailOverlay } from "@/components/tracks/TrackDetailOverlay";
 import SimilarTracks from "@/components/audio/SimilarTracks";
 import SimilarArtists from "@/components/audio/SimilarArtists";
 import InteractiveRadarFilter, { type RadarFilterState } from "@/components/explore/InteractiveRadarFilter";
 import RadarFilterResults from "@/components/explore/RadarFilterResults";
 import PublicNav from "@/components/layout/PublicNav";
 import AddToCrateButton from "@/components/dj/AddToCrateButton";
+import TrackArtwork from "@/components/tracks/TrackArtwork";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
@@ -207,7 +208,7 @@ function SectionHeader({ label, title }: { label: string; title: string }) {
 
 function TrackCard({ track, onPlay, isNew }: { track: TrackItem; onPlay: (t: TrackItem) => void; isNew?: boolean }) {
   const { currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
-  const { open } = useExpandedCard();
+  const { openOverlay: open } = useTrackOverlay();
   const isPlaying = currentTrack?.id === track.id && storeIsPlaying;
   const artistSlug = track.artist.artistSite?.isPublished ? track.artist.artistSlug : null;
 
@@ -387,7 +388,7 @@ function TrackScroll({ tracks, onPlay, isNew }: { tracks: TrackItem[]; onPlay: (
 function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPlaying: boolean; onPlay: (b: BeatItem) => void; onLicense: (b: BeatItem) => void }) {
   const totalUses = beat._count.beatLicenses + beat._count.streamLeases;
   const artistSlug = beat.artist.artistSite?.isPublished ? beat.artist.artistSlug : null;
-  const { open } = useExpandedCard();
+  const { openOverlay: open } = useTrackOverlay();
   const cardData: TrackCardData = {
     id: beat.id, title: beat.title, coverArtUrl: beat.coverArtUrl, canvasVideoUrl: null,
     fileUrl: beat.fileUrl, genre: beat.genre, bpm: beat.bpm, musicalKey: beat.musicalKey,
@@ -529,11 +530,8 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
           onClick={() => onPlay({ ...artist.topTrack!, artist: { id: artist.id, name: artist.name, artistSlug: artist.slug } })}
           className="w-full flex items-center gap-2.5 rounded-lg p-2 transition-all group/track hover:bg-white/5"
         >
-          <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: "#1e1e1e" }}>
-            {artist.topTrack.coverArtUrl
-              ? <img src={artist.topTrack.coverArtUrl} alt="" className="w-full h-full object-cover" />
-              : <Music2 size={14} className="m-auto" style={{ color: "#444" }} />
-            }
+          <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+            <TrackArtwork coverArtUrl={artist.topTrack.coverArtUrl} />
           </div>
           <p className="flex-1 text-xs text-left text-white truncate">{artist.topTrack.title}</p>
           <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,168,67,0.15)" }}>
@@ -675,8 +673,8 @@ function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemoveP
               ))}
               {results!.tracks.map((t) => (
                 <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer" onClick={() => { setOpen(false); onFilter("music"); }}>
-                  <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0" style={{ backgroundColor: "#1e1e1e" }}>
-                    {t.coverArtUrl ? <img src={t.coverArtUrl} className="w-full h-full object-cover" /> : <Music2 size={13} className="m-auto text-gray-600" />}
+                  <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0">
+                    <TrackArtwork coverArtUrl={t.coverArtUrl} />
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-white">{t.title}</p>
@@ -927,6 +925,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
 export default function ExploreClient() {
   const { data: session } = useSession();
   const { play, currentTrack } = useAudioStore();
+  const { OverlayComponent } = useTrackOverlay();
   const loggedIn = !!session?.user;
   const searchParams = useSearchParams();
 
@@ -1808,7 +1807,7 @@ export default function ExploreClient() {
         />
       )}
 
-      <TrackDetailOverlay />
+      <OverlayComponent />
     </div>
   );
 }
