@@ -143,6 +143,35 @@ export async function POST(req: NextRequest) {
     results.leadScoring = "skipped (not due)";
   }
 
+  // ── Creative Prompt — proactive: notify artists 48 h after upload if no cover art
+  const shouldRunCreativePrompt = await shouldRun("CREATIVE_PROMPT", 22); // 22h guard
+  if (shouldRunCreativePrompt) {
+    try {
+      const { runCreativePromptAgent } = await import("@/lib/agents/creative-prompt");
+      const result = await runCreativePromptAgent();
+      results.creativePrompt = `checked ${result.checked}, notified ${result.notified}`;
+    } catch (err) {
+      results.creativePrompt = `error: ${String(err)}`;
+    }
+  } else {
+    results.creativePrompt = "skipped (not due)";
+  }
+
+  // ── Inactive Content — weekly: nudge artists with stale tracks/merch/products
+  const isTuesday = day === 2;
+  const shouldRunInactiveContent = isTuesday && await shouldRun("INACTIVE_CONTENT", 6 * 24); // 6d guard
+  if (shouldRunInactiveContent) {
+    try {
+      const { runInactiveContentAgent } = await import("@/lib/agents/inactive-content");
+      const result = await runInactiveContentAgent();
+      results.inactiveContent = `checked ${result.checked}, acted on ${result.acted}`;
+    } catch (err) {
+      results.inactiveContent = `error: ${String(err)}`;
+    }
+  } else {
+    results.inactiveContent = "skipped (not due or not Tuesday)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

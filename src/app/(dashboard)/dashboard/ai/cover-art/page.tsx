@@ -3,7 +3,7 @@
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw } from "lucide-react";
+import { Sparkles, Download, Loader2, CheckCircle2, Clock, AlertCircle, RotateCcw, Wand2 } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import CreditExhaustedBanner from "@/components/dashboard/CreditExhaustedBanner";
 
@@ -72,7 +72,12 @@ export default function CoverArtPage() {
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
+  // Creative Prompt Suggestion
+  const [suggesting,    setSuggesting]    = useState(false);
+  const [suggestion,    setSuggestion]    = useState<string | null>(null);
+
   const searchParams = useSearchParams();
+  const trackId = searchParams.get("trackId") ?? undefined;
 
   // ── Load history on mount ───────────────────────────────────────────────────
   useEffect(() => {
@@ -88,6 +93,32 @@ export default function CoverArtPage() {
       })
       .finally(() => setHistoryLoading(false));
   }, []);
+
+  // ── Load preloaded suggestion when trackId + ?preloaded=1 is in URL ───────
+  useEffect(() => {
+    if (!trackId) return;
+    const isPreloaded = searchParams.get("preloaded") === "1";
+    if (!isPreloaded) return;
+    setSuggesting(true);
+    fetch(`/api/dashboard/ai/creative-prompt?trackId=${trackId}&type=cover_art`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.suggestion) setSuggestion(d.suggestion); })
+      .catch(() => {})
+      .finally(() => setSuggesting(false));
+  }, [trackId, searchParams]);
+
+  async function handleSuggestPrompt() {
+    if (!trackId) return;
+    setSuggesting(true);
+    setSuggestion(null);
+    try {
+      const res = await fetch(`/api/dashboard/ai/creative-prompt?trackId=${trackId}&type=cover_art`);
+      if (res.ok) {
+        const d = await res.json() as { suggestion: string };
+        setSuggestion(d.suggestion);
+      }
+    } catch { /* silent */ } finally { setSuggesting(false); }
+  }
 
   // ── Handle ?paid=1 return from Stripe Checkout ──────────────────────────────
   useEffect(() => {
@@ -251,9 +282,23 @@ export default function CoverArtPage() {
 
           {/* Prompt */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Describe your cover art *
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Describe your cover art *
+              </label>
+              {trackId && (
+                <button
+                  type="button"
+                  onClick={() => void handleSuggestPrompt()}
+                  disabled={!!isActive || suggesting}
+                  className="flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-70 disabled:opacity-40"
+                  style={{ color: "#D4A843" }}
+                >
+                  {suggesting ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                  {suggesting ? "Analyzing…" : "Suggest a prompt"}
+                </button>
+              )}
+            </div>
             <textarea
               value={artistPrompt}
               onChange={e => setArtistPrompt(e.target.value)}
@@ -264,6 +309,26 @@ export default function CoverArtPage() {
               className="w-full rounded-xl border px-3 py-2.5 text-sm bg-transparent text-foreground outline-none focus:ring-2 focus:ring-accent/50 resize-none"
               style={{ borderColor: "var(--border)" }}
             />
+            {suggestion && !artistPrompt && (
+              <div
+                className="rounded-xl border p-3 space-y-2"
+                style={{ borderColor: "rgba(212,168,67,0.3)", backgroundColor: "rgba(212,168,67,0.06)" }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Wand2 size={11} style={{ color: "#D4A843" }} />
+                  <span className="text-xs font-semibold" style={{ color: "#D4A843" }}>Suggested prompt</span>
+                </div>
+                <p className="text-xs text-foreground leading-relaxed">{suggestion}</p>
+                <button
+                  type="button"
+                  onClick={() => { setArtistPrompt(suggestion); setSuggestion(null); }}
+                  className="text-xs font-semibold underline underline-offset-2"
+                  style={{ color: "#D4A843" }}
+                >
+                  Use this prompt
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Style chips */}
