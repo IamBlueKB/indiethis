@@ -2,9 +2,10 @@
  * POST /api/dashboard/ai/trend-report/checkout
  *
  * Creates a Stripe Checkout session for the Trend Report ($4.99).
+ * Reign plan: free — report generated immediately, no Stripe session.
  * On successful payment the webhook triggers generateTrendReport(userId).
  *
- * Returns: { url: string }
+ * Returns: { url: string } | { free: true }
  */
 
 import { auth }                         from "@/lib/auth";
@@ -12,24 +13,34 @@ import { db }                           from "@/lib/db";
 import { stripe }                       from "@/lib/stripe";
 import { NextRequest, NextResponse }    from "next/server";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
+import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 
 const APP_URL         = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 const PRICING_KEY     = "TREND_REPORT";
 
 export async function POST(_req: NextRequest) {
-  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
-
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   // Require an active subscription
   const subscription = await db.subscription.findFirst({
-    where: { userId, status: "ACTIVE" },
+    where:  { userId, status: "ACTIVE" },
+    select: { tier: true },
   });
   if (!subscription) {
     return NextResponse.json({ error: "Active subscription required" }, { status: 403 });
   }
+
+  // Reign plan: free — generate immediately
+  if (subscription.tier === "REIGN") {
+    void generateTrendReport(userId).catch((err) =>
+      console.error("[trend-report] Reign free generation error:", err)
+    );
+    return NextResponse.json({ free: true });
+  }
+
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
 
   const user = await db.user.findUnique({
     where:  { id: userId },

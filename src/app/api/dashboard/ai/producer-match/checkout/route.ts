@@ -2,9 +2,10 @@
  * POST /api/dashboard/ai/producer-match/checkout
  *
  * Creates a Stripe Checkout session for the Producer-Artist Match Report ($9.99).
+ * Reign plan: free — report generated immediately, no Stripe session.
  * On payment success the webhook triggers generateProducerArtistMatch(userId).
  *
- * Returns: { url: string }
+ * Returns: { url: string } | { free: true }
  */
 
 import { auth }                         from "@/lib/auth";
@@ -12,23 +13,33 @@ import { db }                           from "@/lib/db";
 import { stripe }                       from "@/lib/stripe";
 import { NextRequest, NextResponse }    from "next/server";
 import { getPricing, PRICING_DEFAULTS } from "@/lib/pricing";
+import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
 
 const APP_URL     = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 const PRICING_KEY = "PRODUCER_ARTIST_MATCH";
 
 export async function POST(_req: NextRequest) {
-  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
-
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   const subscription = await db.subscription.findFirst({
-    where: { userId, status: "ACTIVE" },
+    where:  { userId, status: "ACTIVE" },
+    select: { tier: true },
   });
   if (!subscription) {
     return NextResponse.json({ error: "Active subscription required" }, { status: 403 });
   }
+
+  // Reign plan: free — generate immediately
+  if (subscription.tier === "REIGN") {
+    void generateProducerArtistMatch(userId).catch((err) =>
+      console.error("[producer-match] Reign free generation error:", err)
+    );
+    return NextResponse.json({ free: true });
+  }
+
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
 
   const user = await db.user.findUnique({
     where:  { id: userId },

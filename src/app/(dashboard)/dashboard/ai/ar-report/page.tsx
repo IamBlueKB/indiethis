@@ -130,6 +130,9 @@ export default function ARReportPage() {
   const [creditExhausted, setCreditExhausted] = useState(false);
   const [creditInfo, setCreditInfo] = useState<{ used: number; limit: number; tier: string; priceDisplay: string } | null>(null);
 
+  // Tier gate — Launch plan cannot access A&R Intelligence
+  const [tierBlocked, setTierBlocked] = useState(false);
+
   // History
   const [history,        setHistory]        = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -209,6 +212,10 @@ export default function ARReportPage() {
       }
 
       const data = await res.json();
+      if (res.status === 403 && data.error === "upgrade_required") {
+        setTierBlocked(true);
+        return;
+      }
       if (!res.ok) { setSubmitError(data.error ?? "Failed to start job"); return; }
 
       const init: PollData = {
@@ -351,6 +358,25 @@ export default function ARReportPage() {
             <div className="flex items-center gap-2 text-red-400 text-sm">
               <AlertCircle size={14} className="flex-shrink-0" />
               {submitError}
+            </div>
+          )}
+
+          {tierBlocked && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3">
+              <span className="text-amber-400 mt-0.5 shrink-0">⛔</span>
+              <div>
+                <p className="text-sm font-semibold text-amber-300">A&R Intelligence requires Push or Reign</p>
+                <p className="text-xs text-amber-400/80 mt-0.5">
+                  Your Launch plan doesn&apos;t include A&R Intelligence reports. Upgrade to Push ($49/mo) to unlock weekly A&R reports and advanced artist analytics.
+                </p>
+                <a
+                  href="/dashboard/settings#upgrade"
+                  className="inline-block mt-2 px-4 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  Upgrade to Push →
+                </a>
+              </div>
             </div>
           )}
 

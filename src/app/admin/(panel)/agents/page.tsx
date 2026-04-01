@@ -1,20 +1,24 @@
 import { db }                 from "@/lib/db";
 import { requireAdminAccess } from "@/lib/require-admin-access";
 import Link                   from "next/link";
-import { Bot, Filter, AlertTriangle, ShieldAlert, TrendingUp, Activity, Clock, Users } from "lucide-react";
+import {
+  Bot, Filter, AlertTriangle, ShieldAlert, TrendingUp,
+  Activity, Clock, Users, Mic2, Users2, FileSearch,
+  MessageSquare, DollarSign, Music2,
+} from "lucide-react";
 import type { AgentType }     from "@prisma/client";
 
 const AGENT_LABELS: Record<string, string> = {
-  CHURN_PREVENTION:    "Churn Prevention",
-  REVENUE_OPTIMIZATION:"Revenue Optimization",
-  RELEASE_STRATEGY:    "Release Strategy",
-  FAN_ENGAGEMENT:      "Fan Engagement",
-  SESSION_FOLLOWUP:    "Session Follow-up",
-  AR_INTELLIGENCE:     "A&R Intelligence",
-  CONTENT_MODERATION:  "Content Moderation",
-  LEAD_SCORING:        "Lead Scoring",
-  CREATIVE_PROMPT:     "Creative Prompt",
-  INACTIVE_CONTENT:    "Inactive Content",
+  CHURN_PREVENTION:         "Churn Prevention",
+  REVENUE_OPTIMIZATION:     "Revenue Optimization",
+  RELEASE_STRATEGY:         "Release Strategy",
+  FAN_ENGAGEMENT:           "Fan Engagement",
+  SESSION_FOLLOWUP:         "Session Follow-up",
+  AR_INTELLIGENCE:          "A&R Intelligence",
+  CONTENT_MODERATION:       "Content Moderation",
+  LEAD_SCORING:             "Lead Scoring",
+  CREATIVE_PROMPT:          "Creative Prompt",
+  INACTIVE_CONTENT:         "Inactive Content",
   PAYMENT_RECOVERY:         "Payment Recovery",
   TREND_FORECASTER:         "Trend Forecaster",
   PRODUCER_ARTIST_MATCH:    "Producer-Artist Match",
@@ -23,16 +27,16 @@ const AGENT_LABELS: Record<string, string> = {
 };
 
 const AGENT_COLORS: Record<string, string> = {
-  CHURN_PREVENTION:    "#F87171",
-  REVENUE_OPTIMIZATION:"#4ADE80",
-  RELEASE_STRATEGY:    "#60A5FA",
-  FAN_ENGAGEMENT:      "#A78BFA",
-  SESSION_FOLLOWUP:    "#34D399",
-  AR_INTELLIGENCE:     "#FBBF24",
-  CONTENT_MODERATION:  "#FB923C",
-  LEAD_SCORING:        "#38BDF8",
-  CREATIVE_PROMPT:        "#D4A843",
-  INACTIVE_CONTENT:       "#E879F9",
+  CHURN_PREVENTION:         "#F87171",
+  REVENUE_OPTIMIZATION:     "#4ADE80",
+  RELEASE_STRATEGY:         "#60A5FA",
+  FAN_ENGAGEMENT:           "#A78BFA",
+  SESSION_FOLLOWUP:         "#34D399",
+  AR_INTELLIGENCE:          "#FBBF24",
+  CONTENT_MODERATION:       "#FB923C",
+  LEAD_SCORING:             "#38BDF8",
+  CREATIVE_PROMPT:          "#D4A843",
+  INACTIVE_CONTENT:         "#E879F9",
   PAYMENT_RECOVERY:         "#F87171",
   TREND_FORECASTER:         "#34D399",
   PRODUCER_ARTIST_MATCH:    "#60A5FA",
@@ -54,6 +58,11 @@ function timeSince(d: Date): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+function pct(num: number, denom: number): string {
+  if (!denom) return "0%";
+  return `${Math.round((num / denom) * 100)}%`;
+}
+
 export default async function AgentsPage({
   searchParams,
 }: {
@@ -66,10 +75,10 @@ export default async function AgentsPage({
   const perPage = 50;
   const skip    = (page - 1) * perPage;
 
-  const now       = new Date();
+  const now        = new Date();
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-  const weekStart  = new Date(now.getTime() - 7  * 86400_000);
-  const monthStart = new Date(now.getTime() - 30 * 86400_000);
+  const weekStart  = new Date(now.getTime() - 7  * 86_400_000);
+  const monthStart = new Date(now.getTime() - 30 * 86_400_000);
 
   const where = agentFilter ? { agentType: agentFilter as AgentType } : {};
 
@@ -83,14 +92,26 @@ export default async function AgentsPage({
     lastRuns,
     churnCounts,
     pendingFlags,
+    // ── Payment Recovery stats ──────────────────────────────────────────────
+    payRecoveryStarted,
+    payWinBackSent,
+    payDay2Sent,
+    payDay5Sent,
+    // ── Trend Forecaster stats ──────────────────────────────────────────────
+    trendReportsWeek,
+    trendTeasersWeek,
+    // ── Booking Agent stats ─────────────────────────────────────────────────
+    bookingReportsTotal,
+    bookingReportsWeek,
+    // ── Collaboration Matchmaker stats ──────────────────────────────────────
+    collabMatchesMonth,
+    collabOptInCount,
+    // ── Inactive Content stats ──────────────────────────────────────────────
+    inactiveDigestWeek,
+    inactiveBundleSuggestWeek,
   ] = await Promise.all([
     // Paginated activity feed
-    db.agentLog.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take:    perPage,
-      skip,
-    }),
+    db.agentLog.findMany({ where, orderBy: { createdAt: "desc" }, take: perPage, skip }),
     db.agentLog.count({ where }),
 
     // Overview counts
@@ -106,19 +127,16 @@ export default async function AgentsPage({
       orderBy: { _count: { agentType: "desc" } },
     }),
 
-    // Last run time per agent (most recent AGENT_RUN_START)
+    // Last run time per agent
     db.agentLog.findMany({
-      where:   { action: "AGENT_RUN_START" },
-      orderBy: { createdAt: "desc" },
+      where:    { action: "AGENT_RUN_START" },
+      orderBy:  { createdAt: "desc" },
       distinct: ["agentType"],
-      select:  { agentType: true, createdAt: true },
+      select:   { agentType: true, createdAt: true },
     }),
 
     // Churn risk distribution
-    db.user.groupBy({
-      by: ["churnRiskScore"],
-      _count: { _all: true },
-    }).then((rows) => {
+    db.user.groupBy({ by: ["churnRiskScore"], _count: { _all: true } }).then((rows) => {
       let healthy = 0, atRisk = 0, high = 0, critical = 0;
       for (const r of rows) {
         const s = r.churnRiskScore ?? 0;
@@ -132,12 +150,64 @@ export default async function AgentsPage({
 
     // Pending moderation flags
     db.moderationFlag.count({ where: { status: "PENDING" } }),
+
+    // ── Payment Recovery ────────────────────────────────────────────────────
+    db.agentLog.count({
+      where: { agentType: "PAYMENT_RECOVERY" as AgentType, action: "RECOVERY_STARTED", createdAt: { gte: monthStart } },
+    }),
+    db.agentLog.count({
+      where: { agentType: "PAYMENT_RECOVERY" as AgentType, action: "WIN_BACK_SENT", createdAt: { gte: monthStart } },
+    }),
+    db.agentLog.count({
+      where: { agentType: "PAYMENT_RECOVERY" as AgentType, action: "DAY2_EMAIL_SENT", createdAt: { gte: monthStart } },
+    }),
+    db.agentLog.count({
+      where: { agentType: "PAYMENT_RECOVERY" as AgentType, action: "DAY5_EMAIL_SENT", createdAt: { gte: monthStart } },
+    }),
+
+    // ── Trend Forecaster ────────────────────────────────────────────────────
+    db.agentLog.count({
+      where: { agentType: "TREND_FORECASTER" as AgentType, action: "TREND_REPORT_GENERATED", createdAt: { gte: weekStart } },
+    }),
+    db.agentLog.count({
+      where: { agentType: "TREND_FORECASTER" as AgentType, action: "TEASER_SENT", createdAt: { gte: weekStart } },
+    }),
+
+    // ── Booking Agent ───────────────────────────────────────────────────────
+    db.agentLog.count({
+      where: { agentType: "BOOKING_AGENT" as AgentType, action: "REPORT_GENERATED" },
+    }),
+    db.agentLog.count({
+      where: { agentType: "BOOKING_AGENT" as AgentType, action: "REPORT_GENERATED", createdAt: { gte: weekStart } },
+    }),
+
+    // ── Collaboration Matchmaker ────────────────────────────────────────────
+    db.agentLog.count({
+      where: { agentType: "COLLABORATION_MATCHMAKER" as AgentType, action: "MATCH_SENT", createdAt: { gte: monthStart } },
+    }),
+    db.user.count({ where: { openToCollaborations: true, role: "ARTIST" } }),
+
+    // ── Inactive Content ────────────────────────────────────────────────────
+    db.agentLog.count({
+      where: { agentType: "INACTIVE_CONTENT" as AgentType, action: "DIGEST_SENT", createdAt: { gte: weekStart } },
+    }),
+    // Bundle suggestions = DIGEST_SENT logs this week (suggestions stored in details)
+    db.agentLog.findMany({
+      where: { agentType: "INACTIVE_CONTENT" as AgentType, action: "DIGEST_SENT", createdAt: { gte: weekStart } },
+      select: { details: true },
+    }).then((rows) =>
+      rows.reduce((sum, r) => {
+        const d = r.details as Record<string, unknown> | null;
+        const suggestions = d?.suggestions;
+        return sum + (Array.isArray(suggestions) ? suggestions.length : 0);
+      }, 0)
+    ),
   ]);
 
-  const totalPages    = Math.ceil(total / perPage);
-  const lastRunMap    = new Map(lastRuns.map((r) => [r.agentType, r.createdAt]));
-  const weekCountMap  = new Map(weekSummary.map((s) => [s.agentType, s._count._all]));
-  const STALE_HOURS   = 48;
+  const totalPages   = Math.ceil(total / perPage);
+  const lastRunMap   = new Map(lastRuns.map((r) => [r.agentType, r.createdAt]));
+  const weekCountMap = new Map(weekSummary.map((s) => [s.agentType, s._count._all]));
+  const STALE_HOURS  = 48;
 
   return (
     <div className="space-y-6">
@@ -160,9 +230,9 @@ export default async function AgentsPage({
       {/* Overview cards */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Actions today",    value: todayCount,  icon: Activity,    color: "#D4A843" },
-          { label: "Actions this week", value: weekCount,  icon: TrendingUp,  color: "#4ADE80" },
-          { label: "Actions this month",value: monthCount, icon: Clock,       color: "#60A5FA" },
+          { label: "Actions today",     value: todayCount,  icon: Activity,   color: "#D4A843" },
+          { label: "Actions this week", value: weekCount,   icon: TrendingUp, color: "#4ADE80" },
+          { label: "Actions this month",value: monthCount,  icon: Clock,      color: "#60A5FA" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
             <div className="flex items-center justify-between mb-2">
@@ -179,18 +249,18 @@ export default async function AgentsPage({
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Agent Health</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {ALL_AGENT_TYPES.map((type) => {
-            const lastRun   = lastRunMap.get(type);
-            const count7d   = weekCountMap.get(type) ?? 0;
-            const hoursAgo  = lastRun ? (Date.now() - lastRun.getTime()) / 3600_000 : Infinity;
-            const isStale   = hoursAgo > STALE_HOURS;
-            const color     = AGENT_COLORS[type];
+            const lastRun  = lastRunMap.get(type);
+            const count7d  = weekCountMap.get(type) ?? 0;
+            const hoursAgo = lastRun ? (Date.now() - lastRun.getTime()) / 3600_000 : Infinity;
+            const isStale  = hoursAgo > STALE_HOURS;
+            const color    = AGENT_COLORS[type];
             return (
               <Link
                 key={type}
                 href={`/admin/agents?agent=${type}`}
                 className="rounded-xl border p-3 hover:bg-white/[0.02] transition-colors"
                 style={{
-                  borderColor: isStale ? "rgba(248,113,113,0.4)" : "var(--border)",
+                  borderColor:     isStale ? "rgba(248,113,113,0.4)" : "var(--border)",
                   backgroundColor: "var(--card)",
                 }}
               >
@@ -209,6 +279,67 @@ export default async function AgentsPage({
               </Link>
             );
           })}
+        </div>
+      </div>
+
+      {/* ── Agent-specific stat panels ──────────────────────────────────────── */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Agent Metrics</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+
+          {/* Payment Recovery */}
+          <StatCard title="Payment Recovery" color="#F87171" icon={<DollarSign size={14} />}>
+            <StatRow label="Sequences started (30d)"  value={payRecoveryStarted} />
+            <StatRow label="Day 2 emails sent (30d)"  value={payDay2Sent} />
+            <StatRow label="Day 5 emails sent (30d)"  value={payDay5Sent} />
+            <StatRow label="Win-back codes issued (30d)" value={payWinBackSent} />
+            <StatRow label="Recovery rate (est.)"
+              value={pct(payRecoveryStarted - payDay5Sent, payRecoveryStarted)}
+              note="sequences that didn't reach Day 5" />
+          </StatCard>
+
+          {/* Trend Forecaster */}
+          <StatCard title="Trend Forecaster" color="#34D399" icon={<TrendingUp size={14} />}>
+            <StatRow label="Reports generated (7d)" value={trendReportsWeek} />
+            <StatRow label="Teaser notifications (7d)" value={trendTeasersWeek} />
+            <StatRow label="Conversion rate (est.)"
+              value={pct(trendReportsWeek, trendTeasersWeek)}
+              note="teasers → paid reports" />
+          </StatCard>
+
+          {/* Booking Agent */}
+          <StatCard title="Booking Agent" color="#FB923C" icon={<Mic2 size={14} />}>
+            <StatRow label="Reports generated (total)" value={bookingReportsTotal} />
+            <StatRow label="Reports generated (7d)"    value={bookingReportsWeek} />
+            <StatRow label="Opportunities surfaced (est.)"
+              value={bookingReportsTotal * 10}
+              note="10 per report" />
+          </StatCard>
+
+          {/* Collaboration Matchmaker */}
+          <StatCard title="Collaboration Matchmaker" color="#A78BFA" icon={<Users2 size={14} />}>
+            <StatRow label="Match notifications (30d)" value={collabMatchesMonth} />
+            <StatRow label="Artists opted in"          value={collabOptInCount} />
+            <StatRow label="Pairs introduced (est.)"
+              value={Math.floor(collabMatchesMonth / 2)}
+              note="2 notifications per pair" />
+          </StatCard>
+
+          {/* Inactive Content */}
+          <StatCard title="Inactive Content" color="#E879F9" icon={<FileSearch size={14} />}>
+            <StatRow label="Digest notifications (7d)" value={inactiveDigestWeek} />
+            <StatRow label="Suggestions sent (7d)"     value={inactiveBundleSuggestWeek} />
+            <StatRow label="Avg suggestions / artist"
+              value={inactiveDigestWeek ? (inactiveBundleSuggestWeek / inactiveDigestWeek).toFixed(1) : "—"} />
+          </StatCard>
+
+          {/* Collaboration opt-in trend */}
+          <StatCard title="Platform Collaboration Pool" color="#A78BFA" icon={<Music2 size={14} />}>
+            <StatRow label="Artists open to collabs" value={collabOptInCount} />
+            <StatRow label="Match pairs this month"  value={Math.floor(collabMatchesMonth / 2)} />
+            <StatRow label="Notifications sent (30d)" value={collabMatchesMonth} />
+          </StatCard>
+
         </div>
       </div>
 
@@ -253,8 +384,8 @@ export default async function AgentsPage({
               className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
               style={{
                 backgroundColor: pendingFlags > 0 ? "rgba(232,93,74,0.12)" : "rgba(255,255,255,0.05)",
-                color: pendingFlags > 0 ? "#E85D4A" : "var(--muted-foreground)",
-                border: `1px solid ${pendingFlags > 0 ? "rgba(232,93,74,0.3)" : "var(--border)"}`,
+                color:           pendingFlags > 0 ? "#E85D4A" : "var(--muted-foreground)",
+                border:          `1px solid ${pendingFlags > 0 ? "rgba(232,93,74,0.3)" : "var(--border)"}`,
               }}
             >
               Review →
@@ -323,11 +454,11 @@ export default async function AgentsPage({
                 </tr>
               )}
               {logs.map((log) => {
-                const color   = AGENT_COLORS[log.agentType];
-                const details = log.details as Record<string, unknown> | null;
+                const color     = AGENT_COLORS[log.agentType];
+                const details   = log.details as Record<string, unknown> | null;
                 const detailStr = details
                   ? Object.entries(details)
-                      .filter(([, v]) => v != null && v !== "")
+                      .filter(([, v]) => v != null && v !== "" && !Array.isArray(v) && typeof v !== "object")
                       .slice(0, 3)
                       .map(([k, v]) => `${k}: ${String(v)}`)
                       .join(" · ")
@@ -339,7 +470,7 @@ export default async function AgentsPage({
                         className="px-2 py-0.5 rounded-full text-xs font-semibold"
                         style={{ backgroundColor: `${color}20`, color }}
                       >
-                        {AGENT_LABELS[log.agentType]}
+                        {AGENT_LABELS[log.agentType] ?? log.agentType}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-foreground font-mono text-xs">{log.action}</td>
@@ -378,6 +509,42 @@ export default async function AgentsPage({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatCard({
+  title, color, icon, children,
+}: {
+  title: string; color: string; icon: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+      <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: "var(--border)" }}>
+        <span style={{ color }}>{icon}</span>
+        <p className="text-xs font-semibold" style={{ color }}>{title}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function StatRow({
+  label, value, note,
+}: {
+  label: string; value: number | string; note?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {note && <p className="text-[10px] text-muted-foreground/60">{note}</p>}
+      </div>
+      <p className="text-sm font-bold text-foreground tabular-nums shrink-0">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
     </div>
   );
 }

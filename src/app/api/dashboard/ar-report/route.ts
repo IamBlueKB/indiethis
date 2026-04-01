@@ -19,6 +19,21 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // A&R Intelligence is available on Push and Reign only — Launch must upgrade
+  const subscription = await db.subscription.findFirst({
+    where:  { userId: session.user.id, status: "ACTIVE" },
+    select: { tier: true },
+  });
+  if (!subscription) {
+    return NextResponse.json({ error: "Active subscription required" }, { status: 403 });
+  }
+  if (subscription.tier === "LAUNCH") {
+    return NextResponse.json(
+      { error: "upgrade_required", message: "A&R Intelligence is available on the Push plan and above. Upgrade to unlock weekly reports." },
+      { status: 403 }
+    );
+  }
+
   const body = await req.json() as {
     artistName?: string;
     genre?: string;

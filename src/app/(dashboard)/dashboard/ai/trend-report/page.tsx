@@ -47,7 +47,12 @@ export default function TrendReportPage({
     setBuying(true);
     try {
       const res  = await fetch("/api/dashboard/ai/trend-report/checkout", { method: "POST" });
-      const data = await res.json() as { url?: string; error?: string };
+      const data = await res.json() as { url?: string; free?: boolean; error?: string };
+      if (data.free) {
+        // Reign plan — generating for free; show pending state
+        setSuccess(true);
+        return;
+      }
       if (data.url) window.location.href = data.url;
     } catch {
       /* no-op */

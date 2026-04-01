@@ -56,7 +56,12 @@ export default function ProducerMatchPage({
     setBuying(true);
     try {
       const res  = await fetch("/api/dashboard/ai/producer-match/checkout", { method: "POST" });
-      const data = await res.json() as { url?: string };
+      const data = await res.json() as { url?: string; free?: boolean };
+      if (data.free) {
+        // Reign plan — generating for free; show pending state
+        setSuccess(true);
+        return;
+      }
       if (data.url) window.location.href = data.url;
     } catch {
       /* no-op */
