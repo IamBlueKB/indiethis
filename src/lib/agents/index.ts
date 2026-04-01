@@ -15,7 +15,7 @@ const APP_URL   = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.co
 // ─── Agent Logging ────────────────────────────────────────────────────────────
 
 export async function logAgentAction(
-  agentType:  AgentType,
+  agentType:  AgentType | string,
   action:     string,
   targetType?: string,
   targetId?:   string,
@@ -23,7 +23,7 @@ export async function logAgentAction(
 ): Promise<void> {
   await db.agentLog.create({
     data: {
-      agentType,
+      agentType: agentType as AgentType,
       action,
       targetType,
       targetId,
@@ -176,9 +176,9 @@ export async function agentActedRecently(
  * Returns the most recent log entry for this agent, or null if none.
  * Used by the master cron to decide if the agent should run this cycle.
  */
-export async function getLastRun(agentType: AgentType): Promise<Date | null> {
+export async function getLastRun(agentType: AgentType | string): Promise<Date | null> {
   const entry = await db.agentLog.findFirst({
-    where:   { agentType, action: "AGENT_RUN_START" },
+    where:   { agentType: agentType as AgentType, action: "AGENT_RUN_START" },
     orderBy: { createdAt: "desc" },
     select:  { createdAt: true },
   });

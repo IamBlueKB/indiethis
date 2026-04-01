@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
 
 // ─── Helper: shouldRun ────────────────────────────────────────────────────────
 
-async function shouldRun(agentType: Parameters<typeof getLastRun>[0], minHoursBetween: number): Promise<boolean> {
+async function shouldRun(agentType: string, minHoursBetween: number): Promise<boolean> {
   const lastRun = await getLastRun(agentType);
   if (!lastRun) return true;
   return Date.now() - lastRun.getTime() > minHoursBetween * 60 * 60 * 1000;
