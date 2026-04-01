@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import Link from "next/link";
-import { FastAverageColor } from "fast-average-color";
 import { useSession } from "next-auth/react";
 import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
 import { useAudioStore } from "@/store";
@@ -429,15 +428,36 @@ export function TrackDetailOverlay() {
       .catch(() => {});
   }, [overlayData?.id]);
 
-  // Extract dominant color from cover art
+  // Extract dominant color from cover art via manual canvas — no third-party library.
+  // Prefer the API-fetched detail URL so cards that open without art still get color.
   useEffect(() => {
-    const url = overlayData?.coverArtUrl;
-    if (!url) { setDominantColor(null); return; }
-    const fac = new FastAverageColor();
-    fac.getColorAsync(url)
-      .then(c => setDominantColor([c.value[0], c.value[1], c.value[2]]))
-      .catch(() => setDominantColor(null));
-  }, [overlayData?.id]);
+    const url = detail?.coverArtUrl ?? overlayData?.coverArtUrl;
+    if (!url || !url.trim()) { setDominantColor(null); return; }
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (cancelled || !img.naturalWidth || !img.naturalHeight) return;
+      try {
+        const SIZE = 12;
+        const canvas = document.createElement("canvas");
+        canvas.width  = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const d = ctx.getImageData(0, 0, SIZE, SIZE).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; n++; }
+        if (!cancelled) setDominantColor([Math.round(r/n), Math.round(g/n), Math.round(b/n)]);
+      } catch { if (!cancelled) setDominantColor(null); }
+    };
+    img.onerror = () => { if (!cancelled) setDominantColor(null); };
+    img.src = url;
+    return () => { cancelled = true; img.onload = null; img.onerror = null; };
+  // Re-run when detail loads (may have cover art the initial card data didn't)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.coverArtUrl ?? overlayData?.coverArtUrl]);
 
   // Escape key
   useEffect(() => {

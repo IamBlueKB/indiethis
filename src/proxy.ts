@@ -32,6 +32,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/artists")) return true;
   if (pathname.startsWith("/api/studios")) return true;
   if (pathname.startsWith("/api/beats")) return true;
+  // Track overlay endpoint — public (used on explore / artist pages)
+  if (pathname.match(/^\/api\/tracks\/[^/]+\/overlay$/)) return true;
   // Digital product checkout — public (buyer provides email)
   if (pathname === "/api/digital-products/checkout") return true;
   // Digital download API — public (uses token auth)
