@@ -573,7 +573,7 @@ YoutubeReference
 | Booking request management | ✅ DONE |
 | CRM contacts + activity log | ✅ DONE |
 | Intake forms with e-signature | ✅ DONE |
-| Invoice builder + Stripe payment | ⚠️ PARTIAL — keys missing for payment |
+| Invoice builder + Stripe payment | ✅ DONE — `POST /api/invoice/[id]/stripe-checkout` + webhook marks PAID |
 | File delivery (QuickSend) | ✅ DONE |
 | Email blast campaigns (Brevo) | ✅ DONE |
 | Session notes | ✅ DONE |
@@ -766,8 +766,8 @@ YoutubeReference
 | `AUDD_API_KEY` | Track Shield — AudD content recognition API | ✅ SET |
 | `ACRCLOUD_TOKEN` | ACRCloud JWT token for mix track identification | ✅ SET |
 | `PRINTFUL_API_KEY` | Printful print-on-demand order creation + webhooks | ✅ SET |
-| `STRIPE_PRICE_STUDIO_PRO` | Studio Pro plan Stripe price ID | ⚠️ TODO — not yet created |
-| `STRIPE_PRICE_STUDIO_ELITE` | Studio Elite plan Stripe price ID | ⚠️ TODO — not yet created |
+| `STRIPE_PRICE_STUDIO_PRO` | Studio Pro plan Stripe price ID (`price_1TH38eCnAaQlzZZiDdIjBHRd`) | ✅ SET |
+| `STRIPE_PRICE_STUDIO_ELITE` | Studio Elite plan Stripe price ID (`price_1TH38eCnAaQlzZZi1kziXj0W`) | ✅ SET |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
@@ -779,7 +779,7 @@ YoutubeReference
 - [x] Add `STRIPE_SECRET_KEY` to env
 - [x] Add `STRIPE_WEBHOOK_SECRET` to env
 - [x] Create products + prices for Launch ($19), Push ($49), Reign ($99) → add price IDs to env
-- [ ] Create products + prices for Studio Pro ($49), Studio Elite ($99) → add to `PLAN_PRICES` in `stripe.ts`
+- [x] Create products + prices for Studio Pro ($49), Studio Elite ($99) → price IDs set in env
 - [x] Create $0 lifetime prices for Push + Reign referral rewards → price IDs set in env
 - [x] Update `PLAN_PRICES.reign.amount` from `14900` → `9900` in `src/lib/stripe.ts`
 - [x] Add `invoice.created` to webhook subscribed events — handler at line 913 in `src/app/api/stripe/webhook/route.ts`
