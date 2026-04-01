@@ -98,6 +98,8 @@ export const PRICING_DEFAULTS = {
   DJ_CRATE_LIMIT_LAUNCH:  { value: 5,    display: "5 crates"  },
   DJ_CRATE_LIMIT_PUSH:    { value: 15,   display: "15 crates" },
   DJ_CRATE_LIMIT_REIGN:   { value: 0,    display: "Unlimited" },
+  // Release bundle (cover art + canvas + lyric video) — saves $2.99 vs individual
+  AI_RELEASE_BUNDLE:      { value: 18.99, display: "$18.99"   },
 } as const;
 
 export type PricingKey = keyof typeof PRICING_DEFAULTS;

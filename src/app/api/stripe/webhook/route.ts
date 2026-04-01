@@ -773,6 +773,88 @@ export async function POST(req: NextRequest) {
         const periodEnd = new Date(now);
         periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+        // --- Release Bundle: queue cover art + lyric video, then canvas auto-follows ---
+        if (tool === "RELEASE_BUNDLE") {
+          const trackId = checkSession.metadata?.trackId;
+          if (trackId && userId) {
+            void (async () => {
+              try {
+                const track = await db.track.findUnique({
+                  where: { id: trackId },
+                  include: { audioFeatures: true },
+                });
+                if (!track) return;
+
+                const { createAIJob } = await import("@/lib/ai-jobs");
+                const { processAIJob } = await import("@/lib/ai-job-processor");
+
+                // Build a basic prompt from audio features — processor will optimize via Sonnet
+                const af = track.audioFeatures;
+                const promptParts = [
+                  af?.genre ? `${af.genre} music` : "music",
+                  af?.mood  ? `${af.mood} mood`   : "atmospheric mood",
+                  "album cover art, cinematic composition, professional music industry quality",
+                ].filter(Boolean);
+                const artistPrompt = promptParts.join(", ");
+
+                // 1. Queue cover art — bundleTrackId triggers canvas after completion
+                const coverArtResult = await createAIJob({
+                  type:           "COVER_ART",
+                  triggeredBy:    "ARTIST",
+                  triggeredById:  userId,
+                  artistId:       userId,
+                  inputData: {
+                    artistPrompt,
+                    style:          "cinematic",
+                    mood:           af?.mood ?? "atmospheric",
+                    quality:        "standard",
+                    bundleUserId:   userId,
+                    bundleTrackId:  trackId,
+                  },
+                  priceAlreadyCharged: true,
+                  chargedAmount:       4.99,
+                });
+                if (coverArtResult.success && coverArtResult.jobId) {
+                  void processAIJob(coverArtResult.jobId).catch(() => {});
+                }
+
+                // 2. Queue lyric video (Whisper transcription + LyricVideo composition)
+                const lyricResult = await createAIJob({
+                  type:          "LYRIC_VIDEO",
+                  triggeredBy:   "ARTIST",
+                  triggeredById: userId,
+                  artistId:      userId,
+                  inputData: {
+                    trackUrl:    track.fileUrl,
+                    trackId:     track.id,
+                    visualStyle: "cinematic",
+                    fontStyle:   "modern",
+                    accentColor: "#D4A843",
+                    aspectRatio: "9:16",
+                  },
+                  priceAlreadyCharged: true,
+                  chargedAmount:       14.99,
+                });
+                if (lyricResult.success && lyricResult.jobId) {
+                  void processAIJob(lyricResult.jobId).catch(() => {});
+                }
+
+                // Notify artist
+                await createNotification({
+                  userId,
+                  type:    "AI_JOB_COMPLETE",
+                  title:   "Your release bundle is processing",
+                  message: `Cover art and lyric video for "${track.title}" are in the queue. Canvas video will auto-generate once cover art is ready.`,
+                  link:    "/dashboard/music",
+                });
+              } catch (e) {
+                console.error("[webhook] RELEASE_BUNDLE queue error:", e);
+              }
+            })();
+          }
+          break;
+        }
+
         // Credit increments by tool
         const creditField: Record<string, { increment: number }> | null =
           tool === "LYRIC_VIDEO" ? { lyricVideoCreditsLimit: { increment: 1 } }

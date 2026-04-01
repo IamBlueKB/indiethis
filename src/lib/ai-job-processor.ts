@@ -1080,6 +1080,19 @@ export async function processAIJob(jobId: string): Promise<void> {
         },
       });
       console.log(`[ai-jobs] job ${jobId} (${job.type}) COMPLETE`);
+
+      // Auto-trigger canvas video when a Release Bundle cover art job completes
+      if (job.type === "COVER_ART") {
+        const inputData    = job.inputData as Record<string, unknown> | null;
+        const bundleUserId  = inputData?.bundleUserId  as string | undefined;
+        const bundleTrackId = inputData?.bundleTrackId as string | undefined;
+        const imageUrls = (result.outputData as Record<string, unknown>)?.imageUrls as string[] | undefined;
+        if (bundleUserId && bundleTrackId && imageUrls?.[0]) {
+          void triggerBundleCanvas(bundleTrackId, imageUrls[0], bundleUserId).catch((e: unknown) => {
+            console.error("[bundle-canvas] triggerBundleCanvas error:", e);
+          });
+        }
+      }
     } else {
       // Handler manages its own DB writes (e.g. VIDEO Phase 1 preview)
       // Only update costToUs if provided
@@ -1105,6 +1118,65 @@ export async function processAIJob(jobId: string): Promise<void> {
         completedAt:  new Date(),
       },
     });
+  }
+}
+
+// ─── Release Bundle: auto-generate canvas after cover art ─────────────────────
+
+/**
+ * Fires a Remotion Lambda canvas render for a release bundle purchase.
+ * Called after the bundle's COVER_ART job completes — runs fire-and-forget.
+ */
+async function triggerBundleCanvas(trackId: string, coverArtUrl: string, userId: string): Promise<void> {
+  const serveUrl     = process.env.REMOTION_SERVE_URL;
+  const functionName = process.env.REMOTION_FUNCTION_NAME;
+  const awsRegion    = (process.env.REMOTION_REGION ?? process.env.AWS_REGION ?? "us-east-1") as Parameters<typeof renderMediaOnLambda>[0]["region"];
+
+  if (!serveUrl || !functionName) {
+    console.warn("[bundle-canvas] Remotion not configured — skipping canvas render");
+    return;
+  }
+
+  const track = await db.track.findUnique({ where: { id: trackId }, select: { fileUrl: true } });
+  if (!track) return;
+
+  const { renderId, bucketName } = await renderMediaOnLambda({
+    region:      awsRegion,
+    functionName,
+    serveUrl,
+    composition: "TrackCanvas",
+    inputProps:  { coverArtUrl, audioUrl: track.fileUrl, accentColor: "#D4A843" },
+    codec:           "h264",
+    imageFormat:     "jpeg",
+    maxRetries:      1,
+    framesPerLambda: 60,
+    privacy:         "public",
+    outName:         `canvas-bundle-${trackId}-${Date.now()}.mp4`,
+  });
+
+  // Poll for completion (up to 3 minutes)
+  const maxMs = 180_000;
+  const start  = Date.now();
+  while (Date.now() - start < maxMs) {
+    await new Promise<void>((r) => setTimeout(r, 4_000));
+    const progress = await getRenderProgress({ renderId, bucketName, functionName, region: awsRegion });
+    if (progress.fatalErrorEncountered) {
+      console.error("[bundle-canvas] Remotion render error:", progress.errors?.[0]?.message);
+      break;
+    }
+    if (progress.done && progress.outputFile) {
+      await db.track.update({ where: { id: trackId }, data: { canvasVideoUrl: progress.outputFile } });
+      const { createNotification } = await import("@/lib/notifications");
+      void createNotification({
+        userId,
+        type:    "AI_JOB_COMPLETE",
+        title:   "Canvas video ready",
+        message: "Your release bundle canvas video is ready. Head to your music page to view it.",
+        link:    "/dashboard/music",
+      }).catch(() => {});
+      console.log(`[bundle-canvas] canvas saved for track ${trackId}`);
+      break;
+    }
   }
 }
 

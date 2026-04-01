@@ -588,6 +588,62 @@ function TrackCard({ track, context, onDelete, onToggleStatus, onUpdate, current
   );
 }
 
+// ─── Release Bundle Banner ─────────────────────────────────────────────────────
+
+function ReleaseBundleBanner({ track }: { track: Track }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleBundleCheckout() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/ai/release-bundle/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { url: string };
+        window.location.href = data.url;
+      }
+    } catch { /* silent */ } finally { setLoading(false); }
+  }
+
+  return (
+    <div
+      className="rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-3 mb-3"
+      style={{ backgroundColor: "rgba(212,168,67,0.07)", borderColor: "rgba(212,168,67,0.3)" }}
+    >
+      <div className="flex items-center gap-2 shrink-0">
+        <Zap size={16} style={{ color: "#D4A843" }} />
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "#D4A843" }}>
+          Release Bundle
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate">
+          Complete your release for "{track.title}"
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Cover art + canvas video + lyric video — <span style={{ color: "#D4A843" }}>$18.99</span>
+          <span className="text-muted-foreground ml-1.5 line-through opacity-60">$21.97</span>
+          <span className="ml-1.5 text-emerald-400 font-semibold">Save $2.99</span>
+        </p>
+      </div>
+      <button
+        onClick={() => void handleBundleCheckout()}
+        disabled={loading}
+        className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
+        style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+      >
+        {loading ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+        {loading ? "Loading…" : "Get Bundle — $18.99"}
+      </button>
+    </div>
+  );
+}
+
+// ─── My Tracks Tab ─────────────────────────────────────────────────────────────
+
 function MyTracksTab({ currentUserId, currentUserName, currentUserEmail }: {
   currentUserId: string;
   currentUserName: string;
@@ -847,6 +903,11 @@ function MyTracksTab({ currentUserId, currentUserName, currentUserEmail }: {
         </div>
       ) : (
         <div className="space-y-2">
+          {/* Bundle banner — shown for the first track missing cover art + canvas */}
+          {(() => {
+            const candidate = tracks.find(t => !t.coverArtUrl && !t.canvasVideoUrl);
+            return candidate ? <ReleaseBundleBanner key={`bundle-${candidate.id}`} track={candidate} /> : null;
+          })()}
           {tracks.map(track => (
             <TrackCard
               key={track.id}
