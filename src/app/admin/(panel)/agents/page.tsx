@@ -4,7 +4,7 @@ import Link                   from "next/link";
 import { Bot, Filter, AlertTriangle, ShieldAlert, TrendingUp, Activity, Clock, Users } from "lucide-react";
 import type { AgentType }     from "@prisma/client";
 
-const AGENT_LABELS: Record<AgentType, string> = {
+const AGENT_LABELS: Record<string, string> = {
   CHURN_PREVENTION:    "Churn Prevention",
   REVENUE_OPTIMIZATION:"Revenue Optimization",
   RELEASE_STRATEGY:    "Release Strategy",
@@ -20,7 +20,7 @@ const AGENT_LABELS: Record<AgentType, string> = {
   PRODUCER_ARTIST_MATCH: "Producer-Artist Match",
 };
 
-const AGENT_COLORS: Record<AgentType, string> = {
+const AGENT_COLORS: Record<string, string> = {
   CHURN_PREVENTION:    "#F87171",
   REVENUE_OPTIMIZATION:"#4ADE80",
   RELEASE_STRATEGY:    "#60A5FA",
