@@ -4,6 +4,21 @@ Read this file before every task. Do not assume what exists — check the codeba
 
 ---
 
+## ⛔ ABSOLUTE DATABASE RULE — READ THIS FIRST
+
+**NEVER run `prisma db push --force-reset`, `prisma db push --accept-data-loss`, or `prisma migrate reset` under ANY circumstances.**
+
+These commands have **wiped the entire production database TWICE**. There are **NO exceptions** and **NO emergencies** that justify running them.
+
+- Safe schema changes: `npx prisma db push` (no flags)
+- Production deploys: `npx prisma migrate deploy` (already in build script)
+- If a schema change conflicts: **STOP and discuss with Blue before doing anything**
+- If a migration fails: report the error — do not attempt to force it through
+
+The `predbpush` npm script and git pre-commit hook will block dangerous flags automatically. Do not attempt to bypass them.
+
+---
+
 ## What Is IndieThis
 
 IndieThis (indiethis.com) is a SaaS music platform for independent artists, producers, and recording studios. One platform for creating, selling, promoting, and managing music careers. Owner: Blue. Flagship studio: Clear Ear Studios (7411 S Stony Island Ave, Chicago IL 60649, blue@clearearstudios.com, 708-929-8745).

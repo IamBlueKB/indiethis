@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && node -e \"try{require('fs').rmSync('.next/cache',{recursive:true,force:true})}catch(e){}\" && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "predbpush": "node scripts/check-prisma-safety.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
