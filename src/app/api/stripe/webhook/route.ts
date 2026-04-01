@@ -301,14 +301,27 @@ export async function POST(req: NextRequest) {
             subtotal: number;
           }[] = [];
 
+          let hasSelfFulfilled = false;
+
           for (const ri of rawItems) {
             const v = variants.find((v) => v.id === ri.v);
             if (!v) continue;
             const qty      = Math.max(1, ri.q);
             const subtotal = v.retailPrice * qty;
             itemsSubtotal += subtotal;
-            artistEarningsTotal += v.product.markup * qty;
-            platformCutTotal    += v.basePrice * 0.15 * qty;
+
+            if (v.product.fulfillmentType === "POD") {
+              // POD: profit = retailPrice - basePrice; platform takes 15% of profit
+              const profit        = v.retailPrice - v.basePrice;
+              platformCutTotal    += Math.round(profit * 0.15 * qty * 100) / 100;
+              artistEarningsTotal += Math.round(profit * 0.85 * qty * 100) / 100;
+            } else {
+              // Self-fulfilled: platform takes 15% of product price; artist keeps rest + shipping
+              platformCutTotal    += Math.round(v.retailPrice * 0.15 * qty * 100) / 100;
+              artistEarningsTotal += Math.round(v.retailPrice * 0.85 * qty * 100) / 100;
+              hasSelfFulfilled = true;
+            }
+
             itemsData.push({
               orderId:   "", // filled after order creation
               variantId: v.id,
@@ -317,6 +330,11 @@ export async function POST(req: NextRequest) {
               unitPrice: v.retailPrice,
               subtotal,
             });
+          }
+
+          // Self-fulfilled: artist keeps the shipping cost
+          if (hasSelfFulfilled && shippingCost > 0) {
+            artistEarningsTotal += shippingCost;
           }
 
           const totalPrice = itemsSubtotal + shippingCost;
@@ -345,6 +363,44 @@ export async function POST(req: NextRequest) {
           await db.merchOrderItem.createMany({
             data: itemsData.map((d) => ({ ...d, orderId: order.id })),
           });
+
+          // Accumulate artist balance
+          void db.user.update({
+            where: { id: artistId },
+            data: {
+              artistBalance:       { increment: artistEarningsTotal },
+              artistTotalEarnings: { increment: artistEarningsTotal },
+            },
+          }).catch(() => {});
+
+          // DJ attribution for merch (10% of artist earnings → DJ)
+          const djAttributionId = checkSession.metadata?.djAttributionId ?? null;
+          if (djAttributionId && artistEarningsTotal > 0) {
+            void (async () => {
+              try {
+                const attribution = await db.dJAttribution.findUnique({
+                  where: { id: djAttributionId },
+                  select: { id: true, djProfileId: true, expiresAt: true },
+                });
+                const artistOpts = await db.user.findUnique({
+                  where: { id: artistId },
+                  select: { djDiscoveryOptIn: true },
+                });
+                if (attribution && artistOpts?.djDiscoveryOptIn && attribution.expiresAt > new Date()) {
+                  const djCut = Math.round(artistEarningsTotal * 0.10 * 100) / 100;
+                  const djCutCents = Math.round(djCut * 100);
+                  await db.dJProfile.update({
+                    where: { id: attribution.djProfileId },
+                    data: { balance: { increment: djCutCents }, totalEarnings: { increment: djCutCents } },
+                  });
+                  await db.user.update({
+                    where: { id: artistId },
+                    data: { artistBalance: { increment: -(djCut) } },
+                  });
+                }
+              } catch { /* non-critical */ }
+            })();
+          }
 
           // Fan scoring + automations
           void upsertFanScore(artistId, buyerEmail, { merch: totalPrice });
@@ -400,7 +456,6 @@ export async function POST(req: NextRequest) {
           }
 
           // For self-fulfilled items: notify artist with shipping details
-          const hasSelfFulfilled = variants.some((v) => v.product.fulfillmentType === "SELF_FULFILLED");
           if (hasSelfFulfilled && artist?.email && shippingAddress) {
             const sfAddr = shippingAddress as { name?: string; address1: string; address2?: string; city: string; state: string; zip: string; country: string };
             void sendSelfFulfilledOrderEmail({
@@ -1183,13 +1238,25 @@ export async function POST(req: NextRequest) {
   if (rawEvent.type === "transfer.paid") {
     const transferId: string | undefined = rawEvent.data?.object?.id;
     if (transferId) {
-      const withdrawal = await db.dJWithdrawal.findFirst({
+      // DJ withdrawal
+      const djWithdrawal = await db.dJWithdrawal.findFirst({
         where: { stripeTransferId: transferId },
         select: { id: true },
       });
-      if (withdrawal) {
+      if (djWithdrawal) {
         await db.dJWithdrawal.update({
-          where: { id: withdrawal.id },
+          where: { id: djWithdrawal.id },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        });
+      }
+      // Artist withdrawal
+      const artistWithdrawal = await db.artistWithdrawal.findFirst({
+        where: { stripeTransferId: transferId },
+        select: { id: true },
+      });
+      if (artistWithdrawal) {
+        await db.artistWithdrawal.update({
+          where: { id: artistWithdrawal.id },
           data: { status: "COMPLETED", completedAt: new Date() },
         });
       }
@@ -1199,19 +1266,37 @@ export async function POST(req: NextRequest) {
   if (rawEvent.type === "transfer.failed") {
     const transferId: string | undefined = rawEvent.data?.object?.id;
     if (transferId) {
-      const failedWithdrawal = await db.dJWithdrawal.findFirst({
+      // DJ withdrawal
+      const failedDJ = await db.dJWithdrawal.findFirst({
         where: { stripeTransferId: transferId },
         select: { id: true, amount: true, djProfileId: true },
       });
-      if (failedWithdrawal) {
+      if (failedDJ) {
         await db.$transaction([
           db.dJWithdrawal.update({
-            where: { id: failedWithdrawal.id },
+            where: { id: failedDJ.id },
             data: { status: "FAILED" },
           }),
           db.dJProfile.update({
-            where: { id: failedWithdrawal.djProfileId },
-            data: { balance: { increment: failedWithdrawal.amount } },
+            where: { id: failedDJ.djProfileId },
+            data: { balance: { increment: failedDJ.amount } },
+          }),
+        ]);
+      }
+      // Artist withdrawal
+      const failedArtist = await db.artistWithdrawal.findFirst({
+        where: { stripeTransferId: transferId },
+        select: { id: true, amount: true, userId: true },
+      });
+      if (failedArtist) {
+        await db.$transaction([
+          db.artistWithdrawal.update({
+            where: { id: failedArtist.id },
+            data: { status: "FAILED" },
+          }),
+          db.user.update({
+            where: { id: failedArtist.userId },
+            data: { artistBalance: { increment: failedArtist.amount } },
           }),
         ]);
       }

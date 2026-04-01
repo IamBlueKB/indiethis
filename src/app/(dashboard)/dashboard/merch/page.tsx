@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ShoppingBag, Package, DollarSign,
   Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
-  Plus, MapPin,
+  Plus, MapPin, AlertTriangle, Loader2, X,
 } from "lucide-react";
 import {
   useMerchProducts,
@@ -281,10 +281,15 @@ function OrderRow({
   order: MerchOrder;
   onUpdateFulfillment: (id: string, status: string, tracking?: string, trackingUrl?: string, carrier?: string) => void;
 }) {
-  const [expanded,      setExpanded    ] = useState(false);
-  const [trackingInput, setTrackingInput] = useState("");
-  const [trackingUrlIn, setTrackingUrlIn] = useState("");
-  const [carrierInput,  setCarrierInput ] = useState("");
+  const [expanded,       setExpanded     ] = useState(false);
+  const [trackingInput,  setTrackingInput ] = useState("");
+  const [trackingUrlIn,  setTrackingUrlIn ] = useState("");
+  const [carrierInput,   setCarrierInput  ] = useState("");
+  const [showDefect,     setShowDefect    ] = useState(false);
+  const [defectDesc,     setDefectDesc    ] = useState("");
+  const [defectLoading,  setDefectLoading ] = useState(false);
+  const [defectDone,     setDefectDone    ] = useState(false);
+  const [defectError,    setDefectError   ] = useState<string | null>(null);
 
   const cfg = FULFILLMENT_CONFIG[order.fulfillmentStatus] ?? FULFILLMENT_CONFIG.PENDING;
   const Icon = cfg.icon;
@@ -462,7 +467,80 @@ function OrderRow({
                 <CheckCircle2 size={11} /> Mark Delivered
               </button>
             )}
+            {/* POD defect claim */}
+            {isPOD && ["SHIPPED", "DELIVERED"].includes(order.fulfillmentStatus) && !defectDone && (
+              <button
+                onClick={() => setShowDefect(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={{ backgroundColor: "rgba(248,113,113,0.10)", color: "#F87171" }}
+              >
+                <AlertTriangle size={11} /> Report Defect
+              </button>
+            )}
+            {defectDone && (
+              <span className="text-xs px-3 py-1.5 rounded-lg" style={{ backgroundColor: "rgba(74,222,128,0.10)", color: "#4ADE80" }}>
+                ✓ Claim submitted to Printful
+              </span>
+            )}
           </div>
+
+          {/* Defect claim modal */}
+          {showDefect && (
+            <div className="mt-3 p-4 rounded-xl border space-y-3" style={{ backgroundColor: "rgba(248,113,113,0.05)", borderColor: "rgba(248,113,113,0.2)" }}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold" style={{ color: "#F87171" }}>Report Defect / Wrong Product</p>
+                <button onClick={() => { setShowDefect(false); setDefectError(null); }} className="text-muted-foreground hover:text-foreground">
+                  <X size={13} />
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Describe the issue and Printful will send a replacement at no cost.
+              </p>
+              <textarea
+                rows={3}
+                value={defectDesc}
+                onChange={(e) => setDefectDesc(e.target.value)}
+                placeholder="e.g. Wrong size delivered, print is faded, item is torn..."
+                className="w-full rounded-lg border px-3 py-2 text-xs bg-transparent text-foreground outline-none resize-none"
+                style={{ borderColor: "var(--border)" }}
+              />
+              {defectError && <p className="text-xs" style={{ color: "#F87171" }}>{defectError}</p>}
+              <button
+                disabled={!defectDesc.trim() || defectLoading}
+                onClick={async () => {
+                  setDefectLoading(true);
+                  setDefectError(null);
+                  try {
+                    const res = await fetch("/api/dashboard/merch/orders/defect-claim", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        orderId:     order.id,
+                        description: defectDesc.trim(),
+                        items:       order.items.map((i) => ({ itemId: i.id, quantity: i.quantity, reason: defectDesc.trim() })),
+                      }),
+                    });
+                    const d = await res.json() as { error?: string };
+                    if (!res.ok) {
+                      setDefectError(d.error ?? "Claim failed.");
+                    } else {
+                      setDefectDone(true);
+                      setShowDefect(false);
+                    }
+                  } catch {
+                    setDefectError("Network error.");
+                  } finally {
+                    setDefectLoading(false);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ backgroundColor: "rgba(248,113,113,0.15)", color: "#F87171" }}
+              >
+                {defectLoading ? <Loader2 size={11} className="animate-spin" /> : <AlertTriangle size={11} />}
+                Submit Claim to Printful
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

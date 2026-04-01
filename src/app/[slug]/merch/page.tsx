@@ -23,7 +23,7 @@ export default async function MerchStorefront({
         orderBy: { createdAt: "desc" },
         select:  {
           id: true, title: true, imageUrl: true, imageUrls: true,
-          description: true, markup: true, fulfillmentType: true,
+          description: true, markup: true, fulfillmentType: true, returnPolicy: true,
           variants: {
             where:   { inStock: true },
             orderBy: { retailPrice: "asc" },

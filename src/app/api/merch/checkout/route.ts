@@ -19,13 +19,14 @@ export async function POST(req: NextRequest) {
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   try {
     const body = await req.json() as {
-      variantId?:      string;
-      quantity?:       number;
-      items?:          { variantId: string; quantity: number }[];
-      buyerEmail:      string;
-      artistSlug:      string;
-      shippingAddress?: ShippingAddressInput;
-      shippingCost?:   number;
+      variantId?:        string;
+      quantity?:         number;
+      items?:            { variantId: string; quantity: number }[];
+      buyerEmail:        string;
+      artistSlug:        string;
+      shippingAddress?:  ShippingAddressInput;
+      shippingCost?:     number;
+      djAttributionId?:  string;
     };
 
     const { buyerEmail, artistSlug } = body;
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
         items:           JSON.stringify(metaItems).slice(0, 490),
         shippingAddress: shippingMeta,
         shippingCost:    String(shippingCost),
+        ...(body.djAttributionId ? { djAttributionId: body.djAttributionId } : {}),
         // Legacy single-item fields kept for backward compat with webhook
         variantId:       rawItems[0]!.variantId,
         productId:       variants.find((v) => v.id === rawItems[0]!.variantId)!.product.id,

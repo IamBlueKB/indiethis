@@ -87,7 +87,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         take:    8,
         select:  {
           id: true, title: true, imageUrl: true, imageUrls: true,
-          description: true, markup: true, fulfillmentType: true,
+          description: true, markup: true, fulfillmentType: true, returnPolicy: true,
           variants: {
             where:   { inStock: true },
             orderBy: { retailPrice: "asc" },

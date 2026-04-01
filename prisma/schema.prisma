@@ -82,7 +82,10 @@ model User {
   djMode                   Boolean                @default(false)
   djDiscoveryOptIn         Boolean                @default(false)
   churnRiskScore           Int                    @default(0)
+  artistBalance            Float                  @default(0)
+  artistTotalEarnings      Float                  @default(0)
   aiGenerations            AIGeneration[]
+  artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]
   affiliate                Affiliate?
   digitalProducts          DigitalProduct[]
@@ -439,6 +442,17 @@ model MerchOrderItem {
   order     MerchOrder   @relation(fields: [orderId],   references: [id])
   variant   MerchVariant @relation(fields: [variantId], references: [id])
   product   MerchProduct @relation(fields: [productId], references: [id])
+}
+
+model ArtistWithdrawal {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  amount           Float
+  stripeTransferId String?
+  status           String    @default("PENDING")
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
 }
 
 model AIGeneration {

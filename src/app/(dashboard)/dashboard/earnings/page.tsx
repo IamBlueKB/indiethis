@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Download, Receipt, TrendingUp, Heart, ChevronDown, ChevronUp,
   Radio, Music2, DollarSign, FileText, Zap, ExternalLink, Loader2,
+  ShoppingBag, ArrowDownToLine, AlertCircle,
 } from "lucide-react";
 import { useEarnings } from "@/hooks/queries";
 import EarningsProjector from "@/components/dashboard/EarningsProjector";
@@ -483,6 +484,171 @@ function ArtistTab() {
   );
 }
 
+// ─── Merch Balance Section ─────────────────────────────────────────────────────
+
+type MerchWithdrawal = { id: string; amount: number; status: string; createdAt: string; completedAt: string | null };
+
+const WD_STATUS: Record<string, { bg: string; color: string; label: string }> = {
+  PENDING:   { bg: "rgba(234,179,8,0.12)",  color: "#EAB308", label: "Pending"   },
+  COMPLETED: { bg: "rgba(74,222,128,0.12)", color: "#4ADE80", label: "Completed" },
+  FAILED:    { bg: "rgba(248,113,113,0.12)",color: "#F87171", label: "Failed"    },
+};
+
+function MerchBalanceSection() {
+  const [balance,      setBalance]      = useState(0);
+  const [totalEarned,  setTotalEarned]  = useState(0);
+  const [hasStripe,    setHasStripe]    = useState(false);
+  const [withdrawals,  setWithdrawals]  = useState<MerchWithdrawal[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [withdrawing,  setWithdrawing]  = useState(false);
+  const [wdDone,       setWdDone]       = useState(false);
+  const [wdError,      setWdError]      = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/dashboard/merch/balance");
+    if (res.ok) {
+      const d = await res.json();
+      setBalance(d.artistBalance ?? 0);
+      setTotalEarned(d.artistTotalEarnings ?? 0);
+      setHasStripe(!!d.hasStripeConnect);
+      setWithdrawals(d.withdrawals ?? []);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function handleWithdraw() {
+    setWithdrawing(true);
+    setWdError(null);
+    try {
+      const res = await fetch("/api/dashboard/merch/withdrawal", { method: "POST" });
+      const d = await res.json() as { error?: string };
+      if (!res.ok) {
+        setWdError(d.error ?? "Withdrawal failed.");
+      } else {
+        setWdDone(true);
+        setTimeout(() => { void load(); setWdDone(false); }, 2000);
+      }
+    } catch {
+      setWdError("Network error.");
+    } finally {
+      setWithdrawing(false);
+    }
+  }
+
+  if (loading) return null;
+  if (totalEarned === 0 && withdrawals.length === 0) return null;
+
+  const canWithdraw = hasStripe && balance >= 25;
+  let disabledReason: string | undefined;
+  if (!hasStripe) disabledReason = "Connect your Stripe account to withdraw.";
+  else if (balance < 25) disabledReason = `Minimum $25.00 — current balance: $${balance.toFixed(2)}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <ShoppingBag size={14} style={{ color: "#D4A843" }} />
+        <p className="text-sm font-semibold text-foreground">Merch Earnings</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Available Balance */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}>
+          <div className="flex items-center gap-2 mb-1">
+            <DollarSign size={13} className="text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Available Balance</p>
+          </div>
+          <p className="text-3xl font-bold" style={{ color: "#D4A843" }}>${balance.toFixed(2)}</p>
+          {balance > 0 && balance < 25 && (
+            <p className="text-[11px] mt-1 text-muted-foreground">${(25 - balance).toFixed(2)} more until minimum withdrawal</p>
+          )}
+        </div>
+
+        {/* Total Earned */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp size={13} className="text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Total Earned (All Time)</p>
+          </div>
+          <p className="text-3xl font-bold text-foreground">${totalEarned.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* No Stripe warning */}
+      {!hasStripe && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border text-sm"
+          style={{ backgroundColor: "rgba(234,179,8,0.06)", borderColor: "rgba(234,179,8,0.25)", color: "#EAB308" }}>
+          <AlertCircle size={15} className="shrink-0" />
+          <span>Connect your Stripe account in <a href="/dashboard/settings" className="underline">Settings</a> to withdraw merch earnings.</span>
+        </div>
+      )}
+
+      {/* Withdraw button */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">Minimum withdrawal: $25.00 via Stripe Connect</p>
+        <div className="flex flex-col items-end gap-1">
+          {wdDone ? (
+            <span className="px-4 py-2 rounded-lg text-sm font-medium" style={{ backgroundColor: "rgba(74,222,128,0.12)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}>
+              Withdrawal requested
+            </span>
+          ) : (
+            <button
+              onClick={handleWithdraw}
+              disabled={!canWithdraw || withdrawing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              title={disabledReason}
+            >
+              {withdrawing ? <Loader2 size={13} className="animate-spin" /> : <ArrowDownToLine size={13} />}
+              Withdraw ${balance.toFixed(2)}
+            </button>
+          )}
+          {wdError && <p className="text-xs text-red-400">{wdError}</p>}
+          {disabledReason && !wdError && <p className="text-[11px] text-muted-foreground">{disabledReason}</p>}
+        </div>
+      </div>
+
+      {/* Withdrawal history */}
+      {withdrawals.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+          <div className="px-4 py-3 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+            Withdrawal History
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "var(--border)" }}>
+                {["Date", "Amount", "Status"].map((h) => (
+                  <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {withdrawals.map((w) => {
+                const st = WD_STATUS[w.status] ?? WD_STATUS.PENDING;
+                return (
+                  <tr key={w.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {new Date(w.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-foreground">${w.amount.toFixed(2)}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                        style={{ backgroundColor: st.bg, color: st.color }}>
+                        {st.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EarningsPage() {
@@ -521,6 +687,9 @@ export default function EarningsPage() {
         <h1 className="text-2xl font-bold text-foreground">Earnings & Receipts</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Your payment history and producer income</p>
       </div>
+
+      {/* ── Merch Balance ── */}
+      <MerchBalanceSection />
 
       {/* ── Earnings Projector ── */}
       <EarningsProjector />

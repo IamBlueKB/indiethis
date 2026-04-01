@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   CheckCircle, Instagram, Music2, MapPin, Ticket, Calendar, Clock,
-  Play, Video, Loader2, Send,
+  Play, Video, Loader2, Send, ShoppingBag,
 } from "lucide-react";
 
 type Crate = {
@@ -60,6 +60,13 @@ type DJMixPublic = {
   tracklist: MixTrackItem[];
 };
 
+type MerchProductPublic = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  variants: { id: string; retailPrice: number }[];
+};
+
 type DJProfileData = {
   id: string;
   slug: string;
@@ -75,6 +82,8 @@ type DJProfileData = {
   events: DJEvent[];
   mixes?: DJMixPublic[];
   totalCrateItems: number;
+  merch?: MerchProductPublic[];
+  artistSlug?: string | null;
 };
 
 function formatDuration(seconds: number): string {
@@ -738,6 +747,55 @@ export default function DJProfileClient({ djProfile }: { djProfile: DJProfileDat
           )}
         </section>
       </div>
+
+      {/* Merch section */}
+      {djProfile.merch && djProfile.merch.length > 0 && djProfile.artistSlug && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={16} style={{ color: "#D4A843" }} />
+              <h2 className="text-lg font-black tracking-tight text-white">Merch</h2>
+            </div>
+            <Link
+              href={`/${djProfile.artistSlug}/merch`}
+              className="text-xs font-semibold"
+              style={{ color: "#D4A843" }}
+            >
+              View All →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {djProfile.merch.slice(0, 4).map((product) => {
+              const price = product.variants[0]?.retailPrice;
+              return (
+                <Link
+                  key={product.id}
+                  href={`/${djProfile.artistSlug}`}
+                  className="group rounded-xl overflow-hidden border transition-colors hover:border-[#D4A843]/40"
+                  style={{ backgroundColor: "#111", borderColor: "#1a1a1a" }}
+                >
+                  <div className="aspect-square overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {product.imageUrl && (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="text-xs font-semibold text-white truncate">{product.title}</p>
+                    {price !== undefined && (
+                      <p className="text-xs mt-0.5" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Footer spacer */}
       <div className="h-16" />

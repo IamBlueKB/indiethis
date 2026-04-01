@@ -6,7 +6,7 @@ import { moderateContent } from "@/lib/agents/content-moderation";
 // GET /api/dashboard/merch
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ARTIST") {
+  if (!session?.user?.id || !["ARTIST", "STUDIO", "DJ"].includes(session.user.role ?? "")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -35,7 +35,7 @@ export async function GET() {
 //   C) Simple markup-based — `markup` flat markup applied to all catalog variants (legacy)
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ARTIST") {
+  if (!session?.user?.id || !["ARTIST", "STUDIO", "DJ"].includes(session.user.role ?? "")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

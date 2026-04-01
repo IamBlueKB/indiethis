@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 // Returns all merch orders for the authenticated artist, newest first.
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ARTIST") {
+  if (!session?.user?.id || !["ARTIST", "STUDIO", "DJ"].includes(session.user.role ?? "")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

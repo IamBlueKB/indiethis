@@ -23,6 +23,7 @@ export type MerchProduct = {
   imageUrls:       string[];
   markup:          number;
   fulfillmentType: string;
+  returnPolicy?:   string | null;
   variants:        MerchVariantSummary[];
 };
 
@@ -323,6 +324,17 @@ function ProductModal({
               {!activeSize ? "Select a size to continue" : "Select a color and size"}
             </p>
           )}
+
+          {/* Return policy */}
+          <div className="text-[10px] text-white/25 text-center leading-relaxed px-2">
+            {product.fulfillmentType === "POD" ? (
+              "Custom printed to order. Defective or damaged items replaced at no cost. Contact the artist for any issues."
+            ) : product.returnPolicy ? (
+              product.returnPolicy
+            ) : (
+              "Contact the artist directly for return and refund inquiries."
+            )}
+          </div>
 
           <p className="text-[10px] text-white/20 text-center">Secure checkout powered by Stripe</p>
         </div>
@@ -631,6 +643,9 @@ function CartDrawer({
                   ? <><Loader2 size={14} className="animate-spin" /> Redirecting…</>
                   : <><ShoppingBag size={14} /> Pay ${total.toFixed(2)}</>}
               </button>
+              <p className="text-[10px] text-white/25 text-center leading-relaxed">
+                Custom printed items are made to order. Defective items replaced at no cost.
+              </p>
               <p className="text-[10px] text-white/20 text-center">Secure checkout powered by Stripe</p>
             </div>
           </>

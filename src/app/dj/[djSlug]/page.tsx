@@ -40,6 +40,21 @@ export default async function DJProfilePage(
           name: true,
           artistName: true,
           photo: true,
+          artistSlug: true,
+          merchProducts: {
+            where:   { isActive: true },
+            orderBy: { createdAt: "desc" },
+            take:    8,
+            select: {
+              id: true, title: true, imageUrl: true,
+              variants: {
+                where:   { inStock: true },
+                orderBy: { retailPrice: "asc" },
+                take:    1,
+                select:  { id: true, retailPrice: true },
+              },
+            },
+          },
         },
       },
       crates: {
@@ -121,6 +136,8 @@ export default async function DJProfilePage(
     })),
     totalCrateItems,
     socialLinks: djProfile.socialLinks as Record<string, string> | null,
+    merch: djProfile.user.merchProducts,
+    artistSlug: djProfile.user.artistSlug,
   };
 
   return <DJProfileClient djProfile={serialized} />;
