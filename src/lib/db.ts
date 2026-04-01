@@ -7,15 +7,6 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Increase connection pool — Supabase pgbouncer defaults to 1 which causes
-// timeouts when Next.js fires multiple concurrent requests during dev/SSR
-const dbUrl = (process.env.DATABASE_URL ?? "").replace(
-  /connection_limit=\d+/,
-  "connection_limit=10"
-);
-
-export const db = globalThis.prisma ?? new PrismaClient({
-  datasources: { db: { url: dbUrl || undefined } },
-});
+export const db = globalThis.prisma ?? new PrismaClient();
 
 globalThis.prisma = db;

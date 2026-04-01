@@ -25,30 +25,23 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const studio = await db.studio.findFirst({
-    where: { ownerId: session.user.id },
-    select: { id: true },
-  });
-  if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
-
   const body = await req.json();
+  const newSlug = body.slug?.trim() || null;
 
-  // Validate slug uniqueness across both studios and artist pages
-  if (body.slug?.trim()) {
-    const newSlug = body.slug.trim();
-    const [studioConflict, artistConflict] = await Promise.all([
-      db.studio.findFirst({
-        where:  { slug: newSlug, id: { not: studio.id } },
-        select: { id: true },
-      }),
-      db.user.findFirst({
-        where:  { artistSlug: newSlug },
-        select: { id: true },
-      }),
-    ]);
-    if (studioConflict || artistConflict) {
-      return NextResponse.json({ error: "That URL is already taken." }, { status: 409 });
-    }
+  // Run studio lookup + slug conflict checks in one parallel batch
+  const [studio, studioConflict, artistConflict] = await Promise.all([
+    db.studio.findFirst({ where: { ownerId: session.user.id }, select: { id: true } }),
+    newSlug
+      ? db.studio.findFirst({ where: { slug: newSlug, ownerId: { not: session.user.id } }, select: { id: true } })
+      : null,
+    newSlug
+      ? db.user.findFirst({ where: { artistSlug: newSlug }, select: { id: true } })
+      : null,
+  ]);
+
+  if (!studio) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+  if (studioConflict || artistConflict) {
+    return NextResponse.json({ error: "That URL is already taken." }, { status: 409 });
   }
 
   const updated = await db.studio.update({
