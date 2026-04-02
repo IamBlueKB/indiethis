@@ -1971,6 +1971,7 @@ enum NotificationType {
   DJ_CRATE_INVITE
   DJ_WEEKLY_SUMMARY
   REFERRAL_TIER_DROP
+  FAN_FUNDING
 }
 
 enum SplitSheetStatus {

@@ -292,7 +292,7 @@ export const ourFileRouter = {
     }),
 
   // Sample pack zip upload (max 200MB — validated server-side after upload)
-  samplePackZip: f({ "application/zip": { maxFileSize: "200MB", maxFileCount: 1 } })
+  samplePackZip: f({ "application/zip": { maxFileSize: "128MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {
       const token = await getToken({
         req,
@@ -317,7 +317,7 @@ export const ourFileRouter = {
     }),
 
   // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
-  samplePackPreview: f({ audio: { maxFileSize: "50MB", maxFileCount: 5 } })
+  samplePackPreview: f({ audio: { maxFileSize: "32MB", maxFileCount: 5 } })
     .middleware(async ({ req }) => {
       const token = await getToken({
         req,
