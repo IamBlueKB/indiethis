@@ -530,6 +530,48 @@ export async function sendMerchDeliveredEmail(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Fan Funding confirmation to fan
+// ---------------------------------------------------------------------------
+
+export async function sendFanFundingConfirmationEmail(params: {
+  fanEmail:   string;
+  fanName:    string | null;
+  artistName: string;
+  amount:     number; // cents
+}): Promise<void> {
+  const appUrl    = APP_URL();
+  const dollarAmt = (params.amount / 100).toFixed(2);
+  const toName    = params.fanName || "Fan";
+
+  await sendEmail({
+    to: { email: params.fanEmail, name: toName },
+    subject: `You supported ${params.artistName} on IndieThis 🎵`,
+    htmlContent: `
+      <div style="background:#0A0A0A;color:#e5e5e5;font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;border-radius:12px">
+        <div style="text-align:center;margin-bottom:32px">
+          <span style="font-size:24px;font-weight:700;color:#D4A843;letter-spacing:-0.5px">IndieThis</span>
+        </div>
+        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px 0">Thank you for your support!</h1>
+        <p style="margin:0 0 16px 0;color:#aaa;line-height:1.6">
+          Hi ${toName}, your $${dollarAmt} goes directly toward <strong style="color:#fff">${params.artistName}</strong>'s music production, mastering, and promotion on IndieThis.
+          You're fueling independent music — thank you.
+        </p>
+        <p style="margin:28px 0">
+          <a href="${appUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px">
+            Discover More Artists →
+          </a>
+        </p>
+        <p style="margin-top:32px;color:#555;font-size:12px">
+          Powered by <strong style="color:#D4A843">IndieThis</strong> — The Home of Independent Music
+        </p>
+      </div>
+    `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["fan-funding", "confirmation"],
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Intake form link emails
 // ---------------------------------------------------------------------------
 

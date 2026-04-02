@@ -21,6 +21,7 @@ import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import {
   sendEmail, sendOnboardingWelcomeEmail,
   sendMerchOrderConfirmationEmail, sendSelfFulfilledOrderEmail,
+  sendFanFundingConfirmationEmail,
 } from "@/lib/brevo/email";
 import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
@@ -664,6 +665,57 @@ export async function POST(req: NextRequest) {
               message: `Someone purchased "${purchase.digitalProduct.title}" — you earn $${(purchase.artistEarnings / 100).toFixed(2)}`,
               link: "/dashboard/music/sales",
             }).catch(() => {});
+          }
+        }
+        break;
+      }
+
+      // --- Fan Funding ---
+      if (checkSession.metadata?.type === "fan_funding") {
+        const { artistId, fanName, fanEmail, message } = checkSession.metadata;
+        const amount = checkSession.amount_total ?? 0; // cents
+        if (artistId && fanEmail && amount > 0) {
+          const alreadyProcessed = await db.fanFunding.findFirst({
+            where: { stripePaymentId: checkSession.id },
+            select: { id: true },
+          });
+          if (!alreadyProcessed) {
+            const credits = Math.floor(amount / 100); // $1 = 1 credit
+            await db.fanFunding.create({
+              data: {
+                artistId,
+                fanName: fanName || null,
+                fanEmail,
+                amount,
+                creditsAwarded: credits,
+                stripePaymentId: checkSession.id,
+                message: message || null,
+              },
+            });
+            await db.user.update({
+              where: { id: artistId },
+              data: {
+                platformCredits: { increment: credits },
+                supporterCount:  { increment: 1 },
+              },
+            });
+            const artist = await db.user.findUnique({
+              where: { id: artistId },
+              select: { name: true, artistName: true, platformCredits: true },
+            });
+            const displayName = fanName || "A fan";
+            const artistDisplay = artist?.artistName || artist?.name || "you";
+            const totalCredits = artist?.platformCredits ?? credits;
+            // Notify artist
+            void createNotification({
+              userId: artistId,
+              type:   "FAN_FUNDING",
+              title:  `${displayName} supported you with $${(amount / 100).toFixed(2)}!`,
+              message: `You now have ${totalCredits} platform credits to use on subscriptions, tools, and more.`,
+              link:   "/dashboard/earnings",
+            }).catch(() => {});
+            // Thank-you email to fan
+            void sendFanFundingConfirmationEmail({ fanEmail, fanName: fanName || null, artistName: artistDisplay, amount }).catch(() => {});
           }
         }
         break;
