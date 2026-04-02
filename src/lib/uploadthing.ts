@@ -290,6 +290,34 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ file }) => {
       return { url: file.ufsUrl ?? file.url };
     }),
+
+  // Sample pack zip upload (max 200MB — validated server-side after upload)
+  samplePackZip: f({ "application/zip": { maxFileSize: "200MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
+  // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
+  samplePackPreview: f({ audio: { maxFileSize: "50MB", maxFileCount: 5 } })
+    .middleware(async ({ req }) => {
+      const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      });
+      if (!token?.sub) throw new Error("Unauthorized");
+      return { userId: token.sub };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
