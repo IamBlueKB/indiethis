@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-03-31 (session 6)_
+_Last updated: 2026-04-02 (session 7)_
 
 ---
 
@@ -692,6 +692,20 @@ YoutubeReference
 |---------|--------|
 | Preview My Page button on `/dashboard/site` and `/dashboard/settings` | ✅ DONE |
 | Branded 404 page for unknown slugs (dark theme, IndieThis logo, link to explore) | ✅ DONE |
+| MerchGrid horizontal carousel with left/right gold arrow buttons on `/[slug]` | ✅ DONE |
+| MerchGrid `fullPage` prop — switches to 2-col grid on `/[slug]/merch` | ✅ DONE |
+| Explore page merch section converted from static grid to horizontal carousel with arrows | ✅ DONE |
+| IndieThis artist page (`/indiethis`) navbar shows platform logo via `isPlatform` prop | ✅ DONE |
+| IndieThis merch store: 7 products (Snapback, Hoodie, Classic Tee, Dad Hat, Poster, Sticker, Luggage Tag) with real Printful mockups | ✅ DONE |
+
+### Payments — Studio
+| Feature | Status |
+|---------|--------|
+| Stripe invoice payment (card) on public invoice page | ✅ DONE |
+| Cash App Pay option on intake form (studio sets `cashAppHandle` in settings) | ✅ DONE |
+| Zelle, PayPal, Venmo handles on invoice + intake (studio configures in settings) | ✅ DONE |
+| "Payment claimed" banner on invoice when studio marks payment received via alt method | ✅ DONE |
+| Apple Pay / Google Pay — work automatically via Stripe card element (no extra setup needed) | ✅ DONE (Stripe built-in) |
 
 ### Not Started
 | Feature | Status |
@@ -700,7 +714,6 @@ YoutubeReference
 | PostHog / product analytics | ❌ NOT STARTED |
 | Custom domain support for artist sites | ❌ NOT STARTED |
 | White-label studio branding (Elite tier) | ❌ NOT STARTED |
-| Apple Pay / Google Pay in checkout | ❌ NOT STARTED |
 | Mobile app (React Native / PWA) | ❌ NOT STARTED |
 | Spotify / Apple Music API integration | ❌ NOT STARTED |
 | TikTok API integration | ❌ NOT STARTED |
