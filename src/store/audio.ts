@@ -9,6 +9,7 @@ export type AudioTrack = {
   coverArt?: string;
   canvasVideoUrl?: string | null;
   duration?: number;
+  previewOnly?: boolean;
 };
 
 type AudioState = {

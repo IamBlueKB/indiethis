@@ -1,11 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
-  ResponsiveContainer, Tooltip,
-} from "recharts";
-import { motion, useAnimation } from "framer-motion";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,23 +41,6 @@ const SIZE_MAP = {
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
 
-function RadarTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { feature: string; primary: number; compare?: number } }> }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div
-      className="rounded-lg px-3 py-2 text-xs"
-      style={{ background: "#1A1A1A", border: "1px solid #333333" }}
-    >
-      <p style={{ color: "#D4A843", fontWeight: 600 }}>{d.feature}</p>
-      <p style={{ color: "#FFFFFF" }}>{Math.round(d.primary * 100)}%</p>
-      {d.compare !== undefined && (
-        <p style={{ color: "#E85D4A" }}>Compare: {Math.round(d.compare * 100)}%</p>
-      )}
-    </div>
-  );
-}
-
 // ─── Animated SVG Radar (custom — no Recharts for animation) ─────────────────
 
 interface SVGRadarProps {
@@ -84,9 +62,9 @@ function SVGRadar({
   const cy      = size / 2;
   const padding = showLabels ? 36 : 18;
   const radius  = cx - padding;
-  const controls = useAnimation();
   const [progress, setProgress] = useState(animated ? 0 : 1);
   const hasAnimated = useRef(false);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!animated || hasAnimated.current) return;
@@ -204,19 +182,49 @@ function SVGRadar({
         filter="url(#glow-gold)"
       />
 
-      {/* Data point dots */}
+      {/* Data point dots — interactive */}
       {data.map((v, i) => {
         const { x, y } = pointOnAxis(i, v * progress * radius);
+        const isHovered = hoveredIdx === i;
         return (
           <circle
-            key={i} cx={x} cy={y} r={4}
+            key={i} cx={x} cy={y} r={isHovered ? 6 : 4}
             fill="#D4A843"
             stroke="#111111"
             strokeWidth={2}
-            className="transition-all duration-200 hover:r-7"
+            style={{ cursor: "pointer", transition: "r 0.15s" }}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
           />
         );
       })}
+
+      {/* Hover tooltip */}
+      {hoveredIdx !== null && (() => {
+        const v = data[hoveredIdx];
+        const { x, y } = pointOnAxis(hoveredIdx, v * progress * radius);
+        const label = labels[hoveredIdx];
+        const pct   = Math.round(v * 100) + "%";
+        const tipW  = 72;
+        const tipH  = 34;
+        // Offset so tooltip doesn't overlap the dot; nudge inward if near edges
+        const offX  = x > cx ? -(tipW + 8) : 8;
+        const offY  = y > cy ? -(tipH + 4) : 4;
+        const tx    = Math.max(2, Math.min(size - tipW - 2, x + offX));
+        const ty    = Math.max(2, Math.min(size - tipH - 2, y + offY));
+        return (
+          <g key="tip" style={{ pointerEvents: "none" }}>
+            <rect x={tx} y={ty} width={tipW} height={tipH} rx={6}
+              fill="#1A1A1A" stroke="#333333" strokeWidth={1} />
+            <text x={tx + tipW / 2} y={ty + 12} textAnchor="middle"
+              fontSize={10} fontFamily="DM Sans, sans-serif"
+              fontWeight={600} fill="#D4A843">{label}</text>
+            <text x={tx + tipW / 2} y={ty + 25} textAnchor="middle"
+              fontSize={10} fontFamily="DM Sans, sans-serif"
+              fill="#FFFFFF">{pct}</text>
+          </g>
+        );
+      })()}
 
       {/* Labels */}
       {showLabels && labelPositions.map((lp, i) => {
@@ -258,17 +266,6 @@ export default function AudioFeaturesRadar({
     ? FEATURE_KEYS.map(k => compareFeatures[k] as number)
     : undefined;
   const labels  = FEATURE_KEYS.map(k => LABELS[k]);
-
-  // Tooltip data for recharts (used only for hover tooltips on sm)
-  const chartData = FEATURE_KEYS.map((k, i) => ({
-    feature: LABELS[k],
-    primary: features[k] as number,
-    ...(compareFeatures ? { compare: compareFeatures[k] as number } : {}),
-    fullMark: 1,
-    // animated value used for SVG — recharts is hidden; just for tooltip reference
-    value: features[k] as number,
-    displayVal: data[i],
-  }));
 
   return (
     <div

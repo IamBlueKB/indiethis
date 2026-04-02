@@ -365,10 +365,14 @@ export default function ArtistsClient() {
   }
 
   function handlePlayTrack(track: TopTrack) {
+    const s = useAudioStore.getState();
+    if (s.currentTrack?.id === track.id && s.isPlaying) { s.pause(); return; }
     play({ id: track.id, title: track.title, artist: "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined });
   }
 
   function handlePlayBeat(beat: TopBeat) {
+    const s = useAudioStore.getState();
+    if (s.currentTrack?.id === beat.id && s.isPlaying) { s.pause(); return; }
     play({ id: beat.id, title: beat.title, artist: "", src: beat.fileUrl, coverArt: beat.coverArtUrl ?? undefined });
   }
 

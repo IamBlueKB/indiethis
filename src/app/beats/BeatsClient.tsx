@@ -288,7 +288,7 @@ function FilterDropdown({
 // ── Main Client ────────────────────────────────────────────────────────────
 
 export default function BeatsClient() {
-  const { play, currentTrack } = useAudioStore();
+  const { play, currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
   const { OverlayComponent } = useTrackOverlay();
 
   // Filters
@@ -366,6 +366,8 @@ export default function BeatsClient() {
   }
 
   function handlePlay(beat: BeatItem) {
+    const { currentTrack, isPlaying: storeIsPlaying, pause } = useAudioStore.getState();
+    if (currentTrack?.id === beat.id && storeIsPlaying) { pause(); return; }
     play({
       id:       beat.id,
       title:    beat.title,
@@ -564,7 +566,7 @@ export default function BeatsClient() {
                 <BeatCard
                   key={b.id}
                   beat={b}
-                  isPlaying={currentTrack?.id === b.id}
+                  isPlaying={currentTrack?.id === b.id && storeIsPlaying}
                   onPlay={handlePlay}
                   onLicense={setLicenseBeat}
                 />

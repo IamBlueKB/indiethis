@@ -1141,12 +1141,6 @@ function BrowseBeats({ upgradeBeatId }: { upgradeBeatId?: string | null }) {
                     fileUrl={t.fileUrl} coverArtUrl={t.coverArtUrl ?? undefined}
                     isOwned={t.isOwned} className="mt-2 w-full"
                   />
-                  <div className="mt-3 flex justify-center">
-                    <LazyAudioRadar trackId={t.id} size="sm" animated={false} />
-                  </div>
-                  <div className="mt-2">
-                    <SimilarTracks sourceId={t.id} sourceType="beat" limit={4} />
-                  </div>
                 </div>
                 {t.price && !t.isOwned && (
                   <div className="text-right shrink-0">

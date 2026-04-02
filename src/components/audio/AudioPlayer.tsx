@@ -80,7 +80,14 @@ export default function AudioPlayer() {
       }
     });
 
-    ws.on("timeupdate", (t) => setCurrentTime(t));
+    ws.on("timeupdate", (t) => {
+      setCurrentTime(t);
+      if (currentTrack?.previewOnly && t >= 30) {
+        ws.seekTo(0);
+        setCurrentTime(0);
+        useAudioStore.getState().pause();
+      }
+    });
 
     ws.on("finish", () => {
       // Seek WaveSurfer back to start so replay works correctly.

@@ -19,12 +19,16 @@ export async function GET(
         fileUrl:        true,
         coverArtUrl:    true,
         canvasVideoUrl: true,
+        price:          true,
         bpm:            true,
         musicalKey:     true,
         genre:          true,
         producer:       true,
         songwriter:     true,
         featuredArtists:true,
+        beatLeaseSettings: {
+          select: { streamLeaseEnabled: true },
+        },
         artist: {
           select: {
             name:       true,
@@ -79,6 +83,8 @@ export async function GET(
       name:  track.artist.name,
       slug:  artistSlug,
     },
+    price:         track.price,
+    beatLeaseSettings: track.beatLeaseSettings ?? null,
     audioFeatures: track.audioFeatures ?? null,
     djPickCount,
     digitalProduct: dp

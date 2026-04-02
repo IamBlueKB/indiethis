@@ -302,6 +302,8 @@ export default function TrackList({
   }
 
   function playTrack(track: InternalTrack) {
+    const s = useAudioStore.getState();
+    if (s.currentTrack?.id === track.id && s.isPlaying) { s.pause(); return; }
     playInContext({ id: track.id, title: track.title, artist: artistName ?? "", src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined, canvasVideoUrl: track.canvasVideoUrl ?? null }, audioContext);
     firePlay(track);
   }

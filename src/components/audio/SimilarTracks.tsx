@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Music } from "lucide-react";
-import LazyAudioRadar from "./LazyAudioRadar";
 
 interface SimilarTrack {
   id:         string;
@@ -73,11 +72,6 @@ export default function SimilarTracks({
                 ) : (
                   <Music size={20} style={{ color: "#444" }} />
                 )}
-              </div>
-
-              {/* sm radar */}
-              <div className="flex justify-center">
-                <LazyAudioRadar trackId={track.id} size="sm" animated={false} />
               </div>
 
               {/* Title + artist */}

@@ -445,27 +445,8 @@ async function main() {
     console.log("  ✓ Pre-save campaign:", clicks.length, "clicks");
   }
 
-  // Merch
-  const mCount = await db.merchProduct.count({ where: { artistId: artist.id } });
-  if (mCount === 0) {
-    const products = await Promise.all([
-      db.merchProduct.create({ data: { artistId: artist.id, title: "Elevation Tee",     description: "Official album tee — premium heavyweight cotton.", imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400", basePrice: 14.50, artistMarkup: 15.50, productType: "TSHIRT", isActive: true } }),
-      db.merchProduct.create({ data: { artistId: artist.id, title: "Chicago Hoodie",    description: "Embroidered hoodie — limited run.", imageUrl: "https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=400", basePrice: 28.00, artistMarkup: 22.00, productType: "HOODIE", isActive: true } }),
-      db.merchProduct.create({ data: { artistId: artist.id, title: "Neon Dreams Poster", description: "Glossy fine-art print, numbered.", imageUrl: "https://images.unsplash.com/photo-1485579149621-3123dd979885?w=400", basePrice: 7.00, artistMarkup: 18.00, productType: "POSTER", isActive: true } }),
-    ]);
-    const orderRows = [
-      { pi: 0, email: "jayla.m@gmail.com",       qty: 1, status: "DELIVERED", days: 14 },
-      { pi: 0, email: "marcus.bell@outlook.com", qty: 2, status: "SHIPPED",   days: 7  },
-      { pi: 1, email: "drea.vox@gmail.com",       qty: 1, status: "DELIVERED", days: 21 },
-      { pi: 2, email: "sunrise.music@gmail.com",  qty: 3, status: "DELIVERED", days: 30 },
-    ];
-    for (const o of orderRows) {
-      const p = products[o.pi];
-      const total = p.basePrice + p.artistMarkup;
-      await db.merchOrder.create({ data: { merchProductId: p.id, artistId: artist.id, buyerEmail: o.email, quantity: o.qty, totalPrice: total * o.qty, platformCut: total * o.qty * 0.10, artistEarnings: p.artistMarkup * o.qty, fulfillmentStatus: o.status, createdAt: daysAgo(o.days) } });
-    }
-    console.log("  ✓ Merch: 3 products, 4 orders");
-  }
+  // Merch — skipped here; handled by seed-extras.mjs with correct schema
+  console.log("  – Merch: skipped (use seed-extras.mjs)");
 
   // Fan contacts
   const fcCount = await db.fanContact.count({ where: { artistId: artist.id } });
