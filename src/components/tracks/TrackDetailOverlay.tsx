@@ -268,7 +268,8 @@ function Panel({
     );
   }
 
-  const coverSrc = data.canvasVideoUrl || data.coverArtUrl;
+  // Fix 1: prefer API-loaded detail URL so tracks without canvas in store still show video
+  const canvasVideoUrl = detail?.canvasVideoUrl || data.canvasVideoUrl || null;
 
   return (
     <div className="flex flex-col flex-1 min-h-0" style={{ backgroundColor: "#111111", overflow: "hidden" }}>
@@ -277,9 +278,9 @@ function Panel({
       <div className="relative flex-shrink-0" style={{ maxHeight: "min(280px, 40vh)", overflow: "hidden" }}>
 
         {/* Media */}
-        {data.canvasVideoUrl ? (
+        {canvasVideoUrl ? (
           <video
-            src={data.canvasVideoUrl}
+            src={canvasVideoUrl}
             autoPlay loop muted playsInline
             className="w-full object-cover"
             style={{ maxHeight: "min(280px, 40vh)", display: "block" }}
