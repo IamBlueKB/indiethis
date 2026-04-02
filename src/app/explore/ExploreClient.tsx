@@ -1095,6 +1095,12 @@ export default function ExploreClient() {
   const [merch, setMerch]               = useState<MerchItem[]>([]);
   const [featuredMerch, setFeaturedMerch] = useState<MerchItem[]>([]);
   const [loadingMerch, setLoadingMerch] = useState(true);
+  const merchScrollRef = useRef<HTMLDivElement>(null);
+  const scrollMerch = useCallback((dir: "left" | "right") => {
+    const el = merchScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === "right" ? el.clientWidth * 0.7 : -(el.clientWidth * 0.7), behavior: "smooth" });
+  }, []);
 
   const [studioQuery, setStudioQuery] = useState("");
   const [studioSearching, setStudioSearching] = useState(false);
@@ -1677,42 +1683,60 @@ export default function ExploreClient() {
                     );
                   }
                   return (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                      {allMerch.map((item) => {
-                        const artistName = item.artist.artistName || item.artist.name || "";
-                        const price = item.variants?.[0]?.retailPrice;
-                        const thumb = item.imageUrls?.[0] ?? item.imageUrl;
-                        return (
-                          <a
-                            key={item.id}
-                            href={`/${item.artist.artistSlug}/merch`}
-                            className="group block rounded-xl overflow-hidden no-underline relative"
-                            style={{ backgroundColor: item.isFeatured ? "#2a2a2a" : "#141414" }}
-                          >
-                            {item.isFeatured && (
-                              <div className="absolute top-2 left-2 z-10 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
-                                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                                IndieThis
-                              </div>
-                            )}
-                            <div className="relative w-full aspect-square overflow-hidden">
-                              {thumb
-                                ? <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }}>
-                                    <ShoppingBag size={32} style={{ color: "#333" }} />
-                                  </div>
-                              }
-                            </div>
-                            <div className="p-3">
-                              <p className="text-xs font-semibold text-white truncate">{item.title}</p>
-                              <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
-                              {price !== undefined && (
-                                <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+                    <div className="relative">
+                      <button
+                        onClick={() => scrollMerch("left")}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:brightness-125"
+                        style={{ backgroundColor: "rgba(20,20,20,0.9)", border: "1px solid rgba(212,168,67,0.3)" }}
+                        aria-label="Scroll merch left"
+                      >
+                        <ChevronLeft size={14} style={{ color: "#D4A843" }} />
+                      </button>
+                      <div ref={merchScrollRef} className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+                        {allMerch.map((item) => {
+                          const artistName = item.artist.artistName || item.artist.name || "";
+                          const price = item.variants?.[0]?.retailPrice;
+                          const thumb = item.imageUrls?.[0] ?? item.imageUrl;
+                          return (
+                            <a
+                              key={item.id}
+                              href={`/${item.artist.artistSlug}/merch`}
+                              className="group block rounded-xl overflow-hidden no-underline relative shrink-0"
+                              style={{ backgroundColor: "#141414", width: 160 }}
+                            >
+                              {item.isFeatured && (
+                                <div className="absolute top-2 left-2 z-10 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                                  IndieThis
+                                </div>
                               )}
-                            </div>
-                          </a>
-                        );
-                      })}
+                              <div className="relative w-full overflow-hidden" style={{ aspectRatio: "1/1" }}>
+                                {thumb
+                                  ? <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                  : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }}>
+                                      <ShoppingBag size={32} style={{ color: "#333" }} />
+                                    </div>
+                                }
+                              </div>
+                              <div className="p-3">
+                                <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                                <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
+                                {price !== undefined && (
+                                  <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+                                )}
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => scrollMerch("right")}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:brightness-125"
+                        style={{ backgroundColor: "rgba(20,20,20,0.9)", border: "1px solid rgba(212,168,67,0.3)" }}
+                        aria-label="Scroll merch right"
+                      >
+                        <ChevronRight size={14} style={{ color: "#D4A843" }} />
+                      </button>
                     </div>
                   );
                 })()
