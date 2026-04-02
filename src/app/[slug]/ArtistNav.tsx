@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 interface ArtistNavProps {
-  displayName: string;
-  hasMusic:    boolean;
-  hasVideos:   boolean;
-  hasShows:    boolean;
-  hasMerch:    boolean;
-  hasAbout:    boolean;
+  displayName:    string;
+  hasMusic:       boolean;
+  hasVideos:      boolean;
+  hasShows:       boolean;
+  hasMerch:       boolean;
+  hasAbout:       boolean;
+  isPlatform?:    boolean;
 }
 
 export default function ArtistNav({
@@ -19,6 +20,7 @@ export default function ArtistNav({
   hasShows,
   hasMerch,
   hasAbout,
+  isPlatform = false,
 }: ArtistNavProps) {
   const [visible, setVisible] = useState(false);
 
@@ -61,13 +63,22 @@ export default function ArtistNav({
       }}
     >
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-        {/* Artist name */}
-        <span
-          className="font-bold text-white truncate text-sm"
-          style={{ fontFamily: "var(--font-dm-sans, 'DM Sans', sans-serif)" }}
-        >
-          {displayName}
-        </span>
+        {/* Artist name / platform logo */}
+        {isPlatform ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/images/brand/indiethis-logo-dark-bg.svg"
+            alt="IndieThis"
+            className="h-6 w-auto"
+          />
+        ) : (
+          <span
+            className="font-bold text-white truncate text-sm"
+            style={{ fontFamily: "var(--font-dm-sans, 'DM Sans', sans-serif)" }}
+          >
+            {displayName}
+          </span>
+        )}
 
         {/* Section links */}
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">

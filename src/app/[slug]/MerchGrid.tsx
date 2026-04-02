@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { ShoppingBag, X, Loader2, Plus, Minus, ChevronRight, ChevronLeft, ChevronRight as Next, Trash2 } from "lucide-react";
+import { useState, useMemo, useRef, useCallback } from "react";
+import { ShoppingBag, X, Loader2, Plus, Minus, ChevronRight, ChevronLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -661,14 +661,24 @@ export default function MerchGrid({
   products,
   artistSlug,
   justPurchased = false,
+  fullPage = false,
 }: {
   products:       MerchProduct[];
   artistSlug:     string;
   justPurchased?: boolean;
+  fullPage?:      boolean;
 }) {
   const [openProduct, setOpenProduct] = useState<MerchProduct | null>(null);
   const [cart,        setCart       ] = useState<CartItem[]>([]);
   const [cartOpen,    setCartOpen   ] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = useCallback((dir: "left" | "right") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = el.clientWidth * 0.7;
+    el.scrollBy({ left: dir === "right" ? amount : -amount, behavior: "smooth" });
+  }, []);
 
   if (!products.length) return null;
 
@@ -717,38 +727,71 @@ export default function MerchGrid({
 
       <section>
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase mb-[2px]" style={{ color: "#D4A843", letterSpacing: "1.5px" }}>SHOP</p>
-            <h2 className="text-[18px] font-semibold text-white leading-tight">Merch</h2>
-          </div>
-          <div className="flex items-center gap-3">
-            {cartCount > 0 && (
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:brightness-110"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+        {!fullPage && (
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase mb-[2px]" style={{ color: "#D4A843", letterSpacing: "1.5px" }}>SHOP</p>
+              <h2 className="text-[18px] font-semibold text-white leading-tight">Merch</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              {cartCount > 0 && (
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:brightness-110"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  <ShoppingBag size={13} />
+                  Cart ({cartCount})
+                </button>
+              )}
+              <Link href={`/${artistSlug}/merch`}
+                className="text-[11px] font-semibold no-underline transition-colors hover:brightness-125"
+                style={{ color: "rgba(212,168,67,0.7)" }}
               >
-                <ShoppingBag size={13} />
-                Cart ({cartCount})
-              </button>
-            )}
-            <Link href={`/${artistSlug}/merch`}
-              className="text-[11px] font-semibold no-underline transition-colors hover:brightness-125"
-              style={{ color: "rgba(212,168,67,0.7)" }}
-            >
-              View All →
-            </Link>
+                View All →
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Horizontal scroll row */}
-        <div className="flex gap-[10px] overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} onOpen={() => setOpenProduct(p)} />
-          ))}
-          <ViewAllCard artistSlug={artistSlug} />
-        </div>
+        {fullPage ? (
+          /* Full-page grid layout */
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} onOpen={() => setOpenProduct(p)} />
+            ))}
+          </div>
+        ) : (
+          /* Horizontal scroll row with carousel arrows */
+          <div className="relative">
+            {/* Left arrow */}
+            <button
+              onClick={() => scroll("left")}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:brightness-125"
+              style={{ backgroundColor: "rgba(20,20,20,0.9)", border: "1px solid rgba(212,168,67,0.3)" }}
+              aria-label="Scroll left"
+            >
+              <ChevronLeft size={14} style={{ color: "#D4A843" }} />
+            </button>
+
+            <div ref={scrollRef} className="flex gap-[10px] overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+              {products.map((p) => (
+                <ProductCard key={p.id} product={p} onOpen={() => setOpenProduct(p)} />
+              ))}
+              <ViewAllCard artistSlug={artistSlug} />
+            </div>
+
+            {/* Right arrow */}
+            <button
+              onClick={() => scroll("right")}
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:brightness-125"
+              style={{ backgroundColor: "rgba(20,20,20,0.9)", border: "1px solid rgba(212,168,67,0.3)" }}
+              aria-label="Scroll right"
+            >
+              <ChevronRight size={14} style={{ color: "#D4A843" }} />
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Product modal */}

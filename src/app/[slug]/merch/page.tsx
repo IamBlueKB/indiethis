@@ -66,6 +66,7 @@ export default async function MerchStorefront({
             products={artist.merchProducts}
             artistSlug={slug}
             justPurchased={justPurchased}
+            fullPage
           />
         ) : (
           <div className="py-20 text-center">

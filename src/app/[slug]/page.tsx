@@ -325,6 +325,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         hasShows={shows.length > 0}
         hasMerch={artist.merchProducts.length > 0}
         hasAbout={!!bio}
+        isPlatform={slug === "indiethis"}
       />
 
       {/* 1. Hero — full-bleed */}
