@@ -11,6 +11,7 @@ import VideoSection from "./VideoSection";
 import PhotoGallery from "./PhotoGallery";
 import ShowsSection from "./ShowsSection";
 import SupportSection from "./SupportSection";
+import FanFundingButton from "./FanFundingButton";
 import ReleaseCapture from "./ReleaseCapture";
 import AboutSection from "./AboutSection";
 import TestimonialsSection from "./TestimonialsSection";
@@ -51,7 +52,7 @@ async function ArtistSite({ slug }: { slug: string }) {
     select: {
       id: true, name: true, artistName: true, bio: true, photo: true,
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
-      spotifyUrl: true, appleMusicUrl: true,
+      spotifyUrl: true, appleMusicUrl: true, supporterCount: true,
       artistSite: {
         select: {
           isPublished: true, draftMode: true, bioContent: true, heroImage: true,
@@ -450,7 +451,17 @@ async function ArtistSite({ slug }: { slug: string }) {
           <StoreSection products={digitalProducts} artistName={displayName} />
         )}
 
-        {/* 11. Support */}
+        {/* 11. Fan Funding */}
+        <div>
+          <FanFundingButton
+            artistId={artist.id}
+            artistName={displayName}
+            artistSlug={slug}
+            supporterCount={artist.supporterCount}
+          />
+        </div>
+
+        {/* 11b. PWYW Support (legacy) */}
         {site.pwywEnabled && (
           <div id="support">
             <SupportSection artistSlug={slug} artistName={displayName} />
