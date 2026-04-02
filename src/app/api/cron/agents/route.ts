@@ -215,6 +215,24 @@ export async function POST(req: NextRequest) {
     results.paymentRecovery = "skipped (not due)";
   }
 
+  // ── Quality Score Update — runs daily ────────────────────────────────────────
+  const shouldRunQualityScores = await shouldRun("QUALITY_SCORE_UPDATE", 22); // 22h guard
+  if (shouldRunQualityScores) {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL}/api/cron/quality-scores`,
+        { method: "POST", headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }
+      );
+      const data = await res.json() as { updated?: number };
+      results.qualityScoreUpdate = `updated ${data.updated ?? 0} tracks`;
+      await logAgentAction("QUALITY_SCORE_UPDATE", "AGENT_RUN_START");
+    } catch (err) {
+      results.qualityScoreUpdate = `error: ${String(err)}`;
+    }
+  } else {
+    results.qualityScoreUpdate = "skipped (not due)";
+  }
+
   // ── Collaboration Matchmaker — monthly (1st of month) ─────────────────────
   const dayOfMonth     = new Date().getDate();
   const isFirstOfMonth = dayOfMonth === 1;

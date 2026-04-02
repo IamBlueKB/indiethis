@@ -352,6 +352,7 @@ model Track {
   producer             String?
   songwriter           String?
   featuredArtists      String?
+  qualityScore         Int       @default(0)
 }
 
 model AudioFingerprint {
