@@ -14,6 +14,10 @@ export async function GET() {
       type: true,
       price: true,
       coverArtUrl: true,
+      tracks: {
+        select: { id: true, title: true, fileUrl: true, coverArtUrl: true },
+        orderBy: { createdAt: "asc" },
+      },
       user: {
         select: {
           id: true,
@@ -26,5 +30,8 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ products });
+  // Ensure tracks is always an array (defensive — Prisma should always return [] for empty relations)
+  const normalized = products.map(p => ({ ...p, tracks: p.tracks ?? [] }));
+
+  return NextResponse.json({ products: normalized });
 }

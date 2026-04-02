@@ -810,7 +810,7 @@ function DigitalProductOverlay({ product, onBuy, onClose }: { product: DigitalPr
   const { playInContext } = useAudioStore();
   const { currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
 
-  const queue = product.tracks.map(t => ({
+  const queue = (product.tracks ?? []).map(t => ({
     id: t.id, title: t.title, artist: artistName,
     src: t.fileUrl, coverArt: t.coverArtUrl ?? product.coverArtUrl ?? undefined,
     previewOnly: true,
@@ -932,14 +932,14 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
   const artistSlug = product.user.artistSite?.isPublished ? product.user.artistSlug : null;
   const artistName = product.user.artistName || product.user.name;
   const { playInContext } = useAudioStore();
-  const firstTrack = product.tracks[0];
+  const firstTrack = (product.tracks ?? [])[0];
   const [productOpen, setProductOpen] = useState(false);
 
   function handleCardClick() {
     if (!firstTrack) return;
     const s = useAudioStore.getState();
     if (s.currentTrack?.id === firstTrack.id && s.isPlaying) { s.pause(); return; }
-    const queue = product.tracks.map(t => ({
+    const queue = (product.tracks ?? []).map(t => ({
       id: t.id, title: t.title, artist: artistName,
       src: t.fileUrl, coverArt: t.coverArtUrl ?? product.coverArtUrl ?? undefined,
       previewOnly: true,
@@ -1671,8 +1671,8 @@ export default function ExploreClient() {
                   </div>
                 : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {merch.map((item) => {
-                      const artistName = item.artist.artistName || item.artist.name;
-                      const price = item.variants[0]?.retailPrice;
+                      const artistName = item.artist.artistName || item.artist.name || "";
+                      const price = item.variants?.[0]?.retailPrice;
                       const thumb = item.imageUrls?.[0] ?? item.imageUrl;
                       return (
                         <a
