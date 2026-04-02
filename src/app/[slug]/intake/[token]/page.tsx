@@ -64,6 +64,13 @@ function formatDate(d: string) {
   catch { return d; }
 }
 
+function formatTime(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{children}</label>;
 }
@@ -446,7 +453,7 @@ export default function IntakeFormPage() {
               <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>Your Session</p>
               <p className="text-sm font-medium text-foreground">
                 {formatDate(link.sessionDate)}
-                {link.sessionTime ? ` — ${link.sessionTime}${link.endTime ? ` to ${link.endTime}` : ""}` : ""}
+                {link.sessionTime ? ` — ${formatTime(link.sessionTime)}${link.endTime ? ` to ${formatTime(link.endTime)}` : ""}` : ""}
               </p>
             </div>
           </div>
