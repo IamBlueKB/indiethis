@@ -16,6 +16,7 @@ type Props = {
 
 export default function AddToCrateButton({ trackId }: Props) {
   const { data: session } = useSession();
+  const [mounted, setMounted] = useState(false);
   const [crates, setCrates] = useState<CrateSummary[]>([]);
   const [fetched, setFetched] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -26,6 +27,8 @@ export default function AddToCrateButton({ trackId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
+
+  useEffect(() => setMounted(true), []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -102,7 +105,7 @@ export default function AddToCrateButton({ trackId }: Props) {
         }
       </button>
 
-      {open && dropdownPos && typeof document !== "undefined" && createPortal(
+      {mounted && open && dropdownPos && createPortal(
         <div
           className="fixed rounded-xl border shadow-xl overflow-hidden min-w-[160px]"
           style={{ backgroundColor: "#141414", borderColor: "#2a2a2a", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
