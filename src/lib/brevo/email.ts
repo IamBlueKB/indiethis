@@ -4,6 +4,7 @@
  */
 
 import { getBrevoClient } from "./client";
+import { buildEmailTemplate, type TemplateUserData } from "./email-template";
 
 const FROM_EMAIL = () => process.env.BREVO_FROM_EMAIL ?? "hello@indiethis.com";
 const FROM_NAME = () => process.env.BREVO_FROM_NAME ?? "IndieThis";
@@ -82,45 +83,78 @@ export async function sendTemplateEmail(
   });
 }
 
+/**
+ * Send a fully branded transactional email using the shared template.
+ * Wraps primaryContent in the IndieThis header/footer with contextual
+ * feature promotion and What's New section.
+ */
+export async function sendBrandedEmail(options: Omit<SendEmailOptions, "htmlContent"> & {
+  primaryContent: string;
+  context?:       string;
+  userData?:      TemplateUserData;
+  noPromotion?:   boolean;
+}): Promise<void> {
+  const { primaryContent, context, userData, noPromotion, ...emailOptions } = options;
+  return sendEmail({
+    ...emailOptions,
+    htmlContent: buildEmailTemplate({ primaryContent, context, userData, noPromotion }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Auth emails
 // ---------------------------------------------------------------------------
 
 export async function sendWelcomeEmail(user: {
-  email: string;
-  displayName: string;
-  tier: string;
+  email:        string;
+  displayName:  string;
+  tier:         string;
+  artistSlug?:  string;
 }): Promise<void> {
-  await sendEmail({
-    to: { email: user.email, name: user.displayName },
+  await sendBrandedEmail({
+    to:      { email: user.email, name: user.displayName },
     subject: "Welcome to IndieThis — your artist platform is ready",
-    htmlContent: `
-      <h1>Welcome, ${user.displayName}!</h1>
-      <p>Your <strong>${user.tier}</strong> account is active. Start creating, selling, and growing.</p>
-      <p><a href="${APP_URL()}/dashboard">Go to your dashboard →</a></p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Welcome, ${user.displayName}!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Your <strong style="color:#D4A843;">${user.tier}</strong> account is active.
+        Start creating, selling, and growing.
+      </p>
+      <a href="${APP_URL()}/dashboard" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Go to Your Dashboard &rarr;
+      </a>
     `,
     textContent: `Welcome, ${user.displayName}! Your ${user.tier} account is active. Visit: ${APP_URL()}/dashboard`,
-    tags: ["welcome", "onboarding"],
+    context:     "SUBSCRIPTION_WELCOME",
+    userData:    { artistSlug: user.artistSlug },
+    tags:        ["welcome", "onboarding"],
   });
 }
 
 export async function sendPasswordResetEmail(user: {
-  email: string;
+  email:       string;
   displayName: string;
-  resetLink: string;
+  resetLink:   string;
 }): Promise<void> {
-  await sendEmail({
-    to: { email: user.email, name: user.displayName },
+  await sendBrandedEmail({
+    to:      { email: user.email, name: user.displayName },
     subject: "Reset your IndieThis password",
-    htmlContent: `
-      <h1>Password Reset</h1>
-      <p>Hi ${user.displayName},</p>
-      <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-      <p><a href="${user.resetLink}">Reset Password →</a></p>
-      <p>If you didn't request this, ignore this email.</p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Password Reset</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 8px;">Hi ${user.displayName},</p>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Click the button below to reset your password. This link expires in <strong>1 hour</strong>.
+      </p>
+      <a href="${user.resetLink}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Reset Password &rarr;
+      </a>
+      <p style="color:#666;font-size:12px;margin:20px 0 0;">
+        If you didn&rsquo;t request this, you can safely ignore this email.
+      </p>
     `,
-    textContent: `Reset your password: ${user.resetLink} (expires in 1 hour)`,
-    tags: ["auth", "password-reset"],
+    textContent:  `Reset your password: ${user.resetLink} (expires in 1 hour)`,
+    noPromotion:  true,
+    tags:         ["auth", "password-reset"],
   });
 }
 
@@ -254,29 +288,35 @@ export async function sendPayoutNotification(payout: {
 }
 
 export async function sendSaleNotification(sale: {
-  artistEmail: string;
-  artistName: string;
-  itemType: "beat" | "merch" | "track";
-  itemName: string;
-  saleAmount: string;
+  artistEmail:   string;
+  artistName:    string;
+  artistSlug?:   string;
+  itemType:      "beat" | "merch" | "track";
+  itemName:      string;
+  saleAmount:    string;
   buyerLocation?: string;
 }): Promise<void> {
-  const typeLabel = { beat: "Beat", merch: "Merch item", track: "Track" }[
-    sale.itemType
-  ];
-  await sendEmail({
-    to: { email: sale.artistEmail, name: sale.artistName },
+  const typeLabel = { beat: "Beat", merch: "Merch item", track: "Track" }[sale.itemType];
+  await sendBrandedEmail({
+    to:      { email: sale.artistEmail, name: sale.artistName },
     subject: `New sale — ${typeLabel}: ${sale.itemName}`,
-    htmlContent: `
-      <h1>You Made a Sale! 🎉</h1>
-      <p>Hi ${sale.artistName},</p>
-      <p><strong>${typeLabel}:</strong> ${sale.itemName}<br>
-      <strong>Amount:</strong> ${sale.saleAmount}
-      ${sale.buyerLocation ? `<br><strong>From:</strong> ${sale.buyerLocation}` : ""}</p>
-      <p><a href="${APP_URL()}/dashboard/earnings">View Earnings →</a></p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">You Made a Sale! &#x1F389;</h1>
+      <p style="color:#ccc;font-size:14px;margin:0 0 16px;">Hi ${sale.artistName},</p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#888;font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.5px;">${typeLabel}</p>
+        <p style="color:#fff;font-size:16px;font-weight:700;margin:0 0 8px;">${sale.itemName}</p>
+        <p style="color:#D4A843;font-size:20px;font-weight:700;margin:0;">${sale.saleAmount}</p>
+        ${sale.buyerLocation ? `<p style="color:#888;font-size:12px;margin:8px 0 0;">From: ${sale.buyerLocation}</p>` : ""}
+      </div>
+      <a href="${APP_URL()}/dashboard/earnings" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Earnings &rarr;
+      </a>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["sale", sale.itemType],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "ARTIST_SALE_NOTIFICATION",
+    userData: { artistSlug: sale.artistSlug },
+    tags:     ["sale", sale.itemType],
   });
 }
 
@@ -318,42 +358,45 @@ export async function sendSelfFulfilledOrderEmail(params: {
     .filter(Boolean)
     .join("<br>");
 
-  await sendEmail({
-    to: { email: params.artistEmail, name: params.artistName },
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
     subject: `New order — ship to ${params.buyerName}`,
-    htmlContent: `
-      <h1>You Have a New Order!</h1>
-      <p>Hi ${params.artistName}, someone just purchased your merch. Please ship the item(s) as soon as possible.</p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">You Have a New Order!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Hi ${params.artistName}, someone just purchased your merch. Please ship the item(s) as soon as possible.
+      </p>
 
-      <h2 style="margin-top:24px">Order #${params.orderId.slice(-8).toUpperCase()}</h2>
-      <table style="border-collapse:collapse;width:100%;max-width:480px">
+      <p style="color:#D4A843;font-size:13px;font-weight:700;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px;">
+        Order #${params.orderId.slice(-8).toUpperCase()}
+      </p>
+      <table style="border-collapse:collapse;width:100%;max-width:480px;margin:0 0 16px;">
         <thead>
-          <tr style="background:#f5f5f5">
-            <th style="padding:4px 8px;text-align:left">Item</th>
-            <th style="padding:4px 8px;text-align:left">Variant</th>
-            <th style="padding:4px 8px;text-align:left">Qty</th>
-            <th style="padding:4px 8px;text-align:left">Price</th>
+          <tr style="background:#1A1A1A;">
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Item</th>
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Variant</th>
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Qty</th>
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Price</th>
           </tr>
         </thead>
-        <tbody>${itemsHtml}</tbody>
+        <tbody style="color:#ccc;font-size:13px;">${itemsHtml}</tbody>
       </table>
-      <p><strong>Order total:</strong> $${params.totalPrice.toFixed(2)}</p>
+      <p style="color:#fff;font-weight:700;margin:0 0 20px;">Order total: <span style="color:#D4A843;">$${params.totalPrice.toFixed(2)}</span></p>
 
-      <h2 style="margin-top:24px">Ship To</h2>
-      <p>
-        <strong>${params.buyerName}</strong><br>
+      <p style="color:#D4A843;font-size:13px;font-weight:700;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px;">Ship To</p>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        <strong style="color:#fff;">${params.buyerName}</strong><br>
         ${addressHtml}<br>
-        <a href="mailto:${params.buyerEmail}">${params.buyerEmail}</a>
+        <a href="mailto:${params.buyerEmail}" style="color:#D4A843;">${params.buyerEmail}</a>
       </p>
 
-      <p style="margin-top:24px">
-        <a href="${APP_URL()}/dashboard/merch" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
-          View in Dashboard →
-        </a>
-      </p>
+      <a href="${APP_URL()}/dashboard/merch" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View in Dashboard &rarr;
+      </a>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["merch", "self-fulfilled", "order"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "ARTIST_MERCH_ORDER",
+    tags:     ["merch", "self-fulfilled", "order"],
   });
 }
 
@@ -395,56 +438,59 @@ export async function sendMerchOrderConfirmationEmail(params: {
 
   const orderUrl = `${APP_URL()}/order/${params.orderId}`;
 
-  await sendEmail({
-    to: { email: params.buyerEmail, name: params.buyerName },
+  await sendBrandedEmail({
+    to:      { email: params.buyerEmail, name: params.buyerName },
     subject: `Your order from ${params.artistName} is confirmed!`,
-    htmlContent: `
-      <h1 style="color:#0A0A0A">Order Confirmed</h1>
-      <p>Hi ${params.buyerName}, thanks for supporting ${params.artistName}! Your order has been received.</p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Order Confirmed &#x2713;</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Hi ${params.buyerName}, thanks for supporting <strong style="color:#fff;">${params.artistName}</strong>! Your order has been received.
+      </p>
 
-      <h2 style="margin-top:24px">Order #${params.orderId.slice(-8).toUpperCase()}</h2>
-      <table style="border-collapse:collapse;width:100%;max-width:480px">
+      <p style="color:#D4A843;font-size:13px;font-weight:700;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px;">
+        Order #${params.orderId.slice(-8).toUpperCase()}
+      </p>
+      <table style="border-collapse:collapse;width:100%;max-width:480px;margin:0 0 16px;">
         <thead>
-          <tr style="background:#f5f5f5">
-            <th style="padding:4px 8px;text-align:left">Item</th>
-            <th style="padding:4px 8px;text-align:left">Variant</th>
-            <th style="padding:4px 8px;text-align:left">Qty</th>
-            <th style="padding:4px 8px;text-align:right">Price</th>
+          <tr style="background:#1A1A1A;">
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Item</th>
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Variant</th>
+            <th style="padding:8px;text-align:left;color:#888;font-size:12px;font-weight:600;">Qty</th>
+            <th style="padding:8px;text-align:right;color:#888;font-size:12px;font-weight:600;">Price</th>
           </tr>
         </thead>
-        <tbody>${itemsHtml}</tbody>
+        <tbody style="color:#ccc;font-size:13px;">${itemsHtml}</tbody>
         <tfoot>
           <tr>
-            <td colspan="3" style="padding:4px 8px;text-align:right;color:#666">Subtotal</td>
-            <td style="padding:4px 8px;text-align:right">$${params.subtotal.toFixed(2)}</td>
+            <td colspan="3" style="padding:6px 8px;text-align:right;color:#888;font-size:13px;">Subtotal</td>
+            <td style="padding:6px 8px;text-align:right;color:#ccc;font-size:13px;">$${params.subtotal.toFixed(2)}</td>
           </tr>
           ${params.shippingCost > 0 ? `<tr>
-            <td colspan="3" style="padding:4px 8px;text-align:right;color:#666">Shipping</td>
-            <td style="padding:4px 8px;text-align:right">$${params.shippingCost.toFixed(2)}</td>
+            <td colspan="3" style="padding:6px 8px;text-align:right;color:#888;font-size:13px;">Shipping</td>
+            <td style="padding:6px 8px;text-align:right;color:#ccc;font-size:13px;">$${params.shippingCost.toFixed(2)}</td>
           </tr>` : ""}
-          <tr>
-            <td colspan="3" style="padding:4px 8px;text-align:right;font-weight:bold">Total</td>
-            <td style="padding:4px 8px;text-align:right;font-weight:bold">$${params.total.toFixed(2)}</td>
+          <tr style="border-top:1px solid #222;">
+            <td colspan="3" style="padding:8px;text-align:right;color:#fff;font-weight:700;">Total</td>
+            <td style="padding:8px;text-align:right;color:#D4A843;font-weight:700;font-size:15px;">$${params.total.toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
 
-      <h2 style="margin-top:24px">Shipping To</h2>
-      <p>${params.buyerName}<br>${addressHtml}</p>
+      <p style="color:#D4A843;font-size:13px;font-weight:700;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px;">Shipping To</p>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">${params.buyerName}<br>${addressHtml}</p>
 
-      <p style="margin-top:24px">
-        <a href="${orderUrl}" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
-          Track Your Order →
-        </a>
-      </p>
-
-      <p style="margin-top:24px;color:#888;font-size:12px">
+      <a href="${orderUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Track Your Order &rarr;
+      </a>
+      <p style="color:#666;font-size:12px;margin:16px 0 0;">
         Questions? Reply to this email or visit
-        <a href="${APP_URL()}/${params.artistSlug}">the artist's page</a>.
+        <a href="${APP_URL()}/${params.artistSlug}" style="color:#D4A843;">the artist&rsquo;s page</a>.
       </p>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["merch", "order", "buyer-confirmation"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "MERCH_ORDER_CONFIRMATION",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["merch", "order", "buyer-confirmation"],
   });
 }
 
@@ -466,22 +512,25 @@ export async function sendMerchShippedEmail(params: {
     ? `<a href="${params.trackingUrl}" style="color:#D4A843">${params.trackingNumber}</a>`
     : `<strong>${params.trackingNumber}</strong>`;
 
-  await sendEmail({
-    to: { email: params.buyerEmail, name: params.buyerName },
+  await sendBrandedEmail({
+    to:      { email: params.buyerEmail, name: params.buyerName },
     subject: `Your order from ${params.artistName} has shipped!`,
-    htmlContent: `
-      <h1>Your Order is on the Way!</h1>
-      <p>Hi ${params.buyerName}, great news — ${params.artistName} has shipped your order.</p>
-      ${params.carrier ? `<p><strong>Carrier:</strong> ${params.carrier}</p>` : ""}
-      <p><strong>Tracking:</strong> ${trackingLink}</p>
-      <p style="margin-top:24px">
-        <a href="${orderUrl}" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">
-          View Order Status →
-        </a>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Order is on the Way! &#x1F4E6;</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.buyerName}, great news &mdash; <strong style="color:#fff;">${params.artistName}</strong> has shipped your order.
       </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        ${params.carrier ? `<p style="color:#888;font-size:12px;margin:0 0 4px;"><strong style="color:#ccc;">Carrier:</strong> ${params.carrier}</p>` : ""}
+        <p style="color:#888;font-size:12px;margin:0;"><strong style="color:#ccc;">Tracking:</strong> ${trackingLink}</p>
+      </div>
+      <a href="${orderUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Order Status &rarr;
+      </a>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["merch", "order", "shipped"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "MERCH_SHIPPED",
+    tags:     ["merch", "order", "shipped"],
   });
 }
 
@@ -499,33 +548,25 @@ export async function sendMerchDeliveredEmail(params: {
   const orderUrl  = `${APP_URL()}/order/${params.orderId}`;
   const merchUrl  = `${APP_URL()}/${params.artistSlug}/merch`;
 
-  await sendEmail({
-    to: { email: params.buyerEmail, name: params.buyerName },
+  await sendBrandedEmail({
+    to:      { email: params.buyerEmail, name: params.buyerName },
     subject: `Your order from ${params.artistName} has arrived!`,
-    htmlContent: `
-      <div style="background:#0A0A0A;color:#e5e5e5;font-family:'DM Sans',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;border-radius:12px">
-        <div style="text-align:center;margin-bottom:32px">
-          <span style="font-size:22px;font-weight:700;color:#D4A843">IndieThis</span>
-        </div>
-        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 16px 0">Your Order Has Arrived!</h1>
-        <p style="margin:0 0 16px 0;color:#aaa">
-          Hi ${params.buyerName}, your merch from <strong style="color:#fff">${params.artistName}</strong> has been delivered. Enjoy!
-        </p>
-        <p style="margin:24px 0">
-          <a href="${orderUrl}" style="background:#D4A843;color:#0A0A0A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block">
-            View Order →
-          </a>
-        </p>
-        <p style="margin-top:8px">
-          <a href="${merchUrl}" style="color:#D4A843;text-decoration:none;font-size:13px">Browse more merch from ${params.artistName} →</a>
-        </p>
-        <p style="margin-top:32px;color:#555;font-size:12px">
-          Powered by <strong style="color:#D4A843">IndieThis</strong>
-        </p>
-      </div>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Order Has Arrived! &#x1F389;</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Hi ${params.buyerName}, your merch from <strong style="color:#fff;">${params.artistName}</strong> has been delivered. Enjoy!
+      </p>
+      <a href="${orderUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Order &rarr;
+      </a>
+      <p style="margin-top:16px;">
+        <a href="${merchUrl}" style="color:#D4A843;text-decoration:none;font-size:13px;">Browse more merch from ${params.artistName} &rarr;</a>
+      </p>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["merch", "order", "delivered"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "MERCH_DELIVERED",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["merch", "order", "delivered"],
   });
 }
 
@@ -534,40 +575,34 @@ export async function sendMerchDeliveredEmail(params: {
 // ---------------------------------------------------------------------------
 
 export async function sendFanFundingConfirmationEmail(params: {
-  fanEmail:   string;
-  fanName:    string | null;
-  artistName: string;
-  amount:     number; // cents
+  fanEmail:    string;
+  fanName:     string | null;
+  artistName:  string;
+  artistSlug?: string;
+  amount:      number; // cents
 }): Promise<void> {
   const appUrl    = APP_URL();
   const dollarAmt = (params.amount / 100).toFixed(2);
   const toName    = params.fanName || "Fan";
 
-  await sendEmail({
-    to: { email: params.fanEmail, name: toName },
-    subject: `You supported ${params.artistName} on IndieThis 🎵`,
-    htmlContent: `
-      <div style="background:#0A0A0A;color:#e5e5e5;font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;border-radius:12px">
-        <div style="text-align:center;margin-bottom:32px">
-          <span style="font-size:24px;font-weight:700;color:#D4A843;letter-spacing:-0.5px">IndieThis</span>
-        </div>
-        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px 0">Thank you for your support!</h1>
-        <p style="margin:0 0 16px 0;color:#aaa;line-height:1.6">
-          Hi ${toName}, your $${dollarAmt} goes directly toward <strong style="color:#fff">${params.artistName}</strong>'s music production, mastering, and promotion on IndieThis.
-          You're fueling independent music — thank you.
-        </p>
-        <p style="margin:28px 0">
-          <a href="${appUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px">
-            Discover More Artists →
-          </a>
-        </p>
-        <p style="margin-top:32px;color:#555;font-size:12px">
-          Powered by <strong style="color:#D4A843">IndieThis</strong> — The Home of Independent Music
-        </p>
-      </div>
+  await sendBrandedEmail({
+    to:      { email: params.fanEmail, name: toName },
+    subject: `You supported ${params.artistName} on IndieThis &#x1F3B5;`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Thank you for your support!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${toName}, your <strong style="color:#D4A843;">$${dollarAmt}</strong> goes directly toward
+        <strong style="color:#fff;">${params.artistName}</strong>&rsquo;s music production, mastering,
+        and promotion on IndieThis. You&rsquo;re fueling independent music &mdash; thank you.
+      </p>
+      <a href="${appUrl}/explore" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Discover More Artists &rarr;
+      </a>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["fan-funding", "confirmation"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "FAN_FUNDING_RECEIPT",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["fan-funding", "confirmation"],
   });
 }
 
@@ -576,49 +611,43 @@ export async function sendFanFundingConfirmationEmail(params: {
 // ---------------------------------------------------------------------------
 
 export async function sendSamplePackPurchaseEmail(params: {
-  buyerEmail:   string;
-  packTitle:    string;
-  producerName: string;
-  sampleCount:  number;
-  amount:       number; // cents
-  downloadUrl:  string;
+  buyerEmail:    string;
+  packTitle:     string;
+  producerName:  string;
+  producerSlug?: string;
+  sampleCount:   number;
+  amount:        number; // cents
+  downloadUrl:   string;
 }): Promise<void> {
   const appUrl = APP_URL();
   const dollar = (params.amount / 100).toFixed(2);
 
-  await sendEmail({
-    to: { email: params.buyerEmail },
+  await sendBrandedEmail({
+    to:      { email: params.buyerEmail },
     subject: `Your Sample Pack is ready: ${params.packTitle}`,
-    htmlContent: `
-      <div style="background:#0A0A0A;color:#e5e5e5;font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;border-radius:12px">
-        <div style="text-align:center;margin-bottom:32px">
-          <span style="font-size:24px;font-weight:700;color:#D4A843;letter-spacing:-0.5px">IndieThis</span>
-        </div>
-        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px 0">Your Sample Pack is ready!</h1>
-        <p style="margin:0 0 16px 0;color:#aaa;line-height:1.6">
-          Thanks for purchasing <strong style="color:#fff">${params.packTitle}</strong> by <strong style="color:#fff">${params.producerName}</strong>.
-          Your pack contains ${params.sampleCount} audio sample${params.sampleCount !== 1 ? "s" : ""} — ready to download below.
-        </p>
-        <div style="background:#111;border:1px solid #222;border-radius:10px;padding:16px 20px;margin:20px 0">
-          <p style="margin:0;color:#aaa;font-size:13px">Purchase total</p>
-          <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:#D4A843">$${dollar}</p>
-        </div>
-        <p style="margin:28px 0">
-          <a href="${params.downloadUrl}" style="background:#D4A843;color:#0A0A0A;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px">
-            Download Sample Pack →
-          </a>
-        </p>
-        <p style="color:#666;font-size:12px">
-          Keep this email — your download link is valid for up to 5 downloads.<br>
-          Need help? <a href="mailto:support@indiethis.com" style="color:#D4A843">support@indiethis.com</a>
-        </p>
-        <p style="margin-top:32px;color:#555;font-size:12px">
-          Powered by <strong style="color:#D4A843">IndieThis</strong> — The Home of Independent Music
-        </p>
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Sample Pack is ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Thanks for purchasing <strong style="color:#fff;">${params.packTitle}</strong> by
+        <strong style="color:#fff;">${params.producerName}</strong>.
+        Your pack contains ${params.sampleCount} audio sample${params.sampleCount !== 1 ? "s" : ""} &mdash; ready to download below.
+      </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#888;font-size:12px;margin:0 0 4px;">Purchase total</p>
+        <p style="color:#D4A843;font-size:20px;font-weight:700;margin:0;">$${dollar}</p>
       </div>
+      <a href="${params.downloadUrl}" style="background:#E85D4A;color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px;">
+        Download Sample Pack &rarr;
+      </a>
+      <p style="color:#666;font-size:12px;margin:16px 0 0;">
+        Keep this email &mdash; your download link is valid for up to 5 downloads.<br>
+        Need help? <a href="mailto:support@indiethis.com" style="color:#D4A843;">support@indiethis.com</a>
+      </p>
     `,
-    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
-    tags: ["sample-pack", "purchase"],
+    replyTo:  { email: "hello@indiethis.com", name: "IndieThis" },
+    context:  "DIGITAL_PURCHASE_RECEIPT",
+    userData: { artistSlug: params.producerSlug },
+    tags:     ["sample-pack", "purchase"],
   });
 }
 
@@ -1879,5 +1908,322 @@ export async function sendReEngagement45DayEmail(
     replyTo:     { email: process.env.BREVO_REPLY_TO ?? "hello@indiethis.com" },
     tags:        ["re-engagement", "45day", "churn-prevention"],
     htmlContent: reEngagementBase(body, "Manage Subscription →", `${APP_URL()}/dashboard/settings`),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AI tool completion emails
+// ---------------------------------------------------------------------------
+
+export async function sendCoverArtCompleteEmail(params: {
+  artistEmail: string;
+  artistName:  string;
+  artistSlug?: string;
+  trackTitle:  string;
+  artUrl:      string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Your cover art for "${params.trackTitle}" is ready`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Cover Art is Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your AI-generated cover art for
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> is ready to use.
+      </p>
+      <a href="${params.artUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Your Cover Art &rarr;
+      </a>
+    `,
+    context:  "COVER_ART_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "cover-art", "complete"],
+  });
+}
+
+export async function sendMasteringCompleteEmail(params: {
+  artistEmail:  string;
+  artistName:   string;
+  artistSlug?:  string;
+  trackTitle:   string;
+  downloadUrl:  string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Mastering complete — "${params.trackTitle}" is ready`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Mastering Complete!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your AI-mastered version of
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> is ready to download.
+      </p>
+      <a href="${params.downloadUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Download Mastered Track &rarr;
+      </a>
+    `,
+    context:  "MASTERING_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "mastering", "complete"],
+  });
+}
+
+export async function sendVocalRemovalCompleteEmail(params: {
+  artistEmail:  string;
+  artistName:   string;
+  artistSlug?:  string;
+  trackTitle:   string;
+  downloadUrl:  string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Stems ready — "${params.trackTitle}" vocal removal complete`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Stems are Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, the vocal and instrumental stems for
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> have been separated and are ready to download.
+      </p>
+      <a href="${params.downloadUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Download Stems &rarr;
+      </a>
+    `,
+    context:  "VOCAL_REMOVAL_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "vocal-removal", "complete"],
+  });
+}
+
+export async function sendLyricVideoCompleteEmail(params: {
+  artistEmail:  string;
+  artistName:   string;
+  artistSlug?:  string;
+  trackTitle:   string;
+  videoUrl:     string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Lyric video ready — "${params.trackTitle}"`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Lyric Video is Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your lyric video for
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> has been generated.
+      </p>
+      <a href="${params.videoUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Lyric Video &rarr;
+      </a>
+    `,
+    context:  "LYRIC_VIDEO_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "lyric-video", "complete"],
+  });
+}
+
+export async function sendPressKitCompleteEmail(params: {
+  artistEmail:  string;
+  artistName:   string;
+  artistSlug?:  string;
+  pressKitUrl:  string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: "Your IndieThis press kit is ready",
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Press Kit is Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your AI-generated press kit is complete and ready to share with
+        blogs, playlist curators, and industry contacts.
+      </p>
+      <a href="${params.pressKitUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Press Kit &rarr;
+      </a>
+    `,
+    context:  "PRESS_KIT_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "press-kit", "complete"],
+  });
+}
+
+export async function sendTrackShieldCompleteEmail(params: {
+  artistEmail:    string;
+  artistName:     string;
+  artistSlug?:    string;
+  trackTitle:     string;
+  issuesFound:    number;
+  reportUrl:      string;
+}): Promise<void> {
+  const issueText = params.issuesFound === 0
+    ? "No unauthorized uses were found — your music is clear."
+    : `${params.issuesFound} potential issue${params.issuesFound !== 1 ? "s" : ""} found. Review the full report for details.`;
+
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Track Shield scan complete — "${params.trackTitle}"`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Track Shield Scan Complete</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your Track Shield scan for
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> has finished.
+      </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:${params.issuesFound === 0 ? "#4ade80" : "#E85D4A"};font-size:14px;font-weight:700;margin:0;">
+          ${issueText}
+        </p>
+      </div>
+      <a href="${params.reportUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Full Report &rarr;
+      </a>
+    `,
+    context:  "TRACK_SHIELD_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "track-shield", "complete"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Beat purchase receipt (to buyer)
+// ---------------------------------------------------------------------------
+
+export async function sendBeatPurchaseReceiptEmail(params: {
+  buyerEmail:    string;
+  buyerName?:    string;
+  beatTitle:     string;
+  producerName:  string;
+  producerSlug?: string;
+  licenseType:   string;
+  amount:        number; // cents
+  downloadUrl:   string;
+}): Promise<void> {
+  const dollar = (params.amount / 100).toFixed(2);
+  await sendBrandedEmail({
+    to:      { email: params.buyerEmail, name: params.buyerName },
+    subject: `Your beat license: "${params.beatTitle}"`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Beat License Confirmed!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        You&rsquo;ve licensed <strong style="color:#fff;">&ldquo;${params.beatTitle}&rdquo;</strong>
+        by <strong style="color:#fff;">${params.producerName}</strong>.
+      </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#888;font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.5px;">License Type</p>
+        <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 8px;">${params.licenseType}</p>
+        <p style="color:#888;font-size:12px;margin:0 0 4px;">Amount paid</p>
+        <p style="color:#D4A843;font-size:20px;font-weight:700;margin:0;">$${dollar}</p>
+      </div>
+      <a href="${params.downloadUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Download Beat &rarr;
+      </a>
+      <p style="color:#666;font-size:12px;margin:16px 0 0;">
+        Keep this email as your license record. Need help? <a href="mailto:support@indiethis.com" style="color:#D4A843;">support@indiethis.com</a>
+      </p>
+    `,
+    context:  "BEAT_PURCHASE_RECEIPT",
+    userData: { artistSlug: params.producerSlug },
+    tags:     ["beat", "license", "purchase"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fan funding received (to artist)
+// ---------------------------------------------------------------------------
+
+export async function sendFanFundingReceivedEmail(params: {
+  artistEmail:   string;
+  artistName:    string;
+  artistSlug?:   string;
+  fanName:       string | null;
+  amount:        number; // cents
+  totalCredits?: number;
+}): Promise<void> {
+  const dollar    = (params.amount / 100).toFixed(2);
+  const fromWho   = params.fanName || "An anonymous fan";
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `${fromWho} just supported you with $${dollar}!`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Someone Supported You! &#x1F4B8;</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, <strong style="color:#fff;">${fromWho}</strong> just sent you a contribution.
+      </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#888;font-size:12px;margin:0 0 4px;">Amount received</p>
+        <p style="color:#D4A843;font-size:24px;font-weight:700;margin:0;">$${dollar}</p>
+        ${params.totalCredits !== undefined ? `
+        <p style="color:#888;font-size:12px;margin:8px 0 0;">
+          Your new platform credit balance: <strong style="color:#fff;">${params.totalCredits} credits</strong>
+        </p>` : ""}
+      </div>
+      <a href="${APP_URL()}/dashboard/earnings" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Your Balance &rarr;
+      </a>
+    `,
+    context:  "FAN_FUNDING_RECEIVED",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["fan-funding", "received"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Invoice sent (to artist/client)
+// ---------------------------------------------------------------------------
+
+export async function sendInvoiceEmail(params: {
+  recipientEmail: string;
+  recipientName:  string;
+  senderName:     string;
+  invoiceId:      string;
+  amount:         string;
+  dueDate:        string;
+  invoiceUrl:     string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.recipientEmail, name: params.recipientName },
+    subject: `Invoice from ${params.senderName} — ${params.amount} due ${params.dueDate}`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Invoice from ${params.senderName}</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.recipientName}, you have a new invoice from <strong style="color:#fff;">${params.senderName}</strong>.
+      </p>
+      <div style="background:#1A1A1A;border:1px solid #222;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#888;font-size:12px;margin:0 0 4px;">Invoice #${params.invoiceId.slice(-8).toUpperCase()}</p>
+        <p style="color:#D4A843;font-size:24px;font-weight:700;margin:0 0 8px;">${params.amount}</p>
+        <p style="color:#888;font-size:12px;margin:0;">Due: <strong style="color:#ccc;">${params.dueDate}</strong></p>
+      </div>
+      <a href="${params.invoiceUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        View Invoice &rarr;
+      </a>
+    `,
+    noPromotion: true,
+    tags:        ["invoice", "billing"],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Studio session follow-up
+// ---------------------------------------------------------------------------
+
+export async function sendSessionFollowUpEmail(params: {
+  artistEmail:   string;
+  artistName:    string;
+  studioName:    string;
+  sessionDate:   string;
+  followUpUrl:   string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `How was your session at ${params.studioName}?`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">How Was Your Session?</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, just checking in after your session at
+        <strong style="color:#fff;">${params.studioName}</strong> on ${params.sessionDate}.
+        Hope it was productive!
+      </p>
+      <a href="${params.followUpUrl}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Leave a Review &rarr;
+      </a>
+    `,
+    context: "SESSION_FOLLOWUP",
+    tags:    ["session", "follow-up"],
   });
 }
