@@ -84,6 +84,8 @@ model User {
   churnRiskScore           Int                    @default(0)
   artistBalance            Float                  @default(0)
   artistTotalEarnings      Float                  @default(0)
+  platformCredits          Int                    @default(0)
+  supporterCount           Int                    @default(0)
   winBackUsed              Boolean                @default(false)
   openToCollaborations     Boolean                @default(false)
   aiGenerations            AIGeneration[]
@@ -153,6 +155,7 @@ model User {
   youtubeSync              YouTubeSync?
   youtubeReferences        YoutubeReference[]
   moderationFlags          ModerationFlag[]
+  fanFundingReceived       FanFunding[]           @relation("FanFundingReceived")
 }
 
 model Studio {
@@ -2569,4 +2572,20 @@ model ModerationFlag {
   @@index([userId])
   @@index([status])
   @@index([contentType, contentId])
+}
+
+model FanFunding {
+  id              String   @id @default(cuid())
+  artistId        String
+  artist          User     @relation("FanFundingReceived", fields: [artistId], references: [id])
+  fanName         String?
+  fanEmail        String
+  amount          Int      // cents — what the fan paid
+  creditsAwarded  Int      // credits added to artist platformCredits (amount/100, 1:1)
+  stripePaymentId String?
+  message         String?
+  createdAt       DateTime @default(now())
+
+  @@index([artistId])
+  @@index([createdAt])
 }
