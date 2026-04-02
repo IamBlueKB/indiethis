@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Download, Receipt, TrendingUp, Heart, ChevronDown, ChevronUp,
   Radio, Music2, DollarSign, FileText, Zap, ExternalLink, Loader2,
-  ShoppingBag, ArrowDownToLine, AlertCircle,
+  ShoppingBag, ArrowDownToLine, AlertCircle, Users, Star,
 } from "lucide-react";
 import { useEarnings } from "@/hooks/queries";
 import EarningsProjector from "@/components/dashboard/EarningsProjector";
@@ -649,6 +649,122 @@ function MerchBalanceSection() {
   );
 }
 
+// ─── Fan Funding Section ──────────────────────────────────────────────────────
+
+type FanFundingRecord = {
+  id:             string;
+  fanName:        string | null;
+  fanEmail:       string;
+  amount:         number;
+  creditsAwarded: number;
+  message:        string | null;
+  createdAt:      string;
+};
+
+function FanFundingSection() {
+  const [platformCredits, setPlatformCredits] = useState(0);
+  const [supporterCount,  setSupporterCount]  = useState(0);
+  const [totalLifetime,   setTotalLifetime]   = useState(0);
+  const [recent,          setRecent]          = useState<FanFundingRecord[]>([]);
+  const [loading,         setLoading]         = useState(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard/fan-funding")
+      .then((r) => r.json())
+      .then((d) => {
+        setPlatformCredits(d.platformCredits ?? 0);
+        setSupporterCount(d.supporterCount   ?? 0);
+        setTotalLifetime(d.totalLifetime     ?? 0);
+        setRecent(d.recent                   ?? []);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (supporterCount === 0 && totalLifetime === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Heart size={14} style={{ color: "#D4A843" }} />
+        <p className="text-sm font-semibold text-foreground">Fan Funding</p>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border p-4" style={{ backgroundColor: "rgba(212,168,67,0.08)", borderColor: "rgba(212,168,67,0.3)" }}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Star size={11} style={{ color: "#D4A843" }} />
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Credits</p>
+          </div>
+          <p className="text-2xl font-bold" style={{ color: "#D4A843" }}>{platformCredits}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">IndieThis credits</p>
+        </div>
+
+        <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Users size={11} className="text-muted-foreground" />
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Supporters</p>
+          </div>
+          <p className="text-2xl font-bold text-foreground">{supporterCount}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Total fans</p>
+        </div>
+
+        <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <DollarSign size={11} className="text-muted-foreground" />
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Lifetime</p>
+          </div>
+          <p className="text-2xl font-bold text-foreground">${(totalLifetime / 100).toFixed(2)}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">All time</p>
+        </div>
+      </div>
+
+      {/* Credits info note */}
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs"
+        style={{ backgroundColor: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.2)", color: "#D4A843" }}>
+        <Star size={11} className="shrink-0 mt-0.5" />
+        <span>{platformCredits} credit{platformCredits !== 1 ? "s" : ""} — redeemable for AI tools, promotions, and platform features.</span>
+      </div>
+
+      {/* Recent supporters */}
+      {recent.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Supporters</p>
+          </div>
+          <div className="divide-y" style={{ divideColor: "var(--border)" }}>
+            {recent.slice(0, 10).map((r) => (
+              <div key={r.id} className="px-4 py-3 flex items-start justify-between gap-3"
+                style={{ backgroundColor: "var(--card)" }}>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {r.fanName ?? r.fanEmail}
+                    </p>
+                    {r.fanName && (
+                      <p className="text-xs text-muted-foreground truncate hidden sm:block">{r.fanEmail}</p>
+                    )}
+                  </div>
+                  {r.message && (
+                    <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#888" }}>&ldquo;{r.message}&rdquo;</p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {formatDate(r.createdAt)} · +{r.creditsAwarded} credit{r.creditsAwarded !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <p className="text-sm font-bold shrink-0" style={{ color: "#D4A843" }}>
+                  ${(r.amount / 100).toFixed(2)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EarningsPage() {
@@ -690,6 +806,9 @@ export default function EarningsPage() {
 
       {/* ── Merch Balance ── */}
       <MerchBalanceSection />
+
+      {/* ── Fan Funding ── */}
+      <FanFundingSection />
 
       {/* ── Earnings Projector ── */}
       <EarningsProjector />
