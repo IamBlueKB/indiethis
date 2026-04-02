@@ -49,7 +49,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
 
   // ── Hats ───────────────────────────────────────────────────────────────────
   { printfulProductId: 162, label: "Classic Dad Hat (Yupoong 6245CM)",         category: "Hats",                  description: "Unstructured, low-profile cotton twill cap." },
-  { printfulProductId: 86,  label: "Snapback Cap (Otto 11-080)",               category: "Hats",                  description: "Flat-brim snapback with 6-panel structured crown." },
+  { printfulProductId: 77,  label: "Snapback Cap (Otto 125-978)",              category: "Hats",                  description: "Flat-brim snapback with 6-panel structured crown." },
 
   // ── Posters & Art Prints ───────────────────────────────────────────────────
   { printfulProductId: 1,   label: "Poster (Matte, Multiple Sizes)",           category: "Posters & Art Prints",  description: "High-quality matte poster in 12×18, 18×24, 24×36." },

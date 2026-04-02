@@ -1687,7 +1687,7 @@ export default function ExploreClient() {
                             key={item.id}
                             href={`/${item.artist.artistSlug}/merch`}
                             className="group block rounded-xl overflow-hidden no-underline relative"
-                            style={{ backgroundColor: "#141414" }}
+                            style={{ backgroundColor: item.isFeatured ? "#2a2a2a" : "#141414" }}
                           >
                             {item.isFeatured && (
                               <div className="absolute top-2 left-2 z-10 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
