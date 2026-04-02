@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
     const artistDisplayName = artist.artistName || artist.name || "this artist";
     const slug = artist.artistSlug;
 
+    if (!stripe) {
+      return NextResponse.json({ error: "Payments not configured" }, { status: 503 });
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3456";
 
     const session = await stripe.checkout.sessions.create({
