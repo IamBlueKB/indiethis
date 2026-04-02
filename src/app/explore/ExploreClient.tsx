@@ -1789,7 +1789,7 @@ export default function ExploreClient() {
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-3" style={{ color: "#D4A843" }}>Rising DJs</p>
                 <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
                   {risingDjs.map(dj => {
-                    const name = dj.user.artistName ?? dj.user.name;
+                    const name = dj.user.artistName ?? dj.user.name ?? "";
                     const photo = dj.profilePhotoUrl ?? dj.user.photo;
                     return (
                       <Link
@@ -1803,10 +1803,10 @@ export default function ExploreClient() {
                         >
                           {photo
                             ? <img src={photo} alt={name} className="w-full h-full object-cover" />
-                            : <span style={{ color: "#D4A843" }}>{name[0]?.toUpperCase()}</span>
+                            : <span style={{ color: "#D4A843" }}>{name?.[0]?.toUpperCase() ?? "DJ"}</span>
                           }
                         </div>
-                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name}</p>
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name || "DJ"}</p>
                         {dj.city && <p className="text-[10px] truncate mt-0.5" style={{ color: "#666" }}>{dj.city}</p>}
                         <p className="text-[10px] mt-0.5" style={{ color: "#D4A843" }}>{dj.totalCrateItems} tracks</p>
                       </Link>
@@ -1872,7 +1872,7 @@ export default function ExploreClient() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {(activeFilter === "all" ? djs.slice(0, 10) : djs).map(dj => {
-                  const name = dj.user.artistName ?? dj.user.name;
+                  const name = dj.user.artistName ?? dj.user.name ?? "";
                   const photo = dj.profilePhotoUrl ?? dj.user.photo;
                   return (
                     <Link
@@ -1887,11 +1887,11 @@ export default function ExploreClient() {
                       >
                         {photo
                           ? <img src={photo} alt={name} className="w-full h-full object-cover" />
-                          : <span style={{ color: "#D4A843" }}>{name[0]?.toUpperCase()}</span>
+                          : <span style={{ color: "#D4A843" }}>{name?.[0]?.toUpperCase() ?? "DJ"}</span>
                         }
                       </div>
                       <div className="flex items-center justify-center gap-1 mb-0.5">
-                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name}</p>
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-[#D4A843] transition-colors">{name || "DJ"}</p>
                         {dj.isVerified && <span style={{ color: "#D4A843" }}>✓</span>}
                       </div>
                       {dj.city && <p className="text-[10px] truncate" style={{ color: "#666" }}>{dj.city}</p>}
