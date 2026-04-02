@@ -57,6 +57,12 @@ const NEXT_PAYMENT: Record<string, string | null> = {
   WAIVED:  null,
 };
 
+function fmtTime(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 // ─── Time Picker ─────────────────────────────────────────────────────────────
 function TimePicker({ value, onChange, label, required, highlight }: {
   value: string; onChange: (v: string) => void;
@@ -1609,22 +1615,28 @@ export default function StudioBookingsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">{s.contact?.email ?? "—"}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {s.depositPaid && s.paymentMethod && s.paymentMethod !== "stripe" && (() => {
-                        const verified = ["CONFIRMED", "COMPLETED"].includes(s.status);
-                        return verified ? (
+                      {s.paymentMethod && s.paymentMethod !== "stripe" && (() => {
+                        const confirmed = s.depositPaid || ["CONFIRMED", "COMPLETED"].includes(s.status);
+                        return confirmed ? (
                           <span className="text-[10px] text-emerald-400 font-semibold">
-                            ✓ Payment received via {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
+                            ✓ {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
                           </span>
                         ) : (
                           <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>
-                            ⏳ Check {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""}
+                            ⏳ {s.paymentMethod}{s.depositAmount ? ` — $${s.depositAmount}` : ""} (pending)
                           </span>
                         );
                       })()}
-                      {s.depositPaid && s.paymentMethod === "stripe" && (
-                        <span className="text-[10px] text-emerald-400 font-semibold">
-                          ✓ Deposit paid{s.depositAmount ? ` $${s.depositAmount}` : ""}
-                        </span>
+                      {s.paymentMethod === "stripe" && (
+                        s.depositPaid ? (
+                          <span className="text-[10px] text-emerald-400 font-semibold">
+                            ✓ Stripe{s.depositAmount ? ` — $${s.depositAmount}` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold" style={{ color: "#D4A843" }}>
+                            ⏳ Stripe{s.depositAmount ? ` — $${s.depositAmount}` : ""} (pending)
+                          </span>
+                        )
                       )}
                       {s.depositPaid && !s.paymentMethod && (
                         <span className="text-[10px] text-emerald-400 font-semibold">✓ Deposit</span>
@@ -1647,7 +1659,7 @@ export default function StudioBookingsPage() {
                         </p>
                         {s.intakeLink.sessionTime && (
                           <p className="text-xs text-muted-foreground">
-                            {s.intakeLink.sessionTime}{s.intakeLink.endTime ? ` – ${s.intakeLink.endTime}` : ""}
+                            {fmtTime(s.intakeLink.sessionTime)}{s.intakeLink.endTime ? ` – ${fmtTime(s.intakeLink.endTime)}` : ""}
                           </p>
                         )}
                       </>
@@ -1845,7 +1857,7 @@ export default function StudioBookingsPage() {
                     <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--background)", borderColor: "var(--border)" }}>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</p>
                       <p className="text-sm font-semibold text-foreground">
-                        {selectedIntake.intakeLink.sessionTime}{selectedIntake.intakeLink.endTime ? ` – ${selectedIntake.intakeLink.endTime}` : ""}
+                        {fmtTime(selectedIntake.intakeLink.sessionTime)}{selectedIntake.intakeLink.endTime ? ` – ${fmtTime(selectedIntake.intakeLink.endTime)}` : ""}
                       </p>
                     </div>
                   )}
