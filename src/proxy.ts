@@ -34,6 +34,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/beats")) return true;
   // Track overlay endpoint — public (used on explore / artist pages)
   if (pathname.match(/^\/api\/tracks\/[^/]+\/overlay$/)) return true;
+  // Audio features endpoint — public (used by LazyAudioRadar on explore / artist pages)
+  if (pathname.match(/^\/api\/audio-features\/[^/]+$/)) return true;
   // Digital product checkout — public (buyer provides email)
   if (pathname === "/api/digital-products/checkout") return true;
   // Digital download API — public (uses token auth)
@@ -64,8 +66,6 @@ function getDashboardForRole(role: Role): string {
   switch (role) {
     case "STUDIO_ADMIN":
       return "/studio";
-    case "PLATFORM_ADMIN":
-      return "/admin";
     default:
       return "/dashboard";
   }
@@ -106,9 +106,9 @@ export default auth((req) => {
     }
   }
 
-  // Artist dashboard routes — ARTIST only
+  // Artist dashboard routes — ARTIST and PLATFORM_ADMIN
   if (nextUrl.pathname.startsWith("/dashboard")) {
-    if (role !== "ARTIST") {
+    if (role !== "ARTIST" && role !== "PLATFORM_ADMIN") {
       return NextResponse.redirect(
         new URL(getDashboardForRole(role ?? "ARTIST"), nextUrl)
       );
