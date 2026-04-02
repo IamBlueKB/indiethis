@@ -219,6 +219,15 @@ function Panel({
   onClose:       () => void;
 }) {
   const [showLicense, setShowLicense] = useState(false);
+  // Fix 5: parallax — artwork ref driven by scroll position
+  const artworkRef = useRef<HTMLDivElement>(null);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (artworkRef.current) {
+      const offset = Math.min(e.currentTarget.scrollTop * 0.5, 100);
+      artworkRef.current.style.transform = `translateY(-${offset}px)`;
+    }
+  }
 
   // Resolved values — prefer detail (full API data) over TrackCardData
   const artistSlug      = detail?.artist.slug ?? data.artist.artistSlug;
@@ -297,9 +306,12 @@ function Panel({
   return (
     <div className="flex flex-col flex-1 min-h-0" style={{ backgroundColor: "#111111", overflow: "hidden" }}>
 
-      {/* ── Cover art / canvas + gradient + title overlay ── */}
-      <div className="relative flex-shrink-0" style={{ maxHeight: "min(280px, 40vh)", overflow: "hidden" }}>
-
+      {/* ── Fix 5: Artwork — parallax target, NOT inside scroll container ── */}
+      <div
+        ref={artworkRef}
+        className="relative flex-shrink-0"
+        style={{ maxHeight: "min(280px, 40vh)", overflow: "hidden", willChange: "transform" }}
+      >
         {/* Media */}
         {canvasVideoUrl ? (
           <video
@@ -323,7 +335,7 @@ function Panel({
           </div>
         )}
 
-        {/* Gradient bleed into panel background — stronger, reaches further down */}
+        {/* Fix 2: Gradient bleed — stronger, reaches further down */}
         <div
           className="absolute inset-x-0 bottom-0"
           style={{ height: "80%", background: gradientStyle, pointerEvents: "none" }}
@@ -366,94 +378,97 @@ function Panel({
         </div>
       </div>
 
-      {/* ── Fix 2: color bleed continuation behind transport/pills ── */}
-      {bleedGradient && (
-        <div
-          className="flex-shrink-0 pointer-events-none"
-          style={{ height: 150, marginBottom: -150, background: bleedGradient, zIndex: 0 }}
-        />
-      )}
+      {/* ── Fix 5: Scrollable content — everything below artwork ── */}
+      {/* Fix 2: bleedGradient as background so it's always visible at the top of the scroll area */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        style={{
+          scrollbarWidth: "none",
+          backgroundColor: "#111111",
+          backgroundImage: bleedGradient ?? undefined,
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "100% 150px",
+        }}
+        onScroll={handleScroll}
+      >
+        {/* ── Transport ── */}
+        <div className="pt-3" style={{ position: "relative" }}>
+          <Transport data={data} />
+        </div>
 
-      {/* ── Transport ── */}
-      <div className="flex-shrink-0 pt-3" style={{ position: "relative", zIndex: 1 }}>
-        <Transport data={data} />
+        {/* ── Pills ── */}
+        {pills.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5 px-4 pt-3 pb-1">
+            {pills.map(p => (
+              <span key={p} style={{ backgroundColor: "#222", color: "#999", fontSize: 11,
+                fontFamily: "DM Sans, sans-serif", borderRadius: 999, padding: "6px 12px" }}>
+                {p}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* ── Fix 3: Sound DNA radar — above action buttons ── */}
+        {detail?.audioFeatures && (
+          <div className="flex flex-col items-center px-4 pt-4 pb-2">
+            <p style={{ color: "#D4A843", fontSize: 13, fontFamily: "DM Sans, sans-serif",
+              fontWeight: 600, marginBottom: 10 }}>
+              Sound DNA
+            </p>
+            <LazyAudioRadar trackId={data.id} size="sm" />
+          </div>
+        )}
+
+        {/* ── Action buttons ── */}
+        <div className="flex items-center justify-center gap-2 flex-wrap px-4 pt-2 pb-2">
+          {isBeat && (
+            <button
+              onClick={() => setShowLicense(true)}
+              className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold transition-colors hover:opacity-90"
+              style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
+            >
+              License{detail?.price ? ` — $${detail.price.toFixed(2)}` : ""}
+            </button>
+          )}
+          {dp && !isBeat && (
+            <Link
+              href={`/buy/${dp.id}`}
+              className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold"
+              style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
+              onClick={onClose}
+            >
+              Buy — ${dp.price.toFixed(2)}
+            </Link>
+          )}
+          <AddToCrateButton trackId={data.id} />
+          {artistSlug && (
+            <Link
+              href={`/${artistSlug}`}
+              className="text-[13px] rounded-lg px-4 h-10 flex items-center hover:opacity-80"
+              style={{ backgroundColor: "#222", color: "#aaa", fontFamily: "DM Sans, sans-serif" }}
+              onClick={onClose}
+            >
+              View Artist
+            </Link>
+          )}
+        </div>
+
+        {/* ── Credits + DJ badge — scrollable content below action buttons ── */}
+        {scrollSections.length > 0 && (
+          <div className="px-4 pb-6" style={{ borderTop: "1px solid #1a1a1a" }}>
+            {scrollSections.map((section, i) => (
+              <div key={i}>
+                {i > 0 && <Divider />}
+                {i === 0 && <div style={{ height: 12 }} />}
+                {section}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Bottom breathing room */}
+        <div style={{ height: 24 }} />
       </div>
-
-      {/* ── Pills — always visible ── */}
-      {pills.length > 0 && (
-        <div className="flex-shrink-0 flex flex-wrap justify-center gap-1.5 px-4 pt-3 pb-1"
-          style={{ position: "relative", zIndex: 1 }}>
-          {pills.map(p => (
-            <span key={p} style={{ backgroundColor: "#222", color: "#999", fontSize: 11,
-              fontFamily: "DM Sans, sans-serif", borderRadius: 999, padding: "6px 12px" }}>
-              {p}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* ── Fix 3: Sound DNA radar — moved above action buttons ── */}
-      {detail?.audioFeatures && (
-        <div className="flex-shrink-0 flex flex-col items-center px-4 pt-4 pb-2"
-          style={{ position: "relative", zIndex: 1 }}>
-          <p style={{ color: "#D4A843", fontSize: 13, fontFamily: "DM Sans, sans-serif",
-            fontWeight: 600, marginBottom: 10 }}>
-            Sound DNA
-          </p>
-          <LazyAudioRadar trackId={data.id} size="sm" />
-        </div>
-      )}
-
-      {/* ── Action buttons — always visible ── */}
-      <div className="flex-shrink-0 flex items-center justify-center gap-2 flex-wrap px-4 pt-2 pb-2"
-        style={{ position: "relative", zIndex: 1 }}>
-        {isBeat && (
-          <button
-            onClick={() => setShowLicense(true)}
-            className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold transition-colors hover:opacity-90"
-            style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
-          >
-            License{detail?.price ? ` — $${detail.price.toFixed(2)}` : ""}
-          </button>
-        )}
-        {dp && !isBeat && (
-          <Link
-            href={`/buy/${dp.id}`}
-            className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold"
-            style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
-            onClick={onClose}
-          >
-            Buy — ${dp.price.toFixed(2)}
-          </Link>
-        )}
-        <AddToCrateButton trackId={data.id} />
-        {artistSlug && (
-          <Link
-            href={`/${artistSlug}`}
-            className="text-[13px] rounded-lg px-4 h-10 flex items-center hover:opacity-80"
-            style={{ backgroundColor: "#222", color: "#aaa", fontFamily: "DM Sans, sans-serif" }}
-            onClick={onClose}
-          >
-            View Artist
-          </Link>
-        )}
-      </div>
-
-      {/* ── Scrollable: credits, radar, DJ badge ── */}
-      {scrollSections.length > 0 && (
-        <div
-          className="flex-1 min-h-0 overflow-y-auto px-4 pb-6"
-          style={{ scrollbarWidth: "none", borderTop: "1px solid #1a1a1a" }}
-        >
-          {scrollSections.map((section, i) => (
-            <div key={i}>
-              {i > 0 && <Divider />}
-              {i === 0 && <div style={{ height: 12 }} />}
-              {section}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── Beat license modal — portaled above overlay ── */}
       {showLicense && typeof window !== "undefined" && createPortal(
