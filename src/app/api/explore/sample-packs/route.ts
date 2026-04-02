@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db as prisma } from "@/lib/db";
 
 // GET /api/explore/sample-packs
 // Returns published sample packs for the explore page
