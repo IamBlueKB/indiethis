@@ -829,7 +829,9 @@ function DigitalProductOverlay({ product, onBuy, onClose }: { product: DigitalPr
   };
   const badge = TYPE_COLORS[product.type] ?? TYPE_COLORS.SINGLE;
 
-  if (typeof document === "undefined") return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
   return createPortal(
     <div
       className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4"

@@ -503,7 +503,9 @@ export function TrackDetailOverlay() {
     return () => { document.body.style.overflow = ""; };
   }, [!!overlayData]);
 
-  if (typeof window === "undefined") return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
 
   const content = overlayData ? (
     <Panel
