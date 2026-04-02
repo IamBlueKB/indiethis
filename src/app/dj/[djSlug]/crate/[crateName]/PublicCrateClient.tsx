@@ -93,6 +93,7 @@ export default function PublicCrateClient({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <>
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
       <PublicNav />
 
@@ -183,7 +184,7 @@ export default function PublicCrateClient({
                     coverArtUrl={track.coverArtUrl}
                     canvasVideoUrl={track.canvasVideoUrl}
                     isPlaying={isActive && isPlaying}
-                    onPlay={(e) => { e.stopPropagation(); play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }); }}
+                    onPlay={(e) => { e.stopPropagation(); const s = useAudioStore.getState(); if (s.currentTrack?.id === track.id && s.isPlaying) { s.pause(); } else { play({ id: track.id, title: track.title, artist: artistName, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined }); } }}
                     buttonSize="sm"
                     className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
                   />
@@ -235,5 +236,6 @@ export default function PublicCrateClient({
     </div>
 
     <OverlayComponent />
+    </>
   );
 }
