@@ -115,25 +115,41 @@ export async function POST(req: NextRequest) {
 
       // --- Intake deposit payment ---
       if (checkSession.metadata?.type === "intake_deposit") {
-        const { submissionId, studioId } = checkSession.metadata;
+        const { submissionId, studioId, invoiceId } = checkSession.metadata;
         if (submissionId) {
           const paidAmount = checkSession.amount_total ? checkSession.amount_total / 100 : 0;
-          await db.intakeSubmission.update({
+          const sub = await db.intakeSubmission.update({
             where: { id: submissionId },
             data: { depositPaid: true, depositAmount: paidAmount, paymentMethod: "stripe" },
-          }).catch(() => {});
-          if (studioId) {
-            const sub = await db.intakeSubmission.findUnique({
-              where: { id: submissionId },
-              select: { artistName: true },
-            });
+            include: { intakeLink: { select: { sessionDate: true } } },
+          }).catch(() => null);
+
+          // Update the draft invoice — add deposit note
+          if (invoiceId && sub) {
+            await db.invoice.update({
+              where: { id: invoiceId },
+              data: {
+                notes: [
+                  `Deposit of $${paidAmount.toFixed(2)} received via Stripe.`,
+                  sub.intakeLink?.sessionDate
+                    ? `Session date: ${new Date(sub.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`
+                    : null,
+                ].filter(Boolean).join(" "),
+              },
+            }).catch(() => {});
+          }
+
+          if (studioId && sub) {
             const owner = await db.studio.findUnique({ where: { id: studioId }, select: { ownerId: true } });
+            const sessionLine = sub.intakeLink?.sessionDate
+              ? ` for ${new Date(sub.intakeLink.sessionDate).toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
+              : "";
             if (owner?.ownerId) {
               await createNotification({
                 userId: owner.ownerId,
                 type: "PAYMENT_RECEIVED",
                 title: "Deposit received",
-                message: `${sub?.artistName ?? "Artist"} paid a $${paidAmount.toFixed(2)} session deposit via card.`,
+                message: `${sub.artistName ?? "Artist"} paid a $${paidAmount.toFixed(2)} deposit${sessionLine}.`,
                 link: "/studio/inbox",
               });
             }

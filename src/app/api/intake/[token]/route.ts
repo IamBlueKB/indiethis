@@ -21,7 +21,7 @@ export async function GET(
         select: {
           name: true, slug: true, logo: true,
           instagram: true, tiktok: true, youtube: true,
-          cashAppHandle: true, zelleHandle: true, paypalHandle: true, venmoHandle: true, stripePaymentsEnabled: true,
+          zelleHandle: true, stripePaymentsEnabled: true,
         },
       },
     },
@@ -54,10 +54,7 @@ export async function GET(
       instagram: link.studio.instagram,
       tiktok: link.studio.tiktok,
       youtube: link.studio.youtube,
-      cashAppHandle: link.studio.cashAppHandle,
       zelleHandle: link.studio.zelleHandle,
-      paypalHandle: link.studio.paypalHandle,
-      venmoHandle: link.studio.venmoHandle,
       stripePaymentsEnabled: link.studio.stripePaymentsEnabled,
     },
   });
@@ -280,10 +277,10 @@ export async function POST(
   }
 
   // Auto-create a draft invoice if pricing was set on the intake link and we have a contact
+  let createdInvoiceId: string | null = null;
   if (link.hourlyRate && link.sessionHours && contactId) {
     try {
       const totalCost = link.hourlyRate * link.sessionHours;
-      const deposit   = (depositPaid && depositAmount) ? Number(depositAmount) : 0;
 
       const lastInvoice = await db.invoice.findFirst({
         where:   { studioId: link.studioId },
@@ -302,14 +299,13 @@ export async function POST(
       ];
 
       const notesArr: string[] = [];
-      if (deposit > 0) notesArr.push(`Deposit of $${deposit.toFixed(2)} received via ${paymentMethod ?? "cash"}.`);
       if (link.sessionDate) notesArr.push(`Session date: ${new Date(link.sessionDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`);
 
       const dueDate = link.sessionDate
         ? new Date(link.sessionDate)
         : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-      await db.invoice.create({
+      const invoice = await db.invoice.create({
         data: {
           studioId:      link.studioId,
           contactId,
@@ -324,13 +320,15 @@ export async function POST(
           notes:         notesArr.join(" ") || null,
         },
       });
+      createdInvoiceId = invoice.id;
     } catch {
       // Don't fail the submission if invoice creation fails
     }
   }
 
   // If Stripe deposit selected, create checkout session and return URL
-  if (paymentMethod === "stripe" && depositAmount && Number(depositAmount) > 0 && stripe && link.studio.stripePaymentsEnabled) {
+  if (paymentMethod === "stripe" && depositAmount && Number(depositAmount) > 0) {
+    if (!stripe) return NextResponse.json({ error: "Stripe is not configured." }, { status: 500 });
     try {
       const appUrl =
         process.env.NEXT_PUBLIC_APP_URL ??
@@ -355,7 +353,12 @@ export async function POST(
         ],
         success_url: `${appUrl}/${studioSlug}/intake/${token}?depositPaid=stripe`,
         cancel_url:  `${appUrl}/${studioSlug}/intake/${token}`,
-        metadata: { type: "intake_deposit", submissionId: submission.id, studioId: link.studioId },
+        metadata: {
+          type: "intake_deposit",
+          submissionId: submission.id,
+          studioId: link.studioId,
+          ...(createdInvoiceId ? { invoiceId: createdInvoiceId } : {}),
+        },
       });
       return NextResponse.json({ submission, checkoutUrl: checkoutSession.url }, { status: 201 });
     } catch {

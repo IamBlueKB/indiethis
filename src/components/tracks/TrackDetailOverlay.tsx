@@ -5,12 +5,12 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import { useExpandedCard, type TrackCardData } from "@/store/expandedCard";
 import { useAudioStore } from "@/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import AddToCrateButton from "@/components/dj/AddToCrateButton";
 import LazyAudioRadar from "@/components/audio/LazyAudioRadar";
+import BeatLicenseModal from "@/components/beats/BeatLicenseModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,8 @@ type OverlayDetail = {
   songwriter:     string | null;
   featuredArtists:string | null;
   artist: { name: string; slug: string | null };
+  price:          number | null;
+  beatLeaseSettings: { streamLeaseEnabled: boolean } | null;
   audioFeatures: {
     energy: number; danceability: number; valence: number;
     acousticness: number; instrumentalness: number;
@@ -190,8 +192,7 @@ function Panel({
   dominantColor: [number, number, number] | null;
   onClose:       () => void;
 }) {
-  const { data: session } = useSession();
-  const isDJ = (session?.user as { djMode?: boolean })?.djMode === true;
+  const [showLicense, setShowLicense] = useState(false);
 
   // Resolved values — prefer detail (full API data) over TrackCardData
   const artistSlug      = detail?.artist.slug ?? data.artist.artistSlug;
@@ -205,6 +206,7 @@ function Panel({
   const djPickCount     = detail?.djPickCount     ?? 0;
   const dp              = detail?.digitalProduct  ?? null;
   const hasCredits      = !!(producer || songwriter || featuredArtists);
+  const isBeat          = !!(detail?.beatLeaseSettings || detail?.price);
 
   const pills = [
     bpm        ? `${bpm} BPM`  : null,
@@ -218,24 +220,11 @@ function Panel({
     ? `linear-gradient(to bottom, transparent 0%, rgba(${dominantColor[0]},${dominantColor[1]},${dominantColor[2]},0.50) 60%, #111111 100%)`
     : "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 60%, #111111 100%)";
 
-  // Scrollable content sections (with dividers between them)
-  const sections: React.ReactNode[] = [];
-
-  if (pills.length > 0) {
-    sections.push(
-      <div key="pills" className="flex flex-wrap justify-center gap-1.5">
-        {pills.map(p => (
-          <span key={p} style={{ backgroundColor: "#222", color: "#999", fontSize: 11,
-            fontFamily: "DM Sans, sans-serif", borderRadius: 999, padding: "6px 12px" }}>
-            {p}
-          </span>
-        ))}
-      </div>
-    );
-  }
+  // Scrollable-only sections: credits, radar, DJ badge
+  const scrollSections: React.ReactNode[] = [];
 
   if (hasCredits) {
-    sections.push(
+    scrollSections.push(
       <div key="credits" className="space-y-1.5">
         <p style={{ color: "#D4A843", fontSize: 13, fontFamily: "DM Sans, sans-serif", fontWeight: 600 }}>
           Credits
@@ -263,7 +252,7 @@ function Panel({
   }
 
   if (detail?.audioFeatures) {
-    sections.push(
+    scrollSections.push(
       <div key="radar" className="flex justify-center">
         <LazyAudioRadar trackId={data.id} size="sm" />
       </div>
@@ -271,7 +260,7 @@ function Panel({
   }
 
   if (djPickCount >= 3) {
-    sections.push(
+    scrollSections.push(
       <p key="badge" className="text-center"
         style={{ color: "#D4A843", fontSize: 12, fontFamily: "DM Sans, sans-serif" }}>
         Picked by {djPickCount} DJs
@@ -279,44 +268,13 @@ function Panel({
     );
   }
 
-  // Action buttons
-  const viewArtistOnly = !dp && !isDJ;
-  sections.push(
-    <div key="actions"
-      className={`flex items-center gap-2 flex-wrap ${viewArtistOnly ? "" : "justify-center"}`}
-      style={{ paddingBottom: 8 }}
-    >
-      {dp && (
-        <Link
-          href={`/buy/${dp.id}`}
-          className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold"
-          style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
-          onClick={onClose}
-        >
-          Buy — ${dp.price.toFixed(2)}
-        </Link>
-      )}
-      {isDJ && <AddToCrateButton trackId={data.id} />}
-      {artistSlug && (
-        <Link
-          href={`/${artistSlug}`}
-          className={`text-[13px] rounded-lg px-4 h-10 flex items-center hover:opacity-80 ${viewArtistOnly ? "w-full justify-center" : ""}`}
-          style={{ backgroundColor: "#222", color: "#aaa", fontFamily: "DM Sans, sans-serif" }}
-          onClick={onClose}
-        >
-          View Artist
-        </Link>
-      )}
-    </div>
-  );
-
   const coverSrc = data.canvasVideoUrl || data.coverArtUrl;
 
   return (
-    <div className="flex flex-col h-full" style={{ backgroundColor: "#111111", overflow: "hidden" }}>
+    <div className="flex flex-col flex-1 min-h-0" style={{ backgroundColor: "#111111", overflow: "hidden" }}>
 
       {/* ── Cover art / canvas + gradient + title overlay ── */}
-      <div className="relative flex-shrink-0" style={{ maxHeight: 280, overflow: "hidden" }}>
+      <div className="relative flex-shrink-0" style={{ maxHeight: "min(280px, 40vh)", overflow: "hidden" }}>
 
         {/* Media */}
         {data.canvasVideoUrl ? (
@@ -324,7 +282,7 @@ function Panel({
             src={data.canvasVideoUrl}
             autoPlay loop muted playsInline
             className="w-full object-cover"
-            style={{ maxHeight: 280, display: "block" }}
+            style={{ maxHeight: "min(280px, 40vh)", display: "block" }}
           />
         ) : data.coverArtUrl ? (
           <img
@@ -332,7 +290,7 @@ function Panel({
             alt={data.title}
             crossOrigin="anonymous"
             className="w-full object-cover"
-            style={{ maxHeight: 280, display: "block" }}
+            style={{ maxHeight: "min(280px, 40vh)", display: "block" }}
           />
         ) : (
           <div className="w-full flex items-center justify-center"
@@ -389,19 +347,89 @@ function Panel({
         <Transport data={data} />
       </div>
 
-      {/* ── Scrollable content ── */}
-      <div
-        className="flex-1 overflow-y-auto px-4 pb-6"
-        style={{ scrollbarWidth: "none" }}
-      >
-        <style>{`.overlay-scroll::-webkit-scrollbar { display: none; }`}</style>
-        {sections.map((section, i) => (
-          <div key={i}>
-            {i > 0 && <Divider />}
-            {section}
-          </div>
-        ))}
+      {/* ── Pills — always visible ── */}
+      {pills.length > 0 && (
+        <div className="flex-shrink-0 flex flex-wrap justify-center gap-1.5 px-4 pt-3 pb-1">
+          {pills.map(p => (
+            <span key={p} style={{ backgroundColor: "#222", color: "#999", fontSize: 11,
+              fontFamily: "DM Sans, sans-serif", borderRadius: 999, padding: "6px 12px" }}>
+              {p}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ── Action buttons — always visible ── */}
+      <div className="flex-shrink-0 flex items-center justify-center gap-2 flex-wrap px-4 pt-2 pb-2">
+        {isBeat && (
+          <button
+            onClick={() => setShowLicense(true)}
+            className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold transition-colors hover:opacity-90"
+            style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
+          >
+            License{detail?.price ? ` — $${detail.price.toFixed(2)}` : ""}
+          </button>
+        )}
+        {dp && !isBeat && (
+          <Link
+            href={`/buy/${dp.id}`}
+            className="flex items-center justify-center px-5 h-10 rounded-lg text-sm font-semibold"
+            style={{ backgroundColor: "#E85D4A", color: "#fff", fontFamily: "DM Sans, sans-serif" }}
+            onClick={onClose}
+          >
+            Buy — ${dp.price.toFixed(2)}
+          </Link>
+        )}
+        <AddToCrateButton trackId={data.id} />
+        {artistSlug && (
+          <Link
+            href={`/${artistSlug}`}
+            className="text-[13px] rounded-lg px-4 h-10 flex items-center hover:opacity-80"
+            style={{ backgroundColor: "#222", color: "#aaa", fontFamily: "DM Sans, sans-serif" }}
+            onClick={onClose}
+          >
+            View Artist
+          </Link>
+        )}
       </div>
+
+      {/* ── Scrollable: credits, radar, DJ badge ── */}
+      {scrollSections.length > 0 && (
+        <div
+          className="flex-1 min-h-0 overflow-y-auto px-4 pb-6"
+          style={{ scrollbarWidth: "none", borderTop: "1px solid #1a1a1a" }}
+        >
+          {scrollSections.map((section, i) => (
+            <div key={i}>
+              {i > 0 && <Divider />}
+              {i === 0 && <div style={{ height: 12 }} />}
+              {section}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Beat license modal — portaled above overlay ── */}
+      {showLicense && typeof window !== "undefined" && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 1100 }}>
+          <BeatLicenseModal
+            track={{
+              id:                 data.id,
+              title:              data.title,
+              price:              detail?.price ?? null,
+              coverArtUrl:        data.coverArtUrl ?? null,
+              streamLeaseEnabled: detail?.beatLeaseSettings?.streamLeaseEnabled ?? false,
+              artist: {
+                name:       data.artist.name,
+                artistName: null,
+                artistSlug: artistSlug ?? null,
+              },
+            }}
+            onClose={() => setShowLicense(false)}
+          />
+        </div>,
+        document.body
+      )}
 
     </div>
   );
@@ -418,7 +446,7 @@ export function TrackDetailOverlay() {
 
   // Fetch overlay data when a track opens
   useEffect(() => {
-    if (!overlayData) { setDetail(null); setDominantColor(null); return; }
+    if (!overlayData) { setDetail(null); setDominantColor(null); loadedIdRef.current = null; return; }
     if (loadedIdRef.current === overlayData.id) return;
     loadedIdRef.current = overlayData.id;
     setDetail(null);
@@ -507,6 +535,7 @@ export function TrackDetailOverlay() {
             <motion.div
               key="sheet"
               className="fixed inset-0 z-[999]"
+              style={{ display: "flex", flexDirection: "column" }}
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -528,10 +557,13 @@ export function TrackDetailOverlay() {
                 className="pointer-events-auto w-full"
                 style={{
                   maxWidth:     480,
+                  height:       "85vh",
                   maxHeight:    "85vh",
                   borderRadius: 16,
                   border:       "1px solid #1A1A1A",
                   overflow:     "hidden",
+                  display:      "flex",
+                  flexDirection: "column",
                 }}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}

@@ -15,10 +15,7 @@ type StudioData = {
   instagram: string | null;
   tiktok: string | null;
   youtube: string | null;
-  cashAppHandle: string | null;
   zelleHandle: string | null;
-  paypalHandle: string | null;
-  venmoHandle: string | null;
   stripePaymentsEnabled: boolean;
 };
 
@@ -165,9 +162,14 @@ export default function IntakeFormPage() {
   const [aiVideoRequested, setAiVideoRequested] = useState(false);
 
   // ── Payment / deposit ────────────────────────────────────────────────────────
-  const [depositPaid, setDepositPaid]       = useState(false);
-  const [paymentMethod, setPaymentMethod]   = useState<string | null>(null);
-  const [depositAmount, setDepositAmount]   = useState("");
+  const [selectedPaymentBtn, setSelectedPaymentBtn] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod]           = useState<string | null>(null);
+  const [depositAmount, setDepositAmount]           = useState("");
+  const [customDepositMode, setCustomDepositMode]   = useState(false);
+  // Deposit confirmation polling (after Stripe redirect)
+  const [depositConfirmed, setDepositConfirmed]     = useState(false);
+  const [depositPolling, setDepositPolling]         = useState(false);
+  const [depositTimedOut, setDepositTimedOut]       = useState(false);
 
   // ── Prevent Android keyboard-dismiss scroll ──────────────────────────────────
   useEffect(() => {
@@ -248,9 +250,42 @@ export default function IntakeFormPage() {
     e.target.value = "";
   }
 
+  // ── Deposit confirmation polling ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!stripeDepositPaid) return;
+    const submissionId = sessionStorage.getItem(`intake_sub_${token}`);
+    if (!submissionId) { setDepositConfirmed(true); return; }
+    setDepositPolling(true);
+    let tries = 0;
+    const interval = setInterval(async () => {
+      tries++;
+      try {
+        const res = await fetch(`/api/intake/${token}/deposit-status?submissionId=${submissionId}`);
+        const d = await res.json();
+        if (d.depositPaid) {
+          clearInterval(interval);
+          setDepositConfirmed(true);
+          setDepositPolling(false);
+          return;
+        }
+      } catch { /* ignore */ }
+      if (tries >= 15) {
+        clearInterval(interval);
+        setDepositPolling(false);
+        setDepositTimedOut(true);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stripeDepositPaid]);
+
   // ── Submit ───────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!firstName.trim() || !artistName.trim()) return;
+    if (paymentMethod === "stripe" && (!depositAmount || parseFloat(depositAmount) <= 0)) {
+      setSubmitError("Please enter a deposit amount before paying.");
+      return;
+    }
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
     setSubmitting(true);
     setSubmitError(null);
@@ -276,7 +311,7 @@ export default function IntakeFormPage() {
           fileUrls: uploadedFiles.map((f) => f.url),
           photoUrl: photoUrl || undefined,
           paymentMethod: paymentMethod || undefined,
-          depositPaid,
+          depositPaid: false,
           depositAmount: depositAmount ? parseFloat(depositAmount) : undefined,
           aiVideoRequested,
           bpmDetected:  detectedBpm  ?? undefined,
@@ -286,6 +321,7 @@ export default function IntakeFormPage() {
       if (res.ok) {
         const d = await res.json().catch(() => ({}));
         if (d.checkoutUrl) {
+          if (d.submission?.id) sessionStorage.setItem(`intake_sub_${token}`, d.submission.id);
           window.location.href = d.checkoutUrl;
         } else {
           setSubmitted(true);
@@ -313,15 +349,21 @@ export default function IntakeFormPage() {
   if (submitted || link.usedAt) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--background)" }}>
       <div className="text-center space-y-4 max-w-sm px-6">
-        <CheckCircle2 size={48} className="mx-auto text-emerald-400" />
-        <h1 className="text-xl font-bold text-foreground">All done!</h1>
+        {depositPolling
+          ? <Loader2 size={48} className="mx-auto text-accent animate-spin" />
+          : <CheckCircle2 size={48} className="mx-auto text-emerald-400" />
+        }
+        <h1 className="text-xl font-bold text-foreground">
+          {depositPolling ? "Processing your deposit…" : "All done!"}
+        </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Your info has been sent to <span className="text-foreground font-semibold">{link.studio.name}</span>. They&apos;ll be in touch soon.
         </p>
-        {stripeDepositPaid && (
-          <p className="text-sm text-emerald-400 font-medium">
-            ✓ Deposit payment confirmed
-          </p>
+        {stripeDepositPaid && depositConfirmed && (
+          <p className="text-sm text-emerald-400 font-medium">✓ Deposit payment confirmed</p>
+        )}
+        {stripeDepositPaid && depositTimedOut && !depositConfirmed && (
+          <p className="text-sm text-muted-foreground">Your payment is processing — the studio will confirm receipt shortly.</p>
         )}
       </div>
     </div>
@@ -329,23 +371,49 @@ export default function IntakeFormPage() {
 
   const { studio } = link;
 
-  const paymentHandles = [
-    studio.stripePaymentsEnabled && { label: "Card", handle: "Secure card payment", method: "stripe", color: "#D4A843", logo: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#D4A843"/><text x="11" y="16" textAnchor="middle" fill="#0A0A0A" fontSize="12" fontWeight="bold" fontFamily="Arial">$</text></svg>
-    )},
-    studio.cashAppHandle && { label: "Cash App", handle: studio.cashAppHandle, method: "cashapp", color: "#00D54B", logo: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#00D54B"/><text x="11" y="16" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="Arial">$</text></svg>
-    )},
-    studio.zelleHandle   && { label: "Zelle",    handle: studio.zelleHandle,   method: "zelle",   color: "#6D1ED4", logo: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#6D1ED4"/><text x="11" y="16" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold" fontFamily="Arial">Z</text></svg>
-    )},
-    studio.paypalHandle  && { label: "PayPal",   handle: studio.paypalHandle,  method: "paypal",  color: "#003087", logo: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#003087"/><text x="11" y="16" textAnchor="middle" fill="#009CDE" fontSize="12" fontWeight="bold" fontFamily="Arial">PP</text></svg>
-    )},
-    studio.venmoHandle   && { label: "Venmo",    handle: studio.venmoHandle,   method: "venmo",   color: "#3D95CE", logo: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="6" fill="#3D95CE"/><text x="11" y="16" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold" fontFamily="Arial">V</text></svg>
-    )},
-  ].filter(Boolean) as { label: string; handle: string; method: string; color: string; logo: React.ReactNode }[];
+  // ── Payment method icons ──────────────────────────────────────────────────────
+  const CardIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="6" fill="#1a1a2e"/>
+      <rect x="4" y="8" width="18" height="11" rx="2" stroke="#D4A843" strokeWidth="1.4" fill="none"/>
+      <rect x="4" y="11" width="18" height="2.5" fill="#D4A843" opacity="0.8"/>
+      <rect x="6" y="15" width="4" height="1.5" rx="0.5" fill="#D4A843"/>
+      <rect x="11.5" y="15" width="2.5" height="1.5" rx="0.5" fill="#D4A843" opacity="0.5"/>
+    </svg>
+  );
+  const CashAppIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="6" fill="#00D54B"/>
+      <text x="13" y="19" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold" fontFamily="Arial, sans-serif">$</text>
+    </svg>
+  );
+  const ApplePayIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="6" fill="#000"/>
+      <path d="M13.5 8c.5-.6 1.3-1 1.9-1-.1.7-.4 1.4-.9 1.9-.5.5-1.2.9-1.9.8.1-.6.4-1.2.9-1.7z" fill="white"/>
+      <path d="M15.4 9.2c-1 0-1.9.6-2.4.6s-1.2-.5-2-.5c-1.5 0-2.9 1.2-2.9 3.4 0 2 1.4 4.4 2.6 4.4.6 0 1-.4 1.7-.4s1.1.4 1.8.4c1.2 0 2.6-2.3 2.8-3.7-1.5-.5-1.7-2.6-.2-3.3-.6-.7-1.4-.9-1.4-.9z" fill="white"/>
+    </svg>
+  );
+  const GooglePayIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="6" fill="white" stroke="#e5e5e5" strokeWidth="0.5"/>
+      <text x="8" y="18" fill="#4285F4" fontSize="13" fontWeight="700" fontFamily="Arial, sans-serif">G</text>
+      <text x="16" y="17" fill="#555" fontSize="7" fontWeight="600" fontFamily="Arial, sans-serif">Pay</text>
+    </svg>
+  );
+  const ZelleIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="6" fill="#6D1ED4"/>
+      <text x="13" y="19" textAnchor="middle" fill="white" fontSize="15" fontWeight="bold" fontFamily="Arial, sans-serif">Z</text>
+    </svg>
+  );
+
+  const STRIPE_BTNS = [
+    { key: "card",      label: "Card",         Icon: CardIcon },
+    { key: "cashapp",   label: "Cash App Pay", Icon: CashAppIcon },
+    { key: "applepay",  label: "Apple Pay",    Icon: ApplePayIcon },
+    { key: "googlepay", label: "Google Pay",   Icon: GooglePayIcon },
+  ];
 
   const clean = (h: string) => h.replace(/^@+/, "");
   const studioSocials = [
@@ -387,7 +455,7 @@ export default function IntakeFormPage() {
         {/* Pricing banner — only shown if studio set a rate */}
         {link.hourlyRate && link.sessionHours && (() => {
           const sessionTotal = link.hourlyRate * link.sessionHours;
-          const dep = depositPaid ? (parseFloat(depositAmount) || 0) : 0;
+          const dep = (paymentMethod && depositAmount) ? (parseFloat(depositAmount) || 0) : 0;
           const balance = sessionTotal - dep;
           return (
             <div className="rounded-2xl border p-4 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
@@ -681,90 +749,133 @@ export default function IntakeFormPage() {
           </section>
 
           {/* ── Session Deposit ── */}
-          {paymentHandles.length > 0 && (
-            <section className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <section className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
               <div>
                 <h2 className="text-sm font-bold text-foreground">Session Deposit</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {paymentMethod === "stripe"
-                    ? "Pay your deposit securely by card after submitting."
-                    : "Send your deposit to " + studio.name + ", then confirm below."}
+                    ? "You'll be taken to a secure payment page after submitting — Apple Pay and Google Pay accepted."
+                    : paymentMethod === "zelle"
+                      ? `Send via Zelle to ${studio.zelleHandle}, then submit. The studio will verify your payment.`
+                      : "Choose how you'd like to pay your deposit."}
                 </p>
               </div>
 
-              <div className="space-y-2">
-                {paymentHandles.map(({ label, handle, method, logo }) => (
-                  <button key={method} type="button"
+              {/* Stripe payment buttons — 2×2 grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {STRIPE_BTNS.map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
                     onTouchStart={() => { (document.activeElement as HTMLElement)?.blur(); }}
                     onClick={() => {
-                      const selecting = method !== paymentMethod;
-                      setPaymentMethod(selecting ? method : null);
-                      setDepositPaid(selecting && method !== "stripe");
+                      const selecting = selectedPaymentBtn !== key;
+                      setSelectedPaymentBtn(selecting ? key : null);
+                      setPaymentMethod(selecting ? "stripe" : null);
+                      if (selecting) {
+                        if (link.hourlyRate && link.sessionHours) {
+                          setDepositAmount((link.hourlyRate * link.sessionHours * 0.5).toFixed(2));
+                          setCustomDepositMode(false);
+                        } else {
+                          setDepositAmount("");
+                          setCustomDepositMode(true);
+                        }
+                      }
                     }}
-                    className="w-full flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-all"
+                    className="flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-all"
                     style={{
-                      borderColor: paymentMethod === method ? "#D4A843" : "var(--border)",
-                      backgroundColor: paymentMethod === method ? "#D4A84318" : "transparent",
-                    }}>
-                    <div className="flex items-center gap-3">
-                      <span className="shrink-0">{logo}</span>
-                      <div className="text-left">
-                        <p className="font-semibold text-foreground">{label}</p>
-                        <p className="text-xs text-muted-foreground">{handle}</p>
-                      </div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === method ? "border-accent" : "border-border"}`}>
-                      {paymentMethod === method && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "#D4A843" }} />}
+                      borderColor: selectedPaymentBtn === key ? "#D4A843" : "var(--border)",
+                      backgroundColor: selectedPaymentBtn === key ? "#D4A84318" : "transparent",
+                    }}
+                  >
+                    <Icon />
+                    <span className="text-xs font-medium text-foreground flex-1 text-left leading-tight">{label}</span>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedPaymentBtn === key ? "border-accent" : "border-border"}`}>
+                      {selectedPaymentBtn === key && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "#D4A843" }} />}
                     </div>
                   </button>
                 ))}
               </div>
 
-              {/* Manual methods — always in DOM, hidden until selected (prevents Android scroll-to-new-input) */}
-              <div style={{ maxHeight: depositPaid && paymentMethod !== "stripe" ? "200px" : "0px", overflow: "hidden" }}>
-                <div className="space-y-3 pt-1">
-                  <Field label="How much did you send?">
-                    <div className="relative">
-                      <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00" inputMode="decimal" tabIndex={depositPaid && paymentMethod !== "stripe" ? 0 : -1}
-                        className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
-                    </div>
-                  </Field>
-                  <div className="rounded-xl px-3 py-3 space-y-0.5" style={{ backgroundColor: "#10b98118", border: "1px solid rgba(16,185,129,0.2)" }}>
-                    <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 size={13} className="shrink-0" />
-                      {depositAmount && parseFloat(depositAmount) > 0
-                        ? `$${parseFloat(depositAmount).toFixed(2)} sent via ${paymentHandles.find(p => p.method === paymentMethod)?.label}`
-                        : `Payment sent via ${paymentHandles.find(p => p.method === paymentMethod)?.label}`}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground pl-5">
-                      {studio.name} will be notified when you submit and will verify receipt.
-                    </p>
+              {/* Zelle — manual */}
+              {studio.zelleHandle && (
+                <button
+                  type="button"
+                  onTouchStart={() => { (document.activeElement as HTMLElement)?.blur(); }}
+                  onClick={() => {
+                    const selecting = selectedPaymentBtn !== "zelle";
+                    setSelectedPaymentBtn(selecting ? "zelle" : null);
+                    setPaymentMethod(selecting ? "zelle" : null);
+                  }}
+                  className="w-full flex items-center gap-3 rounded-xl border px-4 py-3 transition-all"
+                  style={{
+                    borderColor: selectedPaymentBtn === "zelle" ? "#D4A843" : "var(--border)",
+                    backgroundColor: selectedPaymentBtn === "zelle" ? "#D4A84318" : "transparent",
+                  }}
+                >
+                  <ZelleIcon />
+                  <div className="text-left flex-1">
+                    <p className="text-sm font-semibold text-foreground">Zelle</p>
+                    <p className="text-xs text-muted-foreground">{studio.zelleHandle} · Manual</p>
                   </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedPaymentBtn === "zelle" ? "border-accent" : "border-border"}`}>
+                    {selectedPaymentBtn === "zelle" && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "#D4A843" }} />}
+                  </div>
+                </button>
+              )}
+
+              {/* Stripe deposit amount — revealed when a Stripe method selected */}
+              <div style={{ maxHeight: paymentMethod === "stripe" ? "160px" : "0px", overflow: "hidden", transition: "max-height 0.25s ease" }}>
+                <div className="space-y-2">
+                  {!customDepositMode ? (
+                    <div className="flex items-center justify-between rounded-xl border px-4 py-3" style={{ borderColor: "#D4A84366", backgroundColor: "#D4A84310" }}>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Deposit amount</p>
+                        <p className="text-base font-bold text-foreground">${depositAmount || "0.00"}</p>
+                      </div>
+                      <button type="button" onClick={() => setCustomDepositMode(true)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors"
+                        style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <Field label="Custom deposit amount">
+                      <div className="relative">
+                        <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
+                          placeholder="0.00" inputMode="decimal" autoFocus
+                          className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
+                      </div>
+                    </Field>
+                  )}
                 </div>
               </div>
 
-              {/* Stripe — always in DOM, hidden until selected */}
-              <div style={{ maxHeight: paymentMethod === "stripe" ? "100px" : "0px", overflow: "hidden" }}>
-                <div className="pt-1">
-                  <Field label="Deposit amount">
+              {/* Zelle info — always in DOM, revealed when Zelle selected */}
+              <div style={{ maxHeight: paymentMethod === "zelle" ? "220px" : "0px", overflow: "hidden", transition: "max-height 0.2s ease" }}>
+                <div className="space-y-3 pt-1">
+                  <div className="rounded-xl px-3 py-3 space-y-1" style={{ backgroundColor: "rgba(109,30,212,0.1)", border: "1px solid rgba(109,30,212,0.3)" }}>
+                    <p className="text-xs font-semibold" style={{ color: "#a78bfa" }}>Send to:</p>
+                    <p className="text-sm font-bold text-foreground">{studio.zelleHandle}</p>
+                    <p className="text-[11px] text-muted-foreground">Send your deposit first, then submit the form. {studio.name} will verify receipt.</p>
+                  </div>
+                  <Field label="How much are you sending?">
                     <div className="relative">
                       <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00" inputMode="decimal" tabIndex={paymentMethod === "stripe" ? 0 : -1}
+                        placeholder="0.00" inputMode="decimal" tabIndex={paymentMethod === "zelle" ? 0 : -1}
                         className={INPUT + " pl-8"} style={{ borderColor: "var(--border)" }} />
                     </div>
                   </Field>
                 </div>
               </div>
             </section>
-          )}
 
           {/* ── Session Cost summary (repeated below payment so balance is visible) ── */}
           {link.hourlyRate && link.sessionHours && (() => {
             const sessionTotal = link.hourlyRate! * link.sessionHours!;
-            const dep = depositPaid ? (parseFloat(depositAmount) || 0) : 0;
+            const dep = (paymentMethod && depositAmount) ? (parseFloat(depositAmount) || 0) : 0;
             const balance = sessionTotal - dep;
             return (
               <div className="rounded-2xl border p-4 space-y-3" style={{ backgroundColor: "var(--card)", borderColor: "rgba(212,168,67,0.4)" }}>
@@ -809,7 +920,13 @@ export default function IntakeFormPage() {
             onClick={handleSubmit}
             className="w-full py-4 rounded-2xl text-sm font-bold transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-            {submitting ? "Submitting…" : "Submit Intake Form"}
+            {submitting
+              ? "Submitting…"
+              : paymentMethod === "stripe" && depositAmount
+                ? `Submit & Pay $${parseFloat(depositAmount).toFixed(2)}`
+                : paymentMethod === "zelle"
+                  ? "Submit (Zelle Deposit Noted)"
+                  : "Submit Intake Form"}
           </button>
         </div>
 

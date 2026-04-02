@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -22,7 +23,7 @@ import TrackArtwork from "@/components/tracks/TrackArtwork";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
-  Disc, Disc3,
+  Disc, Disc3, Pause, ShoppingCart,
 } from "lucide-react";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
@@ -115,6 +116,7 @@ type DigitalProductItem = {
   type: "SINGLE" | "ALBUM";
   price: number;
   coverArtUrl: string | null;
+  tracks: { id: string; title: string; fileUrl: string; coverArtUrl: string | null }[];
   user: {
     id: string;
     name: string;
@@ -396,7 +398,7 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
   };
   return (
     <motion.div
-      className="rounded-xl border p-3 transition-[border-color] hover:border-[rgba(212,168,67,0.25)] cursor-pointer"
+      className="rounded-xl border p-3 transition-[border-color] hover:border-[rgba(212,168,67,0.25)] cursor-pointer flex flex-col"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
       whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
@@ -443,13 +445,9 @@ function BeatCard({ beat, isPlaying, onPlay, onLicense }: { beat: BeatItem; isPl
       {totalUses > 0 && (
         <p className="text-[9px] mb-2" style={{ color: "#555" }}>{totalUses} artist{totalUses !== 1 ? "s" : ""} on this beat</p>
       )}
-      <div className="flex justify-center my-2">
-        <LazyAudioRadar trackId={beat.id} size="sm" animated={false} />
-      </div>
-      <SimilarTracks sourceId={beat.id} sourceType="beat" limit={3} />
       <button
         onClick={(e) => { e.stopPropagation(); onLicense(beat); }}
-        className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors"
+        className="w-full py-1.5 rounded-lg text-[11px] font-bold transition-colors mt-auto"
         style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
       >
         License
@@ -544,7 +542,6 @@ function ArtistCard({ artist, onPlay }: { artist: ArtistItem; onPlay: (t: TrackI
           More from {artist.name} →
         </Link>
       )}
-      <SimilarArtists artistId={artist.id} limit={4} />
     </div>
   );
 }
@@ -805,16 +802,163 @@ function DigitalProductCheckoutModal({ product, onClose }: { product: DigitalPro
   );
 }
 
+// ── Digital Product Overlay ─────────────────────────────────────────────────
+
+function DigitalProductOverlay({ product, onBuy, onClose }: { product: DigitalProductItem; onBuy: (p: DigitalProductItem) => void; onClose: () => void }) {
+  const artistSlug = product.user.artistSite?.isPublished ? product.user.artistSlug : null;
+  const artistName = product.user.artistName || product.user.name;
+  const { playInContext } = useAudioStore();
+  const { currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
+
+  const queue = product.tracks.map(t => ({
+    id: t.id, title: t.title, artist: artistName,
+    src: t.fileUrl, coverArt: t.coverArtUrl ?? product.coverArtUrl ?? undefined,
+    previewOnly: true,
+  }));
+
+  function playTrack(index: number) {
+    const s = useAudioStore.getState();
+    if (s.currentTrack?.id === queue[index].id && s.isPlaying) { s.pause(); return; }
+    playInContext(queue[index], queue);
+  }
+
+  const TYPE_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+    ALBUM:  { bg: "rgba(212,168,67,0.15)", color: "#D4A843", border: "rgba(212,168,67,0.4)" },
+    EP:     { bg: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "rgba(139,92,246,0.4)" },
+    SINGLE: { bg: "rgba(255,255,255,0.08)", color: "#aaa",    border: "#333" },
+  };
+  const badge = TYPE_COLORS[product.type] ?? TYPE_COLORS.SINGLE;
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ zIndex: 1050, backgroundColor: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl overflow-hidden"
+        style={{ backgroundColor: "#141414", border: "1px solid #2a2a2a", maxHeight: "90vh" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header: cover + info */}
+        <div className="flex gap-4 p-5" style={{ borderBottom: "1px solid #1e1e1e" }}>
+          <div className="shrink-0 w-24 h-24 rounded-xl overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
+            {product.coverArtUrl
+              ? <img src={product.coverArtUrl} alt={product.title} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center">
+                  <Disc size={28} style={{ color: "#333" }} />
+                </div>
+            }
+          </div>
+          <div className="flex-1 min-w-0">
+            <span
+              className="inline-block text-[9px] font-black px-1.5 py-0.5 rounded-full mb-1.5"
+              style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
+            >
+              {product.type}
+            </span>
+            <p className="text-base font-bold text-white truncate">{product.title}</p>
+            {artistSlug
+              ? <Link href={`/${artistSlug}`} onClick={onClose} className="text-xs hover:underline truncate block mt-0.5" style={{ color: "#888" }}>{artistName}</Link>
+              : <p className="text-xs truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
+            }
+            <p className="text-[10px] mt-1" style={{ color: "#555" }}>{product.tracks.length} track{product.tracks.length !== 1 ? "s" : ""} · 30s previews</p>
+          </div>
+          <button onClick={onClose} className="shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors" style={{ color: "#555" }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tracklist */}
+        <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 220px)" }}>
+          {product.tracks.map((track, i) => {
+            const isActive  = currentTrack?.id === track.id;
+            const isPlaying = isActive && storeIsPlaying;
+            return (
+              <div
+                key={track.id}
+                className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors cursor-pointer"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                onClick={() => playTrack(i)}
+              >
+                <div className="w-5 shrink-0 text-center">
+                  {isPlaying
+                    ? <Pause size={12} style={{ color: "#D4A843" }} />
+                    : isActive
+                      ? <Play size={12} style={{ color: "#D4A843" }} />
+                      : <span className="text-[11px] tabular-nums" style={{ color: "#444" }}>{i + 1}</span>
+                  }
+                </div>
+                <div className="w-8 h-8 rounded shrink-0 overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
+                  {track.coverArtUrl ?? product.coverArtUrl
+                    ? <img src={track.coverArtUrl ?? product.coverArtUrl!} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center"><Disc3 size={14} style={{ color: "#333" }} /></div>
+                  }
+                </div>
+                <p className="flex-1 min-w-0 text-sm truncate" style={{ color: isActive ? "#D4A843" : "#ccc" }}>{track.title}</p>
+                <span className="text-[10px] shrink-0" style={{ color: "#444" }}>0:30</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer: price + buy */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid #1e1e1e" }}>
+          <div>
+            <p className="text-lg font-bold" style={{ color: "#D4A843" }}>${(product.price / 100).toFixed(2)}</p>
+            <p className="text-[10px]" style={{ color: "#555" }}>Full download · all tracks</p>
+          </div>
+          <button
+            onClick={() => { onBuy(product); onClose(); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          >
+            <ShoppingCart size={14} />
+            Buy ${(product.price / 100).toFixed(2)}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Digital Product Card ────────────────────────────────────────────────────
 
 function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; onBuy: (p: DigitalProductItem) => void }) {
   const artistSlug = product.user.artistSite?.isPublished ? product.user.artistSlug : null;
   const artistName = product.user.artistName || product.user.name;
+  const { playInContext } = useAudioStore();
+  const firstTrack = product.tracks[0];
+  const [productOpen, setProductOpen] = useState(false);
+
+  function handleCardClick() {
+    if (!firstTrack) return;
+    const s = useAudioStore.getState();
+    if (s.currentTrack?.id === firstTrack.id && s.isPlaying) { s.pause(); return; }
+    const queue = product.tracks.map(t => ({
+      id: t.id, title: t.title, artist: artistName,
+      src: t.fileUrl, coverArt: t.coverArtUrl ?? product.coverArtUrl ?? undefined,
+      previewOnly: true,
+    }));
+    playInContext(queue[0], queue);
+    setProductOpen(true);
+  }
 
   return (
+    <>
+    {productOpen && (
+      <DigitalProductOverlay
+        product={product}
+        onBuy={onBuy}
+        onClose={() => setProductOpen(false)}
+      />
+    )}
     <div
-      className="rounded-xl border overflow-hidden group"
+      className="rounded-xl border overflow-hidden group cursor-pointer"
       style={{ backgroundColor: "#141414", borderColor: "#2a2a2a" }}
+      onClick={handleCardClick}
     >
       <div className="relative w-full aspect-square overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
         {product.coverArtUrl
@@ -836,7 +980,7 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
       <div className="p-3 space-y-1.5">
         <p className="text-sm font-semibold text-white truncate">{product.title}</p>
         {artistSlug ? (
-          <Link href={`/${artistSlug}`} className="text-[11px] block hover:underline truncate" style={{ color: "#888" }}>
+          <Link href={`/${artistSlug}`} onClick={e => e.stopPropagation()} className="text-[11px] block hover:underline truncate" style={{ color: "#888" }}>
             {artistName}
           </Link>
         ) : (
@@ -845,7 +989,7 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
         <div className="flex items-center justify-between pt-1">
           <span className="text-sm font-bold" style={{ color: "#D4A843" }}>${(product.price / 100).toFixed(2)}</span>
           <button
-            onClick={() => onBuy(product)}
+            onClick={e => { e.stopPropagation(); onBuy(product); }}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors"
             style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
           >
@@ -854,6 +998,7 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -924,7 +1069,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
 
 export default function ExploreClient() {
   const { data: session } = useSession();
-  const { play, currentTrack } = useAudioStore();
+  const { play, currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
   const { OverlayComponent } = useTrackOverlay();
   const loggedIn = !!session?.user;
   const searchParams = useSearchParams();
@@ -1047,6 +1192,11 @@ export default function ExploreClient() {
   }, [searchParams]);
 
   function handlePlay(track: TrackItem) {
+    const { currentTrack, isPlaying: storeIsPlaying, pause } = useAudioStore.getState();
+    if (currentTrack?.id === track.id && storeIsPlaying) {
+      pause();
+      return;
+    }
     play({ id: track.id, title: track.title, artist: track.artist.name, src: track.fileUrl, coverArt: track.coverArtUrl ?? undefined, canvasVideoUrl: track.canvasVideoUrl ?? null });
     if (loggedIn) {
       fetch("/api/explore/record-play", {
@@ -1058,6 +1208,11 @@ export default function ExploreClient() {
   }
 
   function handleBeatPlay(beat: BeatItem) {
+    const { currentTrack, isPlaying: storeIsPlaying, pause } = useAudioStore.getState();
+    if (currentTrack?.id === beat.id && storeIsPlaying) {
+      pause();
+      return;
+    }
     play({
       id:       beat.id,
       title:    beat.title,
@@ -1454,7 +1609,7 @@ export default function ExploreClient() {
                       <BeatCard
                         key={b.id}
                         beat={b}
-                        isPlaying={currentTrack?.id === b.id}
+                        isPlaying={currentTrack?.id === b.id && storeIsPlaying}
                         onPlay={handleBeatPlay}
                         onLicense={(beat) => setLicenseBeat(beat)}
                       />
