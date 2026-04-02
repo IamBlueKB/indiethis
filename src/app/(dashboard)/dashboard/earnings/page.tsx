@@ -733,7 +733,7 @@ function FanFundingSection() {
           <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Supporters</p>
           </div>
-          <div className="divide-y" style={{ divideColor: "var(--border)" }}>
+          <div className="divide-y divide-border">
             {recent.slice(0, 10).map((r) => (
               <div key={r.id} className="px-4 py-3 flex items-start justify-between gap-3"
                 style={{ backgroundColor: "var(--card)" }}>
