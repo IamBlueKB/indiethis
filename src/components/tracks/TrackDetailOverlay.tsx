@@ -215,10 +215,15 @@ function Panel({
     mood       ?? null,
   ].filter((p): p is string => !!p);
 
-  // Gradient style from dominant color
+  // Fix 2: stronger gradient — color washes further down into the panel
+  const [r, g, b] = dominantColor ?? [0, 0, 0];
   const gradientStyle = dominantColor
-    ? `linear-gradient(to bottom, transparent 0%, rgba(${dominantColor[0]},${dominantColor[1]},${dominantColor[2]},0.50) 60%, #111111 100%)`
-    : "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 60%, #111111 100%)";
+    ? `linear-gradient(to bottom, transparent 0%, rgba(${r},${g},${b},0.4) 40%, rgba(${r},${g},${b},0.25) 70%, #111111 100%)`
+    : "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 70%, #111111 100%)";
+  // Continuation bleed into the content area below the artwork
+  const bleedGradient = dominantColor
+    ? `linear-gradient(to bottom, rgba(${r},${g},${b},0.15) 0%, transparent 100%)`
+    : null;
 
   // Scrollable-only sections: credits, radar, DJ badge
   const scrollSections: React.ReactNode[] = [];
@@ -300,10 +305,10 @@ function Panel({
           </div>
         )}
 
-        {/* Gradient bleed into panel background */}
+        {/* Gradient bleed into panel background — stronger, reaches further down */}
         <div
           className="absolute inset-x-0 bottom-0"
-          style={{ height: "60%", background: gradientStyle, pointerEvents: "none" }}
+          style={{ height: "80%", background: gradientStyle, pointerEvents: "none" }}
         />
 
         {/* X button */}
@@ -343,14 +348,23 @@ function Panel({
         </div>
       </div>
 
+      {/* ── Fix 2: color bleed continuation behind transport/pills ── */}
+      {bleedGradient && (
+        <div
+          className="flex-shrink-0 pointer-events-none"
+          style={{ height: 150, marginBottom: -150, background: bleedGradient, zIndex: 0 }}
+        />
+      )}
+
       {/* ── Transport ── */}
-      <div className="flex-shrink-0 pt-3">
+      <div className="flex-shrink-0 pt-3" style={{ position: "relative", zIndex: 1 }}>
         <Transport data={data} />
       </div>
 
       {/* ── Pills — always visible ── */}
       {pills.length > 0 && (
-        <div className="flex-shrink-0 flex flex-wrap justify-center gap-1.5 px-4 pt-3 pb-1">
+        <div className="flex-shrink-0 flex flex-wrap justify-center gap-1.5 px-4 pt-3 pb-1"
+          style={{ position: "relative", zIndex: 1 }}>
           {pills.map(p => (
             <span key={p} style={{ backgroundColor: "#222", color: "#999", fontSize: 11,
               fontFamily: "DM Sans, sans-serif", borderRadius: 999, padding: "6px 12px" }}>
@@ -361,7 +375,8 @@ function Panel({
       )}
 
       {/* ── Action buttons — always visible ── */}
-      <div className="flex-shrink-0 flex items-center justify-center gap-2 flex-wrap px-4 pt-2 pb-2">
+      <div className="flex-shrink-0 flex items-center justify-center gap-2 flex-wrap px-4 pt-2 pb-2"
+        style={{ position: "relative", zIndex: 1 }}>
         {isBeat && (
           <button
             onClick={() => setShowLicense(true)}
