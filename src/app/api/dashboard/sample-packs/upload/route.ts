@@ -66,7 +66,7 @@ async function checkVirusTotal(
 async function submitToVT(buffer: Buffer, apiKey: string): Promise<void> {
   try {
     const form = new FormData();
-    form.append("file", new Blob([buffer], { type: "application/zip" }), "pack.zip");
+    form.append("file", new Blob([new Uint8Array(buffer)], { type: "application/zip" }), "pack.zip");
     await fetch("https://www.virustotal.com/api/v3/files", {
       method: "POST",
       headers: { "x-apikey": apiKey },
