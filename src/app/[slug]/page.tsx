@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import TrackList from "./TrackList";
 import type { StreamLeaseTrackData } from "./TrackList";
 import MerchGrid from "./MerchGrid";
@@ -548,6 +549,66 @@ async function ArtistSite({ slug }: { slug: string }) {
       </div>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METADATA
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await params;
+
+  // Check studio first
+  const studio = await db.studio.findUnique({
+    where:  { slug },
+    select: { name: true, description: true },
+  });
+
+  if (studio) {
+    const title       = `${studio.name} | IndieThis`;
+    const description = studio.description ?? `${studio.name} recording studio on IndieThis`;
+    const ogImage     = `/api/og/studio/${slug}`;
+    return {
+      title,
+      description,
+      openGraph: {
+        title, description,
+        images: [{ url: ogImage, width: 1200, height: 630, alt: studio.name }],
+        type: "website",
+      },
+      twitter: { card: "summary_large_image", title, images: [ogImage] },
+    };
+  }
+
+  // Artist
+  const artist = await db.user.findUnique({
+    where:  { artistSlug: slug },
+    select: {
+      name: true, artistName: true, bio: true,
+      artistSite: { select: { genre: true, bioContent: true } },
+    },
+  });
+
+  if (!artist) return { title: "IndieThis" };
+
+  const displayName = artist.artistName || artist.name || slug;
+  const description = artist.artistSite?.bioContent || artist.bio
+    || `${displayName} on IndieThis`;
+  const title   = `${displayName} | IndieThis`;
+  const ogImage = `/api/og/artist/${slug}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title, description,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: displayName }],
+      type: "profile",
+    },
+    twitter: { card: "summary_large_image", title, images: [ogImage] },
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

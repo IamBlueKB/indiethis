@@ -100,6 +100,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     OPS_ADMIN:     "none",
     SUPPORT_ADMIN: "none",
   },
+  "promo-popups": {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
   "promo-codes": {
     SUPER_ADMIN:   "full",
     OPS_ADMIN:     "full",

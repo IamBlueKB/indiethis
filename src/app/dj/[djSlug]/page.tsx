@@ -8,14 +8,25 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { djSlug } = await params;
   const dj = await db.dJProfile.findUnique({
-    where: { slug: djSlug },
+    where:  { slug: djSlug },
     select: { user: { select: { name: true, artistName: true } }, bio: true, city: true },
   });
   if (!dj) return { title: "DJ — IndieThis" };
-  const displayName = dj.user.artistName ?? dj.user.name;
+
+  const displayName = dj.user.artistName ?? dj.user.name ?? djSlug;
+  const title       = `${displayName} | IndieThis`;
+  const description = dj.bio ?? `Check out ${displayName} on IndieThis`;
+  const ogImage     = `/api/og/dj/${djSlug}`;
+
   return {
-    title: `${displayName} — DJ Profile`,
-    description: dj.bio ?? `Check out ${displayName} on IndieThis`,
+    title,
+    description,
+    openGraph: {
+      title, description,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: displayName }],
+      type: "profile",
+    },
+    twitter: { card: "summary_large_image", title, images: [ogImage] },
   };
 }
 

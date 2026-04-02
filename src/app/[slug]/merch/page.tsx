@@ -2,6 +2,31 @@ import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import MerchGrid from "../MerchGrid";
+import type { Metadata } from "next";
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await params;
+  const artist = await db.user.findUnique({
+    where:  { artistSlug: slug },
+    select: { name: true, artistName: true },
+  });
+  const displayName = artist?.artistName || artist?.name || slug;
+  const title       = `${displayName} Merch | IndieThis`;
+  const description = `Shop official merch from ${displayName} on IndieThis`;
+  const ogImage     = `/api/og/artist/${slug}`;
+  return {
+    title,
+    description,
+    openGraph: {
+      title, description,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: `${displayName} Merch` }],
+      type: "website",
+    },
+    twitter: { card: "summary_large_image", title, images: [ogImage] },
+  };
+}
 
 export default async function MerchStorefront({
   params,

@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PublicNav from "@/components/layout/PublicNav";
+import PromoPopupManager from "@/components/PromoPopupManager";
 import { CheckCircle2, Loader2, Mic2, Building2, Music4, Zap, Star } from "lucide-react";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
@@ -317,6 +318,7 @@ export default function PricingPage() {
           <PricingContent />
         </Suspense>
       </div>
+      <PromoPopupManager page="pricing" />
     </div>
   );
 }

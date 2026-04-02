@@ -5,6 +5,7 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
 import MiniPlayer from "@/components/audio/MiniPlayer";
 import { GracePeriodBanner } from "@/components/dashboard/GracePeriodBanner";
+import PromoPopupManager from "@/components/PromoPopupManager";
 import type { ReactNode } from "react";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -67,6 +68,9 @@ const hasProducerActivity = beatCount > 0;
       </div>
       {/* Persistent mini-player — survives client-side navigation */}
       <MiniPlayer />
+
+      {/* Promo popups — page-targeted, frequency-gated */}
+      <PromoPopupManager page="dashboard" />
     </div>
   );
 }

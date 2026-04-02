@@ -20,6 +20,7 @@ import RadarFilterResults from "@/components/explore/RadarFilterResults";
 import PublicNav from "@/components/layout/PublicNav";
 import AddToCrateButton from "@/components/dj/AddToCrateButton";
 import TrackArtwork from "@/components/tracks/TrackArtwork";
+import PromoPopupManager from "@/components/PromoPopupManager";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
@@ -2140,6 +2141,9 @@ export default function ExploreClient() {
       )}
 
       <OverlayComponent />
+
+      {/* Promo popups — page-targeted, frequency-gated */}
+      <PromoPopupManager page="explore" />
     </div>
   );
 }

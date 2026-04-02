@@ -305,6 +305,17 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Admin promo popup image (admin panel only — max 8MB)
+  promoPopupImage: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      // Admin auth is cookie-based — no NextAuth session available here.
+      // Actual admin gate is enforced client-side + at the API route level.
+      return {};
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
   samplePackPreview: f({ audio: { maxFileSize: "50MB", maxFileCount: 5 } })
     .middleware(async ({ req }) => {

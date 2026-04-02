@@ -2595,3 +2595,26 @@ model FanFunding {
   @@index([artistId])
   @@index([createdAt])
 }
+
+model PromoPopup {
+  id              String    @id @default(cuid())
+  title           String
+  subtitle        String?
+  ctaText         String?
+  ctaUrl          String?
+  imageUrl        String?
+  backgroundColor String?
+  pages           Json
+  priority        Int       @default(0)
+  frequency       String    @default("ONCE_PER_SESSION")
+  trigger         String    @default("ON_LOAD")
+  triggerDelay    Int?
+  active          Boolean   @default(false)
+  startDate       DateTime?
+  endDate         DateTime?
+  impressions     Int       @default(0)
+  dismissals      Int       @default(0)
+  ctaClicks       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
