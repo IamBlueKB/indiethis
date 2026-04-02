@@ -2227,11 +2227,16 @@ model DigitalProduct {
   songwriter    String?
   producer      String?
   isrc          String?
-  tracks        Track[]             @relation("DigitalProductTracks")
-  published     Boolean             @default(false)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  purchases     DigitalPurchase[]
+  tracks              Track[]             @relation("DigitalProductTracks")
+  published           Boolean             @default(false)
+  // Sample Pack fields
+  samplePackFileUrl   String?
+  samplePackFileSize  Int?                // bytes
+  sampleCount         Int?                // number of audio files in zip
+  previewSampleUrls   Json?               // String[] — up to 5 preview audio URLs
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  purchases           DigitalPurchase[]
 
   @@index([userId])
 }
@@ -2261,6 +2266,7 @@ enum DigitalProductType {
   SINGLE
   EP
   ALBUM
+  SAMPLE_PACK
 }
 
 // ─── DJ Feature ───────────────────────────────────────────────────────────────
