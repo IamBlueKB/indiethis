@@ -132,6 +132,9 @@ function Transport({ data }: { data: TrackCardData }) {
   const isLoaded      = currentTrack?.id === data.id;
   const isThisPlaying = isLoaded && isPlaying;
 
+  // Fix 4: BPM-synced pulse — one beat = 60/bpm seconds; default 120 BPM
+  const beatDuration = 60 / (data.bpm || 120);
+
   function handlePlayPause() {
     if (!isLoaded) {
       play({ id: data.id, title: data.title, artist: data.artist.name,
@@ -146,6 +149,15 @@ function Transport({ data }: { data: TrackCardData }) {
 
   return (
     <div className="flex flex-col gap-2 px-4 pb-3">
+      {/* BPM pulse keyframes — injected once per Transport render */}
+      <style>{`
+        @keyframes bpm-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(212,168,67,0.45); }
+          50%  { box-shadow: 0 0 18px 8px rgba(212,168,67,0.12); }
+          100% { box-shadow: 0 0 0 0 rgba(212,168,67,0); }
+        }
+      `}</style>
+
       {/* Buttons row */}
       <div className="flex items-center justify-center gap-6">
         <button onClick={rewind} aria-label="Rewind 10s"
@@ -153,14 +165,28 @@ function Transport({ data }: { data: TrackCardData }) {
           style={{ color: "#888" }}>
           <SkipBack size={22} />
         </button>
-        <button onClick={handlePlayPause} aria-label={isThisPlaying ? "Pause" : "Play"}
-          className="transition-opacity hover:opacity-80"
-          style={{ color: "#D4A843" }}>
-          {isThisPlaying
-            ? <Pause size={30} fill="#D4A843" />
-            : <Play  size={30} fill="#D4A843" style={{ marginLeft: 2 }} />
-          }
-        </button>
+
+        {/* Fix 4: glow wrapper pulses at BPM tempo only when paused */}
+        <div
+          style={{
+            borderRadius: "50%",
+            padding: 6,
+            animation: !isThisPlaying ? `bpm-pulse ${beatDuration}s ease-in-out infinite` : "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <button onClick={handlePlayPause} aria-label={isThisPlaying ? "Pause" : "Play"}
+            className="transition-opacity hover:opacity-80"
+            style={{ color: "#D4A843" }}>
+            {isThisPlaying
+              ? <Pause size={30} fill="#D4A843" />
+              : <Play  size={30} fill="#D4A843" style={{ marginLeft: 2 }} />
+            }
+          </button>
+        </div>
+
         <button onClick={forward} aria-label="Forward 10s"
           className="transition-opacity hover:opacity-70"
           style={{ color: "#888" }}>
