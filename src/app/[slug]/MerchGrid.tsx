@@ -196,7 +196,7 @@ function ProductModal({
                 className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
               >
-                <Next size={14} className="text-white" />
+                <ChevronRight size={14} className="text-white" />
               </button>
               {/* Dots */}
               <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
