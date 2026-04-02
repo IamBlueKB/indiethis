@@ -391,6 +391,7 @@ model MerchProduct {
   returnPolicy      String?         // required for self-fulfilled
   processingDays    Int             @default(3)  // estimated fulfillment days (self-fulfilled)
   isActive          Boolean         @default(true)
+  isFeatured        Boolean         @default(false) // pinned to explore by PLATFORM_ADMIN
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   artist            User            @relation(fields: [artistId], references: [id])

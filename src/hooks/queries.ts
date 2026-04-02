@@ -88,6 +88,7 @@ export type MerchProduct = {
   printfulProductId: number;
   markup:            number;
   isActive:          boolean;
+  isFeatured:        boolean;
   createdAt:         string;
   variants:          MerchVariant[];
   orderItems:        { id: string; unitPrice: number; subtotal: number; order: { artistEarnings: number } }[];

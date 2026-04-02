@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth();
 
-  if (!session?.user?.id || session.user.role !== "ARTIST") {
+  if (!session?.user?.id || !["ARTIST", "PLATFORM_ADMIN"].includes(session.user.role ?? "")) {
     redirect("/login");
   }
 

@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   ShoppingBag, Package, DollarSign,
   Trash2, EyeOff, Eye, Truck, CheckCircle2, Clock,
-  Plus, MapPin, AlertTriangle, Loader2, X,
+  Plus, MapPin, AlertTriangle, Loader2, X, Star, Sparkles,
 } from "lucide-react";
 import {
   useMerchProducts,
@@ -41,6 +42,9 @@ type Tab = "products" | "orders";
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MerchPage() {
+  const { data: session } = useSession();
+  const isPlatformAdmin   = (session?.user as { role?: string } | undefined)?.role === "PLATFORM_ADMIN";
+
   const { data: products = [], isLoading: loadingProducts } = useMerchProducts();
   const { data: orders   = [], isLoading: loadingOrders   } = useMerchOrders();
 
@@ -48,8 +52,38 @@ export default function MerchPage() {
   const { mutate: deleteProduct } = useDeleteMerchProduct();
   const { mutate: updateFulfillment } = useUpdateOrderFulfillment();
 
-  const [tab, setTab] = useState<Tab>("products");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [tab,          setTab         ] = useState<Tab>("products");
+  const [deleteError,  setDeleteError ] = useState<string | null>(null);
+  const [featuredIds,  setFeaturedIds ] = useState<Record<string, boolean>>({});
+  const [togglingId,   setTogglingId  ] = useState<string | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupMsg,     setSetupMsg    ] = useState<string | null>(null);
+
+  async function toggleFeature(id: string, current: boolean) {
+    setTogglingId(id);
+    setFeaturedIds((prev) => ({ ...prev, [id]: !current }));
+    try {
+      await fetch(`/api/dashboard/merch/${id}/feature`, { method: "PATCH" });
+    } catch {
+      // revert on error
+      setFeaturedIds((prev) => ({ ...prev, [id]: current }));
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handlePlatformSetup() {
+    setSetupLoading(true); setSetupMsg(null);
+    try {
+      const res = await fetch("/api/dashboard/merch/platform-setup", { method: "POST" });
+      const data = await res.json() as { message?: string; error?: string };
+      setSetupMsg(data.message ?? data.error ?? "Done.");
+    } catch {
+      setSetupMsg("Setup failed — check console.");
+    } finally {
+      setSetupLoading(false);
+    }
+  }
 
   const totalEarnings = orders.reduce((s, o) => s + o.artistEarnings, 0);
   const totalOrders   = orders.length;
@@ -62,15 +96,40 @@ export default function MerchPage() {
           <h1 className="text-2xl font-bold text-foreground">Merch Store</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Sell print-on-demand merch directly to your fans</p>
         </div>
-        <Link
-          href="/dashboard/merch/create"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-          style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-        >
-          <Plus size={15} />
-          Add Product
-        </Link>
+        <div className="flex items-center gap-2">
+          {isPlatformAdmin && (
+            <button
+              onClick={handlePlatformSetup}
+              disabled={setupLoading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+              style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.3)" }}
+              title="Seed the 3 IndieThis branded products to hello@indiethis.com"
+            >
+              {setupLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              Setup IndieThis Merch
+            </button>
+          )}
+          <Link
+            href="/dashboard/merch/create"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+          >
+            <Plus size={15} />
+            Add Product
+          </Link>
+        </div>
       </div>
+
+      {/* Setup result message */}
+      {setupMsg && (
+        <div
+          className="rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
+          style={{ backgroundColor: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.3)", color: "#D4A843" }}
+        >
+          <span>{setupMsg}</span>
+          <button onClick={() => setSetupMsg(null)} className="text-xs opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       {/* Delete error banner */}
       {deleteError && (
@@ -168,6 +227,23 @@ export default function MerchPage() {
                   >
                     {/* Hover actions */}
                     <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      {isPlatformAdmin && (() => {
+                        const featured = featuredIds[p.id] !== undefined ? featuredIds[p.id] : p.isFeatured;
+                        return (
+                          <button
+                            onClick={() => toggleFeature(p.id, featured)}
+                            disabled={togglingId === p.id}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center"
+                            style={{
+                              backgroundColor: featured ? "rgba(212,168,67,0.9)" : "rgba(0,0,0,0.7)",
+                              color: featured ? "#0A0A0A" : "#D4A843",
+                            }}
+                            title={featured ? "Unfeature from explore" : "Feature on explore"}
+                          >
+                            <Star size={12} fill={featured ? "currentColor" : "none"} />
+                          </button>
+                        );
+                      })()}
                       <button
                         onClick={() => toggleActive({ id: p.id, isActive: !p.isActive })}
                         className="w-7 h-7 rounded-lg flex items-center justify-center"

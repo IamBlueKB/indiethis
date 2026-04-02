@@ -106,6 +106,7 @@ type MerchItem = {
   imageUrl: string;
   imageUrls: string[];
   fulfillmentType: string;
+  isFeatured: boolean;
   artist: { id: string; name: string; artistName: string | null; artistSlug: string | null };
   variants: { id: string; retailPrice: number }[];
 };
@@ -1091,7 +1092,8 @@ export default function ExploreClient() {
   const [loadingStore, setLoadingStore] = useState(true);
   const [buyProduct, setBuyProduct] = useState<DigitalProductItem | null>(null);
 
-  const [merch, setMerch] = useState<MerchItem[]>([]);
+  const [merch, setMerch]               = useState<MerchItem[]>([]);
+  const [featuredMerch, setFeaturedMerch] = useState<MerchItem[]>([]);
   const [loadingMerch, setLoadingMerch] = useState(true);
 
   const [studioQuery, setStudioQuery] = useState("");
@@ -1146,7 +1148,7 @@ export default function ExploreClient() {
     fetch("/api/explore/studios").then(r => r.json()).then(d => { setStudios(d.studios ?? []); setLoadingStudios(false); });
     fetch("/api/explore/rising").then(r => r.json()).then(d => { setRising(d.artists ?? []); setLoadingRising(false); });
     fetch("/api/explore/digital-products").then(r => r.json()).then(d => { setDigitalProducts(d.products ?? []); setLoadingStore(false); });
-    fetch("/api/explore/merch").then(r => r.json()).then(d => { setMerch(d.products ?? []); setLoadingMerch(false); });
+    fetch("/api/explore/merch").then(r => r.json()).then(d => { setFeaturedMerch(d.featured ?? []); setMerch(d.products ?? []); setLoadingMerch(false); });
     fetch("/api/explore/djs").then(r => r.json()).then((d: { djs?: DJItem[]; rising?: DJItem[] }) => {
       setDjs(d.djs ?? []);
       setRisingDjs(d.rising ?? []);
@@ -1659,47 +1661,61 @@ export default function ExploreClient() {
           <section ref={sectionRefs.merch as React.RefObject<HTMLElement>}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>MERCH</p>
-                <h2 className="text-xl font-bold text-white">Artist Merch</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>INDIETHIS</p>
+                <h2 className="text-xl font-bold text-white">IndieThis Merch</h2>
               </div>
             </div>
             {loadingMerch
               ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
-              : merch.length === 0
-                ? <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#141414" }}>
-                    <p className="text-sm" style={{ color: "#555" }}>No merch available yet — check back soon.</p>
-                  </div>
-                : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {merch.map((item) => {
-                      const artistName = item.artist.artistName || item.artist.name || "";
-                      const price = item.variants?.[0]?.retailPrice;
-                      const thumb = item.imageUrls?.[0] ?? item.imageUrl;
-                      return (
-                        <a
-                          key={item.id}
-                          href={`/${item.artist.artistSlug}`}
-                          className="group block rounded-xl overflow-hidden no-underline"
-                          style={{ backgroundColor: "#141414" }}
-                        >
-                          <div className="relative w-full aspect-square overflow-hidden">
-                            {thumb
-                              ? <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                              : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }}>
-                                  <ShoppingBag size={32} style={{ color: "#333" }} />
-                                </div>
-                            }
-                          </div>
-                          <div className="p-3">
-                            <p className="text-xs font-semibold text-white truncate">{item.title}</p>
-                            <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
-                            {price !== undefined && (
-                              <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+              : (() => {
+                  const allMerch = [...featuredMerch, ...merch];
+                  if (allMerch.length === 0) {
+                    return (
+                      <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#141414" }}>
+                        <p className="text-sm" style={{ color: "#555" }}>No merch available yet — check back soon.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {allMerch.map((item) => {
+                        const artistName = item.artist.artistName || item.artist.name || "";
+                        const price = item.variants?.[0]?.retailPrice;
+                        const thumb = item.imageUrls?.[0] ?? item.imageUrl;
+                        return (
+                          <a
+                            key={item.id}
+                            href={`/${item.artist.artistSlug}/merch`}
+                            className="group block rounded-xl overflow-hidden no-underline relative"
+                            style={{ backgroundColor: "#141414" }}
+                          >
+                            {item.isFeatured && (
+                              <div className="absolute top-2 left-2 z-10 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                                IndieThis
+                              </div>
                             )}
-                          </div>
-                        </a>
-                      );
-                    })}
-                  </div>
+                            <div className="relative w-full aspect-square overflow-hidden">
+                              {thumb
+                                ? <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                : <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "#1a1a1a" }}>
+                                    <ShoppingBag size={32} style={{ color: "#333" }} />
+                                  </div>
+                              }
+                            </div>
+                            <div className="p-3">
+                              <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                              <p className="text-[11px] truncate mt-0.5" style={{ color: "#888" }}>{artistName}</p>
+                              {price !== undefined && (
+                                <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>${price.toFixed(2)}</p>
+                              )}
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
             }
           </section>
         )}
