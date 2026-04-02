@@ -225,7 +225,7 @@ function Panel({
     ? `linear-gradient(to bottom, rgba(${r},${g},${b},0.15) 0%, transparent 100%)`
     : null;
 
-  // Scrollable-only sections: credits, radar, DJ badge
+  // Scrollable-only sections: credits, DJ badge (radar moved up — Fix 3)
   const scrollSections: React.ReactNode[] = [];
 
   if (hasCredits) {
@@ -252,14 +252,6 @@ function Panel({
             <span style={{ color: "#ccc" }}>{featuredArtists}</span>
           </p>
         )}
-      </div>
-    );
-  }
-
-  if (detail?.audioFeatures) {
-    scrollSections.push(
-      <div key="radar" className="flex justify-center">
-        <LazyAudioRadar trackId={data.id} size="sm" />
       </div>
     );
   }
@@ -371,6 +363,18 @@ function Panel({
               {p}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* ── Fix 3: Sound DNA radar — moved above action buttons ── */}
+      {detail?.audioFeatures && (
+        <div className="flex-shrink-0 flex flex-col items-center px-4 pt-4 pb-2"
+          style={{ position: "relative", zIndex: 1 }}>
+          <p style={{ color: "#D4A843", fontSize: 13, fontFamily: "DM Sans, sans-serif",
+            fontWeight: 600, marginBottom: 10 }}>
+            Sound DNA
+          </p>
+          <LazyAudioRadar trackId={data.id} size="sm" />
         </div>
       )}
 
