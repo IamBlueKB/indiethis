@@ -86,10 +86,11 @@ const navItems: NavItem[] = [
 ];
 
 const producerNavItems: NavItem[] = [
-  { label: "My Beats",           href: "/dashboard/producer/beats",     icon: ListMusic },
-  { label: "Licensing",          href: "/dashboard/producer/licensing", icon: FileText },
-  { label: "Analytics",          href: "/dashboard/producer/analytics", icon: PieChart },
-  { label: "Earnings",           href: "/dashboard/producer/earnings",  icon: DollarSign },
+  { label: "My Beats",           href: "/dashboard/producer/beats",        icon: ListMusic },
+  { label: "Sample Packs",       href: "/dashboard/producer/sample-packs", icon: Archive },
+  { label: "Licensing",          href: "/dashboard/producer/licensing",    icon: FileText },
+  { label: "Analytics",          href: "/dashboard/producer/analytics",    icon: PieChart },
+  { label: "Earnings",           href: "/dashboard/producer/earnings",     icon: DollarSign },
 ];
 
 const producerStreamLeaseItem: NavItem = {

@@ -572,6 +572,57 @@ export async function sendFanFundingConfirmationEmail(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Sample Pack purchase confirmation
+// ---------------------------------------------------------------------------
+
+export async function sendSamplePackPurchaseEmail(params: {
+  buyerEmail:   string;
+  packTitle:    string;
+  producerName: string;
+  sampleCount:  number;
+  amount:       number; // cents
+  downloadUrl:  string;
+}): Promise<void> {
+  const appUrl = APP_URL();
+  const dollar = (params.amount / 100).toFixed(2);
+
+  await sendEmail({
+    to: { email: params.buyerEmail },
+    subject: `Your Sample Pack is ready: ${params.packTitle}`,
+    htmlContent: `
+      <div style="background:#0A0A0A;color:#e5e5e5;font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;border-radius:12px">
+        <div style="text-align:center;margin-bottom:32px">
+          <span style="font-size:24px;font-weight:700;color:#D4A843;letter-spacing:-0.5px">IndieThis</span>
+        </div>
+        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px 0">Your Sample Pack is ready!</h1>
+        <p style="margin:0 0 16px 0;color:#aaa;line-height:1.6">
+          Thanks for purchasing <strong style="color:#fff">${params.packTitle}</strong> by <strong style="color:#fff">${params.producerName}</strong>.
+          Your pack contains ${params.sampleCount} audio sample${params.sampleCount !== 1 ? "s" : ""} — ready to download below.
+        </p>
+        <div style="background:#111;border:1px solid #222;border-radius:10px;padding:16px 20px;margin:20px 0">
+          <p style="margin:0;color:#aaa;font-size:13px">Purchase total</p>
+          <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:#D4A843">$${dollar}</p>
+        </div>
+        <p style="margin:28px 0">
+          <a href="${params.downloadUrl}" style="background:#D4A843;color:#0A0A0A;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px">
+            Download Sample Pack →
+          </a>
+        </p>
+        <p style="color:#666;font-size:12px">
+          Keep this email — your download link is valid for up to 5 downloads.<br>
+          Need help? <a href="mailto:support@indiethis.com" style="color:#D4A843">support@indiethis.com</a>
+        </p>
+        <p style="margin-top:32px;color:#555;font-size:12px">
+          Powered by <strong style="color:#D4A843">IndieThis</strong> — The Home of Independent Music
+        </p>
+      </div>
+    `,
+    replyTo: { email: "hello@indiethis.com", name: "IndieThis" },
+    tags: ["sample-pack", "purchase"],
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Intake form link emails
 // ---------------------------------------------------------------------------
 

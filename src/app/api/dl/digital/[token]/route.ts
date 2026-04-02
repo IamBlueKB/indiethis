@@ -25,6 +25,64 @@ export async function GET(
     },
   });
 
+  // ── SAMPLE_PACK: serve the zip directly ─────────────────────────────────
+  if (purchase && purchase.digitalProduct.type === "SAMPLE_PACK") {
+    if (purchase.downloadCount >= purchase.maxDownloads) {
+      return NextResponse.json(
+        { error: "Download limit reached. Contact support@indiethis.com for help." },
+        { status: 410 }
+      );
+    }
+
+    // trackId=zip triggers the actual file download
+    if (trackId === "zip") {
+      await db.digitalPurchase.update({
+        where: { downloadToken: token },
+        data: { downloadCount: { increment: 1 } },
+      });
+      const zipUrl = (purchase.digitalProduct as { samplePackFileUrl?: string | null }).samplePackFileUrl;
+      if (!zipUrl) return NextResponse.json({ error: "Zip file not available" }, { status: 404 });
+
+      const res = await fetch(zipUrl);
+      if (!res.ok) return NextResponse.redirect(zipUrl);
+      const buf = await res.arrayBuffer();
+      const safeName = purchase.digitalProduct.title
+        .replace(/[^a-zA-Z0-9 \-_]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+      return new NextResponse(new Uint8Array(buf), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="${safeName}.zip"`,
+          "Content-Length": String(buf.byteLength),
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    // No action param — return pack info for the download page
+    const dp = purchase.digitalProduct as {
+      title: string; type: string; sampleCount?: number | null; samplePackFileSize?: number | null;
+    };
+    return NextResponse.json({
+      purchase: {
+        downloadToken: token,
+        downloadCount: purchase.downloadCount,
+        maxDownloads:  purchase.maxDownloads,
+        remaining:     purchase.maxDownloads - purchase.downloadCount,
+      },
+      product: {
+        title:       dp.title,
+        type:        dp.type,
+        sampleCount: dp.sampleCount ?? 0,
+        fileSize:    dp.samplePackFileSize ?? 0,
+      },
+      isSamplePack:   true,
+      downloadAction: `/api/dl/digital/${token}?trackId=zip`,
+    });
+  }
+
   if (!purchase) {
     return NextResponse.json({ error: "Download link not found" }, { status: 404 });
   }

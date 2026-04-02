@@ -21,7 +21,7 @@ import { processAmbassadorReward } from "@/lib/ambassador-rewards";
 import {
   sendEmail, sendOnboardingWelcomeEmail,
   sendMerchOrderConfirmationEmail, sendSelfFulfilledOrderEmail,
-  sendFanFundingConfirmationEmail,
+  sendFanFundingConfirmationEmail, sendSamplePackPurchaseEmail,
 } from "@/lib/brevo/email";
 import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
@@ -597,10 +597,25 @@ export async function POST(req: NextRequest) {
               },
               include: {
                 digitalProduct: {
-                  select: { title: true, userId: true },
+                  select: {
+                    title: true, userId: true, type: true,
+                    sampleCount: true,
+                    user: { select: { name: true, artistName: true } },
+                  },
                 },
               },
             });
+
+            // If this is a sample pack, credit the artist's withdrawable balance
+            if (purchase.digitalProduct.type === "SAMPLE_PACK") {
+              await db.user.update({
+                where: { id: purchase.digitalProduct.userId },
+                data: {
+                  artistBalance:       { increment: artistEarnings },
+                  artistTotalEarnings: { increment: artistEarnings },
+                },
+              });
+            }
 
             // DJ attribution split — 10% of artist portion if artist opted in
             if (djAttributionIdMeta) {
@@ -645,25 +660,42 @@ export async function POST(req: NextRequest) {
 
             // Send buyer download email
             const dlLink = `${process.env.NEXTAUTH_URL ?? "https://indiethis.com"}/dl/digital/${purchase.downloadToken}`;
-            void sendEmail({
-              to: { email: buyerEmail },
-              subject: `Your download is ready: ${purchase.digitalProduct.title}`,
-              htmlContent: `
-                <p>Thanks for your purchase!</p>
-                <p>Your download link for <strong>${purchase.digitalProduct.title}</strong> is ready:</p>
-                <p><a href="${dlLink}">${dlLink}</a></p>
-                <p>This link allows up to ${purchase.maxDownloads} downloads.</p>
-                <p>— The IndieThis Team</p>
-              `,
-            }).catch(() => {});
+            const isSamplePack = purchase.digitalProduct.type === "SAMPLE_PACK";
+
+            if (isSamplePack) {
+              const producerName =
+                purchase.digitalProduct.user.artistName ??
+                purchase.digitalProduct.user.name ??
+                "Producer";
+              void sendSamplePackPurchaseEmail({
+                buyerEmail,
+                packTitle:    purchase.digitalProduct.title,
+                producerName,
+                sampleCount:  purchase.digitalProduct.sampleCount ?? 0,
+                amount:       purchase.amount,
+                downloadUrl:  dlLink,
+              }).catch(() => {});
+            } else {
+              void sendEmail({
+                to: { email: buyerEmail },
+                subject: `Your download is ready: ${purchase.digitalProduct.title}`,
+                htmlContent: `
+                  <p>Thanks for your purchase!</p>
+                  <p>Your download link for <strong>${purchase.digitalProduct.title}</strong> is ready:</p>
+                  <p><a href="${dlLink}">${dlLink}</a></p>
+                  <p>This link allows up to ${purchase.maxDownloads} downloads.</p>
+                  <p>— The IndieThis Team</p>
+                `,
+              }).catch(() => {});
+            }
 
             // Notify artist
             void createNotification({
               userId: purchase.digitalProduct.userId,
               type: "MUSIC_SALE",
-              title: "New digital sale!",
+              title: isSamplePack ? "New sample pack sale!" : "New digital sale!",
               message: `Someone purchased "${purchase.digitalProduct.title}" — you earn $${(purchase.artistEarnings / 100).toFixed(2)}`,
-              link: "/dashboard/music/sales",
+              link: isSamplePack ? "/dashboard/producer/sample-packs" : "/dashboard/music/sales",
             }).catch(() => {});
           }
         }

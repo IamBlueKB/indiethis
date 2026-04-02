@@ -23,7 +23,7 @@ import TrackArtwork from "@/components/tracks/TrackArtwork";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
-  Disc, Disc3, Pause, ShoppingCart,
+  Disc, Disc3, Pause, ShoppingCart, Archive,
 } from "lucide-react";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
@@ -124,6 +124,22 @@ type DigitalProductItem = {
     artistName: string | null;
     artistSlug: string | null;
     artistSite: { isPublished: boolean } | null;
+  };
+};
+
+type SamplePackItem = {
+  id:                string;
+  title:             string;
+  price:             number;
+  genre:             string | null;
+  coverArtUrl:       string | null;
+  sampleCount:       number | null;
+  previewSampleUrls: string[] | null;
+  artist: {
+    id:          string;
+    name:        string;
+    artistName:  string | null;
+    artistSlug:  string | null;
   };
 };
 
@@ -706,7 +722,7 @@ function SearchBar({ onFilter, onNLPParsed, onClearNLP, nlpPills = [], onRemoveP
 
 // ── Filter Pills ───────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "artists" | "music" | "beats" | "studios" | "ai" | "sound" | "store" | "djs" | "merch";
+type FilterTab = "all" | "artists" | "music" | "beats" | "packs" | "studios" | "ai" | "sound" | "store" | "djs" | "merch";
 
 type FilterTabDef = { key: FilterTab; label: string; icon?: React.ElementType };
 
@@ -715,8 +731,9 @@ const FILTER_TABS: FilterTabDef[] = [
   { key: "sound",   label: "Find Your Sound", icon: Radar },
   { key: "artists", label: "Artists",  icon: Users },
   { key: "music",   label: "Music",    icon: Music2 },
-  { key: "beats",   label: "Beats",    icon: Headphones },
-  { key: "djs",     label: "DJs",      icon: Disc3 },
+  { key: "beats",   label: "Beats",       icon: Headphones },
+  { key: "packs",   label: "Sample Packs", icon: Archive },
+  { key: "djs",     label: "DJs",         icon: Disc3 },
   { key: "store",   label: "Store",    icon: ShoppingBag },
   { key: "merch",   label: "Merch",    icon: ShoppingBag },
   { key: "studios", label: "Studios",  icon: Building2 },
@@ -1092,6 +1109,13 @@ export default function ExploreClient() {
   const [loadingStore, setLoadingStore] = useState(true);
   const [buyProduct, setBuyProduct] = useState<DigitalProductItem | null>(null);
 
+  const [samplePacks, setSamplePacks]   = useState<SamplePackItem[]>([]);
+  const [loadingPacks, setLoadingPacks] = useState(true);
+  const [buyPack, setBuyPack]           = useState<SamplePackItem | null>(null);
+  const [packEmail, setPackEmail]       = useState("");
+  const [packBuying, setPackBuying]     = useState(false);
+  const [packBuyError, setPackBuyError] = useState("");
+
   const [merch, setMerch]               = useState<MerchItem[]>([]);
   const [featuredMerch, setFeaturedMerch] = useState<MerchItem[]>([]);
   const [loadingMerch, setLoadingMerch] = useState(true);
@@ -1135,6 +1159,7 @@ export default function ExploreClient() {
   const sectionRefs: Record<string, React.RefObject<HTMLElement | null>> = {
     music:   useRef<HTMLElement>(null),
     beats:   useRef<HTMLElement>(null),
+    packs:   useRef<HTMLElement>(null),
     studios: useRef<HTMLElement>(null),
     artists: useRef<HTMLElement>(null),
     ai:      useRef<HTMLElement>(null),
@@ -1155,6 +1180,7 @@ export default function ExploreClient() {
     fetch("/api/explore/rising").then(r => r.json()).then(d => { setRising(d.artists ?? []); setLoadingRising(false); });
     fetch("/api/explore/digital-products").then(r => r.json()).then(d => { setDigitalProducts(d.products ?? []); setLoadingStore(false); });
     fetch("/api/explore/merch").then(r => r.json()).then(d => { setFeaturedMerch(d.featured ?? []); setMerch(d.products ?? []); setLoadingMerch(false); });
+    fetch("/api/explore/sample-packs").then(r => r.json()).then((d: { packs?: SamplePackItem[] }) => { setSamplePacks(d.packs ?? []); setLoadingPacks(false); });
     fetch("/api/explore/djs").then(r => r.json()).then((d: { djs?: DJItem[]; rising?: DJItem[] }) => {
       setDjs(d.djs ?? []);
       setRisingDjs(d.rising ?? []);
@@ -1636,6 +1662,115 @@ export default function ExploreClient() {
               </Link>
             </div>
           </section>
+        )}
+
+        {/* Section: Sample Packs */}
+        {showSection("packs") && (
+          <section ref={sectionRefs.packs as React.RefObject<HTMLElement>}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <SectionLabel label="SAMPLE PACKS" />
+                <h2 className="text-xl font-bold text-white">Browse Sample Packs</h2>
+              </div>
+            </div>
+            {loadingPacks
+              ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} /></div>
+              : samplePacks.length === 0
+                ? <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#141414" }}>
+                    <p className="text-sm" style={{ color: "#555" }}>No sample packs available yet — check back soon.</p>
+                  </div>
+                : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {samplePacks.map((p) => (
+                      <button key={p.id}
+                        onClick={() => { setBuyPack(p); setPackEmail(""); setPackBuyError(""); }}
+                        className="rounded-xl overflow-hidden text-left transition-all hover:brightness-110 active:scale-95"
+                        style={{ border: "1px solid rgba(255,255,255,0.06)", backgroundColor: "#111" }}>
+                        <div className="w-full aspect-square flex items-center justify-center relative overflow-hidden"
+                          style={{ backgroundColor: "#1a1a1a" }}>
+                          {p.coverArtUrl
+                            ? <img src={p.coverArtUrl} alt={p.title} className="w-full h-full object-cover" />
+                            : <Archive size={32} className="text-gray-700" />}
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+                            <ShoppingCart size={20} style={{ color: "#D4A843" }} />
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <p className="text-xs font-semibold text-white truncate">{p.title}</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>
+                            {p.artist.artistName ?? p.artist.name}
+                            {p.sampleCount ? ` · ${p.sampleCount} samples` : ""}
+                          </p>
+                          <p className="text-xs font-bold mt-1" style={{ color: "#D4A843" }}>
+                            ${(p.price / 100).toFixed(2)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+            }
+          </section>
+        )}
+
+        {/* Buy sample pack modal */}
+        {buyPack && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setBuyPack(null); }}>
+            <div className="relative w-full max-w-sm rounded-2xl p-6"
+              style={{ backgroundColor: "#111111", border: "1px solid rgba(212,168,67,0.2)" }}>
+              <button onClick={() => setBuyPack(null)}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
+                <X size={14} className="text-white/60" />
+              </button>
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] mb-1" style={{ color: "#D4A843" }}>Sample Pack</p>
+              <h2 className="text-lg font-bold text-white mb-0.5">{buyPack.title}</h2>
+              <p className="text-xs mb-4" style={{ color: "#888" }}>
+                by {buyPack.artist.artistName ?? buyPack.artist.name}
+                {buyPack.sampleCount ? ` · ${buyPack.sampleCount} samples` : ""}
+              </p>
+              {(buyPack.previewSampleUrls ?? []).length > 0 && (
+                <div className="mb-4 space-y-1.5">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: "#555" }}>Preview</p>
+                  {(buyPack.previewSampleUrls ?? []).slice(0, 3).map((url) => {
+                    const label = url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "Sample";
+                    return (
+                      <div key={url} className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                        style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <Play size={12} style={{ color: "#D4A843" }} />
+                        <p className="text-xs truncate flex-1" style={{ color: "#aaa" }}>{label}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <input type="email" placeholder="Your email (for download link)"
+                value={packEmail} onChange={(e) => setPackEmail(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none mb-3"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }} />
+              {packBuyError && <p className="text-xs mb-3" style={{ color: "#E85D4A" }}>{packBuyError}</p>}
+              <button
+                onClick={async () => {
+                  if (!packEmail.includes("@")) { setPackBuyError("Enter a valid email"); return; }
+                  setPackBuying(true); setPackBuyError("");
+                  const r = await fetch("/api/digital-products/checkout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ productId: buyPack.id, buyerEmail: packEmail }),
+                  });
+                  const d = await r.json() as { url?: string; error?: string };
+                  if (d.url) { window.location.href = d.url; }
+                  else { setPackBuyError(d.error ?? "Checkout failed"); setPackBuying(false); }
+                }}
+                disabled={packBuying}
+                className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                {packBuying ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />}
+                {packBuying ? "Redirecting..." : `Buy for $${(buyPack.price / 100).toFixed(2)}`}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Section: Digital Products Store */}

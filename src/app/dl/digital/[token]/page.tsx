@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import {
-  Download, Music2, Package, AlertTriangle, Loader2, CheckCircle2,
+  Download, Music2, Package, AlertTriangle, Loader2, CheckCircle2, Archive,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,12 +17,16 @@ type DownloadInfo = {
   product: {
     title: string;
     type: string;
+    sampleCount?: number;
+    fileSize?: number;
   };
   tracks: Array<{
     id: string;
     title: string;
     downloadUrl: string;
   }>;
+  isSamplePack?: boolean;
+  downloadAction?: string;
 };
 
 export default function DigitalDownloadPage() {
@@ -91,8 +95,78 @@ export default function DigitalDownloadPage() {
 
   if (!data) return null;
 
-  const { purchase, product, tracks } = data;
+  const { purchase, product, tracks, isSamplePack, downloadAction } = data;
 
+  // ── SAMPLE PACK download page ─────────────────────────────────────────────
+  if (isSamplePack) {
+    const fileMb = product.fileSize ? (product.fileSize / (1024 * 1024)).toFixed(1) : null;
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
+        <div className="max-w-lg mx-auto px-4 py-12">
+          <div className="text-center mb-8">
+            {sessionId && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4 text-sm"
+                style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                <CheckCircle2 size={14} />
+                Purchase complete!
+              </div>
+            )}
+            <div className="flex items-center justify-center mb-3">
+              <div className="w-16 h-16 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: "rgba(212,168,67,0.1)" }}>
+                <Archive size={28} style={{ color: "#D4A843" }} />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-white">{product.title}</h1>
+            <p className="text-sm text-gray-400 mt-1">
+              {product.sampleCount} sample{product.sampleCount !== 1 ? "s" : ""}
+              {fileMb ? ` · ${fileMb} MB` : ""}
+            </p>
+          </div>
+
+          <div className="rounded-xl border p-4 mb-6"
+            style={{ backgroundColor: "#111", borderColor: "#222" }}>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-400">Downloads remaining</span>
+              <span className="font-medium" style={{ color: purchase.remaining > 0 ? "#D4A843" : "#f87171" }}>
+                {purchase.remaining} of {purchase.maxDownloads}
+              </span>
+            </div>
+          </div>
+
+          <a
+            href={purchase.remaining > 0 ? (downloadAction ?? "#") : "#"}
+            download
+            onClick={purchase.remaining <= 0 ? (e) => e.preventDefault() : undefined}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold transition-opacity"
+            style={
+              purchase.remaining > 0
+                ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                : { backgroundColor: "#333", color: "#666", cursor: "not-allowed" }
+            }
+          >
+            <Download size={18} />
+            {purchase.remaining > 0 ? "Download Sample Pack (.zip)" : "Download limit reached"}
+          </a>
+
+          <div className="text-center mt-8 text-xs text-gray-600">
+            <p>Keep this email link for up to {purchase.maxDownloads} downloads.</p>
+            <p className="mt-1">
+              Need help?{" "}
+              <a href="mailto:support@indiethis.com" className="underline" style={{ color: "#D4A843" }}>
+                support@indiethis.com
+              </a>
+            </p>
+            <Link href="/" className="block mt-3 hover:text-gray-400 transition-colors">
+              Powered by IndieThis
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MUSIC (SINGLE / EP / ALBUM) download page ─────────────────────────────
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
       <div className="max-w-lg mx-auto px-4 py-12">

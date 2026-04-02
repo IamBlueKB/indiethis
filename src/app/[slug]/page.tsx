@@ -23,6 +23,7 @@ import ArtistPageViewTracker from "./ArtistPageViewTracker";
 import ArtistNav from "./ArtistNav";
 import StoreSection, { type DigitalProductPublic } from "./StoreSection";
 import BeatsSection, { type PublicBeat } from "./BeatsSection";
+import SamplePacksSection, { type PublicSamplePack } from "./SamplePacksSection";
 import { CustomTemplate } from "@/components/studio-public/templates/CustomTemplate";
 import { DefaultTemplate } from "@/components/studio-public/templates/DefaultTemplate";
 import { CleanTemplate } from "@/components/studio-public/templates/CleanTemplate";
@@ -200,6 +201,18 @@ async function ArtistSite({ slug }: { slug: string }) {
       id: true, title: true, type: true, price: true,
       coverArtUrl: true, description: true,
       _count: { select: { tracks: true } },
+    },
+  });
+
+  // Published sample packs by this producer
+  const rawSamplePacks = await db.digitalProduct.findMany({
+    where:   { userId: artist.id, type: "SAMPLE_PACK", published: true },
+    orderBy: { createdAt: "desc" },
+    take:    12,
+    select: {
+      id: true, title: true, price: true, description: true,
+      genre: true, coverArtUrl: true, sampleCount: true,
+      samplePackFileSize: true, previewSampleUrls: true,
     },
   });
 
@@ -409,6 +422,15 @@ async function ArtistSite({ slug }: { slug: string }) {
             beats={publicBeats}
             producerName={producerDisplayName}
             producerBio={producerBio}
+            artistSlug={slug}
+          />
+        )}
+
+        {/* 6b. Sample Packs (producer section) */}
+        {rawSamplePacks.length > 0 && (
+          <SamplePacksSection
+            packs={rawSamplePacks as PublicSamplePack[]}
+            producerName={producerDisplayName}
             artistSlug={slug}
           />
         )}
