@@ -2,7 +2,7 @@
  * POST /api/dashboard/merch/platform-setup
  *
  * One-time setup: creates 3 IndieThis-branded merch products
- * attached to hello@indiethis.com, marked isFeatured: true.
+ * attached to admin@indiethis.com, marked isFeatured: true.
  * PLATFORM_ADMIN only. Safe to call multiple times — skips products
  * that already exist (matched by title).
  */
@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-const PLATFORM_EMAIL = "hello@indiethis.com";
+const PLATFORM_EMAIL = "admin@indiethis.com";
 
 const PRODUCTS = [
   {
@@ -19,7 +19,7 @@ const PRODUCTS = [
     imageUrl:        "/images/brand/indiethis-logo-dark-bg.svg",
     fulfillmentType: "SELF_FULFILLED" as const,
     shippingCost:    5.99,
-    returnPolicy:    "All sales final on branded merch. Contact hello@indiethis.com for defective items.",
+    returnPolicy:    "All sales final on branded merch. Contact admin@indiethis.com for defective items.",
     processingDays:  5,
     variants: [
       { size: "S",   color: "Black", colorCode: "#0A0A0A", retailPrice: 29.99 },
@@ -35,7 +35,7 @@ const PRODUCTS = [
     imageUrl:        "/images/brand/indiethis-logo-dark-bg.svg",
     fulfillmentType: "SELF_FULFILLED" as const,
     shippingCost:    7.99,
-    returnPolicy:    "All sales final on branded merch. Contact hello@indiethis.com for defective items.",
+    returnPolicy:    "All sales final on branded merch. Contact admin@indiethis.com for defective items.",
     processingDays:  5,
     variants: [
       { size: "S",   color: "Black", colorCode: "#0A0A0A", retailPrice: 54.99 },
@@ -50,7 +50,7 @@ const PRODUCTS = [
     imageUrl:        "/images/brand/indiethis-icon.svg",
     fulfillmentType: "SELF_FULFILLED" as const,
     shippingCost:    4.99,
-    returnPolicy:    "All sales final on branded merch. Contact hello@indiethis.com for defective items.",
+    returnPolicy:    "All sales final on branded merch. Contact admin@indiethis.com for defective items.",
     processingDays:  5,
     variants: [
       { size: "OS", color: "Black", colorCode: "#0A0A0A", retailPrice: 27.99 },
