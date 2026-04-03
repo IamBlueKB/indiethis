@@ -1,12 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAudioStore } from "@/store/audio";
-
-const LINE_H      = 14 * 1.8;  // font-size × line-height = 25.2 px
-const CONTAINER_H = 300;
-const PAD         = 32;        // top and bottom breathing room
 
 interface Props {
   artistTrackIds: string[];
@@ -32,11 +28,15 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
       ? Math.min(Math.floor((currentTime / duration) * lines.length), lines.length - 1)
       : 0;
 
-  // Translate the inner div upward so the current line stays centred
-  const lineTop   = PAD + currentLineIndex * LINE_H;
-  const rawY      = -(lineTop - CONTAINER_H / 2 + LINE_H / 2);
-  const totalH    = PAD + lines.length * LINE_H + PAD;
-  const translateY = Math.min(0, Math.max(-(totalH - CONTAINER_H), rawY));
+  const lyricsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!lyricsRef.current || !duration || duration === 0) return;
+    const container = lyricsRef.current;
+    const scrollHeight = container.scrollHeight - container.clientHeight;
+    const progress = currentTime / duration;
+    container.scrollTop = scrollHeight * progress;
+  }, [currentTime, duration]);
 
   const contentKey = isThisArtist ? (currentTrack!.id ?? "none") : "none";
 
@@ -50,7 +50,7 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
-        style={{ position: "relative", width: "100%", height: CONTAINER_H, overflow: "hidden" }}
+        style={{ position: "relative", width: "100%" }}
       >
         {/* Top dissolve */}
         <div style={{
@@ -59,13 +59,16 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
           pointerEvents: "none", zIndex: 2,
         }} />
 
-        {/* Moving lyrics strip */}
-        <div style={{
-          transform:  `translateY(${translateY}px)`,
-          transition: isPlaying ? "transform 0.6s linear" : "none",
-          willChange: "transform",
-        }}>
-          <div style={{ height: PAD }} />
+        {/* Lyrics container — overflow-y: hidden, scrollTop driven by JS */}
+        <div
+          ref={lyricsRef}
+          style={{
+            position:   "relative",
+            maxHeight:  300,
+            overflowY:  "hidden",
+          }}
+        >
+          <div style={{ height: 32 }} />
           {lines.map((line, i) => (
             <p
               key={i}
@@ -85,7 +88,7 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
               {line}
             </p>
           ))}
-          <div style={{ height: PAD }} />
+          <div style={{ height: 32 }} />
         </div>
 
         {/* Bottom dissolve */}
