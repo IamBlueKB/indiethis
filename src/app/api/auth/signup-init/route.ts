@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       email:        string;
       password:     string;
       role?:        string;
+      authProvider?: string;
       signupPath?:  string;
       referralCode?: string;
       affiliateId?:  string;
@@ -39,17 +40,27 @@ export async function POST(req: NextRequest) {
       name, email, password, role,
       signupPath, referralCode, affiliateId, promoCode,
       source, utmSource, utmMedium, utmCampaign, landingPage, firstVisitAt,
+      authProvider,
     } = body;
 
+    const isOAuth = authProvider && authProvider !== "email";
+
     // ── Validation ────────────────────────────────────────────────────────
-    if (!name?.trim() || !email?.trim() || !password) {
+    if (!name?.trim() || !email?.trim()) {
       return NextResponse.json(
-        { error: "Name, email, and password are required." },
+        { error: "Name and email are required." },
         { status: 400 }
       );
     }
 
-    if (password.length < 8) {
+    if (!isOAuth && !password) {
+      return NextResponse.json(
+        { error: "Password is required." },
+        { status: 400 }
+      );
+    }
+
+    if (!isOAuth && password.length < 8) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters." },
         { status: 400 }
@@ -71,8 +82,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Hash password ─────────────────────────────────────────────────────
-    const passwordHash = await bcrypt.hash(password, 12);
+    // ── Hash password (skip for OAuth signups) ────────────────────────────
+    const passwordHash = isOAuth ? null : await bcrypt.hash(password, 12);
 
     // ── Upsert PendingSignup ──────────────────────────────────────────────
     // Upsert so a user can re-submit the form (e.g. after closing the tab)
@@ -82,6 +93,7 @@ export async function POST(req: NextRequest) {
       update: {
         name:          name.trim(),
         passwordHash,
+        authProvider:  authProvider ?? "email",
         role:          userRole,
         signupPath:    signupPath ?? (userRole === "STUDIO_ADMIN" ? "studio" : "artist"),
         referredByCode: referralCode?.toUpperCase() ?? null,
@@ -93,7 +105,7 @@ export async function POST(req: NextRequest) {
         utmCampaign:   utmCampaign   ?? null,
         landingPage:   landingPage   ?? null,
         firstVisitAt:  firstVisitAt  ? new Date(firstVisitAt) : null,
-        stripeSessionId: null, // reset in case of re-submission
+        stripeSessionId: null,
         tier:          null,
         expiresAt:     addHours(new Date(), 24),
       },
@@ -101,6 +113,7 @@ export async function POST(req: NextRequest) {
         email:         normalizedEmail,
         name:          name.trim(),
         passwordHash,
+        authProvider:  authProvider ?? "email",
         role:          userRole,
         signupPath:    signupPath ?? (userRole === "STUDIO_ADMIN" ? "studio" : "artist"),
         referredByCode: referralCode?.toUpperCase() ?? null,

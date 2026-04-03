@@ -39,7 +39,8 @@ model User {
   email                    String                 @unique
   emailVerified            DateTime?
   phone                    String?
-  passwordHash             String
+  passwordHash             String?
+  authProvider             String                 @default("email")
   role                     Role                   @default(ARTIST)
   name                     String
   artistName               String?
@@ -1715,7 +1716,9 @@ model PendingSignup {
   id              String    @id @default(cuid())
   email           String    @unique
   name            String
-  passwordHash    String
+  passwordHash    String?
+  authProvider    String    @default("email")
+  socialPhoto     String?
   role            Role
   signupPath      String?
   referredByCode  String?

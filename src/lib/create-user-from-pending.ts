@@ -88,8 +88,10 @@ export async function createUserFromPending(
     data: {
       name:          pending.name.trim(),
       email:         normalizedEmail,
-      passwordHash:  pending.passwordHash,
+      passwordHash:  pending.passwordHash ?? null,
+      authProvider:  pending.authProvider ?? "email",
       role:          pending.role,
+      photo:         pending.socialPhoto ?? undefined,
       referralCode:  newReferralCode,
       referredById,
       referredByCode: referredById ? pending.referredByCode?.toUpperCase() : undefined,
