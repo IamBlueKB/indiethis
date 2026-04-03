@@ -17,8 +17,8 @@ _Last updated: 2026-04-03 (session 9)_
 
 | Route | Description |
 |-------|-------------|
-| `/login` | Email/password login |
-| `/signup` | New account creation with path selection (artist/producer/studio) |
+| `/login` | Email/password + Google/Facebook social login |
+| `/signup` | New account creation with path selection (artist/producer/studio) — social OAuth pre-fill mode |
 | `/signup/setup` | Post-checkout onboarding wizard (social links, bio, location) |
 | `/signup/complete` | Checkout completion handler, creates user from PendingSignup |
 | `/forgot-password` | Send password reset email via Brevo |
@@ -141,7 +141,6 @@ _Last updated: 2026-04-03 (session 9)_
 | `/admin/settings/pricing` | PlatformPricing live editor |
 | `/admin/analytics/funnel` | Conversion funnel analytics |
 | `/admin/dj-verification` | DJ verification queue (approve/deny applications) |
-| `/admin` | Admin dashboard now includes Merch Overview section (orders, revenue, status breakdown, top products, Printful health) |
 
 ---
 
@@ -178,10 +177,12 @@ _Last updated: 2026-04-03 (session 9)_
 ### Auth
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/auth/[...nextauth]` | NextAuth.js handler (sign in, sign out, session) |
+| `POST /api/auth/[...nextauth]` | NextAuth.js handler (sign in, sign out, session) — credentials + Google + Facebook |
+| `POST /api/auth/signup-init` | Create PendingSignup record (step 1 of signup flow) |
 | `POST /api/auth/forgot-password` | Send password reset email |
 | `POST /api/auth/reset-password` | Complete password reset with token |
-| `POST /api/auth/complete-signup` | Finalize PendingSignup → User after checkout |
+| `GET /api/auth/complete-signup` | Finalize PendingSignup → User after checkout |
+| `POST /api/auth/facebook-data-deletion` | Facebook data deletion callback (Meta requirement) |
 | `POST /api/admin/auth/login` | Admin session login |
 | `POST /api/admin/auth/logout` | Admin session logout |
 | `POST /api/admin/auth/change-password` | Admin password update |
@@ -455,6 +456,8 @@ YouTubeSync          YoutubeReference
 | **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
 | **Stripe Connect** | DJ and producer direct payouts | ✅ Code complete — transfer.paid/failed webhook handlers wired |
 | **Printful** | Print-on-demand merch fulfillment (order creation, webhook status updates, issue/defect claims) | ✅ Key set — `PRINTFUL_API_KEY` |
+| **Google OAuth** | Social login via NextAuth Google provider | ✅ Live |
+| **Facebook OAuth** | Social login via NextAuth Facebook provider | ⏳ Pending Meta business verification |
 
 ---
 
@@ -464,6 +467,11 @@ YouTubeSync          YoutubeReference
 | Feature | Status |
 |---------|--------|
 | Email/password login | ✅ DONE |
+| Google OAuth login — existing users sign in, new users redirected to signup flow | ✅ DONE |
+| Facebook OAuth login — wired, hidden until Meta business verification completes | ⏳ PENDING |
+| Social profile auto-population — name + photo from Google/Facebook set on account creation | ✅ DONE |
+| `authProvider` tracked on User model (`"email"` / `"google"` / `"facebook"`) | ✅ DONE |
+| Facebook button hidden on login + signup pages (remove `hidden` class to re-enable) | ✅ DONE |
 | New user signup (artist / producer / studio path) | ✅ DONE |
 | Forgot / reset password (Brevo email) | ✅ DONE |
 | Post-checkout onboarding wizard | ✅ DONE |
