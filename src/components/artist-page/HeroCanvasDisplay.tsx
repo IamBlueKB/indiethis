@@ -145,7 +145,7 @@ export default function HeroCanvasDisplay({
           <motion.div
             key={media.key}
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
+            animate={{ opacity: 0.7 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5, ease: "easeInOut" }}
             style={{
