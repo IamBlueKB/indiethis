@@ -71,7 +71,12 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
     const el        = lineRefs.current[currentLineIndex];
     if (!container || !el) return;
 
-    const targetTop = el.offsetTop + el.offsetHeight / 2 - container.clientHeight / 2;
+    // getBoundingClientRect gives viewport-relative coords; offset by current
+    // scrollTop to get the element's position within the scrollable container.
+    const containerRect  = container.getBoundingClientRect();
+    const elRect         = el.getBoundingClientRect();
+    const elTopInScroll  = elRect.top - containerRect.top + container.scrollTop;
+    const targetTop      = elTopInScroll + el.offsetHeight / 2 - container.clientHeight / 2;
     container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
   }, [currentLineIndex, isPlaying]);
 
