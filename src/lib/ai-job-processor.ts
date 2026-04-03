@@ -27,6 +27,12 @@ import { UTApi } from "uploadthing/server";
 import { claude, SONNET } from "@/lib/claude";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import { embedIndieThisMetadata } from "@/lib/image-metadata";
+import {
+  sendMasteringCompleteEmail,
+  sendCoverArtCompleteEmail,
+  sendPressKitCompleteEmail,
+  sendLyricVideoCompleteEmail,
+} from "@/lib/brevo/email";
 
 // Set the static ffmpeg binary path once at module load
 ffmpegFluent.setFfmpegPath(ffmpegInstaller.path);
@@ -1093,6 +1099,54 @@ export async function processAIJob(jobId: string): Promise<void> {
           });
         }
       }
+
+      // Branded completion email (non-fatal, fire-and-forget)
+      if (job.artistId && (job.type === "MASTERING" || job.type === "COVER_ART" || job.type === "PRESS_KIT")) {
+        const completionArtistId = job.artistId;
+        void (async () => {
+          try {
+            const artist = await db.user.findUnique({
+              where:  { id: completionArtistId },
+              select: { email: true, name: true, artistName: true, artistSlug: true },
+            });
+            if (!artist?.email) return;
+            const artistName = artist.artistName ?? artist.name ?? "Artist";
+            const artistSlug = artist.artistSlug !== null ? artist.artistSlug : undefined;
+            const appUrl     = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+
+            if (job.type === "MASTERING") {
+              const outputs = (result.outputData.outputs as Array<{ downloadUrl: string | null; status: string }> | undefined) ?? [];
+              const first   = outputs.find((o) => o.status === "Success" && o.downloadUrl);
+              await sendMasteringCompleteEmail({
+                artistEmail: artist.email,
+                artistName,
+                artistSlug,
+                trackTitle:  "your track",
+                downloadUrl: first?.downloadUrl ?? `${appUrl}/dashboard/ai/mastering`,
+              });
+            } else if (job.type === "COVER_ART") {
+              const imageUrls = (result.outputData.imageUrls as string[] | undefined) ?? [];
+              await sendCoverArtCompleteEmail({
+                artistEmail: artist.email,
+                artistName,
+                artistSlug,
+                trackTitle:  "your latest",
+                artUrl:      imageUrls[0] ?? `${appUrl}/dashboard/ai/cover-art`,
+              });
+            } else if (job.type === "PRESS_KIT") {
+              const pdfUrl = (result.outputData.pdfUrl as string | undefined) ?? `${appUrl}/dashboard/ai/press-kit`;
+              await sendPressKitCompleteEmail({
+                artistEmail: artist.email,
+                artistName,
+                artistSlug,
+                pressKitUrl: pdfUrl,
+              });
+            }
+          } catch (emailErr) {
+            console.error(`[ai-jobs] completion email failed for job ${jobId}:`, emailErr);
+          }
+        })();
+      }
     } else {
       // Handler manages its own DB writes (e.g. VIDEO Phase 1 preview)
       // Only update costToUs if provided
@@ -1924,4 +1978,27 @@ export async function continueLyricVideoRender(
     `[lyric-video/phase2] job ${jobId} COMPLETE — ` +
     `video: ${finalVideoUrl}, total cost $${totalCostToUs.toFixed(4)}`,
   );
+
+  // Branded completion email (non-fatal)
+  if (job.artistId) {
+    const lyricArtistId = job.artistId;
+    void (async () => {
+      try {
+        const artist = await db.user.findUnique({
+          where:  { id: lyricArtistId },
+          select: { email: true, name: true, artistName: true, artistSlug: true },
+        });
+      if (!artist?.email) return;
+      await sendLyricVideoCompleteEmail({
+        artistEmail: artist.email,
+        artistName:  artist.artistName ?? artist.name ?? "Artist",
+        artistSlug:  artist.artistSlug !== null ? artist.artistSlug : undefined,
+        trackTitle:  "your track",
+        videoUrl:    finalVideoUrl,
+      });
+    } catch (emailErr) {
+      console.error(`[lyric-video/phase2] completion email failed for job ${jobId}:`, emailErr);
+    }
+    })();
+  }
 }

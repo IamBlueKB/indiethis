@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { cancelFollowUpByContactId } from "@/lib/email-sequence";
 import { createNotification } from "@/lib/notifications";
+import { sendSessionFollowUpEmail } from "@/lib/brevo/email";
 
 // PATCH /api/studio/bookings/[id]
 // Updates status, paymentStatus, and/or engineerNotes on a booking.
@@ -90,6 +91,30 @@ export async function PATCH(
         link: "/dashboard/sessions",
       }).catch(() => {});
     }
+  }
+
+  // Session follow-up email when booking is COMPLETED (non-fatal)
+  if (status === "COMPLETED" && booking?.artistId) {
+    void (async () => {
+      try {
+        const artist = await db.user.findUnique({
+          where:  { id: booking.artistId! },
+          select: { email: true, name: true, artistName: true },
+        });
+        if (!artist?.email) return;
+        const sessionDateStr = booking.dateTime
+          ? new Date(booking.dateTime).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+          : "your session";
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+        await sendSessionFollowUpEmail({
+          artistEmail: artist.email,
+          artistName:  artist.artistName ?? artist.name ?? "Artist",
+          studioName:  studio.name,
+          sessionDate: sessionDateStr,
+          followUpUrl: `${appUrl}/dashboard/sessions`,
+        });
+      } catch { /* non-fatal */ }
+    })();
   }
 
   // Create draft invoice when completing a booking with line items and a contact

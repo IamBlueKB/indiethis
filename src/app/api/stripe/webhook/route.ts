@@ -22,6 +22,7 @@ import {
   sendEmail, sendOnboardingWelcomeEmail,
   sendMerchOrderConfirmationEmail, sendSelfFulfilledOrderEmail,
   sendFanFundingConfirmationEmail, sendSamplePackPurchaseEmail,
+  sendBeatPurchaseReceiptEmail, sendFanFundingReceivedEmail,
 } from "@/lib/brevo/email";
 import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
@@ -224,6 +225,32 @@ export async function POST(req: NextRequest) {
             message: `${buyerName} purchased a ${licenseType} license for "${soldTrack?.title ?? "your beat"}" — $${paidAmount.toFixed(2)}`,
             link: "/dashboard/producer/licensing",
           }).catch(() => {});
+
+          // Receipt email to buyer
+          void (async () => {
+            try {
+              const buyerWithEmail = await db.user.findUnique({
+                where:  { id: buyerId },
+                select: { email: true, name: true, artistName: true },
+              });
+              const producer = await db.user.findUnique({
+                where:  { id: producerId },
+                select: { name: true, artistName: true, artistSlug: true },
+              });
+              if (!buyerWithEmail?.email) return;
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+              await sendBeatPurchaseReceiptEmail({
+                buyerEmail:    buyerWithEmail.email,
+                buyerName:     buyerWithEmail.artistName ?? buyerWithEmail.name ?? undefined,
+                beatTitle:     soldTrack?.title ?? "Beat",
+                producerName:  producer?.artistName ?? producer?.name ?? "Producer",
+                producerSlug:  producer?.artistSlug ?? undefined,
+                licenseType,
+                amount:        checkSession.amount_total ?? 0,
+                downloadUrl:   `${appUrl}/dashboard/marketplace`,
+              });
+            } catch { /* non-fatal */ }
+          })();
         }
         break;
       }
@@ -733,7 +760,7 @@ export async function POST(req: NextRequest) {
             });
             const artist = await db.user.findUnique({
               where: { id: artistId },
-              select: { name: true, artistName: true, platformCredits: true },
+              select: { email: true, name: true, artistName: true, artistSlug: true, platformCredits: true },
             });
             const displayName = fanName || "A fan";
             const artistDisplay = artist?.artistName || artist?.name || "you";
@@ -748,6 +775,18 @@ export async function POST(req: NextRequest) {
             }).catch(() => {});
             // Thank-you email to fan
             void sendFanFundingConfirmationEmail({ fanEmail, fanName: fanName || null, artistName: artistDisplay, amount }).catch(() => {});
+
+            // Notification email to artist
+            if (artist?.email) {
+              void sendFanFundingReceivedEmail({
+                artistEmail:  artist.email,
+                artistName:   artist.artistName ?? artist.name ?? artistDisplay,
+                artistSlug:   artist.artistSlug ?? undefined,
+                fanName:      fanName || null,
+                amount,
+                totalCredits: totalCredits,
+              }).catch(() => {});
+            }
           }
         }
         break;

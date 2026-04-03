@@ -22,6 +22,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/admin")) return true;
   if (pathname.startsWith("/api/uploadthing")) return true;
   if (pathname.startsWith("/api/public")) return true;
+  // Dev email preview — never auth-gated (route itself blocks in production)
+  if (pathname.startsWith("/api/dev")) return true;
   // Stripe checkout — handles both new signups (unauthenticated) and upgrades (authenticated)
   if (pathname === "/api/stripe/checkout") return true;
   // Public invoice pages — no auth required (artists paying invoices)

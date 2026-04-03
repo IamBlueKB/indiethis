@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { replicate } from "@/lib/replicate";
 import { createNotification } from "@/lib/notifications";
 import { storeStemsFromReplicate } from "@/lib/stem-storage";
+import { sendVocalRemovalCompleteEmail } from "@/lib/brevo/email";
 
 export const maxDuration = 30;
 
@@ -63,6 +64,22 @@ export async function GET(
           message: "Download your separated vocals, drums, bass, and instruments",
           link:    "/dashboard/ai/vocal-remover",
         }).catch(() => {}); // non-fatal
+
+        // Branded completion email (non-fatal)
+        void db.user.findUnique({
+          where:  { id: session.user.id },
+          select: { email: true, name: true, artistName: true, artistSlug: true },
+        }).then((user) => {
+          if (!user?.email) return;
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+          return sendVocalRemovalCompleteEmail({
+            artistEmail: user.email,
+            artistName:  user.artistName ?? user.name ?? "Artist",
+            artistSlug:  user.artistSlug ?? undefined,
+            trackTitle:  separation.originalFileName,
+            downloadUrl: `${appUrl}/dashboard/ai/vocal-remover`,
+          });
+        }).catch(() => {});
 
         return NextResponse.json(updated);
       }

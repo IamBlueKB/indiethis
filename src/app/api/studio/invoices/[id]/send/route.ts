@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sendEmail } from "@/lib/brevo/email";
+import { sendInvoiceEmail } from "@/lib/brevo/email";
 import { sendSMS } from "@/lib/brevo/sms";
 import InvoicePDF from "@/components/pdf/InvoicePDF";
 
@@ -61,37 +61,18 @@ export async function POST(
   // Send email (non-fatal — log and continue if it fails)
   if (invoice.contact.email) {
     try {
-      await sendEmail({
-        to: { email: invoice.contact.email, name: invoice.contact.name },
-        subject: `Invoice #${String(invoice.invoiceNumber).padStart(4, "0")} from ${studio.name} — $${invoice.total.toFixed(2)} due ${dueDate}`,
-        htmlContent: `
-          <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#111">
-            <h2 style="margin-bottom:4px">Invoice from ${studio.name}</h2>
-            <p style="color:#888;margin-top:0">Invoice #${String(invoice.invoiceNumber).padStart(4, "0")}</p>
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-            <p>Hi ${invoice.contact.name},</p>
-            <p>You have a new invoice for <strong>$${invoice.total.toFixed(2)} USD</strong>, due on <strong>${dueDate}</strong>.</p>
-            <p>
-              <a href="${paymentUrl}"
-                 style="background:#D4A843;color:#0A0A0A;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">
-                View &amp; Pay Invoice
-              </a>
-            </p>
-            <p style="color:#aaa;font-size:12px">Invoice PDF is attached for your records.</p>
-          </div>
-        `,
+      await sendInvoiceEmail({
+        recipientEmail: invoice.contact.email,
+        recipientName:  invoice.contact.name,
+        senderName:     studio.name,
+        invoiceId:      invoice.id,
+        amount:         `$${invoice.total.toFixed(2)} USD`,
+        dueDate,
+        invoiceUrl:     paymentUrl,
         ...(pdfBase64
-          ? {
-              attachment: [
-                {
-                  content: pdfBase64,
-                  name: `invoice-${String(invoice.invoiceNumber).padStart(4, "0")}.pdf`,
-                },
-              ],
-            }
+          ? { attachment: { content: pdfBase64, name: `invoice-${String(invoice.invoiceNumber).padStart(4, "0")}.pdf` } }
           : {}),
-        tags: ["invoice"],
-      } as Parameters<typeof sendEmail>[0]);
+      });
     } catch (err) {
       console.error("[invoices/send] Email failed:", err);
     }

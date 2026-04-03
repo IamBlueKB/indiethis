@@ -2175,10 +2175,13 @@ export async function sendInvoiceEmail(params: {
   amount:         string;
   dueDate:        string;
   invoiceUrl:     string;
+  /** Optional PDF attachment (base64-encoded). */
+  attachment?:    { content: string; name: string };
 }): Promise<void> {
   await sendBrandedEmail({
     to:      { email: params.recipientEmail, name: params.recipientName },
     subject: `Invoice from ${params.senderName} — ${params.amount} due ${params.dueDate}`,
+    ...(params.attachment ? { attachment: [{ content: params.attachment.content, name: params.attachment.name }] } : {}),
     primaryContent: `
       <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Invoice from ${params.senderName}</h1>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">

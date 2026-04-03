@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sendTrackShieldCompleteEmail } from "@/lib/brevo/email";
 
 export const maxDuration = 60;
 
@@ -130,6 +131,29 @@ export async function POST(req: NextRequest) {
       },
     },
   });
+
+  // Branded completion email (non-fatal)
+  void (async () => {
+    try {
+      const user = await db.user.findUnique({
+        where:  { id: session.user.id },
+        select: { email: true, name: true, artistName: true, artistSlug: true },
+      });
+      if (!user?.email) return;
+      const totalIssues = completedScan.tracks.reduce((sum, t) => sum + t.matchCount, 0);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+      await sendTrackShieldCompleteEmail({
+        artistEmail: user.email,
+        artistName:  user.artistName ?? user.name ?? "Artist",
+        artistSlug:  user.artistSlug ?? undefined,
+        trackTitle:  completedScan.tracks[0]?.track.title ?? "your track",
+        issuesFound: totalIssues,
+        reportUrl:   `${appUrl}/dashboard/ai/track-shield`,
+      });
+    } catch (emailErr) {
+      console.error("[track-shield/scan] completion email failed:", emailErr);
+    }
+  })();
 
   return NextResponse.json({ scan: completedScan });
 }
