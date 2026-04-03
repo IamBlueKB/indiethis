@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAudioStore } from "@/store/audio";
 
+const LINE_H      = 14 * 1.8;  // font-size × line-height = 25.2 px
+const CONTAINER_H = 300;
+const PAD         = 32;        // top and bottom breathing room
+
 interface Props {
-  /** IDs of every published track on this artist's page — gates display to this artist only */
   artistTrackIds: string[];
 }
 
@@ -29,36 +32,11 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
       ? Math.min(Math.floor((currentTime / duration) * lines.length), lines.length - 1)
       : 0;
 
-  // containerRef — must have position:relative so <p> elements use it as offsetParent,
-  // making el.offsetTop correctly relative to the scroll container.
-  const containerRef     = useRef<HTMLDivElement>(null);
-  const lineRefs         = useRef<(HTMLParagraphElement | null)[]>([]);
-  const userScrollingRef = useRef(false);
-  const scrollTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleScroll = useCallback(() => {
-    userScrollingRef.current = true;
-    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-    scrollTimerRef.current = setTimeout(() => {
-      userScrollingRef.current = false;
-    }, 5000);
-  }, []);
-
-  useEffect(() => {
-    if (userScrollingRef.current || !isPlaying) return;
-    const container = containerRef.current;
-    const el        = lineRefs.current[currentLineIndex];
-    if (!container || !el) return;
-
-    // el.offsetTop is relative to the container because it has position:relative.
-    // Center the current line in the visible area.
-    const target = el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
-    container.scrollTop = Math.max(0, target);
-  }, [currentLineIndex, isPlaying]);
-
-  useEffect(() => () => {
-    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-  }, []);
+  // Translate the inner div upward so the current line stays centred
+  const lineTop   = PAD + currentLineIndex * LINE_H;
+  const rawY      = -(lineTop - CONTAINER_H / 2 + LINE_H / 2);
+  const totalH    = PAD + lines.length * LINE_H + PAD;
+  const translateY = Math.min(0, Math.max(-(totalH - CONTAINER_H), rawY));
 
   const contentKey = isThisArtist ? (currentTrack!.id ?? "none") : "none";
 
@@ -72,42 +50,34 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
-        style={{ position: "relative", width: "100%" }}
+        style={{ position: "relative", width: "100%", height: CONTAINER_H, overflow: "hidden" }}
       >
         {/* Top dissolve */}
         <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 48,
+          position: "absolute", top: 0, left: 0, right: 0, height: 56,
           background: "linear-gradient(to bottom, #0A0A0A 0%, transparent 100%)",
           pointerEvents: "none", zIndex: 2,
         }} />
 
-        {/* Scroll container — position:relative makes it the offsetParent */}
-        <div
-          ref={containerRef}
-          onScroll={handleScroll}
-          style={{
-            position:        "relative",
-            maxHeight:       300,
-            overflowY:       "auto",
-            scrollbarWidth:  "none",
-            msOverflowStyle: "none" as React.CSSProperties["msOverflowStyle"],
-          }}
-        >
-          <div style={{ height: 24 }} />
-
+        {/* Moving lyrics strip */}
+        <div style={{
+          transform:  `translateY(${translateY}px)`,
+          transition: isPlaying ? "transform 0.6s linear" : "none",
+          willChange: "transform",
+        }}>
+          <div style={{ height: PAD }} />
           {lines.map((line, i) => (
             <p
               key={i}
-              ref={(el) => { lineRefs.current[i] = el; }}
               style={{
                 fontFamily: "'DM Sans', sans-serif",
                 fontSize:   14,
                 lineHeight: 1.8,
                 margin:     0,
-                padding:    "0 0 1px",
+                padding:    0,
                 color:
                   i === currentLineIndex ? "#FFFFFF"
-                  : i < currentLineIndex ? "#444444"
+                  : i < currentLineIndex  ? "#444444"
                   : "#666666",
                 transition: "color 0.3s ease",
               }}
@@ -115,13 +85,12 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
               {line}
             </p>
           ))}
-
-          <div style={{ height: 24 }} />
+          <div style={{ height: PAD }} />
         </div>
 
         {/* Bottom dissolve */}
         <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, height: 48,
+          position: "absolute", bottom: 0, left: 0, right: 0, height: 56,
           background: "linear-gradient(to top, #0A0A0A 0%, transparent 100%)",
           pointerEvents: "none", zIndex: 2,
         }} />
