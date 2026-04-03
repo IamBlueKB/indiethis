@@ -854,6 +854,9 @@ YouTubeSync          YoutubeReference
 | Collaboration Matchmaker Agent — monthly (1st of month) surfaces collab opportunities | ✅ DONE |
 | Release Bundle Agent — coordinates pre-release coaching across multi-step release plans | ✅ DONE |
 | All batch 2 agents orchestrated via `POST /api/cron/agents` cron route | ✅ DONE |
+| `dj-monthly-earnings` cron wired in `vercel.json` — fires 1st of each month at 07:00 UTC | ✅ DONE |
+| `dj-weekly-summary` cron wired in `vercel.json` — fires every Monday at 07:00 UTC | ✅ DONE |
+| `fan-anniversaries` cron wired in `vercel.json` — fires daily at midnight UTC | ✅ DONE |
 
 ### Ambassador / Affiliate
 | Feature | Status |

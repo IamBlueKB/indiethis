@@ -31,6 +31,18 @@
     {
       "path": "/api/cron/agents",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/dj-monthly-earnings",
+      "schedule": "0 7 1 * *"
+    },
+    {
+      "path": "/api/cron/dj-weekly-summary",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/fan-anniversaries",
+      "schedule": "0 0 * * *"
     }
   ]
 }
