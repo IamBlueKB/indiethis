@@ -109,8 +109,8 @@ export default function HeroCanvasDisplay({
   const glowColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
 
   return (
-    // Outer wrapper: provides positioning context for the glow div that sits behind
-    <div style={{ position: "relative", width: 280, maxWidth: "100%" }}>
+    // Outer wrapper: fills the parent column; the column in page.tsx controls the 280px desktop width
+    <div style={{ position: "relative", width: "100%" }}>
 
       {/* Ambient glow — dominant color wash, transitions when track changes */}
       <div
@@ -127,8 +127,9 @@ export default function HeroCanvasDisplay({
         }}
       />
 
-      {/* Video / image container */}
+      {/* Video / image container — mobile: capped at 240px tall; desktop: full 9:16 ratio */}
       <div
+        className="max-h-[240px] md:max-h-none"
         style={{
           position:     "relative",
           width:        "100%",

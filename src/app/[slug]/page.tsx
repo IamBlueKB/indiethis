@@ -371,70 +371,89 @@ async function ArtistSite({ slug }: { slug: string }) {
         djPickedCount={djPickedCount}
       />
 
-      {/* 2. Canvas display — below Listen Now, above content */}
-      {artistTrackIds.length > 0 && (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6" style={{ marginTop: 24, marginBottom: 32 }}>
-          <HeroCanvasDisplay
-            artistTrackIds={artistTrackIds}
-            latestCoverArt={latestCoverArt}
-            latestCanvasVideo={latestCanvasVideo}
-          />
-        </div>
-      )}
-
       {/* Body */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-10">
 
-        {/* 2. Pinned Announcement */}
-        {site.pinnedMessage && (
-          <PinnedAnnouncement
-            message={site.pinnedMessage}
-            actionText={site.pinnedActionText ?? undefined}
-            actionUrl={site.pinnedActionUrl ?? undefined}
-          />
-        )}
+        {/*
+          Two-column zone (desktop):
+            Left  — canvas display (280px), left-aligned directly below the hero Listen Now button
+            Right — primary content sections (pre-save, music) flow alongside the canvas
 
-        {/* 3. Activity Ticker */}
-        {site.activityTickerEnabled && (
-          <ActivityTicker artistSlug={slug} />
-        )}
+          Single-column (mobile < 768px):
+            Canvas full-width on top, content below
+        */}
+        <div className="flex flex-col md:flex-row gap-8 items-start">
 
-        {/* 4. Pre-save Campaign */}
-        {campaign && (
-          <PreSaveCampaignCard
-            campaignId={campaign.id}
-            title={campaign.title}
-            artUrl={campaign.artUrl ?? null}
-            releaseDate={campaign.releaseDate.toISOString()}
-            spotifyUrl={campaign.spotifyUrl ?? null}
-            appleMusicUrl={campaign.appleMusicUrl ?? null}
-          />
-        )}
+          {/* Left column — canvas display */}
+          {artistTrackIds.length > 0 && (
+            <div className="flex-shrink-0 w-full md:w-[280px]">
+              <HeroCanvasDisplay
+                artistTrackIds={artistTrackIds}
+                latestCoverArt={latestCoverArt}
+                latestCanvasVideo={latestCanvasVideo}
+              />
+            </div>
+          )}
 
-        {/* 5. Music */}
-        {hasMusic && (
-          <div id="music">
-            <TrackList
-              releases={releases.map((r) => ({
-                id:          r.id,
-                title:       r.title,
-                coverUrl:    r.coverUrl ?? null,
-                releaseDate: r.releaseDate ? r.releaseDate.toISOString() : null,
-                type:        r.type,
-                tracks:      r.tracks,
-              }))}
-              looseTracks={artist.tracks}
-              streamLeaseTracks={streamLeaseTracks}
-              artistName={displayName}
-              artistSlug={slug}
-              followGateEnabled={site.followGateEnabled ?? false}
-              instagramHandle={artist.instagramHandle ?? null}
-              spotifyUrl={artist.spotifyUrl ?? null}
-              appleMusicUrl={artist.appleMusicUrl ?? null}
-              youtubeChannel={artist.youtubeChannel ?? null}
-            />
-          </div>
-        )}
+          {/* Right column — pinned announcement, activity ticker, pre-save, music */}
+          <div className="flex-1 min-w-0 space-y-10">
+
+            {/* 2. Pinned Announcement */}
+            {site.pinnedMessage && (
+              <PinnedAnnouncement
+                message={site.pinnedMessage}
+                actionText={site.pinnedActionText ?? undefined}
+                actionUrl={site.pinnedActionUrl ?? undefined}
+              />
+            )}
+
+            {/* 3. Activity Ticker */}
+            {site.activityTickerEnabled && (
+              <ActivityTicker artistSlug={slug} />
+            )}
+
+            {/* 4. Pre-save Campaign */}
+            {campaign && (
+              <PreSaveCampaignCard
+                campaignId={campaign.id}
+                title={campaign.title}
+                artUrl={campaign.artUrl ?? null}
+                releaseDate={campaign.releaseDate.toISOString()}
+                spotifyUrl={campaign.spotifyUrl ?? null}
+                appleMusicUrl={campaign.appleMusicUrl ?? null}
+              />
+            )}
+
+            {/* 5. Music */}
+            {hasMusic && (
+              <div id="music">
+                <TrackList
+                  releases={releases.map((r) => ({
+                    id:          r.id,
+                    title:       r.title,
+                    coverUrl:    r.coverUrl ?? null,
+                    releaseDate: r.releaseDate ? r.releaseDate.toISOString() : null,
+                    type:        r.type,
+                    tracks:      r.tracks,
+                  }))}
+                  looseTracks={artist.tracks}
+                  streamLeaseTracks={streamLeaseTracks}
+                  artistName={displayName}
+                  artistSlug={slug}
+                  followGateEnabled={site.followGateEnabled ?? false}
+                  instagramHandle={artist.instagramHandle ?? null}
+                  spotifyUrl={artist.spotifyUrl ?? null}
+                  appleMusicUrl={artist.appleMusicUrl ?? null}
+                  youtubeChannel={artist.youtubeChannel ?? null}
+                />
+              </div>
+            )}
+
+          </div>{/* /right column */}
+        </div>{/* /two-column zone */}
+
+        {/* Full-width sections — below the canvas / primary content row */}
+        <div className="space-y-10 mt-10">
 
         {/* 6. Beats (producer section) */}
         {publicBeats.length > 0 && (
@@ -565,7 +584,8 @@ async function ArtistSite({ slug }: { slug: string }) {
           appleMusicUrl={artist.appleMusicUrl ?? null}
         />
 
-      </div>
+        </div>{/* /full-width sections */}
+      </div>{/* /body */}
     </div>
   );
 }
