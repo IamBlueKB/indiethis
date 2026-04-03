@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useAudioStore } from "@/store/audio";
 
 interface DominantColor {
   r: number;
   g: number;
   b: number;
+}
+
+interface MediaState {
+  /** Unique key — changes when the displayed media changes, triggering cross-fade */
+  key:       string;
+  videoSrc:  string | null;
+  imageSrc:  string | null;
+  colorSrc:  string | null;
 }
 
 interface Props {
@@ -22,13 +31,15 @@ interface Props {
  * Ambient canvas video / cover art panel shown on the artist public page
  * below the Listen Now button.
  *
+ * Reacts to the MiniPlayer in real time:
  * - Playing track (this artist) with canvas video → looping muted video at 0.6 opacity
  * - Playing track (this artist) without canvas video → static cover art at 0.6 opacity
  * - Nothing playing / different artist → latest release cover art (or canvas if available)
  * - Artist has zero tracks → renders nothing
  *
+ * Track changes trigger a 500ms AnimatePresence cross-fade.
  * All four edges dissolve into the #0A0A0A background via gradient overlays.
- * A dominant-color radial glow bleeds outward behind the container for ambient mood.
+ * A dominant-color radial glow transitions smoothly (1s ease) when the track changes.
  */
 export default function HeroCanvasDisplay({
   artistTrackIds,
@@ -38,6 +49,7 @@ export default function HeroCanvasDisplay({
   const currentTrack = useAudioStore((s) => s.currentTrack);
 
   // Only mirror tracks that belong to this artist's page.
+  // If the user is playing a track from another page, show this artist's latest release instead.
   const isThisArtist =
     currentTrack !== null && artistTrackIds.includes(currentTrack.id);
 
@@ -47,28 +59,40 @@ export default function HeroCanvasDisplay({
   const imageSrc = isThisArtist
     ? (currentTrack!.coverArt ?? null)
     : latestCoverArt;
-
-  // The image URL used for dominant color extraction (always from cover art, even when showing video)
-  const colorSourceUrl = isThisArtist
+  const colorSrc = isThisArtist
     ? (currentTrack!.coverArt ?? latestCoverArt)
     : latestCoverArt;
 
-  const showVideo = !!videoSrc;
-  const showImage = !showVideo && !!imageSrc;
+  // Stable media key — changes only when the displayed media URL changes so
+  // AnimatePresence knows when to run exit/enter transitions.
+  const mediaSrc = videoSrc ?? imageSrc ?? null;
+  const mediaKey = mediaSrc ?? "empty";
 
-  // Dominant color for the ambient glow behind the container
+  // Packaged state passed into the animated layer (captured at key-change time)
+  const [media, setMedia] = useState<MediaState>({
+    key:      mediaKey,
+    videoSrc,
+    imageSrc,
+    colorSrc,
+  });
+
+  useEffect(() => {
+    setMedia({ key: mediaKey, videoSrc, imageSrc, colorSrc });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaKey]);
+
+  // Dominant color for the ambient glow
   const [dominantColor, setDominantColor] = useState<DominantColor>({ r: 80, g: 60, b: 40 });
   const colorUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!colorSourceUrl || colorSourceUrl === colorUrlRef.current) return;
-    colorUrlRef.current = colorSourceUrl;
+    if (!colorSrc || colorSrc === colorUrlRef.current) return;
+    colorUrlRef.current = colorSrc;
 
-    // Dynamically import fast-average-color (client only)
     import("fast-average-color").then(({ FastAverageColor }) => {
       const fac = new FastAverageColor();
       fac
-        .getColorAsync(colorSourceUrl, { crossOrigin: "anonymous" })
+        .getColorAsync(colorSrc, { crossOrigin: "anonymous" })
         .then((color) => {
           setDominantColor({ r: color.value[0], g: color.value[1], b: color.value[2] });
         })
@@ -76,10 +100,10 @@ export default function HeroCanvasDisplay({
           // Silently fall back to default warm color — CORS or load error
         });
     });
-  }, [colorSourceUrl]);
+  }, [colorSrc]);
 
   // Nothing to show — artist has no tracks at all
-  if (!showVideo && !showImage) return null;
+  if (!videoSrc && !imageSrc) return null;
 
   const { r, g, b } = dominantColor;
   const glowColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
@@ -88,18 +112,18 @@ export default function HeroCanvasDisplay({
     // Outer wrapper: provides positioning context for the glow div that sits behind
     <div style={{ position: "relative", width: 280, maxWidth: "100%" }}>
 
-      {/* Ambient glow — dominant color wash bleeding outward behind the container */}
+      {/* Ambient glow — dominant color wash, transitions when track changes */}
       <div
         style={{
-          position:   "absolute",
-          top:        "-20%",
-          left:       "-20%",
-          width:      "140%",
-          height:     "140%",
-          background: `radial-gradient(ellipse at center, ${glowColor} 0%, transparent 70%)`,
+          position:      "absolute",
+          top:           "-20%",
+          left:          "-20%",
+          width:         "140%",
+          height:        "140%",
+          background:    `radial-gradient(ellipse at center, ${glowColor} 0%, transparent 70%)`,
           pointerEvents: "none",
-          zIndex:     0,
-          transition: "background 1s ease",
+          zIndex:        0,
+          transition:    "background 1s ease",
         }}
       />
 
@@ -115,88 +139,106 @@ export default function HeroCanvasDisplay({
           zIndex:       1,
         }}
       >
-        {/* Media — dimmed to 0.6 opacity for cinematic ambient feel */}
-        {showVideo ? (
-          <video
-            key={videoSrc!}
-            src={videoSrc!}
-            autoPlay
-            loop
-            muted
-            playsInline
+        {/* Cross-fading media layer */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={media.key}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
             style={{
-              width:     "100%",
-              height:    "100%",
-              objectFit: "cover",
-              display:   "block",
-              opacity:   0.6,
+              position: "absolute",
+              inset:    0,
+              opacity:  0.6,
             }}
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageSrc!}
-            alt=""
-            aria-hidden
-            style={{
-              width:     "100%",
-              height:    "100%",
-              objectFit: "cover",
-              display:   "block",
-              opacity:   0.6,
-            }}
-          />
-        )}
+          >
+            {media.videoSrc ? (
+              <video
+                src={media.videoSrc}
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{
+                  width:     "100%",
+                  height:    "100%",
+                  objectFit: "cover",
+                  display:   "block",
+                }}
+              />
+            ) : media.imageSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={media.imageSrc}
+                alt=""
+                aria-hidden
+                style={{
+                  width:     "100%",
+                  height:    "100%",
+                  objectFit: "cover",
+                  display:   "block",
+                }}
+              />
+            ) : null}
+          </motion.div>
+        </AnimatePresence>
 
-        {/* Bottom gradient — fades into page background */}
+        {/* Gradient overlays — dissolve all four edges into the #0A0A0A background */}
+
+        {/* Bottom gradient */}
         <div
           style={{
-            position:   "absolute",
-            bottom:     0,
-            left:       0,
-            right:      0,
-            height:     "40%",
-            background: "linear-gradient(to bottom, transparent 0%, #0A0A0A 100%)",
+            position:      "absolute",
+            bottom:        0,
+            left:          0,
+            right:         0,
+            height:        "40%",
+            background:    "linear-gradient(to bottom, transparent 0%, #0A0A0A 100%)",
             pointerEvents: "none",
+            zIndex:        2,
           }}
         />
 
-        {/* Top gradient — subtle top fade */}
+        {/* Top gradient */}
         <div
           style={{
-            position:   "absolute",
-            top:        0,
-            left:       0,
-            right:      0,
-            height:     "20%",
-            background: "linear-gradient(to top, transparent 0%, rgba(0,0,0,0.3) 100%)",
+            position:      "absolute",
+            top:           0,
+            left:          0,
+            right:         0,
+            height:        "20%",
+            background:    "linear-gradient(to top, transparent 0%, rgba(0,0,0,0.3) 100%)",
             pointerEvents: "none",
+            zIndex:        2,
           }}
         />
 
-        {/* Left gradient — blends into left edge */}
+        {/* Left gradient */}
         <div
           style={{
-            position:   "absolute",
-            top:        0,
-            bottom:     0,
-            left:       0,
-            width:      "20%",
-            background: "linear-gradient(to left, transparent 0%, #0A0A0A 100%)",
+            position:      "absolute",
+            top:           0,
+            bottom:        0,
+            left:          0,
+            width:         "20%",
+            background:    "linear-gradient(to left, transparent 0%, #0A0A0A 100%)",
             pointerEvents: "none",
+            zIndex:        2,
           }}
         />
 
-        {/* Right gradient — blends into right edge */}
+        {/* Right gradient */}
         <div
           style={{
-            position:   "absolute",
-            top:        0,
-            bottom:     0,
-            right:      0,
-            width:      "20%",
-            background: "linear-gradient(to right, transparent 0%, #0A0A0A 100%)",
+            position:      "absolute",
+            top:           0,
+            bottom:        0,
+            right:         0,
+            width:         "20%",
+            background:    "linear-gradient(to right, transparent 0%, #0A0A0A 100%)",
             pointerEvents: "none",
+            zIndex:        2,
           }}
         />
       </div>
