@@ -244,7 +244,7 @@ function SignupForm() {
                 type="button"
                 onClick={() => handleSocial("facebook")}
                 disabled={!!socialLoading || loading}
-                className="w-full flex items-center justify-center gap-3 h-11 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="hidden w-full flex items-center justify-center gap-3 h-11 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: "#1877F2" }}
               >
                 {socialLoading === "facebook" ? (
