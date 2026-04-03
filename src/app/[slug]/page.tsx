@@ -372,7 +372,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       />
 
       {/* Body */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-10">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-3 pb-10">
 
         {/*
           Two-column zone (desktop):
