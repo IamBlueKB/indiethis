@@ -272,6 +272,8 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET/POST /api/dashboard/stream-leases` | Stream lease CRUD |
 | `GET/POST /api/dashboard/release-planner` | Release plan management |
 | `POST /api/dashboard/settings/password` | Change account password |
+| `POST /api/dashboard/stripe-connect` | Create Stripe Express account + return onboarding link |
+| `GET /api/dashboard/stripe-connect/refresh` | Refresh expired Stripe Connect account link |
 | `GET /api/dashboard/fan-scores` | Fan engagement scores |
 | `GET /api/dashboard/supporters` | Top supporter list |
 | `GET /api/dashboard/producer/analytics` | Producer revenue analytics |
@@ -323,6 +325,7 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/public/presave-click` | Pre-save campaign click |
 | `POST /api/public/shows/[showId]/waitlist` | Join show waitlist |
 | `POST /api/intake/[token]` | Submit intake form by token |
+| `GET /api/intake/[token]/deposit-status` | Poll deposit payment confirmation for intake form |
 | `GET /api/dl/[token]` | Download delivered file by token |
 | `GET /api/invoice/[id]` | Public invoice data |
 
@@ -371,6 +374,7 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/cron/trial-expiration` | Handle trial expiration |
 | `POST /api/cron/stream-lease-cleanup` | Cancel expired stream leases |
 | `POST /api/cron/quality-scores` | Daily batch recalculation of track quality scores (maxDuration 300, batches of 50) |
+| `POST /api/cron/agents` | Orchestrates all batch 2 agents on schedule |
 
 ### Dev (blocked in production)
 | Endpoint | Description |
@@ -637,7 +641,7 @@ YouTubeSync          YoutubeReference
 | Artist self-fulfilled order email with buyer shipping address | ✅ DONE |
 | Admin merch overview — orders/month, platform cut, overdue orders, Printful health, status breakdown, top products | ✅ DONE |
 
-### AI Agent Platform (Steps 1–11)
+### AI Agent Platform — Batch 1 (Steps 1–11)
 | Feature | Status |
 |---------|--------|
 | Agent infrastructure — `AgentLog` model, `logAgentAction()`, admin agent log page | ✅ DONE |
@@ -652,6 +656,18 @@ YouTubeSync          YoutubeReference
 | Lead Scoring Agent — scores studio CRM contacts for conversion likelihood | ✅ DONE |
 | Enhanced Admin Dashboard Agent — weekly KPI summary email to admin | ✅ DONE |
 | Admin agent log page — per-agent history, action counts, status | ✅ DONE |
+
+### AI Agent Platform — Batch 2 (7 new agents + release bundle)
+| Feature | Status |
+|---------|--------|
+| Creative Prompt Agent — daily nudge to artists missing cover art or metadata | ✅ DONE |
+| Inactive Content Agent — weekly (Tuesdays) nudges artists with stale tracks/merch | ✅ DONE |
+| Trend Forecaster Agent — weekly (Fridays) sends genre/trend teasers to artists | ✅ DONE |
+| Producer–Artist Match Agent — weekly (Thursdays) matches producers to compatible artists | ✅ DONE |
+| Payment Recovery Agent — daily escalation emails at Day 2 / 5 / 10 for failed payments | ✅ DONE |
+| Collaboration Matchmaker Agent — monthly (1st of month) surfaces collab opportunities | ✅ DONE |
+| Release Bundle Agent — coordinates pre-release coaching across multi-step release plans | ✅ DONE |
+| All batch 2 agents orchestrated via `POST /api/cron/agents` cron route | ✅ DONE |
 
 ### Ambassador / Affiliate
 | Feature | Status |
@@ -765,6 +781,41 @@ YouTubeSync          YoutubeReference
 | &nbsp;&nbsp;`sendSessionFollowUpEmail` → studio bookings PATCH on COMPLETED status | ✅ DONE |
 | Dev preview route — `GET /api/dev/email-preview?context=X` (blocked in production) | ✅ DONE |
 | `/api/dev` added to public paths in `src/proxy.ts` | ✅ DONE |
+
+### Canvas & Overlay Enhancements
+| Feature | Status |
+|---------|--------|
+| Canvas video plays in cards — CanvasPlayer with fade transition, fallback to cover art | ✅ DONE |
+| Stronger gradient overlay on canvas cards for text legibility | ✅ DONE |
+| Radar prominence — audio feature radar visible on track/artist cards | ✅ DONE |
+| BPM pulse animation — card pulse synced to track BPM | ✅ DONE |
+| Parallax effect on artist/track hero sections | ✅ DONE |
+| Overlay data endpoint (`GET /api/tracks/[id]/overlay`) — BPM, key, genre, energy, canvas URL | ✅ DONE |
+
+### Explore Cards (Steps 6–9)
+| Feature | Status |
+|---------|--------|
+| Credits visibility on explore cards — producer/writer credits shown inline | ✅ DONE |
+| Canvas upload prompt on explore cards — CTA when artist has no canvas video | ✅ DONE |
+| Video trimmer — trim canvas video to loop section before upload | ✅ DONE |
+| Upload specs modal — shows accepted formats, max size, recommended resolution | ✅ DONE |
+
+### Intake Deposit & Studio Payments
+| Feature | Status |
+|---------|--------|
+| Intake deposit payment flow — fan pays deposit via Stripe Checkout on intake form | ✅ DONE |
+| Stripe webhook confirms deposit — sets `submission.depositPaid`, `submission.depositAmount`, adds note to draft invoice | ✅ DONE |
+| `GET /api/intake/[token]/deposit-status` — polls deposit confirmation for intake form | ✅ DONE |
+
+### Stripe Connect — Dashboard
+| Feature | Status |
+|---------|--------|
+| `POST /api/dashboard/stripe-connect` — creates Stripe Express account, stores `stripeConnectId` on User, returns onboarding link | ✅ DONE |
+| `GET /api/dashboard/stripe-connect/refresh` — refreshes expired Stripe Connect account links | ✅ DONE |
+| `ConnectStripeButton` component — reusable button for initiating Stripe Connect onboarding | ✅ DONE |
+| Stripe Connect status shown on `/dashboard/earnings` — payout options + connect status | ✅ DONE |
+| Stripe Connect status on `/dashboard/affiliate` — affiliate payout integration | ✅ DONE |
+| DJ earnings (`/dashboard/dj/earnings`) — Stripe Connect onboarding for DJ payouts | ✅ DONE |
 
 ### Artist Public Page UX
 | Feature | Status |
