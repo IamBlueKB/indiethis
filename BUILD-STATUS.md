@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-02 (session 8)_
+_Last updated: 2026-04-03 (session 9)_
 
 ---
 
@@ -7,7 +7,7 @@ _Last updated: 2026-04-02 (session 8)_
 
 - **Framework:** Next.js 16.1.6 App Router, TypeScript strict
 - **Database:** Supabase PostgreSQL via Prisma 5.22.0
-- **Auth:** NextAuth v5 beta (`src/proxy.ts`, not middleware)
+- **Auth:** NextAuth v5 beta (`src/proxy.ts`, not middleware) — Google ✅ + Facebook ⏳ (pending Meta business verification)
 - **Last clean build:** ✅ passes `npx next build` with zero errors
 - **Deployment:** Vercel (auto-deploy on push to `master`)
 
@@ -778,6 +778,27 @@ YouTubeSync          YoutubeReference
 | "Payment claimed" banner on invoice when studio marks payment received via alt method | ✅ DONE |
 | Apple Pay / Google Pay — work automatically via Stripe card element (no extra setup needed) | ✅ DONE (Stripe built-in) |
 
+### Social Login — Google + Facebook (Session 9)
+| Feature | Status |
+|---------|--------|
+| Google OAuth provider added to NextAuth (`next-auth/providers/google`) | ✅ DONE |
+| Facebook OAuth provider added to NextAuth (`next-auth/providers/facebook`) | ✅ DONE |
+| `signIn` callback — existing user lookup by email; updates `authProvider` + photo | ✅ DONE |
+| `signIn` callback — new user → creates PendingSignup with social data, redirects to `/signup` | ✅ DONE |
+| `jwt` callback — fetches `role` + `djMode` from DB for OAuth sign-ins | ✅ DONE |
+| Schema: `passwordHash String?` (nullable for OAuth users) on User + PendingSignup | ✅ DONE |
+| Schema: `authProvider String @default("email")` on User + PendingSignup | ✅ DONE |
+| Schema: `socialPhoto String?` on PendingSignup — auto-fills user photo on account creation | ✅ DONE |
+| `signup-init`: skips password for OAuth; stores `authProvider` in PendingSignup upsert | ✅ DONE |
+| `create-user-from-pending`: sets `authProvider` + `photo` from PendingSignup on user create | ✅ DONE |
+| Login page: Google + Facebook buttons above email form with "or" divider | ✅ DONE |
+| Signup page: social buttons + OAuth pre-fill mode (email locked, password hidden, name pre-populated) | ✅ DONE |
+| Facebook data deletion callback (`POST /api/auth/facebook-data-deletion`) — Meta requirement | ✅ DONE |
+| Google OAuth — tested and working ✅ | ✅ LIVE |
+| Facebook OAuth — pending Meta business verification | ⏳ PENDING |
+| Brand assets: all SVG logos converted to PNG at 2× resolution | ✅ DONE |
+| Facebook cover photo (820×312) + profile pic (400×400) + Meta app icon (1024×1024) generated | ✅ DONE |
+
 ### Not Started
 | Feature | Status |
 |---------|--------|
@@ -852,6 +873,10 @@ YouTubeSync          YoutubeReference
 | `PRINTFUL_API_KEY` | Printful print-on-demand order creation + webhooks | ✅ SET |
 | `STRIPE_PRICE_STUDIO_PRO` | Studio Pro plan Stripe price ID (`price_1TH38eCnAaQlzZZiDdIjBHRd`) | ✅ SET |
 | `STRIPE_PRICE_STUDIO_ELITE` | Studio Elite plan Stripe price ID (`price_1TH38eCnAaQlzZZi1kziXj0W`) | ✅ SET |
+| `FACEBOOK_CLIENT_ID` | Facebook OAuth provider (NextAuth) | ✅ SET |
+| `FACEBOOK_CLIENT_SECRET` | Facebook OAuth provider (NextAuth) | ✅ SET |
+| `GOOGLE_CLIENT_ID` | Google OAuth provider (NextAuth) | ✅ SET |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth provider (NextAuth) | ✅ SET |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
