@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-03 (session 9)_
+_Last updated: 2026-04-03 (session 10)_
 
 ---
 
@@ -715,6 +715,18 @@ YouTubeSync          YoutubeReference
 | Canvas Video — studio AI tools (roster artist + track selector, upload/generate) | ✅ DONE |
 | Canvas Video — CanvasPlayer plays only in MiniPlayer Now Playing area; all cards show static cover art | ✅ DONE |
 | Canvas Video — wired across platform (public page, explore, DJ crate, marketplace, dashboard, DJ profile) | ✅ DONE |
+| Canvas Video — `HeroCanvasDisplay` ambient panel on artist public page (below Listen Now button) | ✅ DONE |
+| Canvas Video — ambient panel reacts to MiniPlayer in real time (track-specific canvas or cover art) | ✅ DONE |
+| Canvas Video — dominant color radial glow behind panel via `fast-average-color` (transitions 1s ease) | ✅ DONE |
+| Canvas Video — AnimatePresence 500ms cross-fade on track change | ✅ DONE |
+| Canvas Video — 4-edge gradient dissolve overlays (bottom 40%, top 20%, left 20%, right 20%) | ✅ DONE |
+| Canvas Video — two-column layout on `/[slug]`: canvas 280px left column, page content right column | ✅ DONE |
+| `Track.lyrics String?` — lyrics field added to Prisma schema for synced display | ✅ DONE |
+| `AudioTrack.lyrics` + `AudioTrack.description` — added to Zustand audio store type | ✅ DONE |
+| Auto-scrolling `LyricsDisplay` component below canvas video — synced to MiniPlayer playback position | ✅ DONE |
+| Lyrics scroll — `overflow-y: hidden` + direct `scrollTop = scrollHeight × progress` (no jitter) | ✅ DONE |
+| Lyrics highlighting — current line white, past lines `#444444`, upcoming lines `#666666` | ✅ DONE |
+| Lyrics top/bottom dissolve gradient overlays (56px each) | ✅ DONE |
 | Credit system (used/limit per tier) | ✅ DONE |
 | Credit reset on monthly renewal (`invoice.paid`) | ✅ DONE |
 | PPU Stripe Checkout flow | ✅ DONE |
@@ -1016,6 +1028,7 @@ YouTubeSync          YoutubeReference
 | Explore page merch section converted from static grid to horizontal carousel with arrows | ✅ DONE |
 | IndieThis artist page (`/indiethis`) navbar shows platform logo via `isPlatform` prop | ✅ DONE |
 | IndieThis merch store: 7 products (Snapback, Hoodie, Classic Tee, Dad Hat, Poster, Sticker, Luggage Tag) with real Printful mockups | ✅ DONE |
+| Two-column layout on `/[slug]` — canvas + lyrics left (280px), hero/music/merch/shows right | ✅ DONE |
 
 ### Payments — Studio
 | Feature | Status |
