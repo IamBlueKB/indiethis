@@ -70,6 +70,9 @@ _Last updated: 2026-04-03 (session 9)_
 | `/dashboard/producer/earnings` | Producer earnings projections |
 | `/dashboard/music/sales` | Digital product sales — Singles, EPs, Albums (price-per-unit) |
 | `/dashboard/dj-activity` | Artist view — DJs who have their tracks in crates |
+| `/dashboard/dj/booking-report` | DJ booking report page |
+| `/dashboard/producer/sample-packs` | Producer sample packs management |
+| `/dashboard/samples` | Artist samples page |
 | `/dashboard/dj/analytics` | DJ analytics — fans attributed, revenue, 12-week chart |
 | `/dashboard/dj/settings` | DJ profile settings — bio, genres, city, social links |
 | `/dashboard/dj/earnings` | DJ earnings — balance, withdrawals, attribution history |
@@ -164,8 +167,10 @@ _Last updated: 2026-04-03 (session 9)_
 | `/[slug]` | Artist public site (dynamic) — with Store section (digital products) and "Picked by X DJs" badge |
 | `/[slug]/merch` | Artist public merch storefront |
 | `/[slug]/intake/[token]` | Studio intake submission form |
+| `/[slug]/book` | Artist booking page (public) |
 | `/dl/[token]` | File download by token |
 | `/invoice/[id]` | Public invoice view and Stripe payment |
+| `/order/[orderId]` | Public order status tracking page |
 | `/splits/review/[token]` | Split sheet review and e-sign |
 | `/dj/[djSlug]` | Public DJ profile — sets, mixes, crates, events |
 | `/dj/[djSlug]/crate/[crateName]` | Public DJ crate page |
@@ -203,6 +208,14 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET /api/dashboard/ai/[toolType]` | Fetch job history + credit status for tool |
 | `GET /api/ai-jobs/[id]` | Poll individual job status |
 | `GET /api/ai-jobs/[id]/press-kit-pdf` | Download completed press kit PDF |
+| `GET/POST /api/dashboard/ai/booking-report` | Generate AI booking report |
+| `POST /api/dashboard/ai/booking-report/checkout` | Stripe checkout for booking report |
+| `POST /api/dashboard/ai/creative-prompt` | Creative prompt nudge |
+| `GET/POST /api/dashboard/ai/producer-match` | Producer-artist AI matching |
+| `POST /api/dashboard/ai/producer-match/checkout` | Stripe checkout for producer match |
+| `GET/POST /api/dashboard/ai/release-bundle/checkout` | Release bundle coordination checkout |
+| `GET/POST /api/dashboard/ai/trend-report` | Trend forecasting report |
+| `POST /api/dashboard/ai/trend-report/checkout` | Stripe checkout for trend report |
 
 ### Track Shield
 | Endpoint | Description |
@@ -242,6 +255,35 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/admin/dj-verification/[id]/approve` | Admin: approve DJ verification |
 | `POST /api/admin/dj-verification/[id]/deny` | Admin: deny DJ verification |
 | `POST /api/admin/audio-fingerprints/backfill` | Admin: backfill fingerprints for existing tracks |
+| `POST /api/dj/[djSlug]/book` | Book DJ from public profile |
+| `POST /api/dj/crates/[id]/accept-invite` | Accept crate collaboration invite |
+| `POST /api/dj/crates/[id]/decline-invite` | Decline crate collaboration invite |
+| `POST /api/dj/crates/[id]/invite` | Invite collaborator to crate |
+| `POST /api/dashboard/dj/activate` | Activate DJ mode |
+| `POST /api/dashboard/dj/deactivate` | Deactivate DJ mode |
+| `GET/POST /api/dashboard/dj/bookings` | DJ booking management |
+| `GET/PUT/DELETE /api/dashboard/dj/bookings/[id]` | Individual DJ booking |
+| `GET/POST /api/dashboard/dj/crates` | DJ crate CRUD |
+| `GET/PUT/DELETE /api/dashboard/dj/crates/[id]` | Individual crate management |
+| `GET/POST /api/dashboard/dj/crates/[id]/collaborators` | Crate collaborator management |
+| `GET/POST /api/dashboard/dj/crates/[id]/items` | Crate item management |
+| `DELETE /api/dashboard/dj/crates/[id]/items/[trackId]` | Remove track from crate |
+| `GET/POST /api/dashboard/dj/events` | DJ event management |
+| `GET/PUT/DELETE /api/dashboard/dj/events/[id]` | Individual DJ event |
+| `GET/POST /api/dashboard/dj/invites` | Crate collaboration invites |
+| `GET/POST /api/dashboard/dj/mixes` | DJ mix CRUD |
+| `GET/PUT/DELETE /api/dashboard/dj/mixes/[id]` | Individual mix management |
+| `POST /api/dashboard/dj/mixes/[id]/identify` | ACRCloud track identification for mix |
+| `GET/POST /api/dashboard/dj/mixes/[id]/tracklist` | Mix tracklist management |
+| `GET/PUT/DELETE /api/dashboard/dj/mixes/[id]/tracklist/[itemId]` | Individual tracklist item |
+| `POST /api/dashboard/dj/mixes/canvas/[mixId]` | Canvas video for specific mix |
+| `POST /api/dashboard/dj/mixes/canvas/checkout` | Canvas video Stripe checkout |
+| `POST /api/dashboard/dj/mixes/canvas/generate` | Generate canvas video for mix |
+| `POST /api/dashboard/dj/mixes/canvas/upload` | Upload canvas video for mix |
+| `GET/POST /api/dashboard/dj/sets` | DJ set management |
+| `GET/PUT/DELETE /api/dashboard/dj/sets/[id]` | Individual DJ set |
+| `POST /api/dashboard/dj/verification/apply` | DJ verification application |
+| `GET /api/dashboard/dj/withdrawals` | DJ withdrawal history |
 
 ### Merch
 | Endpoint | Description |
@@ -257,6 +299,11 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET /api/merch/catalog` | Public: Printful curated catalog with base prices |
 | `POST /api/merch/checkout` | Create Stripe Checkout session for merch purchase |
 | `POST /api/merch/printful-webhook` | Receive Printful fulfillment webhooks (status, tracking, shipping) |
+| `GET/POST /api/dashboard/merch/[id]/feature` | Feature/unfeature product in storefront |
+| `POST /api/dashboard/merch/platform-setup` | Platform-level merch setup |
+| `POST /api/dashboard/sample-packs/upload` | Sample pack ZIP upload |
+| `GET/POST /api/dashboard/sample-packs/[id]/previews` | Sample pack preview management |
+| `GET /api/dashboard/sample-packs` | Sample pack listings |
 
 ### Dashboard — Artist Content
 | Endpoint | Description |
@@ -277,6 +324,51 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET /api/dashboard/fan-scores` | Fan engagement scores |
 | `GET /api/dashboard/supporters` | Top supporter list |
 | `GET /api/dashboard/producer/analytics` | Producer revenue analytics |
+| `GET /api/dashboard/analytics` | User analytics dashboard data |
+| `GET/POST /api/dashboard/artist-collaborators` | Manage artist collaborators |
+| `GET/POST /api/dashboard/artist-photos` | Manage artist photos |
+| `GET/POST /api/dashboard/artist-press-items` | Manage press kit items |
+| `GET/POST /api/dashboard/artist-testimonials` | Manage artist testimonials |
+| `POST /api/dashboard/beats/describe` | AI description generation for beats |
+| `POST /api/dashboard/earnings-projection` | Project artist earnings |
+| `POST /api/dashboard/fan-funding` | Fan funding stats for dashboard |
+| `GET/POST /api/dashboard/fans` | Fan management |
+| `GET/POST /api/dashboard/license-documents/[id]` | License document CRUD |
+| `GET /api/dashboard/release-timing` | Release timing recommendations |
+| `GET /api/dashboard/setup` | Dashboard initial setup data |
+| `GET /api/dashboard/session-notes` | Session notes (artist side) |
+| `GET /api/dashboard/sessions` | Booking sessions view for artists |
+| `GET /api/dashboard/references` | Artist references/credits |
+| `GET /api/dashboard/references/[id]` | Individual reference/credit detail |
+| `GET /api/dashboard/stream-lease-beat-download/[beatId]` | Download beat via stream lease |
+| `GET/POST /api/dashboard/stream-lease-bookmarks` | Bookmark stream leases |
+| `GET /api/dashboard/stream-lease-earnings` | Stream lease earnings summary |
+| `POST /api/dashboard/session-notes/[id]/feedback` | Session note feedback |
+| `GET/POST /api/dashboard/producer/licensing` | Producer licensing settings |
+| `GET/POST /api/dashboard/producer/settings` | Producer profile settings |
+
+### Dashboard — Canvas & Videos
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/dashboard/music/canvas/[trackId]` | Canvas video management for track |
+| `POST /api/dashboard/music/canvas/checkout` | Canvas video Stripe checkout |
+| `POST /api/dashboard/music/canvas/generate` | Generate canvas video for track |
+| `POST /api/dashboard/music/canvas/upload` | Upload canvas video for track |
+| `GET /api/dashboard/videos/[id]` | Individual video detail |
+| `GET /api/dashboard/videos/products` | Videos associated with products |
+| `POST /api/dashboard/videos/reorder` | Reorder video display order |
+| `POST /api/dashboard/videos/upload-url` | Get presigned upload URL |
+| `POST /api/dashboard/videos/youtube/connect` | Connect YouTube account |
+| `POST /api/dashboard/videos/youtube/disconnect` | Disconnect YouTube account |
+| `GET /api/dashboard/videos/youtube/status` | YouTube sync status |
+| `POST /api/dashboard/videos/youtube/sync` | Manually trigger YouTube sync |
+
+### Dashboard — Notifications
+| Endpoint | Description |
+|----------|-------------|
+| `GET/PUT /api/dashboard/notifications/[id]` | Individual notification management |
+| `GET /api/dashboard/notifications/unread-count` | Unread notification count |
+| `GET/PUT /api/dashboard/presave/[id]` | Individual pre-save campaign management |
 
 ### Studio
 | Endpoint | Description |
@@ -294,6 +386,38 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/studio/quick-send` | Send file without booking |
 | `POST /api/studio/[studioId]/book-request` | Public: submit booking request |
 | `POST /api/studio/[studioId]/contact` | Public: contact studio |
+| `POST /api/studio/canvas/[trackId]` | Canvas video for studio roster track |
+| `POST /api/studio/canvas/checkout` | Canvas video Stripe checkout for studio |
+| `GET /api/studio/canvas/tracks` | Get studio tracks eligible for canvas |
+| `POST /api/studio/canvas/upload` | Upload canvas video for studio |
+| `POST /api/studio/ai-tools/roster` | AI tools applied to roster artists |
+| `GET /api/studio/artist-search` | Search artists for studio roster |
+| `GET/POST /api/studio/artists` | Studio roster management |
+| `GET/POST /api/studio/bookings` | Studio bookings |
+| `GET/PUT/DELETE /api/studio/bookings/[id]` | Individual booking management |
+| `POST /api/studio/contacts/[id]/cancel-sequence` | Cancel email sequence for contact |
+| `GET/POST /api/studio/credits` | Studio credits/attributions |
+| `GET/PUT/DELETE /api/studio/credits/[id]` | Individual credit |
+| `GET/POST /api/studio/engineers` | Engineer profile management |
+| `GET/PUT/DELETE /api/studio/engineers/[id]` | Individual engineer |
+| `GET/POST /api/studio/equipment` | Equipment list management |
+| `GET/PUT/DELETE /api/studio/equipment/[id]` | Individual equipment item |
+| `POST /api/studio/generate-page` | AI-generate studio public page |
+| `POST /api/studio/generation-feedback` | Feedback on AI page generation |
+| `GET /api/studio/generation-log/latest` | Latest AI generation log entry |
+| `GET/PUT /api/studio/inbox/[id]` | Individual inbox message management |
+| `GET/PUT /api/studio/intake-submissions/[id]/analyze` | Analyze intake submission with AI |
+| `POST /api/studio/invoices/[id]/pay` | Mark invoice as manually paid |
+| `POST /api/studio/invoices/reminders` | Send invoice payment reminders |
+| `POST /api/studio/my-slug` | Retrieve studio slug |
+| `POST /api/studio/pageview/[studioId]` | Track studio page views |
+| `GET/POST /api/studio/portfolio` | Portfolio track management |
+| `GET/PUT/DELETE /api/studio/portfolio/[id]` | Individual portfolio track |
+| `GET/PUT /api/studio/quick-send/[id]` | Individual quick-send file management |
+| `GET /api/studio/referral-credits` | Studio referral credit tracking |
+| `GET/PUT /api/studio/session-notes/[id]` | Individual session note |
+| `GET /api/studio/settings/slug-check` | Check studio slug availability |
+| `POST /api/studio/setup` | Studio account setup handler |
 
 ### Beats & Licensing
 | Endpoint | Description |
@@ -328,6 +452,12 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET /api/intake/[token]/deposit-status` | Poll deposit payment confirmation for intake form |
 | `GET /api/dl/[token]` | Download delivered file by token |
 | `GET /api/invoice/[id]` | Public invoice data |
+| `POST /api/public/artist-activity` | Record artist activity events |
+| `POST /api/public/artist-pageview/[artistSlug]` | Track artist page views |
+| `POST /api/public/artist-qr/[artistSlug]` | QR code scan tracking |
+| `POST /api/public/shows/interest` | Register interest in a show |
+| `POST /api/public/stream-lease-play` | Track stream lease plays |
+| `POST /api/public/tracks/checkout` | Stripe checkout for track purchases |
 
 ### Admin
 | Endpoint | Description |
@@ -350,6 +480,31 @@ _Last updated: 2026-04-03 (session 9)_
 | `GET /api/admin/churn` | Churn risk analysis |
 | `GET/POST /api/admin/moderation` | Studio content moderation |
 | `GET/POST /api/admin/settings/pricing` | Live PlatformPricing editor |
+| `GET/POST /api/admin/ai-insights-log/[id]` | View AI insights log details |
+| `GET /api/admin/ai-learning` | Aggregated AI feedback and learning analytics |
+| `GET /api/admin/attribution` | Platform-wide attribution analytics |
+| `POST /api/admin/audio-features/backfill` | Backfill audio features for existing tracks |
+| `POST /api/admin/content/[type]/[id]/request-docs` | Request documentation from studio content |
+| `GET/POST /api/admin/explore/[id]` | Manage explore feature cards by ID |
+| `GET /api/admin/explore` | Explore feature card management |
+| `POST /api/admin/impersonate/start` | Begin user impersonation session |
+| `POST /api/admin/insights` | AI-generated platform insights summary |
+| `POST /api/admin/moderation/[studioId]/approve` | Approve studio content from moderation |
+| `POST /api/admin/moderation/[studioId]/scan` | Scan studio for moderation flags |
+| `GET/POST /api/admin/moderation/flags/[flagId]` | Individual moderation flag management |
+| `GET/POST /api/admin/moderation/flags` | List all moderation flags |
+| `GET /api/admin/promo-popups/[id]/analytics` | Analytics for specific promo popup |
+| `GET/PUT/DELETE /api/admin/promo-popups/[id]` | Promo popup CRUD |
+| `GET/POST /api/admin/promo-popups` | Promo popup management |
+| `POST /api/admin/support-chat` | Admin support chat handling |
+| `POST /api/admin/team/[id]/deactivate` | Deactivate admin team member |
+| `POST /api/admin/team/[id]/reactivate` | Reactivate admin team member |
+| `POST /api/admin/team/[id]/reset-password` | Reset admin team member password |
+| `PATCH /api/admin/team/[id]/role` | Change admin team member role |
+| `POST /api/admin/users/[id]/dj-verify` | Force DJ verification status |
+| `POST /api/admin/affiliates/[id]/commission` | Manage affiliate commission |
+| `POST /api/admin/affiliates/[id]/reject` | Reject affiliate application |
+| `POST /api/admin/affiliates/[id]/suspend` | Suspend affiliate account |
 
 ### AI Agent Platform
 | Endpoint | Description |
@@ -364,6 +519,7 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/agents/content-moderation` | Content Moderation Agent — studio profile/portfolio review queue |
 | `POST /api/agents/lead-scoring` | Lead Scoring Agent — scores studio contacts for conversion likelihood |
 | `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
+| Booking Agent (`src/lib/agents/booking-agent.ts`) | DJ booking reminders and follow-up automation |
 
 ### Cron Jobs (protected by CRON_SECRET)
 | Endpoint | Description |
@@ -375,6 +531,11 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/cron/stream-lease-cleanup` | Cancel expired stream leases |
 | `POST /api/cron/quality-scores` | Daily batch recalculation of track quality scores (maxDuration 300, batches of 50) |
 | `POST /api/cron/agents` | Orchestrates all batch 2 agents on schedule |
+| `POST /api/cron/dj-monthly-earnings` | Monthly DJ earnings summary |
+| `POST /api/cron/dj-weekly-summary` | Weekly DJ summary email |
+| `POST /api/cron/fan-anniversaries` | Fan anniversary notifications |
+| `POST /api/cron/stream-lease-payment-grace` | Stream lease grace period handling |
+| `POST /api/cron/youtube-sync` | YouTube video sync orchestration |
 
 ### Dev (blocked in production)
 | Endpoint | Description |
@@ -387,11 +548,36 @@ _Last updated: 2026-04-03 (session 9)_
 | `POST /api/uploadthing` | UploadThing file upload handler |
 | `POST /api/affiliate/apply` | Submit affiliate application |
 | `GET /api/affiliate/me` | Current affiliate status |
+| `POST /api/affiliate/connect` | Initiate Stripe Connect for affiliate payouts |
+| `GET /api/affiliate/connect/refresh` | Refresh expired Stripe Connect link |
+| `POST /api/affiliate/payout` | Request affiliate payout |
 | `POST /api/splits/review/[token]/agree` | E-sign split sheet by link |
 | `POST /api/splits/review/[token]/reject` | Reject split sheet by link |
 | `GET /api/notifications` | Fetch user notifications |
 | `GET /api/receipts` | List AI/payment receipts |
 | `GET /api/year-in-review/[year]` | Year-in-review data |
+| `GET /api/artists` | Public artist directory listings |
+| `GET /api/audio-features/analyze` | Analyze audio features for a track |
+| `GET /api/audio-features/my-average` | Current user's average audio features |
+| `GET /api/audio-features/similar-artists` | Find similar artists by audio profile |
+| `GET /api/audio-features/similar-tracks` | Find similar tracks by audio profile |
+| `GET /api/explore/featured` | Featured cards for explore page |
+| `GET /api/explore/merch` | Merch products section in explore |
+| `GET /api/explore/recently-played` | Recently played tracks section |
+| `GET /api/explore/record-play` | Record a track play event from explore |
+| `GET /api/explore/rising` | Rising/trending tracks section |
+| `GET /api/explore/sample-packs` | Sample packs section in explore |
+| `GET/POST /api/fans/automations` | Fan automation CRUD |
+| `POST /api/invoice/[id]/notify-payment` | Notify studio of manual payment |
+| `POST /api/merch/mockup` | Generate Printful product mockup |
+| `GET /api/merch/shipping-estimate` | Estimate merch shipping costs |
+| `GET /api/og/[type]/[id]` | Dynamic OG image by type and ID |
+| `POST /api/promo/redeem` | Redeem promo code at checkout |
+| `POST /api/promo/validate` | Validate promo code |
+| `GET/POST /api/samples` | Sample management |
+| `GET/PUT/DELETE /api/samples/[id]` | Individual sample management |
+| `GET /api/tracks/[id]/card-detail` | Track card detail data for explore cards |
+| `GET /api/tracks/[id]/overlay` | Track overlay data (BPM, key, canvas URL) |
 
 ---
 
