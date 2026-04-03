@@ -40,6 +40,7 @@ import PageViewTracker from "@/components/studio/PageViewTracker";
 import { calculateAverageFeatures } from "@/lib/audio-features";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import SimilarArtists from "@/components/audio/SimilarArtists";
+import HeroCanvasDisplay from "@/components/artist-page/HeroCanvasDisplay";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -293,11 +294,12 @@ async function ArtistSite({ slug }: { slug: string }) {
   ];
   const audioTracks = [
     ...allPublishedTracks.map((t) => ({
-      id:       t.id,
-      title:    t.title,
-      artist:   displayName,
-      src:      t.fileUrl,
-      coverArt: t.coverArtUrl ?? undefined,
+      id:             t.id,
+      title:          t.title,
+      artist:         displayName,
+      src:            t.fileUrl,
+      coverArt:       t.coverArtUrl ?? undefined,
+      canvasVideoUrl: t.canvasVideoUrl ?? undefined,
     })),
     ...streamLeaseTracks.map((sl) => ({
       id:       sl.leaseId,
@@ -310,6 +312,12 @@ async function ArtistSite({ slug }: { slug: string }) {
   const firstTrack = audioTracks[0] ?? null;
 
   const hasMusic = releases.length > 0 || artist.tracks.length > 0 || streamLeaseTracks.length > 0;
+
+  // Canvas display — ids for ownership check, latest track media for fallback
+  const artistTrackIds    = allPublishedTracks.map((t) => t.id);
+  const latestTrack       = allPublishedTracks[0] ?? null;
+  const latestCoverArt    = latestTrack?.coverArtUrl ?? null;
+  const latestCanvasVideo = latestTrack?.canvasVideoUrl ?? null;
 
   // Count distinct DJs who have this artist's tracks in their crates
   const allArtistTrackIds = [
@@ -362,6 +370,17 @@ async function ArtistSite({ slug }: { slug: string }) {
         city={site.city ?? null}
         djPickedCount={djPickedCount}
       />
+
+      {/* 2. Canvas display — below Listen Now, above content */}
+      {artistTrackIds.length > 0 && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6" style={{ marginTop: 24, marginBottom: 32 }}>
+          <HeroCanvasDisplay
+            artistTrackIds={artistTrackIds}
+            latestCoverArt={latestCoverArt}
+            latestCanvasVideo={latestCanvasVideo}
+          />
+        </div>
+      )}
 
       {/* Body */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
