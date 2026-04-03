@@ -10,6 +10,10 @@ export type AudioTrack = {
   canvasVideoUrl?: string | null;
   duration?: number;
   previewOnly?: boolean;
+  /** Lyrics text (line-separated). Populated when the artist has entered or transcribed lyrics. */
+  lyrics?: string | null;
+  /** Track or beat description — shown in place of lyrics for instrumentals. */
+  description?: string | null;
 };
 
 type AudioState = {

@@ -41,6 +41,7 @@ import { calculateAverageFeatures } from "@/lib/audio-features";
 import type { AudioFeatureScores } from "@/lib/audio-features";
 import SimilarArtists from "@/components/audio/SimilarArtists";
 import HeroCanvasDisplay from "@/components/artist-page/HeroCanvasDisplay";
+import LyricsDisplay from "@/components/artist-page/LyricsDisplay";
 
 type ServiceItem  = { name: string; price: string; description: string };
 type Testimonial  = { quote: string; author: string; track?: string };
@@ -74,7 +75,7 @@ async function ArtistSite({ slug }: { slug: string }) {
             where:   { status: "PUBLISHED" },
             orderBy: { createdAt: "asc" },
             take:    10,
-            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
+            select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, lyrics: true, description: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
           },
         },
       },
@@ -83,7 +84,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         where:   { status: "PUBLISHED", releaseId: null },
         orderBy: { createdAt: "desc" },
         take:    10,
-        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
+        select:  { id: true, title: true, fileUrl: true, coverArtUrl: true, canvasVideoUrl: true, lyrics: true, description: true, price: true, plays: true, releaseId: true, audioFeatures: { select: { loudness: true, energy: true, danceability: true, acousticness: true, instrumentalness: true, speechiness: true, liveness: true, valence: true, genre: true, mood: true, isVocal: true } } },
       },
       merchProducts: {
         where:   { isActive: true },
@@ -300,6 +301,8 @@ async function ArtistSite({ slug }: { slug: string }) {
       src:            t.fileUrl,
       coverArt:       t.coverArtUrl ?? undefined,
       canvasVideoUrl: t.canvasVideoUrl ?? undefined,
+      lyrics:         t.lyrics ?? undefined,
+      description:    t.description ?? undefined,
     })),
     ...streamLeaseTracks.map((sl) => ({
       id:       sl.leaseId,
@@ -384,7 +387,7 @@ async function ArtistSite({ slug }: { slug: string }) {
         */}
         <div className="flex flex-col md:flex-row gap-8 items-start">
 
-          {/* Left column — canvas display */}
+          {/* Left column — canvas display + lyrics */}
           {artistTrackIds.length > 0 && (
             <div className="flex-shrink-0 w-full md:w-[280px]">
               <HeroCanvasDisplay
@@ -392,6 +395,8 @@ async function ArtistSite({ slug }: { slug: string }) {
                 latestCoverArt={latestCoverArt}
                 latestCanvasVideo={latestCanvasVideo}
               />
+              {/* Lyrics scroll directly below the canvas — no gap */}
+              <LyricsDisplay artistTrackIds={artistTrackIds} />
             </div>
           )}
 
