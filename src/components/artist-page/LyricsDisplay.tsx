@@ -50,8 +50,7 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
       : 0;
 
   // Refs
-  const containerRef      = useRef<HTMLDivElement>(null);
-  const lineRefs          = useRef<(HTMLParagraphElement | null)[]>([]);
+  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const userScrollingRef  = useRef(false);
   const scrollTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -67,17 +66,9 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
   // Auto-scroll to keep current line centred in the container
   useEffect(() => {
     if (userScrollingRef.current || !isPlaying) return;
-    const container = containerRef.current;
-    const el        = lineRefs.current[currentLineIndex];
-    if (!container || !el) return;
-
-    // getBoundingClientRect gives viewport-relative coords; offset by current
-    // scrollTop to get the element's position within the scrollable container.
-    const containerRect  = container.getBoundingClientRect();
-    const elRect         = el.getBoundingClientRect();
-    const elTopInScroll  = elRect.top - containerRect.top + container.scrollTop;
-    const targetTop      = elTopInScroll + el.offsetHeight / 2 - container.clientHeight / 2;
-    container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+    const el = lineRefs.current[currentLineIndex];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [currentLineIndex, isPlaying]);
 
   // Cleanup on unmount
@@ -119,7 +110,6 @@ export default function LyricsDisplay({ artistTrackIds }: Props) {
 
         {/* Scrollable lyrics container */}
         <div
-          ref={containerRef}
           onScroll={handleScroll}
           style={{
             maxHeight:          300,
