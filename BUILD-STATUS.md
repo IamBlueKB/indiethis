@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-02 (session 7)_
+_Last updated: 2026-04-02 (session 8)_
 
 ---
 
@@ -317,6 +317,7 @@ _Last updated: 2026-04-02 (session 7)_
 | `POST /api/public/artist-linkclick` | Track a link click event |
 | `POST /api/public/booking-inquiry/[artistSlug]` | Submit artist booking inquiry |
 | `POST /api/public/fan-contact/[artistSlug]` | Fan contact form submission |
+| `POST /api/public/fan-funding` | Public Stripe Checkout for fan-to-artist credit funding (no auth required) |
 | `POST /api/public/support/[artistSlug]` | Fan tip/support submission |
 | `POST /api/public/presave-click` | Pre-save campaign click |
 | `POST /api/public/shows/[showId]/waitlist` | Join show waitlist |
@@ -368,6 +369,12 @@ _Last updated: 2026-04-02 (session 7)_
 | `POST /api/cron/re-engagement-emails` | Send re-engagement emails |
 | `POST /api/cron/trial-expiration` | Handle trial expiration |
 | `POST /api/cron/stream-lease-cleanup` | Cancel expired stream leases |
+| `POST /api/cron/quality-scores` | Daily batch recalculation of track quality scores (maxDuration 300, batches of 50) |
+
+### Dev (blocked in production)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/dev/email-preview` | Render branded email HTML in browser — `?context=MERCH_ORDER_CONFIRMATION` etc. |
 
 ### Misc
 | Endpoint | Description |
@@ -383,7 +390,7 @@ _Last updated: 2026-04-02 (session 7)_
 
 ---
 
-## PRISMA MODELS (115 total)
+## PRISMA MODELS (116 total)
 
 ```
 Account              ActivityLog          AdminAccount
@@ -401,28 +408,28 @@ DigitalPurchase      DJAttribution        DJCrate
 DJEvent              DJMix                DJMixTrack
 DJProfile            DJSet                DJVerificationApplication
 DJWithdrawal         EmailCampaign        ExploreFeatureCard
-FanAutomation        FanContact           FanScore
-GenerationFeedback   GenerationLog        IntakeLink
-IntakeSubmission     Invoice              LicenseDocument
-LinkClick            MerchOrder           MerchOrderItem
-MerchProduct         MerchVariant         Notification
-OnboardingEmailLog   PageView             Payment
-PendingSignup        PlatformPricing      PreSaveCampaign
-PreSaveClick         ProducerLeaseSettings ProducerProfile
-PromoCode            PromoRedemption      QuickSend
-RecentPlay           ReEngagementEmailLog Receipt
-Referral             ReleasePlan          ReleasePlanTask
-SampleLog            ScheduledEmail       SessionNote
-SessionNoteAttachment ShowInterest        ShowWaitlist
-Split                SplitPayment         SplitSheet
-StemSeparation       StreamLease          StreamLeaseAgreement
-StreamLeaseBookmark  StreamLeasePayment   StreamLeasePlay
-Studio               StudioArtist         StudioCredit
-StudioEngineer       StudioEquipment      StudioPortfolioTrack
-Subscription         Track                TrackPlay
-TrackShieldResult    TrackShieldScan      User
-UserAttribution      VerificationToken    YouTubeSync
-YoutubeReference
+FanAutomation        FanContact           FanFunding
+FanScore             GenerationFeedback   GenerationLog
+IntakeLink           IntakeSubmission     Invoice
+LicenseDocument      LinkClick            MerchOrder
+MerchOrderItem       MerchProduct         MerchVariant
+Notification         OnboardingEmailLog   PageView
+Payment              PendingSignup        PlatformPricing
+PreSaveCampaign      PreSaveClick         ProducerLeaseSettings
+ProducerProfile      PromoCode            PromoRedemption
+QuickSend            RecentPlay           ReEngagementEmailLog
+Receipt              Referral             ReleasePlan
+ReleasePlanTask      SampleLog            ScheduledEmail
+SessionNote          SessionNoteAttachment ShowInterest
+ShowWaitlist         Split                SplitPayment
+SplitSheet           StemSeparation       StreamLease
+StreamLeaseAgreement StreamLeaseBookmark  StreamLeasePayment
+StreamLeasePlay      Studio               StudioArtist
+StudioCredit         StudioEngineer       StudioEquipment
+StudioPortfolioTrack Subscription         Track
+TrackPlay            TrackShieldResult    TrackShieldScan
+User                 UserAttribution      VerificationToken
+YouTubeSync          YoutubeReference
 ```
 
 ---
@@ -565,6 +572,13 @@ YoutubeReference
 | Audio radar filter (8-axis) | ✅ DONE |
 | Collab match recommendations | ✅ DONE |
 | AudioFeatures data population pipeline | ⚠️ PARTIAL — trigger exists, data sparsely populated |
+| Quality score system — 0–100 signal: play velocity (25pts), DJ crate adds (20), purchases (15), audio uniqueness (10), recency (15), profile completeness (15), stale penalty | ✅ DONE |
+| `qualityScore Int @default(0)` on Track model — pre-computed, updated by daily cron | ✅ DONE |
+| Explore sections ranked by qualityScore — Trending, Beats, DJ Picks, New Releases | ✅ DONE |
+| Cold-start fallback on all 4 sections — profile completeness + recency when <5 qualifying results | ✅ DONE |
+| Daily quality-score recalculation cron (`POST /api/cron/quality-scores`, CRON_SECRET protected, maxDuration 300) | ✅ DONE |
+| Cron orchestrator updated — QUALITY_SCORE_UPDATE agent fires daily with 22h dedup guard | ✅ DONE |
+| New explore endpoints: `/api/explore/trending`, `/api/explore/new-releases`, `/api/explore/beats`, `/api/explore/dj-picks` | ✅ DONE |
 
 ### Studio
 | Feature | Status |
@@ -686,6 +700,63 @@ YoutubeReference
 | Churn prediction table (at-risk subscribers) | ✅ DONE |
 | Stream lease stats (active leases, plays, duplicate flags) | ✅ DONE |
 | Booking lead tracking — platform-wide leads, potential value, per-studio breakdown | ✅ DONE |
+
+### Fan Funding / Artist Credits (Feature 1 — Steps 1–5)
+| Feature | Status |
+|---------|--------|
+| `FanFunding` model — artistId, fanName, fanEmail, amount (cents), creditsAwarded, stripePaymentId, message | ✅ DONE |
+| `platformCredits Int @default(0)` + `supporterCount Int @default(0)` on User | ✅ DONE |
+| `POST /api/public/fan-funding` — public Stripe Checkout (no auth required); min $1, max $500; validates artist has active subscription | ✅ DONE |
+| Stripe webhook handler — `fan_funding` checkout type; creates FanFunding record, increments credits + supporterCount | ✅ DONE |
+| Notification to artist on funding received | ✅ DONE |
+| Confirmation email to fan via Brevo (branded) | ✅ DONE |
+| "Support [Artist]" button on `/[slug]` — gold outline, heart icon, opens modal | ✅ DONE |
+| Support modal — preset amounts ($5/$10/$25/$50), custom amount, fan name/email/message fields, coral CTA | ✅ DONE |
+| Post-payment `?funded=true` toast on artist page | ✅ DONE |
+| Fan funding dashboard section on `/dashboard/earnings` — total received, supporter count, recent transactions | ✅ DONE |
+| `sendFanFundingReceivedEmail` wired to Stripe webhook — artist notified with amount + credit balance | ✅ DONE |
+
+### Sample Packs (Feature 2 — Steps 1–9)
+| Feature | Status |
+|---------|--------|
+| `SAMPLE_PACK` type added to `DigitalProduct` schema | ✅ DONE |
+| Sample pack upload — ZIP up to 128MB via UploadThing | ✅ DONE |
+| Preview audio extraction from ZIP (first .wav/.mp3 found) | ✅ DONE |
+| Sample pack listing on producer dashboard | ✅ DONE |
+| Sample pack public display on artist/producer page (`StoreSection`) | ✅ DONE |
+| Stripe Checkout for sample pack purchase | ✅ DONE |
+| Token-gated download link for buyers | ✅ DONE |
+| Buyer email receipt via Brevo (`sendSamplePackPurchaseEmail`) | ✅ DONE |
+| Artist in-app notification on sample pack sale | ✅ DONE |
+
+### Admin Popups & OG Optimization (Feature 3)
+| Feature | Status |
+|---------|--------|
+| Promo popup system — admin-configured, dismissible overlay on public pages | ✅ DONE |
+| OG image API (`/api/og`) — dynamic social share images per artist/track/page | ✅ DONE |
+| Social meta tags on artist public pages and explore | ✅ DONE |
+
+### Branded Transactional Emails (Feature 6 — Steps 17–20)
+| Feature | Status |
+|---------|--------|
+| Shared `buildEmailTemplate()` — dark HTML (#0A0A0A body, #111111 card, #D4A843 gold, #E85D4A coral CTAs) | ✅ DONE |
+| `getFeaturePromotion(context)` — 15 context cases; rule: never promote what user just used | ✅ DONE |
+| `getWhatsNew()` — 10 rotating items, consistent by day-of-year across all emails | ✅ DONE |
+| `sendBrandedEmail()` wrapper — applied to all existing transactional functions | ✅ DONE |
+| All 9 existing email functions migrated to branded template | ✅ DONE |
+| 10 new email functions created and wired to trigger points: | ✅ DONE |
+| &nbsp;&nbsp;`sendVocalRemovalCompleteEmail` → vocal-remover status poll on Replicate succeeded | ✅ DONE |
+| &nbsp;&nbsp;`sendMasteringCompleteEmail` → ai-job-processor MASTERING COMPLETE block | ✅ DONE |
+| &nbsp;&nbsp;`sendCoverArtCompleteEmail` → ai-job-processor COVER_ART COMPLETE block | ✅ DONE |
+| &nbsp;&nbsp;`sendPressKitCompleteEmail` → ai-job-processor PRESS_KIT COMPLETE block | ✅ DONE |
+| &nbsp;&nbsp;`sendLyricVideoCompleteEmail` → lyric video Phase 2 render completion | ✅ DONE |
+| &nbsp;&nbsp;`sendTrackShieldCompleteEmail` → track-shield scan route post-scan | ✅ DONE |
+| &nbsp;&nbsp;`sendBeatPurchaseReceiptEmail` → Stripe webhook BEAT_LICENSE handler | ✅ DONE |
+| &nbsp;&nbsp;`sendFanFundingReceivedEmail` → Stripe webhook fan_funding handler (artist side) | ✅ DONE |
+| &nbsp;&nbsp;`sendInvoiceEmail` → studio invoice send route (replaces raw sendEmail, carries PDF attachment) | ✅ DONE |
+| &nbsp;&nbsp;`sendSessionFollowUpEmail` → studio bookings PATCH on COMPLETED status | ✅ DONE |
+| Dev preview route — `GET /api/dev/email-preview?context=X` (blocked in production) | ✅ DONE |
+| `/api/dev` added to public paths in `src/proxy.ts` | ✅ DONE |
 
 ### Artist Public Page UX
 | Feature | Status |
