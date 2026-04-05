@@ -642,8 +642,8 @@ YouTubeSync          YoutubeReference
 | **YouTube Data API** | YouTube video sync/embed + DJ set seeding | ✅ Key set |
 | **AudD** | Track Shield — content recognition scanning against 80M+ songs | ✅ Key set |
 | **ACRCloud** | DJ mix track identification + track upload acoustic fingerprinting | ✅ Token set |
-| **Sentry** | Error monitoring | ❌ NOT INTEGRATED |
-| **PostHog / Mixpanel** | Product analytics | ❌ NOT INTEGRATED |
+| **Sentry** | Error monitoring | ⏭️ SKIPPED — PostHog used instead |
+| **PostHog** | Product analytics + error tracking | ✅ INTEGRATED — `posthog-js` (client) + `posthog-node` (server) |
 | **Stripe Connect** | DJ and producer direct payouts | ✅ Code complete — transfer.paid/failed webhook handlers wired |
 | **Printful** | Print-on-demand merch fulfillment (order creation, webhook status updates, issue/defect claims) | ✅ Key set — `PRINTFUL_API_KEY` |
 | **Google OAuth** | Social login via NextAuth Google provider | ✅ Live |
@@ -1060,11 +1060,20 @@ YouTubeSync          YoutubeReference
 | Brand assets: all SVG logos converted to PNG at 2× resolution | ✅ DONE |
 | Facebook cover photo (820×312) + profile pic (400×400) + Meta app icon (1024×1024) generated | ✅ DONE |
 
+### Analytics & Monitoring
+| Feature | Status |
+|---------|--------|
+| PostHog product analytics + error tracking | ✅ DONE |
+| PostHog client-side init via `instrumentation-client.ts` (Next.js 15.3+ pattern) | ✅ DONE |
+| PostHog server-side singleton at `src/lib/posthog.ts` (`posthog-node`, `flushAt: 1`) | ✅ DONE |
+| Auto-captures: pageviews, clicks, interactions, web vitals, session replay | ✅ DONE — PostHog built-in |
+| Error tracking — enable in PostHog dashboard (no extra code needed) | ✅ DONE — PostHog built-in |
+| Env vars: `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` | ✅ SET |
+| Sentry error monitoring | ⏭️ SKIPPED — PostHog covers error tracking |
+
 ### Not Started
 | Feature | Status |
 |---------|--------|
-| Sentry error monitoring | ❌ NOT STARTED |
-| PostHog / product analytics | ❌ NOT STARTED |
 | Custom domain support for artist sites | ❌ NOT STARTED |
 | White-label studio branding (Elite tier) | ❌ NOT STARTED |
 | Mobile app (React Native / PWA) | ❌ NOT STARTED |
@@ -1141,6 +1150,8 @@ YouTubeSync          YoutubeReference
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
 | `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
+| `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | PostHog client + server analytics | ✅ SET |
+| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog ingest host (`https://us.i.posthog.com`) | ✅ SET |
 
 ---
 

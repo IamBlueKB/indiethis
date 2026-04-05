@@ -45,6 +45,8 @@
     "node-id3": "^0.2.9",
     "node-web-audio-api": "^1.0.8",
     "pdf-parse": "^2.4.5",
+    "posthog-js": "^1.364.7",
+    "posthog-node": "^5.28.11",
     "prisma": "5.22.0",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
