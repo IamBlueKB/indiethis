@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-03 (session 10)_
+_Last updated: 2026-04-05 (session 11)_
 
 ---
 
@@ -10,6 +10,130 @@ _Last updated: 2026-04-03 (session 10)_
 - **Auth:** NextAuth v5 beta (`src/proxy.ts`, not middleware) — Google ✅ + Facebook ⏳ (pending Meta business verification)
 - **Last clean build:** ✅ passes `npx next build` with zero errors
 - **Deployment:** Vercel (auto-deploy on push to `master`)
+- **Company:** Clear Ear Corp — `info@indiethis.com`
+
+---
+
+## TECH STACK
+
+### Core
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `next` | 16.1.6 | App Router framework |
+| `typescript` | strict | Type checking |
+| `prisma` + `@prisma/client` | 5.22.0 | ORM + type-safe DB client |
+| `next-auth` | v5 beta | Authentication (credentials + OAuth) |
+| `tailwindcss` | latest | Utility CSS |
+| `zustand` | latest | Global audio player state |
+| `framer-motion` | latest | Animations, AnimatePresence cross-fades |
+
+### Payments & Commerce
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `stripe` | latest | Server-side Stripe SDK |
+| `@stripe/stripe-js` | latest | Client-side Stripe.js |
+
+### AI & Media
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@anthropic-ai/sdk` | latest | Claude API (bio, A&R, press kit, contract scan) |
+| `replicate` | latest | Demucs vocal removal + Whisper transcription |
+| `@remotion/lambda` | 4.0.436 | Lyric video rendering on AWS Lambda |
+| `fast-average-color` | latest | Dominant color extraction (canvas glow) |
+| `node-id3` | latest | ID3 tag embedding on digital downloads |
+| `pdf-parse` | latest | Contract PDF text extraction |
+
+### Email, Files & Analytics
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@uploadthing/react` | v6+ | File upload (audio, images, PDFs) |
+| `posthog-js` | ^1.364.7 | Client-side analytics + error tracking |
+| `posthog-node` | ^5.28.11 | Server-side event capture |
+
+### UI & Charts
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `lucide-react` | latest | Icons throughout |
+| `recharts` | latest | DJ analytics charts |
+| `date-fns` | latest | Date formatting and arithmetic |
+| `bcryptjs` | latest | Password hashing (12 rounds) |
+| `compromise` | latest | NLP for explore search intent parsing |
+
+### Fonts
+- **DM Sans** — body text, UI labels (Google Fonts)
+- **font-display** — headings (`font-display` Tailwind class)
+
+---
+
+## KEY FILES
+
+| File | Purpose |
+|------|---------|
+| `src/proxy.ts` | Auth middleware — all protected route redirects. Add new public routes to `PUBLIC_PATHS` array here |
+| `src/store/audio.ts` | Zustand audio store — `currentTrack`, `currentTime`, `isPlaying`, `duration`. All player state flows through this |
+| `src/lib/db.ts` | Prisma client singleton — import `db` from here in all API routes |
+| `src/lib/stripe.ts` | Stripe client + `PLAN_PRICES` map. Update price IDs here when switching Stripe accounts |
+| `src/lib/brevo.ts` | All transactional email + SMS functions (`sendBrandedEmail`, `buildEmailTemplate`) |
+| `src/lib/printful.ts` | Printful API client — order creation, catalog, webhooks, defect claims |
+| `src/lib/posthog.ts` | PostHog server-side singleton (`getPostHogClient()`) — use in API routes, always call `await posthog.shutdown()` after capture |
+| `src/lib/agents/` | All AI agent files — one file per agent |
+| `instrumentation-client.ts` | PostHog client-side init (Next.js 15.3+ pattern) — auto-captures pageviews + interactions |
+| `prisma/schema.prisma` | Database schema — source of truth for all models |
+| `vercel.json` | Cron job schedule — all 12 cron routes listed here |
+| `src/app/api/stripe/webhook/route.ts` | Central Stripe webhook handler — all event types handled here |
+| `src/app/api/agents/master-cron/route.ts` | Agent orchestrator — routes to all agents on schedule |
+| `src/components/artist-page/HeroCanvasDisplay.tsx` | Canvas video ambient panel on artist public page |
+| `src/components/artist-page/LyricsDisplay.tsx` | Auto-scrolling lyrics synced to audio playback |
+| `src/app/[slug]/page.tsx` | Artist public page — two-column layout, canvas + lyrics left, content right |
+
+---
+
+## ARCHITECTURE NOTES
+
+### Auth Pattern
+- Auth is handled in `src/proxy.ts`, **NOT** `middleware.ts`
+- Any route that needs to skip auth (screenshots, public API, etc.) must be added to `PUBLIC_PATHS` in `proxy.ts` AND have the layout redirect commented out
+- `/api/dev` prefix is in PUBLIC_PATHS for email preview routes
+
+### Signup Flow (PendingSignup → User)
+1. User fills `/signup` → `POST /api/auth/signup-init` → creates `PendingSignup` record, returns `pendingId`
+2. User selects plan on `/pricing` → `POST /api/stripe/checkout` → creates Stripe Checkout session, stores `stripeSessionId` on PendingSignup
+3. Stripe payment completes → `checkout.session.completed` webhook → `POST /api/auth/complete-signup` → creates `User` from PendingSignup
+4. `agreedToTerms: true` + `agreedToTermsAt` timestamp stored on PendingSignup at step 1
+
+### Audio Player State
+- All player state lives in Zustand at `src/store/audio.ts`
+- `AudioTrack` type includes: `id`, `title`, `artist`, `src`, `coverArt`, `canvasVideoUrl`, `lyrics`, `description`, `duration`, `previewOnly`
+- `HeroCanvasDisplay` and `LyricsDisplay` subscribe to the store — they only activate when a track from the current artist is playing
+
+### Canvas Video on Artist Page
+- `HeroCanvasDisplay` checks `artistTrackIds.includes(currentTrack.id)` — only shows for this artist's tracks
+- When nothing playing: shows `latestCanvasVideo` (latest track's canvas) or `latestCoverArt` as static fallback
+- `fast-average-color` extracts dominant color → radial glow behind panel (transitions 1s ease)
+- `AnimatePresence mode="wait"` handles cross-fade on track change — `animate={{ opacity: 0.7 }}` (NOT 1, which overrides the style prop)
+- 280px left column on desktop, full-width stacked on mobile
+
+### Lyrics Scroll
+- `overflow-y: hidden` + direct `container.scrollTop = (scrollHeight - clientHeight) * (currentTime / duration)`
+- Do NOT use `scrollTo` (rapid calls interrupt each other) or `scrollIntoView` (scrolls whole page)
+
+### Canvas Video Opacity Bug (documented)
+- Framer Motion `animate={{ opacity: 1 }}` overrides `style.opacity`. Always set the final opacity in `animate`, not `style`, for Framer-controlled elements
+
+### Prisma on Windows Dev
+- `prisma generate` requires stopping the dev server first — Next.js holds a DLL lock on the generated client
+- Dev server: always start with `preview_start "IndieThis"` (port 3456) — if blocked, delete `.next/dev/lock`
+
+### Platform Fees Summary
+| Transaction | Artist Gets | Platform Gets |
+|------------|------------|---------------|
+| Digital music sale | 90% | 10% |
+| Sample pack sale | 90% | 10% |
+| Beat license | 70% | 30% |
+| Stream lease | 70% (producer) | 30% |
+| POD merch | (retail − base) × 85% | 15% of profit |
+| Self-fulfilled merch | retail × 85% + shipping | 15% of retail |
+| DJ attribution | 90% of artist's cut | DJ gets 10% of artist's cut |
 
 ---
 
@@ -667,6 +791,8 @@ YouTubeSync          YoutubeReference
 | Post-checkout onboarding wizard | ✅ DONE |
 | Promo code redemption at signup | ✅ DONE |
 | PendingSignup → User creation (webhook fallback) | ✅ DONE |
+| Required ToS + Privacy checkbox on signup (email + OAuth flows) — blocks submit if unchecked | ✅ DONE |
+| `agreedToTerms Boolean @default(false)` + `agreedToTermsAt DateTime?` on `PendingSignup` — legal consent record | ✅ DONE |
 
 ### Artist Dashboard
 | Feature | Status |
@@ -1060,6 +1186,18 @@ YouTubeSync          YoutubeReference
 | Brand assets: all SVG logos converted to PNG at 2× resolution | ✅ DONE |
 | Facebook cover photo (820×312) + profile pic (400×400) + Meta app icon (1024×1024) generated | ✅ DONE |
 
+### Legal Pages
+| Feature | Status |
+|---------|--------|
+| Terms of Service (`/terms`) — 21 sections, Clear Ear Corp, April 2026 | ✅ DONE |
+| ToS covers: subscriptions, PPU, AI tools, merch splits (15%/85%), fan funding, DJ attribution (10%), beat marketplace, stream leases, platform agents, Track Shield, audio fingerprinting, prohibited conduct, arbitration (Cook County IL) | ✅ DONE |
+| Privacy Policy (`/privacy`) — 14 sections, April 2026 | ✅ DONE |
+| Privacy lists all third-party services: Stripe, Brevo, Printful, UploadThing, AWS S3, Supabase, Vercel, ACRCloud, AudD, Anthropic Claude, fal.ai, Replicate, Auphonic, PostHog | ✅ DONE |
+| CCPA section in Privacy (California residents) | ✅ DONE |
+| Facebook data deletion callback endpoint + noted in Privacy | ✅ DONE |
+| Contact email: `info@indiethis.com` | ✅ DONE |
+| Operator: Clear Ear Corp, Chicago, Illinois | ✅ DONE |
+
 ### Analytics & Monitoring
 | Feature | Status |
 |---------|--------|
@@ -1093,7 +1231,6 @@ YouTubeSync          YoutubeReference
 | 5 | ~~`YOUTUBE_API_KEY` not set~~ | **FIXED** — key set in `.env.local` |
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
 | 7 | ~~`STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME`~~ | **FIXED** — $0 Stripe prices created, IDs set in `.env.local`, billing + tier-drop logic fully wired |
-| 9 | `AudioFeatures` table | Sparse data — radar filter and similarity matching return few results |
 | 10 | ~~Chromaprint / fpcalc not on Vercel~~ | **FIXED** — SHA-256 fallback replaced with ACRCloud File Scanning API; stores matched title/artist/ISRC/confidence as JSON |
 
 ---
@@ -1149,7 +1286,6 @@ YouTubeSync          YoutubeReference
 | `GOOGLE_CLIENT_SECRET` | Google OAuth provider (NextAuth) | ✅ SET |
 | `BREVO_REPLY_TO` | Brevo reply-to address (optional) | ⚠️ OPTIONAL |
 | `ADMIN_SECRET` | Admin API secret (referenced in code) | ⚠️ CHECK USAGE |
-| `CLOUDFLARE_ACCOUNT_ID` | Referenced in memory notes, not found in code | ⚠️ UNUSED |
 | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | PostHog client + server analytics | ✅ SET |
 | `NEXT_PUBLIC_POSTHOG_HOST` | PostHog ingest host (`https://us.i.posthog.com`) | ✅ SET |
 
