@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { PWARegister } from "@/components/shared/PWARegister";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import TrackVisit from "@/components/shared/TrackVisit";
 import "./globals.css";
@@ -33,10 +34,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#D4A843" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body>
         <TrackVisit />
         <PWARegister />
+        <InstallPrompt />
         <ImpersonationBanner />
         <Providers>{children}</Providers>
       </body>
