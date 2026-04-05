@@ -55,6 +55,7 @@ _Last updated: 2026-04-05 (session 11)_
 |---------|---------|---------|
 | `lucide-react` | latest | Icons throughout |
 | `recharts` | latest | DJ analytics charts |
+| `react-joyride` | v3 | Onboarding product tour |
 | `date-fns` | latest | Date formatting and arithmetic |
 | `bcryptjs` | latest | Password hashing (12 rounds) |
 | `compromise` | latest | NLP for explore search intent parsing |
@@ -84,6 +85,13 @@ _Last updated: 2026-04-05 (session 11)_
 | `src/app/api/agents/master-cron/route.ts` | Agent orchestrator — routes to all agents on schedule |
 | `src/components/artist-page/HeroCanvasDisplay.tsx` | Canvas video ambient panel on artist public page |
 | `src/components/artist-page/LyricsDisplay.tsx` | Auto-scrolling lyrics synced to audio playback |
+| `src/components/OnboardingTour.tsx` | react-joyride v3 tour component — 5-step artist tour + 5-step studio tour |
+| `src/components/dashboard/DashboardTourWrapper.tsx` | Client wrapper — manages `showTour` state, calls `/api/dashboard/onboarding-complete` on finish/skip |
+| `src/components/InstallPrompt.tsx` | PWA install banner — `beforeinstallprompt` event, dismiss stored in localStorage |
+| `src/components/shared/PWARegister.tsx` | Service worker registration (production only) |
+| `public/manifest.json` | PWA web app manifest — name, icons, theme_color, start_url |
+| `public/sw.js` | Service worker — network-first caching, precaches `/`, `/explore`, `/pricing` |
+| `public/icons/` | PWA icons: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` (generated from brand icon) |
 | `src/app/[slug]/page.tsx` | Artist public page — two-column layout, canvas + lyrics left, content right |
 
 ---
@@ -793,6 +801,13 @@ YouTubeSync          YoutubeReference
 | PendingSignup → User creation (webhook fallback) | ✅ DONE |
 | Required ToS + Privacy checkbox on signup (email + OAuth flows) — blocks submit if unchecked | ✅ DONE |
 | `agreedToTerms Boolean @default(false)` + `agreedToTermsAt DateTime?` on `PendingSignup` — legal consent record | ✅ DONE |
+| `onboardingTourCompleted Boolean @default(false)` on `User` — prevents re-showing tour after first completion | ✅ DONE |
+| Onboarding tour (react-joyride v3) — fires once for new users after dashboard fully renders (1s delay) | ✅ DONE |
+| Artist tour: 5 steps — Music → AI Tools → Merch → Artist Site → Explore | ✅ DONE |
+| Studio tour: 5 steps — Bookings → Contacts → Invoices → AI Tools → Settings | ✅ DONE |
+| `data-tour` attributes on `DashboardSidebar` (music, ai-tools, merch, site, explore) and `StudioSidebar` (bookings, contacts, invoices, studio-ai, studio-settings) | ✅ DONE |
+| Dashboard layout + Studio layout each fetch `onboardingTourCompleted`, render `DashboardTourWrapper` with correct role | ✅ DONE |
+| `POST /api/dashboard/onboarding-complete` — sets `onboardingTourCompleted: true`; called on tour finish or skip | ✅ DONE |
 
 ### Artist Dashboard
 | Feature | Status |
@@ -1137,6 +1152,7 @@ YouTubeSync          YoutubeReference
 ### Stripe Connect — Dashboard
 | Feature | Status |
 |---------|--------|
+| `POST /api/dashboard/onboarding-complete` | Mark onboarding tour as completed for current user |
 | `POST /api/dashboard/stripe-connect` — creates Stripe Express account, stores `stripeConnectId` on User, returns onboarding link | ✅ DONE |
 | `GET /api/dashboard/stripe-connect/refresh` — refreshes expired Stripe Connect account links | ✅ DONE |
 | `ConnectStripeButton` component — reusable button for initiating Stripe Connect onboarding | ✅ DONE |
@@ -1198,6 +1214,18 @@ YouTubeSync          YoutubeReference
 | Contact email: `info@indiethis.com` | ✅ DONE |
 | Operator: Clear Ear Corp, Chicago, Illinois | ✅ DONE |
 
+### Progressive Web App (PWA)
+| Feature | Status |
+|---------|--------|
+| `public/manifest.json` — name, description, start_url `/`, display standalone, theme_color `#D4A843`, orientation portrait | ✅ DONE |
+| PWA icons: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` (20% safe-zone padding on `#0A0A0A` bg) in `public/icons/` | ✅ DONE |
+| `public/sw.js` — network-first caching strategy; precaches `/`, `/explore`, `/pricing`; cleans old caches on activate | ✅ DONE |
+| Root layout: `<link rel="manifest">`, `<meta name="theme-color">`, Apple mobile web app meta tags, `<link rel="apple-touch-icon">` | ✅ DONE |
+| `PWARegister` — production-only service worker registration (no-op in dev) | ✅ DONE |
+| `InstallPrompt` — `beforeinstallprompt` banner: dark bg, gold heading, Install button, × dismiss; persists dismiss in localStorage | ✅ DONE |
+| No PWA library — manual setup only (manifest + SW + InstallPrompt) | ✅ DONE |
+| IndieThis is installable on Android, iOS (Add to Home Screen), and desktop Chrome/Edge | ✅ DONE |
+
 ### Analytics & Monitoring
 | Feature | Status |
 |---------|--------|
@@ -1214,7 +1242,8 @@ YouTubeSync          YoutubeReference
 |---------|--------|
 | Custom domain support for artist sites | ❌ NOT STARTED |
 | White-label studio branding (Elite tier) | ❌ NOT STARTED |
-| Mobile app (React Native / PWA) | ❌ NOT STARTED |
+| PWA (installable web app) | ✅ DONE — manifest, service worker, install prompt |
+| Native mobile app (React Native) | ❌ NOT STARTED |
 | Spotify / Apple Music API integration | ❌ NOT STARTED |
 | TikTok API integration | ❌ NOT STARTED |
 
