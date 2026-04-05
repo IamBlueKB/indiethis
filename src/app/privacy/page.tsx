@@ -111,8 +111,8 @@ export default function PrivacyPage() {
           </p>
           <p style={{ marginBottom: 12 }}>
             <strong style={{ color: "#ccc" }}>Delete:</strong> You can request account deletion by contacting us at{" "}
-            <a href="mailto:blue@clearearstudios.com" style={{ color: "#D4A843", textDecoration: "none" }}>
-              blue@clearearstudios.com
+            <a href="mailto:info@indiethis.com" style={{ color: "#D4A843", textDecoration: "none" }}>
+              info@indiethis.com
             </a>
             . Upon deletion, your public page will be taken offline, your content will be removed within 30 days, and your personal data will be purged from our systems except where retention is required by law or for completed transactions.
           </p>
@@ -134,8 +134,8 @@ export default function PrivacyPage() {
 
         <Section title="8. California Residents (CCPA)">
           If you are a California resident, you have the right to: know what personal information we collect and how it is used; request deletion of your personal information; opt out of the sale of personal information (we do not sell your data); not be discriminated against for exercising your privacy rights. To exercise these rights, contact us at{" "}
-          <a href="mailto:blue@clearearstudios.com" style={{ color: "#D4A843", textDecoration: "none" }}>
-            blue@clearearstudios.com
+          <a href="mailto:info@indiethis.com" style={{ color: "#D4A843", textDecoration: "none" }}>
+            info@indiethis.com
           </a>
           .
         </Section>
@@ -162,11 +162,11 @@ export default function PrivacyPage() {
 
         <Section title="14. Contact">
           For privacy questions or data requests, contact us at{" "}
-          <a href="mailto:blue@clearearstudios.com" style={{ color: "#D4A843", textDecoration: "none" }}>
-            blue@clearearstudios.com
+          <a href="mailto:info@indiethis.com" style={{ color: "#D4A843", textDecoration: "none" }}>
+            info@indiethis.com
           </a>
           .<br /><br />
-          Clear Ear Studios LLC<br />
+          Clear Ear Corp<br />
           Chicago, Illinois
         </Section>
       </main>
@@ -186,12 +186,12 @@ export default function PrivacyPage() {
             color: "#444",
           }}
         >
-          <span>© 2026 Clear Ear Studios LLC</span>
+          <span>© 2026 Clear Ear Corp</span>
           <div style={{ display: "flex", gap: 20 }}>
             <Link href="/terms" style={{ color: "#444", textDecoration: "none" }}>Terms</Link>
             <Link href="/privacy" style={{ color: "#D4A843", textDecoration: "none" }}>Privacy</Link>
-            <a href="mailto:blue@clearearstudios.com" style={{ color: "#444", textDecoration: "none" }}>
-              blue@clearearstudios.com
+            <a href="mailto:info@indiethis.com" style={{ color: "#444", textDecoration: "none" }}>
+              info@indiethis.com
             </a>
           </div>
         </div>

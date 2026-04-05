@@ -50,7 +50,7 @@ export default function TermsPage() {
         </p>
 
         <Section title="1. Agreement to Terms">
-          By creating an account, subscribing to a plan, or using any feature on IndieThis ("the Platform"), you agree to these Terms of Service. If you do not agree, do not use the Platform. IndieThis is operated by Clear Ear Studios LLC ("we", "us", "our"). These terms apply to all users including artists, producers, studios, and DJs.
+          By creating an account, subscribing to a plan, or using any feature on IndieThis ("the Platform"), you agree to these Terms of Service. If you do not agree, do not use the Platform. IndieThis is operated by Clear Ear Corp ("we", "us", "our"). These terms apply to all users including artists, producers, studios, and DJs.
         </Section>
 
         <Section title="2. Accounts and Eligibility">
@@ -133,11 +133,11 @@ export default function TermsPage() {
 
         <Section title="21. Contact">
           For questions about these terms, contact us at{" "}
-          <a href="mailto:blue@clearearstudios.com" style={{ color: "#D4A843", textDecoration: "none" }}>
-            blue@clearearstudios.com
+          <a href="mailto:info@indiethis.com" style={{ color: "#D4A843", textDecoration: "none" }}>
+            info@indiethis.com
           </a>
           .<br /><br />
-          Clear Ear Studios LLC<br />
+          Clear Ear Corp<br />
           Chicago, Illinois
         </Section>
       </main>
@@ -157,12 +157,12 @@ export default function TermsPage() {
             color: "#444",
           }}
         >
-          <span>© 2026 Clear Ear Studios LLC</span>
+          <span>© 2026 Clear Ear Corp</span>
           <div style={{ display: "flex", gap: 20 }}>
             <Link href="/terms" style={{ color: "#D4A843", textDecoration: "none" }}>Terms</Link>
             <Link href="/privacy" style={{ color: "#444", textDecoration: "none" }}>Privacy</Link>
-            <a href="mailto:blue@clearearstudios.com" style={{ color: "#444", textDecoration: "none" }}>
-              blue@clearearstudios.com
+            <a href="mailto:info@indiethis.com" style={{ color: "#444", textDecoration: "none" }}>
+              info@indiethis.com
             </a>
           </div>
         </div>
