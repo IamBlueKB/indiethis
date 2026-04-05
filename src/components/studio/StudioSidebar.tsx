@@ -34,24 +34,25 @@ type NavItem = {
   label: string;
   href: string;
   icon: React.ElementType;
+  tourId?: string;
 };
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/studio",            icon: LayoutDashboard },
   { label: "Explore",   href: "/explore",           icon: Compass },
   { label: "Analytics", href: "/studio/analytics",  icon: BarChart2 },
-  { label: "Bookings", href: "/studio/bookings", icon: Calendar },
-  { label: "Artists", href: "/studio/artists", icon: Users },
-  { label: "Contacts", href: "/studio/contacts", icon: BookUser },
-  { label: "Inbox", href: "/studio/inbox", icon: Inbox },
-  { label: "File Delivery", href: "/studio/deliver", icon: FolderOpen },
-  { label: "Email Blasts", href: "/studio/email", icon: Mail },
-  { label: "Invoices", href: "/studio/invoices", icon: FileText },
-  { label: "Payments", href: "/studio/payments", icon: CreditCard },
-  { label: "AI Tools",       href: "/studio/ai-tools",                icon: Wand2 },
+  { label: "Bookings",     href: "/studio/bookings",              icon: Calendar,  tourId: "bookings" },
+  { label: "Artists",      href: "/studio/artists",               icon: Users },
+  { label: "Contacts",     href: "/studio/contacts",              icon: BookUser,  tourId: "contacts" },
+  { label: "Inbox",        href: "/studio/inbox",                 icon: Inbox },
+  { label: "File Delivery",href: "/studio/deliver",               icon: FolderOpen },
+  { label: "Email Blasts", href: "/studio/email",                 icon: Mail },
+  { label: "Invoices",     href: "/studio/invoices",              icon: FileText,  tourId: "invoices" },
+  { label: "Payments",     href: "/studio/payments",              icon: CreditCard },
+  { label: "AI Tools",     href: "/studio/ai-tools",              icon: Wand2,     tourId: "studio-ai" },
   { label: "Vocal Remover",  href: "/studio/ai-tools/vocal-remover",  icon: Scissors },
   { label: "Credits",        href: "/studio/credits",                  icon: Gift },
-  { label: "Settings", href: "/studio/settings", icon: Settings },
+  { label: "Settings", href: "/studio/settings", icon: Settings, tourId: "studio-settings" },
   { label: "Public Page", href: "/studio/settings/public-page", icon: Globe },
   { label: "Portfolio", href: "/studio/settings/portfolio", icon: Music },
   { label: "Who Records Here", href: "/studio/settings/credits", icon: Users },
@@ -112,6 +113,7 @@ export default function StudioSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              {...(item.tourId ? { "data-tour": item.tourId } : {})}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors no-underline",
                 active

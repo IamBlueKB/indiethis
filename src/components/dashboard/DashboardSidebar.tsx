@@ -49,12 +49,13 @@ type NavItem = {
   label: string;
   href: string;
   icon: React.ElementType;
+  tourId?: string;
 };
 
 const navItems: NavItem[] = [
   { label: "Dashboard",     href: "/dashboard",              icon: LayoutDashboard },
-  { label: "Explore",       href: "/explore",                icon: Compass },
-  { label: "Music",         href: "/dashboard/music",        icon: Music },
+  { label: "Explore",       href: "/explore",                icon: Compass,      tourId: "explore" },
+  { label: "Music",         href: "/dashboard/music",        icon: Music,        tourId: "music" },
   { label: "Sales",         href: "/dashboard/music/sales",  icon: ShoppingCart },
   { label: "Videos",        href: "/dashboard/videos",       icon: Video },
   { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
@@ -63,15 +64,15 @@ const navItems: NavItem[] = [
   { label: "Analytics",     href: "/dashboard/analytics",    icon: BarChart2 },
   { label: "Broadcasts",    href: "/dashboard/broadcasts",   icon: MessageSquare },
   { label: "QR Code",       href: "/dashboard/qr",           icon: QrCode },
-  { label: "AI Tools",      href: "/dashboard/ai/video",        icon: Wand2  },
+  { label: "AI Tools",      href: "/dashboard/ai/video",        icon: Wand2,        tourId: "ai-tools" },
   { label: "Track Shield", href: "/dashboard/ai/track-shield", icon: Shield },
-  { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag },
+  { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag,  tourId: "merch" },
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
   { label: "Stream Leases", href: "/dashboard/stream-leases",icon: Radio },
   { label: "DJ Activity",   href: "/dashboard/dj-activity",  icon: Radio },
   { label: "License Vault", href: "/dashboard/vault",        icon: Archive },
   { label: "Samples",       href: "/dashboard/samples",     icon: Upload },
-  { label: "Artist Site",   href: "/dashboard/site",         icon: Globe },
+  { label: "Artist Site",   href: "/dashboard/site",         icon: Globe,        tourId: "site" },
   { label: "Sessions",        href: "/dashboard/sessions",          icon: Calendar },
   { label: "Book a Studio",   href: "/studios",                     icon: Building2 },
   { label: "Splits",          href: "/dashboard/splits",            icon: Users },
@@ -160,6 +161,7 @@ export default function DashboardSidebar({ hasProducerActivity, hasProducerStrea
             <Link
               key={item.href}
               href={item.href}
+              {...(item.tourId ? { "data-tour": item.tourId } : {})}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors no-underline",
                 active

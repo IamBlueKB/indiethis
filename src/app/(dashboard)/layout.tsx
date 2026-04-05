@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
+import DashboardTourWrapper from "@/components/dashboard/DashboardTourWrapper";
 import MiniPlayer from "@/components/audio/MiniPlayer";
 import { GracePeriodBanner } from "@/components/dashboard/GracePeriodBanner";
 import PromoPopupManager from "@/components/PromoPopupManager";
@@ -41,13 +42,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }),
     db.user.findUnique({
       where: { id: userId },
-      select: { djMode: true },
+      select: { djMode: true, onboardingTourCompleted: true },
     }),
   ]);
 
 const hasProducerActivity = beatCount > 0;
   const hasProducerStreamLeases = producerLeaseCount > 0;
   const hasDjMode = userFlags?.djMode ?? false;
+  const tourCompleted = userFlags?.onboardingTourCompleted ?? false;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--background)" }}>
@@ -71,6 +73,9 @@ const hasProducerActivity = beatCount > 0;
 
       {/* Promo popups — page-targeted, frequency-gated */}
       <PromoPopupManager page="dashboard" />
+
+      {/* Onboarding tour — shown once for new users */}
+      <DashboardTourWrapper tourCompleted={tourCompleted} role="artist" />
     </div>
   );
 }
