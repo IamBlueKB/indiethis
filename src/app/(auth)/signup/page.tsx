@@ -77,6 +77,7 @@ function SignupForm() {
   const [loading,     setLoading]     = useState(false);
   const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Promo code
   const [promoExpanded,    setPromoExpanded]    = useState(!!initialPromo);
@@ -124,6 +125,11 @@ function SignupForm() {
       return;
     }
 
+    if (!agreedToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -141,13 +147,15 @@ function SignupForm() {
           signupPath:   path,
           referralCode: refCode,
           affiliateId,
-          promoCode:    promoCode.trim() || undefined,
+          promoCode:       promoCode.trim() || undefined,
           source,
           utmSource,
           utmMedium,
           utmCampaign,
           landingPage,
-          firstVisitAt: firstVisitAt ? new Date(Number(firstVisitAt)).toISOString() : undefined,
+          firstVisitAt:    firstVisitAt ? new Date(Number(firstVisitAt)).toISOString() : undefined,
+          agreedToTerms:   true,
+          agreedToTermsAt: new Date().toISOString(),
         }),
       });
 
@@ -427,6 +435,45 @@ function SignupForm() {
             </p>
           )}
 
+          {/* Terms checkbox */}
+          <label
+            style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(e) => { setAgreedToTerms(e.target.checked); if (e.target.checked) setError(""); }}
+              style={{
+                marginTop: 2,
+                width: 16,
+                height: 16,
+                flexShrink: 0,
+                accentColor: "#D4A843",
+                cursor: "pointer",
+              }}
+            />
+            <span style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
+              I agree to the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#D4A843", textDecoration: "none" }}
+              >
+                Terms of Service
+              </Link>
+              {" "}and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#D4A843", textDecoration: "none" }}
+              >
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+
           {/* CTA */}
           <button
             type="submit"
@@ -440,13 +487,6 @@ function SignupForm() {
               "Continue to Payment →"
             )}
           </button>
-
-          <p className="text-[11px] text-muted-foreground text-center">
-            By creating an account you agree to our{" "}
-            <Link href="/terms" className="underline hover:text-foreground transition-colors">
-              Terms of Service
-            </Link>
-          </p>
         </form>
 
         <p className="text-center text-sm text-muted-foreground mt-5">

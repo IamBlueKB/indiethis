@@ -1731,10 +1731,12 @@ model PendingSignup {
   utmCampaign     String?
   landingPage     String?
   firstVisitAt    DateTime?
-  stripeSessionId String?   @unique
-  tier            String?
-  createdAt       DateTime  @default(now())
-  expiresAt       DateTime
+  stripeSessionId  String?   @unique
+  tier             String?
+  agreedToTerms    Boolean   @default(false)
+  agreedToTermsAt  DateTime?
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
 }
 
 model AudioFeatures {

@@ -32,15 +32,17 @@ export async function POST(req: NextRequest) {
       utmSource?:    string;
       utmMedium?:    string;
       utmCampaign?:  string;
-      landingPage?:  string;
-      firstVisitAt?: string;
+      landingPage?:     string;
+      firstVisitAt?:    string;
+      agreedToTerms?:   boolean;
+      agreedToTermsAt?: string;
     };
 
     const {
       name, email, password, role,
       signupPath, referralCode, affiliateId, promoCode,
       source, utmSource, utmMedium, utmCampaign, landingPage, firstVisitAt,
-      authProvider,
+      authProvider, agreedToTerms, agreedToTermsAt,
     } = body;
 
     const isOAuth = authProvider && authProvider !== "email";
@@ -103,8 +105,10 @@ export async function POST(req: NextRequest) {
         utmSource:     utmSource     ?? null,
         utmMedium:     utmMedium     ?? null,
         utmCampaign:   utmCampaign   ?? null,
-        landingPage:   landingPage   ?? null,
-        firstVisitAt:  firstVisitAt  ? new Date(firstVisitAt) : null,
+        landingPage:      landingPage      ?? null,
+        firstVisitAt:     firstVisitAt     ? new Date(firstVisitAt) : null,
+        agreedToTerms:    agreedToTerms    ?? false,
+        agreedToTermsAt:  agreedToTermsAt  ? new Date(agreedToTermsAt) : null,
         stripeSessionId: null,
         tier:          null,
         expiresAt:     addHours(new Date(), 24),
@@ -123,8 +127,10 @@ export async function POST(req: NextRequest) {
         utmSource:     utmSource     ?? null,
         utmMedium:     utmMedium     ?? null,
         utmCampaign:   utmCampaign   ?? null,
-        landingPage:   landingPage   ?? null,
-        firstVisitAt:  firstVisitAt  ? new Date(firstVisitAt) : null,
+        landingPage:     landingPage     ?? null,
+        firstVisitAt:    firstVisitAt    ? new Date(firstVisitAt) : null,
+        agreedToTerms:   agreedToTerms   ?? false,
+        agreedToTermsAt: agreedToTermsAt ? new Date(agreedToTermsAt) : null,
         expiresAt:     addHours(new Date(), 24),
       },
     });

@@ -10,7 +10,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div style={{ marginBottom: 36 }}>
       <h2 style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 10 }}>{title}</h2>
-      <p style={{ fontSize: 14, color: "#aaa", lineHeight: 1.75 }}>{children}</p>
+      <div style={{ fontSize: 14, color: "#aaa", lineHeight: 1.75 }}>{children}</div>
     </div>
   );
 }
@@ -46,131 +46,98 @@ export default function TermsPage() {
           Terms of Service
         </h1>
         <p style={{ fontSize: 13, color: "#555", marginBottom: 48 }}>
-          Effective Date: March 22, 2026 &nbsp;·&nbsp; Last Updated: March 22, 2026
+          Last Updated: April 2026
         </p>
 
         <Section title="1. Agreement to Terms">
-          By accessing or using IndieThis (indiethis.com), operated by IndieThis LLC, you agree to be bound by
-          these Terms of Service. If you do not agree, do not use the platform.
+          By creating an account, subscribing to a plan, or using any feature on IndieThis ("the Platform"), you agree to these Terms of Service. If you do not agree, do not use the Platform. IndieThis is operated by Clear Ear Studios LLC ("we", "us", "our"). These terms apply to all users including artists, producers, studios, and DJs.
         </Section>
 
-        <Section title="2. Eligibility">
-          You must be at least 18 years old to create an account. By using IndieThis, you represent that you are
-          at least 18 years of age and have the legal capacity to enter into these terms.
+        <Section title="2. Accounts and Eligibility">
+          You must be at least 18 years old to create an account. You are responsible for maintaining the security of your account credentials. You may not share your account with others. You may sign up using email and password, or through Google or Facebook authentication. One person may hold one account. Creating multiple accounts to manipulate platform features, inflate play counts, or game the Impact Score system is prohibited and grounds for immediate termination.
         </Section>
 
-        <Section title="3. Account Registration">
-          You are responsible for maintaining the confidentiality of your account credentials. You are responsible
-          for all activity that occurs under your account. You must provide accurate and complete information during
-          registration. We reserve the right to suspend or terminate accounts that violate these terms.
+        <Section title="3. Subscription Plans and Billing">
+          IndieThis offers monthly subscription plans for artists, producers, and studios. Prices are listed on the pricing page and may change with 30 days notice. Subscriptions are billed monthly through Stripe. You may cancel at any time through the billing portal — your access continues through the end of the current billing period. No refunds are issued for partial months. Promotional and comp accounts may be granted at our discretion with limited or no access to AI tools, email blasts, and SMS broadcasts.
         </Section>
 
-        <Section title="4. Subscription Plans and Billing">
-          IndieThis offers subscription plans (Launch, Push, Reign for artists; Pro, Elite for studios) billed
-          monthly through Stripe. Pay-per-use AI tools are available without a subscription. All prices are listed
-          in US dollars. Subscriptions renew automatically each month unless cancelled. You may cancel at any time
-          through your account settings. Cancellation takes effect at the end of the current billing period — no
-          refunds are issued for partial months. We reserve the right to change pricing with 30 days notice to
-          active subscribers.
+        <Section title="4. Pay Per Use (PPU) Purchases">
+          Certain AI tools and features are available as one-time purchases. PPU charges are non-refundable once processing has begun. If an AI tool fails to produce a result due to a system error, the charge will be refunded or credited to your account. Prices for PPU features are set in the Platform Pricing system and may be adjusted at any time.
         </Section>
 
-        <Section title="5. Content Ownership">
-          You retain full ownership of all content you upload to IndieThis, including music, artwork, videos, and
-          written content. You retain full ownership of your master recordings. By uploading content, you grant
-          IndieThis a non-exclusive, worldwide license to host, display, and distribute your content within the
-          platform as necessary to provide our services. This license terminates when you delete your content or
-          close your account. AI-generated content created through our tools is owned by you upon purchase.
+        <Section title="5. AI-Generated Content">
+          IndieThis provides AI-powered tools including but not limited to cover art generation, music video generation, audio mastering, lyric video creation, vocal removal, bio generation, press kit creation, contract scanning, and A&R reports. AI-generated content is provided "as-is." We do not guarantee that AI output will be free of errors, suitable for any particular purpose, or free of intellectual property conflicts. You are solely responsible for reviewing and using AI-generated content. You own the output generated by AI tools using your inputs, subject to any third-party rights in the underlying AI models. We do not claim ownership of your AI-generated content.
         </Section>
 
-        <Section title="6. Prohibited Content and Conduct">
-          You may not upload content that infringes on the intellectual property rights of others, is illegal,
-          defamatory, obscene, or promotes violence or hate. You may not use the platform to distribute malware or
-          engage in phishing. You may not create multiple accounts to circumvent platform limits, scrape or automate
-          access without written permission, or resell platform access. We reserve the right to remove content and
-          suspend accounts that violate these rules.
+        <Section title="6. User Content and Intellectual Property">
+          You retain ownership of all content you upload to IndieThis including music, artwork, videos, bios, and merch designs. By uploading content, you grant IndieThis a non-exclusive, worldwide license to display, distribute, and promote your content within the Platform and in marketing materials for the Platform. This license terminates when you delete your content or close your account, except for content that has been purchased by other users or is part of completed transactions.
+          <br /><br />
+          You represent that you have all necessary rights to the content you upload. You may not upload content that infringes on any third party&apos;s intellectual property, contains unauthorized samples, or violates any law. IndieThis uses content moderation systems to scan uploaded content for potential violations. Content flagged for violations may be unpublished or removed at our discretion.
         </Section>
 
-        <Section title="7. Merch Storefront">
-          IndieThis provides merch storefront tools. You are responsible for the accuracy of your product
-          descriptions and fulfillment. IndieThis takes a platform cut on merch sales as specified in your
-          subscription tier. You are responsible for applicable sales tax obligations in your jurisdiction.
+        <Section title="7. Music Distribution and Sales">
+          Artists may sell digital products (singles, EPs, albums, sample packs) through the Platform. IndieThis retains a 10% platform fee on digital music sales and sample pack sales. Artists set their own prices within the allowed ranges. Buyers receive download access via tokenized links. Downloaded files include ID3 metadata tags. All sales are final — IndieThis does not process refunds for digital content on behalf of artists.
         </Section>
 
-        <Section title="8. Beat Marketplace">
-          Beat licensing agreements are between the buyer and seller. IndieThis facilitates the transaction and
-          provides standard licensing templates. IndieThis takes a platform cut on beat sales as specified in your
-          subscription tier. Sellers are responsible for ensuring they have the rights to sell the beats they list.
+        <Section title="8. Beat Marketplace and Licensing">
+          Producers may list beats for licensing on the Platform. Licensing terms (Basic, Exclusive, Unlimited) are defined by the producer. IndieThis facilitates the transaction and generates license documents. Stream leases are billed monthly at the rate set by the producer with a 70/30 revenue split (producer/platform). Failed stream lease payments are subject to a 3-day grace period before the lease is suspended.
         </Section>
 
-        <Section title="9. Payments and Earnings">
-          Payments are processed through Stripe. Earnings from merch sales, beat sales, tips, and other revenue are
-          paid to your connected Stripe account. IndieThis is not responsible for Stripe fees or payment processing
-          delays. You are responsible for reporting and paying taxes on your earnings.
+        <Section title="9. Merchandise">
+          IndieThis offers merchandise sales through two fulfillment methods: print-on-demand via Printful and self-fulfilled by the artist. IndieThis retains 15% of merchandise profit on POD items and 15% of the total product price on self-fulfilled items. For POD products, custom printed items are made to order and cannot be returned unless defective. Defective items will be replaced at no cost through our fulfillment partner. For self-fulfilled products, the artist&apos;s return policy applies. IndieThis does not process merch returns or refunds — these are handled between the buyer and the artist or fulfillment provider.
         </Section>
 
-        <Section title="10. AI Tools">
-          AI-generated content is created using third-party AI providers. Results may vary. We do not guarantee
-          that AI-generated content will be free of errors or suitable for any specific purpose. You are responsible
-          for reviewing AI-generated content before publishing or distributing it. AI tool credits and usage limits
-          are determined by your subscription tier.
+        <Section title="10. Fan Funding and Platform Credits">
+          Fans may support artists by purchasing platform credits. Credits are purchased in US dollars at a 1:1 ratio ($1 = 1 credit). Credits are applied to the artist&apos;s IndieThis balance and can only be spent on Platform services including subscriptions, PPU tools, and merch production costs. Credits cannot be withdrawn as cash, transferred to another user, or converted to any currency. Credits have no expiration date. Fan funding purchases are non-refundable.
         </Section>
 
-        <Section title="11. Studio Services">
-          Studio accounts manage client relationships, bookings, and file delivery through the platform. Studios
-          are responsible for the services they provide to their clients. IndieThis is not a party to agreements
-          between studios and their clients.
+        <Section title="11. DJ Platform and Attribution">
+          Users may activate DJ mode on their accounts. DJs may create crates, upload mixes, list events, and apply for verification. The DJ Attribution Engine tracks fan discovery through DJ activity and allocates 10% of the artist&apos;s portion on qualifying sales to the attributing DJ. Artists opt into DJ discovery attribution through their settings. The attribution percentage is fixed and cannot be modified by artists or DJs. DJ earnings accumulate in the DJ&apos;s balance and are paid out via Stripe Connect with a $25 minimum withdrawal.
         </Section>
 
-        <Section title="12. Promo Codes and Ambassador Program">
-          Promo codes are issued at the sole discretion of IndieThis and may be revoked at any time. Ambassador
-          rewards are earned based on the terms set at the time of enrollment and may be modified with notice.
-          Ambassador credit balances and payouts are subject to the terms of the ambassador agreement.
+        <Section title="12. Studio Features">
+          Studios may use IndieThis for booking management, client CRM, invoicing, file delivery, email campaigns, and intake forms. Intake deposits collected through the Platform are processed via Stripe. Alternative payment methods (Cash App, Zelle) are facilitated through the Platform but processed outside of Stripe — IndieThis is not responsible for verifying external payments. Studios are responsible for their own client relationships, service delivery, and dispute resolution.
         </Section>
 
-        <Section title="13. Privacy">
-          Your use of IndieThis is also governed by our{" "}
-          <Link href="/privacy" style={{ color: "#D4A843", textDecoration: "none" }}>
-            Privacy Policy
-          </Link>
-          . Please review it to understand how we collect, use, and protect your information.
+        <Section title="13. Platform Agents">
+          IndieThis operates automated agents that analyze platform data and take actions including sending emails, notifications, scoring leads, moderating content, and surfacing recommendations. These agents operate on scheduled intervals and event triggers. Agent-generated communications are sent on behalf of IndieThis, not on behalf of individual users. You may not rely on agent recommendations as professional advice — they are informational suggestions based on platform data.
         </Section>
 
-        <Section title="14. Intellectual Property">
-          The IndieThis name, logo, and brand elements are the property of IndieThis LLC. You may not use our
-          branding without written permission. The &quot;Powered by IndieThis&quot; attribution on public pages
-          is a condition of using the platform.
+        <Section title="14. Track Shield and Content Scanning">
+          Track Shield scans the internet for potential unauthorized use of your music using third-party content recognition services. Results are informational and do not constitute legal evidence of infringement. IndieThis does not provide legal advice or take enforcement action on your behalf. You are responsible for pursuing any claims of infringement through appropriate legal channels.
         </Section>
 
-        <Section title="15. Limitation of Liability">
-          IndieThis is provided &quot;as is&quot; without warranties of any kind, express or implied. We are not
-          liable for any indirect, incidental, special, or consequential damages arising from your use of the
-          platform. Our total liability to you for any claim shall not exceed the amount you paid us in the
-          12 months preceding the claim.
+        <Section title="15. Audio Fingerprinting and Analysis">
+          When you upload audio content, IndieThis automatically generates acoustic fingerprints and analyzes audio features (BPM, key, energy, danceability, and other characteristics). This data is used for platform features including the explore page radar filter, quality ranking, collab matching, and DJ mix track identification. Audio fingerprints and features are stored as part of your content data and deleted when you delete your content.
         </Section>
 
-        <Section title="16. Termination">
-          We may suspend or terminate your account at any time for violation of these terms. You may close your
-          account at any time through your account settings. Upon termination, your content will be retained for
-          30 days to allow you to export it, after which it may be permanently deleted.
+        <Section title="16. Prohibited Conduct">
+          You may not: use the Platform to distribute malware or harmful content; create fake accounts or inflate metrics artificially; harass, threaten, or abuse other users; upload content that is illegal, obscene, or promotes violence; reverse engineer or attempt to access the Platform&apos;s source code; use automated tools to scrape content or manipulate Platform features; resell or sublicense Platform access; impersonate other artists or misrepresent your identity.
         </Section>
 
-        <Section title="17. Changes to Terms">
-          We may update these terms from time to time. We will notify active users of material changes via email.
-          Continued use of the platform after changes take effect constitutes acceptance of the updated terms.
+        <Section title="17. Termination">
+          We reserve the right to suspend or terminate your account for violation of these terms, fraudulent activity, or conduct that harms the Platform or its users. Upon termination, your public page will be taken offline. Your uploaded content remains accessible for 30 days to allow you to download it. After 30 days, content may be permanently deleted. Active subscriptions will be cancelled and no refund will be issued for the remaining period. Completed transactions (sales, purchases, licensing) survive termination.
         </Section>
 
-        <Section title="18. Governing Law">
-          These terms are governed by the laws of the State of Illinois, United States. Any disputes shall be
-          resolved in the courts of Cook County, Illinois.
+        <Section title="18. Limitation of Liability">
+          IndieThis is provided "as-is" without warranties of any kind. We are not liable for: lost revenue, data loss, service interruptions, AI output quality, third-party service failures (Stripe, Printful, Brevo, etc.), or any indirect, incidental, or consequential damages. Our total liability to you for any claim shall not exceed the amount you paid to IndieThis in the 12 months preceding the claim.
         </Section>
 
-        <Section title="19. Contact">
+        <Section title="19. Dispute Resolution">
+          Any disputes arising from these terms shall be resolved through binding arbitration in Cook County, Illinois under the rules of the American Arbitration Association. You waive any right to participate in a class action. Small claims court actions are exempt from this arbitration requirement.
+        </Section>
+
+        <Section title="20. Changes to Terms">
+          We may update these terms at any time. Material changes will be communicated via email and in-app notification at least 30 days before taking effect. Continued use of the Platform after changes take effect constitutes acceptance of the updated terms.
+        </Section>
+
+        <Section title="21. Contact">
           For questions about these terms, contact us at{" "}
-          <a href="mailto:hello@indiethis.com" style={{ color: "#D4A843", textDecoration: "none" }}>
-            hello@indiethis.com
+          <a href="mailto:blue@clearearstudios.com" style={{ color: "#D4A843", textDecoration: "none" }}>
+            blue@clearearstudios.com
           </a>
           .<br /><br />
-          IndieThis LLC<br />
+          Clear Ear Studios LLC<br />
           Chicago, Illinois
         </Section>
       </main>
@@ -190,12 +157,12 @@ export default function TermsPage() {
             color: "#444",
           }}
         >
-          <span>© 2026 IndieThis LLC</span>
+          <span>© 2026 Clear Ear Studios LLC</span>
           <div style={{ display: "flex", gap: 20 }}>
             <Link href="/terms" style={{ color: "#D4A843", textDecoration: "none" }}>Terms</Link>
             <Link href="/privacy" style={{ color: "#444", textDecoration: "none" }}>Privacy</Link>
-            <a href="mailto:hello@indiethis.com" style={{ color: "#444", textDecoration: "none" }}>
-              hello@indiethis.com
+            <a href="mailto:blue@clearearstudios.com" style={{ color: "#444", textDecoration: "none" }}>
+              blue@clearearstudios.com
             </a>
           </div>
         </div>
