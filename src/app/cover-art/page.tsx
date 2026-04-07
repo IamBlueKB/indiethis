@@ -96,7 +96,11 @@ export default async function CoverArtPage() {
 
   return (
     <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }} />}>
-      <CoverArtClient guestEmail={guestEmail} artistName={artistName} />
+      <CoverArtClient
+        guestEmail={guestEmail}
+        artistName={artistName}
+        userId={session?.user?.id ?? null}
+      />
     </Suspense>
   );
 }

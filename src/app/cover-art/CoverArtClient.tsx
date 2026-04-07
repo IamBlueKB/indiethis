@@ -22,6 +22,7 @@ import {
 import { useUploadThing }    from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS }  from "@/lib/pricing";
 import { CATEGORY_LABELS }   from "@/lib/cover-art/styles-seed";
+import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ interface RefinementEntry {
 interface Props {
   guestEmail: string;
   artistName: string | null;
+  userId:     string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -201,7 +203,7 @@ function FullscreenPreview({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function CoverArtClient({ guestEmail, artistName }: Props) {
+export default function CoverArtClient({ guestEmail, artistName, userId }: Props) {
   const searchParams = useSearchParams();
 
   // ── Phase + wizard state ───────────────────────────────────────────────────
@@ -633,6 +635,23 @@ export default function CoverArtClient({ guestEmail, artistName }: Props) {
                   <p className="text-sm font-bold text-white truncate">{selectedStyle.name}</p>
                 </div>
                 <button onClick={() => setPhase(1)} className="text-xs" style={{ color: "#D4A843" }}>Change</button>
+              </div>
+            )}
+
+            {/* Avatar reference (logged-in users) */}
+            {userId && (
+              <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: "#1E1E1E", backgroundColor: "#111" }}>
+                <p className="text-xs font-semibold text-white">Artist Reference</p>
+                <p className="text-[11px]" style={{ color: "#666" }}>
+                  Use your avatar as a character reference to appear in the cover art.
+                </p>
+                <AvatarPicker
+                  compact
+                  label="Artist Reference"
+                  selectedUrl={refImageUrl ?? undefined}
+                  onSelect={(p: AvatarSelectPayload) => { setRefImageUrl(p.url); setRefImageName("Avatar reference"); }}
+                  onUploadUrl={(url: string) => { setRefImageUrl(url); setRefImageName("Uploaded reference"); }}
+                />
               </div>
             )}
 
