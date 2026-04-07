@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-07 (session 12)_
+_Last updated: 2026-04-07 (session 13)_
 
 ---
 
@@ -93,6 +93,9 @@ _Last updated: 2026-04-07 (session 12)_
 | `public/sw.js` | Service worker — network-first caching, precaches `/`, `/explore`, `/pricing` |
 | `public/icons/` | PWA icons: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` (generated from brand icon) |
 | `src/app/[slug]/page.tsx` | Artist public page — two-column layout, canvas + lyrics left, content right |
+| `src/lib/avatar/styles.ts` | Client-safe `AVATAR_STYLES` export (no server imports) — prevents sharp from bundling into client |
+| `src/lib/avatar/generator.ts` | Avatar generation engine — fal.ai FLUX, dominant color extraction, saves to `ArtistAvatar` model |
+| `src/components/avatar/AvatarPicker.tsx` | Reusable avatar picker — compact/standard, `onSelect(AvatarSelectPayload)` + `onUploadUrl(url)` callbacks |
 
 ---
 
@@ -172,6 +175,7 @@ _Last updated: 2026-04-07 (session 12)_
 | `/dashboard/notifications` | Notification center |
 | `/dashboard/analytics` | Fan/revenue/play analytics |
 | `/dashboard/ai/video` | AI music video generation tool |
+| `/dashboard/avatar` | Artist Avatar Studio — generate, manage, and set profile AI avatars |
 | `/dashboard/ai/mastering` | AI audio mastering tool |
 | `/dashboard/ai/lyric-video` | AI lyric video generator |
 | `/dashboard/ai/ar-report` | A&R analytics report generator |
@@ -661,6 +665,15 @@ _Last updated: 2026-04-07 (session 12)_
 | `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
 | Booking Agent (`src/lib/agents/booking-agent.ts`) | DJ booking reminders and follow-up automation |
 
+### Artist Avatar Studio
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/dashboard/avatar` | List user's generated avatars |
+| `POST /api/dashboard/avatar/generate` | Generate new avatar — style, prompt, optional ref image (fal.ai FLUX) |
+| `PUT /api/dashboard/avatar/[id]` | Update avatar label |
+| `DELETE /api/dashboard/avatar/[id]` | Delete an avatar |
+| `POST /api/dashboard/avatar/[id]/set-profile` | Set avatar as profile default (`isDefault: true`) |
+
 ### Music Video Studio
 | Endpoint | Description |
 |----------|-------------|
@@ -768,6 +781,7 @@ _Last updated: 2026-04-07 (session 12)_
 ```
 Account              ActivityLog          AdminAccount
 Affiliate            AffiliateReferral    AIGeneration
+ArtistAvatar
 AIInsightsLog        AIJob                AgentLog
 Ambassador           AmbassadorPayout     ArtistBookingInquiry
 ArtistCollaborator   ArtistPhoto          ArtistPressItem
@@ -1340,6 +1354,28 @@ YoutubeReference
 | Sub-pages: `/video-studio/[id]/generating` (progress), `/video-studio/[id]/preview` (complete), `/video-studio/director/[id]` (Director session) | ✅ DONE |
 | Admin panel `/admin/video-studio` — metrics dashboard (total/monthly videos + revenue, avg cost/margin, conversion rate, avg gen time, popular styles/models), video list table (100 most recent, filterable) | ✅ DONE |
 | VideoStyle + VideoPreset CRUD via admin API (PLATFORM_ADMIN only) | ✅ DONE |
+| Preview page (`/video-studio/[id]/preview`) — "Discover more" section shows 4 trending track cards (2×2/4-col grid, cover art, artist name, links to artist profile) | ✅ DONE |
+| Trending tracks fetched server-side (ordered by plays desc, must have coverArtUrl, status PUBLISHED) | ✅ DONE |
+| Audio file validation on `videoStudioAudio` UploadThing endpoint via `validateUT()` → `validateUpload("audio")` | ✅ DONE |
+
+### Artist Avatar System (Steps 1–11)
+| Feature | Status |
+|---------|--------|
+| Schema: `ArtistAvatar` — `id`, `userId`, `avatarUrl`, `style`, `prompt`, `isDefault`, `dominantColors`, `label`, `createdAt` | ✅ DONE |
+| `AVATAR_STYLES` — 8 style presets (Cinematic, Anime, Oil Painting, Neon Cyberpunk, Comic Book, Watercolor, 3D Render, Studio Portrait) | ✅ DONE |
+| `src/lib/avatar/styles.ts` — client-safe export of `AVATAR_STYLES` (no sharp/fal imports); resolves Vercel build failure | ✅ DONE |
+| `src/lib/avatar/generator.ts` — generation engine: fal.ai FLUX Kontext, dominant color extraction, saves to `ArtistAvatar` | ✅ DONE |
+| Avatar Studio dashboard at `/dashboard/avatar` — generate form, gallery, set-default button, delete | ✅ DONE |
+| `AvatarPicker` reusable component — compact/standard variant, `onSelect(AvatarSelectPayload)`, `onUploadUrl(url)` | ✅ DONE |
+| `AvatarSelectPayload` — `{ url: string; dominantColors: DominantColors \| null; avatarId: string }` | ✅ DONE |
+| Video Studio (Quick + Director modes) — AvatarPicker in Step 2 sets character reference image | ✅ DONE |
+| Cover Art tool — AvatarPicker in Phase 2 sets `refImageUrl` for generation (logged-in users) | ✅ DONE |
+| Lyric Video (Quick + Director modes) — AvatarPicker replaces cover art URL input for logged-in users | ✅ DONE |
+| Canvas Video page (`/dashboard/ai/canvas`) — AvatarPicker on empty state, X button to clear ref | ✅ DONE |
+| OG image route (`/api/og/[type]/[id]`) — artist + DJ types prefer `avatars[0].avatarUrl` over photo | ✅ DONE |
+| Artist public page (`/[slug]`) — `avatars { where: { isDefault: true } }` query; uses avatar as profile photo | ✅ DONE |
+| Dashboard sidebar + mobile nav — "Avatar Studio" entry with `UserCircle` icon (after AI Tools) | ✅ DONE |
+| **Bug fix (Vercel):** `sharp` was bundling into client via `AvatarStudio.tsx → generator.ts → sharp`; fixed by extracting `AVATAR_STYLES` to `styles.ts` | ✅ FIXED |
 
 ### Cover Art Generator (Steps 1–7)
 | Feature | Status |
