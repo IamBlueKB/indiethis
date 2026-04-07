@@ -247,6 +247,37 @@ export async function POST(req: NextRequest) {
     results.qualityScoreUpdate = "skipped (not due)";
   }
 
+  // ── Revenue Report — configurable schedule (checks every hour) ───────────────
+  try {
+    const { db } = await import("@/lib/db");
+    const { checkAlerts, runRevenueReportAgent } = await import("@/lib/agents/revenue-report");
+    const rrConfig = await db.revenueReportConfig.findFirst();
+    if (rrConfig) {
+      const recipients = JSON.parse(rrConfig.recipients as string) as string[];
+      // Always check alerts on every cron tick
+      await checkAlerts(recipients);
+
+      // Check if it's time to send the scheduled report
+      const nowDate        = new Date();
+      const currentHourUtc = `${String(nowDate.getUTCHours()).padStart(2, "0")}:00`;
+      const shouldSendReport = (
+        (rrConfig.frequency === "DAILY" && currentHourUtc === rrConfig.timeUtc) ||
+        (rrConfig.frequency === "WEEKLY" && nowDate.getUTCDay() === rrConfig.dayOfWeek && currentHourUtc === rrConfig.timeUtc) ||
+        (rrConfig.frequency === "MONTHLY" && nowDate.getUTCDate() === rrConfig.dayOfMonth && currentHourUtc === rrConfig.timeUtc)
+      );
+      if (shouldSendReport) {
+        const rrResult = await runRevenueReportAgent();
+        results.revenueReport = rrResult.sent ? `sent to ${rrResult.recipients} recipients` : "skipped (no config)";
+      } else {
+        results.revenueReport = "alerts checked; report not due this hour";
+      }
+    } else {
+      results.revenueReport = "skipped (no config)";
+    }
+  } catch (err) {
+    results.revenueReport = `error: ${String(err)}`;
+  }
+
   // ── Collaboration Matchmaker — monthly (1st of month) ─────────────────────
   const dayOfMonth     = new Date().getDate();
   const isFirstOfMonth = dayOfMonth === 1;
