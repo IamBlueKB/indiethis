@@ -225,6 +225,15 @@ export default function VideoStudioClient({ userId, userTier }: Props) {
 
       const { id, requiresPayment } = createData as { id: string; requiresPayment: boolean; amount: number };
 
+      // Director Mode — redirect to director chat (payment happens after shot list approval)
+      if (mode === "DIRECTOR") {
+        if (!userId && guestEmail.trim()) {
+          document.cookie = `videoStudio_guest=${encodeURIComponent(JSON.stringify({ email: guestEmail.trim(), videoId: id }))}; max-age=604800; path=/`;
+        }
+        router.push(`/video-studio/director/${id}`);
+        return;
+      }
+
       if (!requiresPayment) {
         // Subscriber with included credit — generation already started
         // Set guest cookie for later linking

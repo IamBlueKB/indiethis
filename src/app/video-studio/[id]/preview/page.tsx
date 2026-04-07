@@ -38,6 +38,7 @@ export default async function PreviewPage({
       amount:         true,
       userId:         true,
       guestEmail:     true,
+      scenes:         true,
       createdAt:      true,
     },
   });
@@ -59,6 +60,7 @@ export default async function PreviewPage({
       finalVideoUrls={(video.finalVideoUrls as Record<string, string> | null) ?? null}
       aspectRatio={video.aspectRatio}
       style={video.style}
+      mode={video.mode}
       bpm={video.bpm}
       musicalKey={video.musicalKey}
       energy={video.energy}

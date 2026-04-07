@@ -295,6 +295,48 @@ function getSceneLimit(videoLength: string): number {
   }
 }
 
+// ─── Director Mode: analysis only (no generation) ────────────────────────────────
+
+/**
+ * For Director Mode, run song analysis immediately so BPM/key/energy are
+ * available in the chat UI. Does NOT proceed to generate scenes.
+ */
+export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
+  try {
+    const video = await db.musicVideo.findUnique({ where: { id: musicVideoId } });
+    if (!video) return;
+
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
+    });
+
+    const analysis = await analyzeSong({
+      audioUrl: video.audioUrl,
+      trackId:  video.trackId ?? undefined,
+      duration: video.trackDuration,
+    });
+
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  {
+        status:          "PENDING",  // Back to PENDING — ready for Director chat
+        progress:        0,
+        currentStep:     null,
+        bpm:             Math.round(analysis.bpm),
+        musicalKey:      analysis.key,
+        energy:          analysis.energy,
+        lyrics:          analysis.lyrics ?? null,
+        lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
+        songStructure:   analysis as object,
+      },
+    });
+
+  } catch (err) {
+    console.error(`[video-studio] analysis-only failed for ${musicVideoId}:`, err);
+  }
+}
+
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {

@@ -2,12 +2,13 @@
 
 /**
  * PreviewClient — final video preview, format tabs, download button, guest CTA.
+ * Director Mode: also shows per-scene regeneration panel (one free redo).
  */
 
 import { useState }                        from "react";
 import {
   Film, Download, Music2, Activity, Zap, ChevronRight,
-  Share2, Check,
+  Share2, Check, RefreshCw, Loader2, Clapperboard,
 } from "lucide-react";
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -16,6 +17,15 @@ const FORMAT_LABELS: Record<string, string> = {
   "1:1":  "Instagram Feed",
 };
 
+interface SceneRef {
+  sceneIndex: number;
+  videoUrl:   string;
+  model:      string;
+  prompt:     string;
+  startTime:  number;
+  endTime:    number;
+}
+
 interface Props {
   id:             string;
   trackTitle:     string;
@@ -23,6 +33,7 @@ interface Props {
   finalVideoUrls: Record<string, string> | null;
   aspectRatio:    string;
   style:          string | null;
+  mode:           string;
   bpm:            number | null;
   musicalKey:     string | null;
   energy:         number | null;
@@ -33,11 +44,40 @@ interface Props {
 
 export default function PreviewClient({
   id, trackTitle, finalVideoUrl, finalVideoUrls,
-  aspectRatio, style, bpm, musicalKey, energy,
+  aspectRatio, style, mode, bpm, musicalKey, energy,
   amount, isOwner, isGuest,
 }: Props) {
   const [activeFormat, setActiveFormat] = useState<string>(aspectRatio);
   const [copied,       setCopied]       = useState(false);
+  const [regenIdx,     setRegenIdx]     = useState<number | null>(null);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [regenError,   setRegenError]   = useState<string | null>(null);
+  const [regenDone,    setRegenDone]    = useState(false);
+
+  const isDirector = mode === "DIRECTOR";
+
+  async function handleRegen(sceneIndex: number) {
+    if (regenLoading || regenDone) return;
+    setRegenIdx(sceneIndex);
+    setRegenLoading(true);
+    setRegenError(null);
+    try {
+      const res  = await fetch(`/api/video-studio/director/${id}/scene-regen`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ sceneIndex }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRegenError(data.error ?? "Regen failed"); return; }
+      setRegenDone(true);
+      // Refresh page to show new scene
+      window.location.reload();
+    } catch {
+      setRegenError("Connection error. Please try again.");
+    } finally {
+      setRegenLoading(false);
+    }
+  }
 
   // Available formats from finalVideoUrls + primary
   const availableFormats = finalVideoUrls ? Object.keys(finalVideoUrls) : [aspectRatio];
@@ -183,6 +223,47 @@ export default function PreviewClient({
                 <p className="text-lg font-black" style={{ color: "#D4A843" }}>{Math.round(energy * 10)}/10</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Director Mode — Review + Refine */}
+        {isDirector && isOwner && (
+          <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: "#2A2A2A", backgroundColor: "#0F0F0F" }}>
+            <div className="flex items-center gap-2">
+              <Clapperboard size={15} style={{ color: "#D4A843" }} />
+              <p className="text-sm font-bold text-white">Review + Refine</p>
+            </div>
+            <p className="text-xs" style={{ color: "#888" }}>
+              Not happy with a scene? You get <span style={{ color: "#D4A843" }}>one free regeneration</span>. The AI will re-generate that clip with a fresh attempt using the same prompt.
+            </p>
+            {regenError && (
+              <p className="text-xs text-red-400">{regenError}</p>
+            )}
+            {regenDone && (
+              <div className="flex items-center gap-2 text-xs" style={{ color: "#34C759" }}>
+                <Check size={12} /> Scene regenerated! Refreshing…
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {[0, 1, 2, 3].map(i => (
+                <button
+                  key={i}
+                  onClick={() => handleRegen(i)}
+                  disabled={regenLoading || regenDone}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition disabled:opacity-40"
+                  style={{
+                    borderColor:     regenIdx === i && regenLoading ? "#D4A843" : "#2A2A2A",
+                    color:           regenIdx === i && regenLoading ? "#D4A843" : "#888",
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  {regenIdx === i && regenLoading
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <RefreshCw size={11} />}
+                  Scene {i + 1}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

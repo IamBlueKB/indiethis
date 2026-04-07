@@ -24,7 +24,7 @@ import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoPrice }         from "@/lib/video-studio/model-router";
-import { startGeneration }       from "@/lib/video-studio/generate";
+import { startGeneration, startAnalysisOnly } from "@/lib/video-studio/generate";
 
 // Included credits per tier per month
 const INCLUDED_VIDEOS: Record<string, number> = {
@@ -116,7 +116,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ── Start immediately if free ─────────────────────────────────────────────
+    // ── Director Mode: start analysis immediately (feeds Director chat) ──────
+    if (mode === "DIRECTOR") {
+      // Only analyze — don't generate yet (generation triggered after shot list approval)
+      void startAnalysisOnly(video.id).catch(err =>
+        console.error("[video-studio/create] director analysis error:", err)
+      );
+      return NextResponse.json({ id: video.id, requiresPayment: false, amount: 0 });
+    }
+
+    // ── Quick Mode: Start immediately if free ─────────────────────────────────
     if (isFree) {
       void startGeneration(video.id).catch(err =>
         console.error("[video-studio/create] generation error:", err)
