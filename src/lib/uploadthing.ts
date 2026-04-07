@@ -1,8 +1,81 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
+import { UTApi } from "uploadthing/server";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join, extname } from "path";
+import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
 import { getToken } from "next-auth/jwt";
+import { validateUpload } from "@/lib/upload-validator";
 
-const f = createUploadthing();
+const f      = createUploadthing();
+const utapi  = new UTApi();
+
+// ─── UploadThing validation helper ───────────────────────────────────────────
+//
+// Called inside every onUploadComplete callback.
+// - Audio/video: passes the UploadThing CDN URL directly to ffprobe (no download)
+// - Image/ZIP:   downloads to a temp file for sharp / unzip -t inspection
+// - PDF, octet-stream, and other unsupported types: skipped (UploadThing enforces
+//   size and type limits at upload time)
+// If validation fails: deletes the file from UploadThing storage and throws,
+// which causes the client-side onUploadError handler to fire.
+
+type ValidatableType = "audio" | "image" | "video" | "zip";
+
+function resolveFileType(mimeType: string): ValidatableType | null {
+  const mime = mimeType.toLowerCase();
+  if (mime.startsWith("audio/"))                                        return "audio";
+  if (mime.startsWith("image/"))                                        return "image";
+  if (mime.startsWith("video/"))                                        return "video";
+  if (mime === "application/zip" || mime === "application/x-zip-compressed") return "zip";
+  return null; // PDF, octet-stream, etc. — skip integrity check
+}
+
+async function validateUT(file: {
+  url:  string;
+  key:  string;
+  name: string;
+  size: number;
+  type: string;
+}): Promise<void> {
+  const fileType = resolveFileType(file.type);
+  if (!fileType) return; // unsupported MIME — skip; UploadThing enforces allowed types
+
+  // Audio and video: ffprobe understands HTTP(S) URLs natively — no download needed.
+  // Image and ZIP: require a local path for sharp / unzip -t.
+  const needsLocal = fileType === "image" || fileType === "zip";
+  let   filePath   = file.url;
+  let   tmpPath: string | null = null;
+
+  if (needsLocal) {
+    tmpPath = join(tmpdir(), `ut-${randomUUID()}${extname(file.name) || ""}`);
+    try {
+      const res = await fetch(file.url);
+      if (!res.ok) throw new Error(`CDN fetch failed (${res.status})`);
+      await writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+      filePath = tmpPath;
+    } catch (err) {
+      await unlink(tmpPath).catch(() => {});
+      tmpPath = null;
+      // Can't download for inspection — delete from storage and reject
+      await utapi.deleteFiles([file.key]).catch(() => {});
+      throw new Error(
+        err instanceof Error ? err.message : "Could not download file for validation. Please try again."
+      );
+    }
+  }
+
+  try {
+    const result = await validateUpload(filePath, file.name, file.size, file.type, fileType);
+    if (!result.valid) {
+      await utapi.deleteFiles([file.key]).catch(() => {});
+      throw new Error(result.error ?? `Invalid ${fileType} file.`);
+    }
+  } finally {
+    if (tmpPath) await unlink(tmpPath).catch(() => {});
+  }
+}
 
 export const ourFileRouter = {
   // Artist track upload (single audio file, up to 256MB)
@@ -13,6 +86,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -24,6 +98,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -35,6 +110,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -46,6 +122,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -57,6 +134,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -68,10 +146,12 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
-  // Intake form: audio + images (up to 10 files, 128MB each)
+  // Intake form: audio + images + PDF + video (up to 10 files, 128MB each)
+  // PDF and octet-stream are skipped by validateUT; audio/image/video are validated.
   intakeFiles: f({
     audio: { maxFileSize: "128MB", maxFileCount: 10 },
     image: { maxFileSize: "16MB", maxFileCount: 5 },
@@ -82,10 +162,12 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
   // Quick send: any file type, up to 10 files, 512MB each
+  // Only audio/image/video are validated; PDF and octet-stream are skipped.
   quickSendFiles: f({
     "application/octet-stream": { maxFileSize: "512MB", maxFileCount: 10 },
     audio: { maxFileSize: "512MB", maxFileCount: 10 },
@@ -97,6 +179,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.url };
     }),
 
@@ -112,6 +195,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -123,6 +207,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -134,6 +219,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -148,6 +234,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -162,6 +249,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -176,6 +264,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -190,10 +279,12 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
   // License & receipt vault documents (PDF, PNG, JPG, max 10MB)
+  // PDF is skipped by validateUT; image is validated.
   licenseDocument: f({
     "application/pdf": { maxFileSize: "8MB", maxFileCount: 1 },
     image:             { maxFileSize: "8MB", maxFileCount: 1 },
@@ -207,6 +298,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -224,6 +316,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -238,6 +331,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -249,6 +343,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -260,6 +355,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -271,6 +367,7 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -288,10 +385,11 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
-  // Sample pack zip upload (max 200MB — validated server-side after upload)
+  // Sample pack zip upload (max 200MB — content validated in /api/dashboard/sample-packs/upload)
   samplePackZip: f({ "application/zip": { maxFileSize: "128MB", maxFileCount: 1 } })
     .middleware(async ({ req }) => {
       const token = await getToken({
@@ -302,6 +400,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -313,6 +412,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -323,6 +423,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -333,6 +434,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 
@@ -347,6 +449,7 @@ export const ourFileRouter = {
       return { userId: token.sub };
     })
     .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
 } satisfies FileRouter;
