@@ -12,6 +12,7 @@ import { useState, useEffect }   from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Play, Loader2, AlertCircle, Check, X, ChevronLeft, Music2 } from "lucide-react";
 import { AIToolsNav }            from "@/components/dashboard/AIToolsNav";
+import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
 
 interface Track {
   id:          string;
@@ -23,7 +24,9 @@ interface Track {
 export default function CanvasPage() {
   const searchParams = useSearchParams();
   const router       = useRouter();
-  const refImageUrl  = searchParams.get("refImageUrl") ?? "";
+
+  // Seed from query param (coming from Cover Art Studio); overridable by AvatarPicker
+  const [refImageUrl, setRefImageUrl] = useState<string>(searchParams.get("refImageUrl") ?? "");
 
   const [tracks,        setTracks]        = useState<Track[]>([]);
   const [tracksLoading, setTracksLoading] = useState(true);
@@ -110,20 +113,33 @@ export default function CanvasPage() {
                 >
                   <p className="text-xs font-semibold text-white">Will be used as canvas background</p>
                 </div>
+                <button
+                  onClick={() => setRefImageUrl("")}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}
+                >
+                  <X size={12} />
+                </button>
               </div>
             ) : (
-              <div
-                className="rounded-2xl aspect-square flex flex-col items-center justify-center gap-2 border-2 border-dashed"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <Play size={24} className="text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">No cover art selected</p>
+              <div className="rounded-2xl border-2 border-dashed p-4 space-y-3" style={{ borderColor: "var(--border)" }}>
+                <p className="text-xs text-muted-foreground text-center">Select your avatar or use cover art as the canvas background</p>
+                <AvatarPicker
+                  compact
+                  label="Canvas Background"
+                  selectedUrl={undefined}
+                  onSelect={(p: AvatarSelectPayload) => setRefImageUrl(p.url)}
+                  onUploadUrl={(url: string) => setRefImageUrl(url)}
+                />
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex-1 h-px bg-border" />or<div className="flex-1 h-px bg-border" />
+                </div>
                 <a
                   href="/dashboard/ai/cover-art"
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                  className="block text-center text-xs font-semibold px-3 py-1.5 rounded-lg transition"
                   style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
                 >
-                  Go to Cover Art Studio
+                  Generate from Cover Art Studio
                 </a>
               </div>
             )}
