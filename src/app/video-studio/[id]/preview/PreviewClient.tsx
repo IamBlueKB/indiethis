@@ -26,6 +26,13 @@ interface SceneRef {
   endTime:    number;
 }
 
+interface TrendingTrack {
+  id:          string;
+  title:       string;
+  coverArtUrl: string | null;
+  artist:      { artistName: string | null; name: string | null; artistSlug: string | null };
+}
+
 interface Props {
   id:             string;
   trackTitle:     string;
@@ -40,12 +47,13 @@ interface Props {
   amount:         number;
   isOwner:        boolean;
   isGuest:        boolean;
+  trendingTracks?: TrendingTrack[];
 }
 
 export default function PreviewClient({
   id, trackTitle, finalVideoUrl, finalVideoUrls,
   aspectRatio, style, mode, bpm, musicalKey, energy,
-  amount, isOwner, isGuest,
+  amount, isOwner, isGuest, trendingTracks = [],
 }: Props) {
   const [activeFormat, setActiveFormat] = useState<string>(aspectRatio);
   const [copied,       setCopied]       = useState(false);
@@ -313,12 +321,12 @@ export default function PreviewClient({
         )}
 
         {/* Explore discovery */}
-        <div className="border-t pt-8" style={{ borderColor: "#1A1A1A" }}>
+        <div className="border-t pt-8 space-y-5" style={{ borderColor: "#1A1A1A" }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-white">Discover more on IndieThis</p>
+              <p className="text-sm font-bold text-white">Discover more music on IndieThis</p>
               <p className="text-xs mt-0.5" style={{ color: "#666" }}>
-                Browse music, merch, and beats from independent artists.
+                Browse tracks, merch, and beats from independent artists.
               </p>
             </div>
             <a
@@ -329,6 +337,43 @@ export default function PreviewClient({
               <Music2 size={12} /> Explore &rarr;
             </a>
           </div>
+
+          {/* Trending track cards — horizontal row */}
+          {trendingTracks.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {trendingTracks.map(track => {
+                const artistName = track.artist.artistName || track.artist.name || "Artist";
+                const href = track.artist.artistSlug ? `/${track.artist.artistSlug}` : "/explore";
+                return (
+                  <a
+                    key={track.id}
+                    href={href}
+                    className="group rounded-xl overflow-hidden no-underline transition-all hover:opacity-80"
+                    style={{ backgroundColor: "#111", border: "1px solid #1E1E1E" }}
+                  >
+                    {track.coverArtUrl ? (
+                      <img
+                        src={track.coverArtUrl}
+                        alt={track.title}
+                        className="w-full aspect-square object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full aspect-square flex items-center justify-center"
+                        style={{ backgroundColor: "#1A1A1A" }}
+                      >
+                        <Music2 size={20} style={{ color: "#333" }} />
+                      </div>
+                    )}
+                    <div className="p-2.5">
+                      <p className="text-xs font-semibold text-white truncate">{track.title}</p>
+                      <p className="text-[11px] mt-0.5 truncate" style={{ color: "#666" }}>{artistName}</p>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
 
       </div>

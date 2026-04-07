@@ -52,6 +52,19 @@ export default async function PreviewPage({
     );
   }
 
+  // Fetch 4 trending tracks for the discovery row
+  const trendingTracks = await db.track.findMany({
+    where:   { status: "PUBLISHED", coverArtUrl: { not: null } },
+    orderBy: { plays: "desc" },
+    take:    4,
+    select:  {
+      id:          true,
+      title:       true,
+      coverArtUrl: true,
+      artist:      { select: { artistName: true, name: true, artistSlug: true } },
+    },
+  });
+
   return (
     <PreviewClient
       id={id}
@@ -67,6 +80,7 @@ export default async function PreviewPage({
       amount={video.amount}
       isOwner={!!userId && userId === video.userId}
       isGuest={!video.userId}
+      trendingTracks={trendingTracks}
     />
   );
 }
