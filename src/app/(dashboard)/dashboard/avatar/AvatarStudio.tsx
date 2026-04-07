@@ -20,7 +20,7 @@ import {
   Star, UserCircle, Trash2, Loader2, X, RefreshCw,
 } from "lucide-react";
 import { useUploadThing }  from "@/lib/uploadthing-client";
-import { AVATAR_STYLES }   from "@/lib/avatar/generator";
+import { AVATAR_STYLES }   from "@/lib/avatar/styles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
