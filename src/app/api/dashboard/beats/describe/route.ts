@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join, extname } from "path";
+import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
 import { detectAudioFeaturesFromBuffer } from "@/lib/audio-analysis";
 import { claude, SONNET } from "@/lib/claude";
+import { validateUpload } from "@/lib/upload-validator";
 
 /**
  * POST /api/dashboard/beats/describe
@@ -29,7 +34,26 @@ export async function POST(req: NextRequest) {
     if (!file || typeof file === "string") {
         return NextResponse.json({ bpm: null, key: null, description: null });
     }
-    audioBuffer = await (file as Blob).arrayBuffer();
+    const audioFile = file as File;
+    audioBuffer     = await audioFile.arrayBuffer();
+
+    // ── Validate before analysis ─────────────────────────────────────────────
+    const tmpPath = join(
+      tmpdir(),
+      `beat-describe-${randomUUID()}${extname(audioFile.name || ".mp3") || ".mp3"}`
+    );
+    await writeFile(tmpPath, Buffer.from(audioBuffer));
+    const validation = await validateUpload(
+      tmpPath,
+      audioFile.name || "audio.mp3",
+      audioFile.size,
+      audioFile.type || "audio/mpeg",
+      "audio"
+    );
+    await unlink(tmpPath).catch(() => {});
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
   } catch (err) {
     console.error("[beats/describe] FormData parse error:", err);
     return NextResponse.json({ bpm: null, key: null, description: null });

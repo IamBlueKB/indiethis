@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import JSZip from "jszip";
 import crypto from "crypto";
+import { validateUpload } from "@/lib/upload-validator";
 
 // Audio extensions allowed inside sample pack zips
 const ALLOWED_AUDIO_EXTS = new Set([
@@ -112,7 +117,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 2. VirusTotal hash check ───────────────────────────────────────────────
+  // ── 2. File integrity check ────────────────────────────────────────────────
+  const tmpValidatePath = join(tmpdir(), `samplepack-${randomUUID()}.zip`);
+  await writeFile(tmpValidatePath, buffer);
+  const zipValidation = await validateUpload(
+    tmpValidatePath,
+    "upload.zip",
+    buffer.length,
+    "application/zip",
+    "zip"
+  );
+  await unlink(tmpValidatePath).catch(() => {});
+  if (!zipValidation.valid) {
+    return NextResponse.json({ error: zipValidation.error }, { status: 400 });
+  }
+
+  // ── 3. VirusTotal hash check ───────────────────────────────────────────────
   const vtResult = await checkVirusTotal(buffer);
   if (!vtResult.clean) {
     return NextResponse.json(
@@ -125,7 +145,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 3. Unzip + extension validation ───────────────────────────────────────
+  // ── 4. Unzip + extension validation ───────────────────────────────────────
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(buffer);
@@ -172,7 +192,7 @@ export async function POST(req: NextRequest) {
 
   const sampleCount = audioFiles.length;
 
-  // ── 4. If a digitalProductId is provided, update the record ───────────────
+  // ── 5. If a digitalProductId is provided, update the record ───────────────
   if (body.digitalProductId) {
     const product = await prisma.digitalProduct.findFirst({
       where: { id: body.digitalProductId, userId },
