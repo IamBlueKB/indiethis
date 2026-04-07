@@ -24,6 +24,7 @@ import { useUploadThing }  from "@/lib/uploadthing-client";
 import TypographyPreview   from "@/components/lyric-video/TypographyPreview";
 import type { TypographyStyleData } from "@/components/lyric-video/TypographyPreview";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
+import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ interface Props {
   guestEmail:     string;
   artistName?:    string | null;
   isSubscriber?:  boolean;
+  userId?:        string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -60,7 +62,7 @@ const STEP_LABELS: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function QuickModeWizard({ guestEmail, artistName, isSubscriber = false }: Props) {
+export default function QuickModeWizard({ guestEmail, artistName, isSubscriber = false, userId = null }: Props) {
   const router = useRouter();
 
   // ── Wizard phase ───────────────────────────────────────────────────────────
@@ -296,22 +298,35 @@ export default function QuickModeWizard({ guestEmail, artistName, isSubscriber =
         />
       </div>
 
-      {/* Cover art URL (optional) */}
-      <div>
-        <label className="text-xs font-semibold block mb-1.5" style={{ color: "#888" }}>
-          Cover Art URL <span style={{ color: "#555", fontWeight: 400 }}>(optional — seeds the video color palette)</span>
-        </label>
-        <input
-          type="url"
-          placeholder="https://…"
-          value={coverArtUrl}
-          onChange={(e) => setCoverArtUrl(e.target.value)}
-          className="w-full rounded-xl border px-4 py-3 text-sm bg-transparent text-white outline-none"
-          style={{ borderColor: "#2A2A2A" }}
-          onFocus={(e) => (e.target.style.borderColor = "#D4A843")}
-          onBlur={(e)  => (e.target.style.borderColor = "#2A2A2A")}
-        />
-      </div>
+      {/* Cover art / avatar reference */}
+      {userId ? (
+        <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: "#1E1E1E", backgroundColor: "#111" }}>
+          <p className="text-xs font-semibold text-white">Artist Reference <span style={{ color: "#555", fontWeight: 400 }}>(optional — seeds the video color palette)</span></p>
+          <AvatarPicker
+            compact
+            label="Artist Reference"
+            selectedUrl={coverArtUrl || undefined}
+            onSelect={(p: AvatarSelectPayload) => setCoverArtUrl(p.url)}
+            onUploadUrl={(url: string) => setCoverArtUrl(url)}
+          />
+        </div>
+      ) : (
+        <div>
+          <label className="text-xs font-semibold block mb-1.5" style={{ color: "#888" }}>
+            Cover Art URL <span style={{ color: "#555", fontWeight: 400 }}>(optional — seeds the video color palette)</span>
+          </label>
+          <input
+            type="url"
+            placeholder="https://…"
+            value={coverArtUrl}
+            onChange={(e) => setCoverArtUrl(e.target.value)}
+            className="w-full rounded-xl border px-4 py-3 text-sm bg-transparent text-white outline-none"
+            style={{ borderColor: "#2A2A2A" }}
+            onFocus={(e) => (e.target.style.borderColor = "#D4A843")}
+            onBlur={(e)  => (e.target.style.borderColor = "#2A2A2A")}
+          />
+        </div>
+      )}
 
       <button
         onClick={() => setPhase(1)}

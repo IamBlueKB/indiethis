@@ -101,6 +101,7 @@ export default async function LyricVideoPage({
         artistName={artistName}
         isSubscriber={false}
         initialMode={initialMode as "quick" | "director" | null}
+        userId={session?.user?.id ?? null}
       />
     </Suspense>
   );

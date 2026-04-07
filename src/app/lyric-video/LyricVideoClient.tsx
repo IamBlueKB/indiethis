@@ -22,13 +22,14 @@ interface Props {
   artistName?:   string | null;
   isSubscriber?: boolean;
   initialMode?:  "quick" | "director" | null;
+  userId?:       string | null;
 }
 
 type Mode = "quick" | "director" | null;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function LyricVideoClient({ guestEmail, artistName, isSubscriber = false, initialMode = null }: Props) {
+export default function LyricVideoClient({ guestEmail, artistName, isSubscriber = false, initialMode = null, userId = null }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
   const quickGuestPrice    = PRICING_DEFAULTS.LYRIC_VIDEO_QUICK_GUEST.display;
@@ -201,12 +202,14 @@ export default function LyricVideoClient({ guestEmail, artistName, isSubscriber 
               guestEmail={guestEmail}
               artistName={artistName}
               isSubscriber={isSubscriber}
+              userId={userId}
             />
           ) : (
             <DirectorModeWizard
               guestEmail={guestEmail}
               artistName={artistName}
               isSubscriber={isSubscriber}
+              userId={userId}
             />
           )}
         </div>
