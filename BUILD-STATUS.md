@@ -276,6 +276,8 @@ _Last updated: 2026-04-07 (session 12)_
 | `/admin/settings/pricing` | PlatformPricing live editor |
 | `/admin/analytics/funnel` | Conversion funnel analytics |
 | `/admin/dj-verification` | DJ verification queue (approve/deny applications) |
+| `/admin/video-studio` | Music video metrics dashboard, video list table, VideoStyle CRUD |
+| `/admin/revenue-report` | Revenue report preview, Send Now button, alert config UI |
 
 ---
 
@@ -307,6 +309,11 @@ _Last updated: 2026-04-07 (session 12)_
 | `/dj/[djSlug]` | Public DJ profile — sets, mixes, crates, events |
 | `/dj/[djSlug]/crate/[crateName]` | Public DJ crate page |
 | `/lyric-video` | Public Lyric Video Studio — gate screen (email/Google OAuth), mode picker (Quick / Director), wizard, post-Stripe return handler |
+| `/video-studio` | Public Music Video Studio — hero landing with DemoReel, mode picker (Quick / Director), non-subscriber gate, `?start=1` opens wizard |
+| `/video-studio/[id]/generating` | Generating progress page — polls job status, animated progress bar, step labels |
+| `/video-studio/[id]/preview` | Completed video preview — video player, download, share, upsell |
+| `/video-studio/director/[id]` | Director Mode session page — shot list, scene editor, character refs, brief lock |
+| `/cover-art` | Public Cover Art Studio — gate screen (email/Google OAuth), wizard, post-Stripe return, conversion drip |
 
 ---
 
@@ -654,6 +661,37 @@ _Last updated: 2026-04-07 (session 12)_
 | `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
 | Booking Agent (`src/lib/agents/booking-agent.ts`) | DJ booking reminders and follow-up automation |
 
+### Music Video Studio
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/video-studio/stripe` | Create Stripe Checkout for Quick or Director mode (guest + subscriber) |
+| `GET /api/video-studio/[id]` | Get video job detail |
+| `POST /api/video-studio/[id]/brief/lock` | Lock Director Mode creative brief |
+| `GET /api/video-studio/[id]/download` | Download completed video file |
+| `POST /api/video-studio/[id]/generate` | Trigger production generation |
+| `POST /api/video-studio/[id]/publish` | Publish video to artist profile |
+| `GET /api/video-studio/[id]/refs` | Character reference images for job |
+| `POST /api/video-studio/[id]/regenerate` | Regenerate entire video |
+| `GET /api/video-studio/[id]/shots` | Shot list for Director Mode job |
+| `GET /api/video-studio/[id]/status` | Poll generation status + progress |
+| `GET /api/video-studio/presets` | List VideoPresets for Quick Mode |
+| `POST /api/video-studio/track/click` | Redirect click tracking for Email 4 conversion gate |
+| `GET /api/video-studio/director` | Director Mode session management |
+| `GET /api/video-studio/create` | Initialize new video job |
+| `GET/POST /api/admin/video-studio/styles` | VideoStyle CRUD (PLATFORM_ADMIN) |
+| `PATCH/DELETE /api/admin/video-studio/styles/[id]` | Individual VideoStyle management |
+| `GET/POST /api/admin/video-studio/presets` | VideoPreset management (PLATFORM_ADMIN) |
+
+### Cover Art Studio
+| Endpoint | Description |
+|----------|-------------|
+| `GET/POST /api/cover-art` | List and create CoverArtJob records |
+| `GET/PUT/DELETE /api/cover-art/[id]` | Individual job management |
+| `GET /api/cover-art/[id]/status` | Poll generation status |
+| `POST /api/cover-art/checkout` | Stripe Checkout for guest cover art purchase |
+| `GET /api/cover-art/styles` | List active CoverArtStyles |
+| `GET/POST /api/admin/cover-art/styles` | CoverArtStyle CRUD (PLATFORM_ADMIN) |
+
 ### Lyric Video Studio
 | Endpoint | Description |
 |----------|-------------|
@@ -725,21 +763,23 @@ _Last updated: 2026-04-07 (session 12)_
 
 ---
 
-## PRISMA MODELS (118 total)
+## PRISMA MODELS (127 total)
 
 ```
 Account              ActivityLog          AdminAccount
 Affiliate            AffiliateReferral    AIGeneration
-AIInsightsLog        AIJob                Ambassador
-AmbassadorPayout     ArtistBookingInquiry ArtistCollaborator
-ArtistPhoto          ArtistPressItem      ArtistRelease
-ArtistShow           ArtistSite           ArtistSupport
-ArtistTestimonial    ArtistVideo          ArtistWithdrawal
-AudioFeatures        AudioFingerprint     BeatLeaseSettings
-BeatLicense          BeatPreview          BookingSession
-BroadcastLog         Contact              ContactSubmission
+AIInsightsLog        AIJob                AgentLog
+Ambassador           AmbassadorPayout     ArtistBookingInquiry
+ArtistCollaborator   ArtistPhoto          ArtistPressItem
+ArtistRelease        ArtistShow           ArtistSite
+ArtistSupport        ArtistTestimonial    ArtistVideo
+ArtistWithdrawal     AudioFeatures        AudioFingerprint
+BeatLeaseSettings    BeatLicense          BeatPreview
+BookingSession       BroadcastLog         Contact
+ContactSubmission    CoverArtJob          CoverArtStyle
+Crate                CrateCollaborator    CrateInvite
 CrateItem            DeliveredFile        DigitalProduct
-DigitalPurchase      DJAttribution        DJCrate
+DigitalPurchase      DJAttribution        DJBookingInquiry
 DJEvent              DJMix                DJMixTrack
 DJProfile            DJSet                DJVerificationApplication
 DJWithdrawal         EmailCampaign        ExploreFeatureCard
@@ -748,23 +788,26 @@ FanScore             GenerationFeedback   GenerationLog
 IntakeLink           IntakeSubmission     Invoice
 LicenseDocument      LinkClick            LyricVideo
 MerchOrder           MerchOrderItem       MerchProduct
-MerchVariant         Notification         OnboardingEmailLog
-PageView             Payment              PendingSignup
-PlatformPricing      PreSaveCampaign      PreSaveClick
-ProducerLeaseSettings ProducerProfile     PromoCode
+MerchVariant         ModerationFlag       MusicVideo
+Notification         OnboardingEmailLog   PageView
+Payment              PendingSignup        PlatformPricing
+PreSaveCampaign      PreSaveClick         ProducerLeaseSettings
+ProducerProfile      PromoCode            PromoPopup
 PromoRedemption      QuickSend            RecentPlay
 ReEngagementEmailLog Receipt              Referral
-ReleasePlan          ReleasePlanTask      SampleLog
-ScheduledEmail       SessionNote          SessionNoteAttachment
-ShowInterest         ShowWaitlist         Split
-SplitPayment         SplitSheet           StemSeparation
-StreamLease          StreamLeaseAgreement StreamLeaseBookmark
-StreamLeasePayment   StreamLeasePlay      Studio
-StudioArtist         StudioCredit         StudioEngineer
-StudioEquipment      StudioPortfolioTrack Subscription
-Track                TrackPlay            TrackShieldResult
-TrackShieldScan      TypographyStyle      User
-UserAttribution      VerificationToken    YouTubeSync
+ReleasePlan          ReleasePlanTask      RevenueReportAlert
+RevenueReportConfig  RevenueReportGoal    RevenueReportLog
+SampleLog            ScheduledEmail       SessionNote
+SessionNoteAttachment ShowInterest        ShowWaitlist
+Split                SplitPayment         SplitSheet
+StemSeparation       StreamLease          StreamLeaseAgreement
+StreamLeaseBookmark  StreamLeasePayment   StreamLeasePlay
+Studio               StudioArtist         StudioCredit
+StudioEngineer       StudioEquipment      StudioPortfolioTrack
+Subscription         Track                TrackPlay
+TrackShieldResult    TrackShieldScan      TypographyStyle
+User                 UserAttribution      VerificationToken
+VideoPreset          VideoStyle           YouTubeSync
 YoutubeReference
 ```
 
@@ -852,9 +895,9 @@ YoutubeReference
 ### AI Tools
 | Feature | Status |
 |---------|--------|
-| AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 | ✅ DONE |
+| AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 — public `/cover-art` + subscriber dashboard — 6 styles, Claude prompt enhancement, 4 variations, Pro refinement, 4-email conversion drip | ✅ DONE |
 | AI Mastering (Auphonic) — $7.99 PPU | ✅ DONE |
-| AI Music Video (Kling via FAL) | ✅ DONE |
+| AI Music Video (Kling via FAL) — public `/video-studio` + subscriber dashboard — Quick + Director modes, WorkflowBoard, VideoPreset picker, CameraDirectionPicker, 4-email conversion drip | ✅ DONE |
 | AI Lyric Video Studio (Remotion Lambda) — Quick $17.99 guest / $14.99 sub · Director $29.99 guest / $24.99 sub | ✅ DONE — 5 Framer Motion typography styles, Kling v3 Pro AI backgrounds per section, Director Mode Claude chat + section plan editor, public `/lyric-video` gate screen, 4-email conversion drip, guest linking on login |
 | A&R Report (Claude) | ✅ DONE |
 | Press Kit (Claude + PDF) — $9.99 PPU | ✅ DONE |
@@ -996,7 +1039,8 @@ YoutubeReference
 ### AI Agent Platform — Batch 1 (Steps 1–11)
 | Feature | Status |
 |---------|--------|
-| Agent infrastructure — `AgentLog` model, `logAgentAction()`, admin agent log page | ✅ DONE |
+| `AgentLog` model — tracks every agent action with agentType, action, status, metadata, timestamps | ✅ DONE |
+| `logAgentAction()` utility + admin agent log page | ✅ DONE |
 | Master cron (`POST /api/agents/master-cron`) — routes to all agents by schedule | ✅ DONE |
 | Churn Prevention Agent — detects subscribers inactive >14 days, sends re-engagement sequence | ✅ DONE |
 | Revenue Optimization Agent — upgrade nudges for near-limit users, upsell prompts | ✅ DONE |
@@ -1264,27 +1308,38 @@ YoutubeReference
 | API: `POST /api/admin/revenue-report/send-now`, `GET /api/admin/revenue-report/preview` | ✅ DONE |
 | AdminSidebar: "Rev Report" nav entry | ✅ DONE |
 
-### Music Video Studio (Steps 1–10)
+### Music Video Studio (Steps 1–10 + extras)
 | Feature | Status |
 |---------|--------|
-| Schema: `MusicVideo`, `VideoStyle`, `VIDEO_CONVERSION` AgentType | ✅ DONE |
-| Stripe checkout at `/api/video-studio/checkout` (guest + subscriber) | ✅ DONE |
+| Schema: `MusicVideo`, `VideoStyle`, `VideoPreset`, `VIDEO_CONVERSION` AgentType | ✅ DONE |
+| Stripe checkout at `/api/video-studio/stripe` (guest + subscriber) | ✅ DONE |
 | Song analyzer: BPM, key, energy, lyrics, structure via fal.ai Whisper + Claude | ✅ DONE |
-| Quick Mode: style picker, vision prompt, aspect ratio selector | ✅ DONE |
+| Quick Mode: VideoPreset picker, vision prompt, aspect ratio selector | ✅ DONE |
 | Director Mode: Claude creative brief, shot list editor, character ref uploads, conversation log | ✅ DONE |
-| `VideoStudioClient` wizard UI (multi-step, both modes) | ✅ DONE |
+| `WorkflowBoard` — node-based production map showing all stages and their status | ✅ DONE |
+| `CameraDirectionPicker` — per-scene camera direction selection (pan, zoom, static, etc.) | ✅ DONE |
+| Camera direction auto-detection — shot-list generator suggests directions from lyrics/mood | ✅ DONE |
+| `VideoPreset` schema + seed — 10 default presets with style/mood/prompt combos | ✅ DONE |
+| `PresetPicker` component — Quick Mode preset grid with preview thumbnails | ✅ DONE |
+| `VideoStudioClient` wizard UI (multi-step, both modes, WorkflowBoard integrated) | ✅ DONE |
 | Character portrait via FLUX Kontext Pro | ✅ DONE |
 | Parallel scene generation — max 3 concurrent, model-specific fal.ai params (Seedance 2.0, Seedance 1.5 Pro, Kling, etc.) | ✅ DONE |
 | Remotion Lambda stitching — `MusicVideoComposition` with per-scene crossfade, `renderMediaOnLambda` | ✅ DONE |
 | Thumbnail from highest-energy scene | ✅ DONE |
-| API routes: download, refs, generate, regenerate, publish, brief, brief/lock, shots, scene-regen | ✅ DONE |
+| `sendMusicVideoCompleteEmail()` — completion notification with preview link | ✅ DONE |
+| API routes: download, refs, generate, regenerate, publish, brief, brief/lock, shots, scene-regen, status | ✅ DONE |
 | Stripe webhook handler for `tool === "MUSIC_VIDEO"` | ✅ DONE |
-| Video Conversion Agent: 4-email drip (immediate / 48h / 5d / 10d), Email 4 gated on click tracking, unique 50%-off Stripe promo code | ✅ DONE |
+| Non-subscriber gate — `GateScreen.tsx` collects email/Google OAuth, sets `indiethis_guest_email` cookie | ✅ DONE |
+| Payment guard in pipeline — throws if amount > 0 and no `stripePaymentId` | ✅ DONE |
+| Abandoned cart agent — targets PENDING jobs >2h, sends re-engagement email | ✅ DONE |
+| Video Conversion Agent: 4-email drip (immediate / 48h / 5d / 10d), Email 4 gated on `conversionAnyOpened`, unique 50%-off Stripe promo code | ✅ DONE |
 | Redirect click tracking at `/api/video-studio/track/click` | ✅ DONE |
+| `VIDEO_CONVERSION` wired into `/api/cron/agents` with 22h dedup guard | ✅ DONE |
 | Session linking: `linkGuestVideosByEmail()` claims guest videos on first dashboard login | ✅ DONE |
-| Premium landing page `/video-studio` — hero + bg video loop, mode cards, OG/Twitter metadata; `?start=1` gates wizard | ✅ DONE |
-| Admin panel `/admin/video-studio` — metrics dashboard, video list table, VideoStyle CRUD | ✅ DONE |
-| VideoStyle API: `GET/POST /api/admin/video-studio/styles`, `PATCH/DELETE …/[id]` (PLATFORM_ADMIN only) | ✅ DONE |
+| Premium landing page `/video-studio` — hero with DemoReel + bg video loop, mode cards, OG/Twitter metadata; `?start=1` gates wizard | ✅ DONE |
+| Sub-pages: `/video-studio/[id]/generating` (progress), `/video-studio/[id]/preview` (complete), `/video-studio/director/[id]` (Director session) | ✅ DONE |
+| Admin panel `/admin/video-studio` — metrics dashboard (total/monthly videos + revenue, avg cost/margin, conversion rate, avg gen time, popular styles/models), video list table (100 most recent, filterable) | ✅ DONE |
+| VideoStyle + VideoPreset CRUD via admin API (PLATFORM_ADMIN only) | ✅ DONE |
 
 ### Cover Art Generator (Steps 1–7)
 | Feature | Status |
