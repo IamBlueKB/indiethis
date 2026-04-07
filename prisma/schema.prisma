@@ -161,6 +161,7 @@ model User {
   musicVideos              MusicVideo[]
   lyricVideos              LyricVideo[]
   avatars                  ArtistAvatar[]
+  releases                 Release[]
 }
 
 model Studio {
@@ -2963,4 +2964,25 @@ model LyricVideo {
   @@index([guestEmail])
   @@index([status])
   @@index([createdAt])
+}
+
+// ─── Release Board ─────────────────────────────────────────────────────────────
+
+model Release {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  title            String                // album / single / EP name
+  trackIds         Json                  // String[] — track IDs in this release
+  coverArtJobId    String?               // linked CoverArtJob id
+  musicVideoId     String?               // linked MusicVideo id
+  lyricVideoId     String?               // linked LyricVideo id
+  canvasVideoId    String?               // track ID whose canvasVideoUrl is used
+  masteredTrackId  String?               // linked mastered track id
+  releaseDate      DateTime?             // planned release date
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([updatedAt])
 }
