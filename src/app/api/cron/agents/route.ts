@@ -294,6 +294,21 @@ export async function POST(req: NextRequest) {
     results.collaborationMatchmaker = isFirstOfMonth ? "skipped (not due)" : "skipped (not 1st of month)";
   }
 
+  // ── Video Conversion Agent — daily ───────────────────────────────────────
+  const shouldRunVideoConversion = await shouldRun("VIDEO_CONVERSION", 22); // 22h guard
+  if (shouldRunVideoConversion) {
+    try {
+      const { runVideoConversionAgent } = await import("@/lib/agents/video-conversion");
+      await logAgentAction("VIDEO_CONVERSION", "AGENT_RUN_START");
+      const result = await runVideoConversionAgent();
+      results.videoConversion = `acted=${result.acted} (e1=${result.email1} e2=${result.email2} e3=${result.email3} e4=${result.email4} stopped=${result.stopped})`;
+    } catch (err) {
+      results.videoConversion = `error: ${String(err)}`;
+    }
+  } else {
+    results.videoConversion = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

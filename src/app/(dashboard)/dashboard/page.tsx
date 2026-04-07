@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { linkGuestVideosByEmail } from "@/lib/video-studio/link-guest";
 import Link from "next/link";
 import ReleaseTimingCard from "@/components/dashboard/ReleaseTimingCard";
 import {
@@ -112,6 +113,19 @@ export default async function DashboardPage(
 
   const sp         = await searchParams;
   const showWelcome = sp.welcome === "1";
+
+  // Session linking: link any guest-purchased videos to this userId on first visit
+  let linkedVideoCount = 0;
+  try {
+    const userEmail = await db.user.findUnique({
+      where:  { id: userId },
+      select: { email: true },
+    });
+    if (userEmail?.email) {
+      const { linked } = await linkGuestVideosByEmail(userId, userEmail.email);
+      linkedVideoCount = linked;
+    }
+  } catch { /* non-fatal */ }
 
   const firstName = (session.user.name ?? "Artist").split(" ")[0];
 
@@ -255,6 +269,30 @@ export default async function DashboardPage(
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Music Video link banner — shown when a guest video was just linked ── */}
+      {linkedVideoCount > 0 && (
+        <Link
+          href="/dashboard/ai/video"
+          className="flex items-center justify-between rounded-xl border px-4 py-3 no-underline transition-colors hover:border-accent/40"
+          style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.25)" }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-base">🎬</span>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>
+                Your music {linkedVideoCount === 1 ? "video is" : "videos are"} already here
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#888" }}>
+                {linkedVideoCount === 1
+                  ? "The video you created before signing up has been added to your account."
+                  : `${linkedVideoCount} videos you created before signing up have been added to your account.`}
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={14} style={{ color: "#D4A843" }} className="shrink-0" />
+        </Link>
       )}
 
       {/* ── Banners ── */}

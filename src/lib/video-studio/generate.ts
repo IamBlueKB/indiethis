@@ -20,6 +20,7 @@ import { db }                   from "@/lib/db";
 import { fal }                  from "@fal-ai/client";
 import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
 import { sendMusicVideoCompleteEmail } from "@/lib/brevo/email";
+import { sendVideoConversionEmail1 }  from "@/lib/agents/video-conversion";
 import type { MusicVideo }      from "@prisma/client";
 import {
   routeScene,
@@ -233,12 +234,23 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
           });
         }
       } else if (vid.guestEmail) {
-        await sendMusicVideoCompleteEmail({
-          toEmail:    vid.guestEmail,
-          toName:     "Artist",
-          trackTitle: vid.trackTitle,
-          previewUrl,
-          mode:       mode,
+        // Guest — send Email 1 of the conversion sequence (includes soft upsell)
+        await sendVideoConversionEmail1({
+          id:            musicVideoId,
+          trackTitle:    vid.trackTitle,
+          guestEmail:    vid.guestEmail,
+          amount:        vid.amount,
+          mode:          vid.mode,
+          finalVideoUrl: finalVideoUrl ?? null,
+          finalVideoUrls: null,
+        });
+        // Mark Email 1 sent so the cron picks up from Email 2
+        await db.musicVideo.update({
+          where: { id: musicVideoId },
+          data:  {
+            conversionStep:   1,
+            conversionNextAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          },
         });
       }
     } catch (emailErr) {

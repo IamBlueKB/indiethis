@@ -2546,6 +2546,7 @@ enum AgentType {
   COLLABORATION_MATCHMAKER
   RELEASE_BUNDLE
   REVENUE_REPORT
+  VIDEO_CONVERSION
 }
 
 model TrackShieldScan {
@@ -2725,6 +2726,13 @@ model MusicVideo {
 
   // Director Mode regen flag (one free redo per video)
   sceneRegenUsed  Boolean  @default(false)
+
+  // Video Conversion Agent — non-subscriber email sequence
+  conversionStep      Int      @default(0)   // 0=no emails, 1=email1, 2=email2, 3=email3, 4=done
+  conversionNextAt    DateTime?              // when to send the next conversion email
+  conversionPromoCode String?               // Stripe promo code string for Email 4
+  conversionDone      Boolean  @default(false)
+  conversionAnyOpened Boolean  @default(false) // true once a link in any email was clicked
 
   // Progress tracking
   progress        Int      @default(0)  // 0-100
