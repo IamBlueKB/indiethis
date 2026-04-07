@@ -460,6 +460,18 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Avatar Studio: source reference photo (subscriber only, max 8MB, JPG/PNG/WEBP)
+  avatarSourcePhoto: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
   samplePackPreview: f({ audio: { maxFileSize: "32MB", maxFileCount: 5 } })
     .middleware(async ({ req }) => {
