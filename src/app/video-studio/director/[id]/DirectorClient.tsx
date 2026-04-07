@@ -550,13 +550,10 @@ export default function DirectorClient({
               </div>
             </div>
 
-            {/* Model legend */}
+            {/* Scene type legend — color indicators only */}
             <div className="flex flex-wrap gap-2">
               {Array.from(new Set(shotList.map(s => s.modelDisplay))).map(model => (
-                <div key={model} className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs" style={{ backgroundColor: "#1A1A1A" }}>
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: MODEL_COLORS[model] ?? "#888" }} />
-                  <span style={{ color: MODEL_COLORS[model] ?? "#888" }}>{model}</span>
-                </div>
+                <div key={model} className="w-3 h-3 rounded-full" style={{ backgroundColor: MODEL_COLORS[model] ?? "#888" }} />
               ))}
             </div>
 
@@ -611,7 +608,6 @@ export default function DirectorClient({
                       <div className="flex items-center gap-3 mt-2">
                         <div className="flex items-center gap-1">
                           <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: MODEL_COLORS[scene.modelDisplay] ?? "#888" }} />
-                          <span className="text-xs" style={{ color: MODEL_COLORS[scene.modelDisplay] ?? "#888" }}>{scene.modelDisplay}</span>
                         </div>
                         <span className="text-xs" style={{ color: "#555" }}>{scene.modelReason}</span>
                         {scene.hasLipSync && (

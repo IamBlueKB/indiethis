@@ -247,7 +247,7 @@ export default function GeneratingClient({ id }: { id: string }) {
                     <p className="text-xs" style={{ color: isDone ? "#AAA" : isActive ? "#D4A843" : "#555" }}>
                       {s === "ANALYZING"  ? "Analyzing audio — BPM, key, structure, lyrics" :
                        s === "PLANNING"   ? "Planning scenes with AI model router" :
-                       s === "GENERATING" ? "Generating scene clips with fal.ai" :
+                       s === "GENERATING" ? "Generating scene clips" :
                                            "Stitching clips into final video"}
                     </p>
                   </div>

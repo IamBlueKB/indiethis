@@ -189,7 +189,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
           {/* Trust line */}
           <p className="text-xs mt-6" style={{ color: "#555" }}>
-            Powered by Kling 3.0, Veo 3.1, Seedance 2.0 &nbsp;·&nbsp; Results in ~15 minutes &nbsp;·&nbsp; Download MP4
+            Results in ~15 minutes &nbsp;·&nbsp; Download MP4
           </p>
         </div>
       </section>
@@ -281,7 +281,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
             <Feature icon={Zap}        label="Beat-synced cuts"         sub="Scene transitions align to your track's BPM and energy peaks." />
             <Feature icon={Download}   label="Download forever"         sub="Your MP4 is yours. No expiry, no watermarks, no subscriptions needed." />
             <Feature icon={Globe}      label="Shareable preview page"   sub="Every video gets a public preview URL to drop in your bio." />
-            <Feature icon={Sparkles}   label="Powered by top AI models" sub="Kling 3.0 Pro, Veo 3.1, Seedance 2.0 — the best models in one place." />
+            <Feature icon={Sparkles}   label="Powered by top AI models" sub="State-of-the-art video generation — automatically matched to your style." />
           </div>
         </div>
       </section>
