@@ -438,6 +438,17 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Cover Art Studio: reference image upload (subscribers + guests, max 16MB)
+  coverArtRef: f({ image: { maxFileSize: "16MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      // Allow both subscribers and guests — auth checked at job creation
+      return {};
+    })
+    .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
   samplePackPreview: f({ audio: { maxFileSize: "32MB", maxFileCount: 5 } })
     .middleware(async ({ req }) => {
