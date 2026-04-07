@@ -247,16 +247,19 @@ export async function GET(
         photo:      true,
         bio:        true,
         artistSite: { select: { genre: true, city: true } },
+        avatars:    { where: { isDefault: true }, select: { avatarUrl: true }, take: 1 },
       },
     });
 
     const displayName = artist?.artistName || artist?.name || "Artist";
     const genre       = artist?.artistSite?.genre;
     const tagline     = genre ? `${genre} · on IndieThis` : "on IndieThis";
+    // Prefer default avatar over generic profile photo for OG image
+    const photoUrl    = artist?.avatars?.[0]?.avatarUrl ?? artist?.photo ?? null;
 
     return new ImageResponse(
       <PersonLayout
-        photoUrl={artist?.photo ?? null}
+        photoUrl={photoUrl}
         displayName={displayName}
         tagline={tagline}
       />,
@@ -272,7 +275,14 @@ export async function GET(
         profilePhotoUrl: true,
         genres:          true,
         city:            true,
-        user:            { select: { name: true, artistName: true, photo: true } },
+        user:            {
+          select: {
+            name:       true,
+            artistName: true,
+            photo:      true,
+            avatars:    { where: { isDefault: true }, select: { avatarUrl: true }, take: 1 },
+          },
+        },
       },
     });
 
@@ -280,7 +290,8 @@ export async function GET(
     const genres      = (dj?.genres as string[] | null) ?? [];
     const genreLabel  = genres.slice(0, 2).join(", ");
     const tagline     = genreLabel ? `${genreLabel} · DJ on IndieThis` : "DJ on IndieThis";
-    const photo       = dj?.profilePhotoUrl ?? dj?.user.photo ?? null;
+    // Prefer default avatar → DJ profile photo → generic user photo
+    const photo       = dj?.user.avatars?.[0]?.avatarUrl ?? dj?.profilePhotoUrl ?? dj?.user.photo ?? null;
 
     return new ImageResponse(
       <PersonLayout
