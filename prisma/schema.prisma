@@ -160,6 +160,7 @@ model User {
   fanFundingReceived       FanFunding[]           @relation("FanFundingReceived")
   musicVideos              MusicVideo[]
   lyricVideos              LyricVideo[]
+  avatars                  ArtistAvatar[]
 }
 
 model Studio {
@@ -1208,6 +1209,24 @@ model ArtistPhoto {
   artist    User     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId])
+}
+
+model ArtistAvatar {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String                          // "Main Look", "Dark Aesthetic", "Performance"
+  sourcePhotoUrl  String                          // the original uploaded reference photo
+  avatarUrl       String                          // the AI-generated portrait
+  style           String                          // cinematic | illustrated | dark_moody | neon_glow | vintage_film | clean_portrait | watercolor | comic_book
+  promptUsed      String?                         // full prompt used for generation
+  dominantColors  Json?                           // extracted palette for cross-tool consistency
+  isDefault       Boolean  @default(false)        // one avatar auto-selected in tools
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, isDefault])
 }
 
 model ArtistTestimonial {
