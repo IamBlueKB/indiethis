@@ -29,6 +29,7 @@ import {
   Music2,
   Bot,
   MonitorPlay,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -66,6 +67,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Attribution", href: "/admin/attribution",      icon: Target,      page: "attribution"      },
   { label: "DJ Verification", href: "/admin/dj-verification", icon: ShieldCheck, page: "dj-verification" },
   { label: "Agents",      href: "/admin/agents",       icon: Bot,             page: "agents"       },
+  { label: "Video Studio", href: "/admin/video-studio", icon: Film,           page: "video-studio"  },
   { label: "Rev Report",  href: "/admin/revenue-report", icon: BarChart3,      page: "revenue-report" },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",         icon: Settings,    page: "settings"     },
