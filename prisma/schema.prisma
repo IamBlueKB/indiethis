@@ -158,6 +158,7 @@ model User {
   youtubeReferences        YoutubeReference[]
   moderationFlags          ModerationFlag[]
   fanFundingReceived       FanFunding[]           @relation("FanFundingReceived")
+  musicVideos              MusicVideo[]
 }
 
 model Studio {
@@ -2675,4 +2676,78 @@ model RevenueReportLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ─── Music Video Studio ───────────────────────────────────────────────────────
+
+model MusicVideo {
+  id              String   @id @default(cuid())
+  userId          String?  // null for non-subscribers / guests
+  guestEmail      String?  // delivery email for non-subscribers
+  trackId         String?  // linked IndieThis Track (subscribers only)
+  trackTitle      String
+  trackDuration   Int      // seconds
+  audioUrl        String   // uploaded or pulled from Track.fileUrl
+
+  mode            String   // QUICK | DIRECTOR
+  videoLength     String   // SHORT | STANDARD | EXTENDED
+  status          String   @default("PENDING")
+  // PENDING → ANALYZING → PLANNING → GENERATING → STITCHING → COMPLETE | FAILED
+
+  // Style & vision
+  style           String?  // VideoStyle.name chosen by user
+  visionPrompt    String?  // free-text description from user
+  aspectRatio     String   @default("16:9") // 16:9 | 9:16 | 1:1
+
+  // Director Mode
+  creativeBrief   Json?    // Claude-generated brief object
+  shotList        Json?    // Scene[]: { index, prompt, model, startTime, endTime, type, ... }
+  characterRefs   Json?    // String[] of reference image URLs
+  conversationLog Json?    // ChatMessage[]: { role, content, createdAt }
+
+  // Song analysis (populated by song-analyzer)
+  songStructure   Json?    // SongAnalysis object
+  bpm             Int?
+  musicalKey      String?
+  energy          Float?
+  lyrics          String?
+  lyricTimestamps Json?    // { word, start, end }[]
+
+  // Output
+  scenes          Json?    // GeneratedScene[]: { sceneIndex, videoUrl, model, prompt, startTime, endTime, thumbnailUrl }
+  finalVideoUrl   String?  // primary stitched output URL
+  finalVideoUrls  Json?    // { "16:9": url, "9:16": url, "1:1": url }
+  thumbnailUrl    String?
+
+  // Billing
+  stripePaymentId String?
+  amount          Int      // cents — what the user paid (0 for included credits)
+
+  // Progress tracking
+  progress        Int      @default(0)  // 0-100
+  currentStep     String?  // human-readable step description
+  errorMessage    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model VideoStyle {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  category    String   // CINEMATIC | ANIMATED | ABSTRACT | RETRO | DARK | BRIGHT
+  previewUrl  String   // short looping preview video URL
+  promptBase  String   // prepended to every scene prompt for visual consistency
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+  @@index([sortOrder])
 }
