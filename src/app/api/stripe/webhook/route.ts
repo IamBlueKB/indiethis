@@ -1127,6 +1127,32 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        // --- Lyric Video Studio (new cinematic system) ---
+        if (tool === "LYRIC_VIDEO_QUICK" || tool === "LYRIC_VIDEO_DIRECTOR") {
+          const jobId = checkSession.metadata?.jobId;
+          if (jobId) {
+            void (async () => {
+              try {
+                const stripePaymentId =
+                  typeof checkSession.payment_intent === "string"
+                    ? checkSession.payment_intent
+                    : checkSession.id;
+
+                await db.lyricVideo.update({
+                  where: { id: jobId },
+                  data:  { stripePaymentId },
+                });
+
+                const { startLyricVideoGeneration } = await import("@/lib/lyric-video/pipeline");
+                await startLyricVideoGeneration(jobId);
+              } catch (err) {
+                console.error("[webhook] LYRIC_VIDEO generation error:", err);
+              }
+            })();
+          }
+          break;
+        }
+
         // Credit increments by tool
         const creditField: Record<string, { increment: number }> | null =
           tool === "LYRIC_VIDEO" ? { lyricVideoCreditsLimit: { increment: 1 } }

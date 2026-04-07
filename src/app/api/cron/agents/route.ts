@@ -333,6 +333,25 @@ export async function POST(req: NextRequest) {
     results.abandonedCart   = "skipped (not due)";
   }
 
+  // ── Lyric Video Conversion Agent — daily ─────────────────────────────────
+  const shouldRunLyricConversion = await shouldRun("LYRIC_VIDEO_CONVERSION", 22); // 22h guard
+  if (shouldRunLyricConversion) {
+    try {
+      const { runLyricVideoConversionAgent, runLyricVideoAbandonedCartAgent } = await import("@/lib/agents/lyric-video-conversion");
+      await logAgentAction("LYRIC_VIDEO_CONVERSION", "AGENT_RUN_START");
+      const result = await runLyricVideoConversionAgent();
+      results.lyricVideoConversion = `acted=${result.acted} (e1=${result.email1} e2=${result.email2} e3=${result.email3} e4=${result.email4} stopped=${result.stopped})`;
+
+      const cartResult = await runLyricVideoAbandonedCartAgent();
+      results.lyricVideoAbandonedCart = `acted=${cartResult.acted} sent=${cartResult.emails}`;
+    } catch (err) {
+      results.lyricVideoConversion = `error: ${String(err)}`;
+    }
+  } else {
+    results.lyricVideoConversion    = "skipped (not due)";
+    results.lyricVideoAbandonedCart = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,
