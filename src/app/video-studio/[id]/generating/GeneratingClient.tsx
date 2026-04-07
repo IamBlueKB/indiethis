@@ -4,11 +4,9 @@
  * GeneratingClient — progress screen for music video generation.
  *
  * Polls GET /api/video-studio/[id]/status every 5 seconds.
- * Shows:
- *   - Animated progress bar with current step
- *   - Feature cards with actual track data (BPM, key, energy) as they become available
- *   - Redirects to /video-studio/[id]/preview when COMPLETE
- *   - Error state with retry option if FAILED
+ * - Quick Mode: animated progress bar + stats cards
+ * - Director Mode: live WorkflowBoard with per-scene clip status
+ * Redirects to /video-studio/[id]/preview when COMPLETE.
  */
 
 import { useEffect, useState, useCallback } from "react";
@@ -18,21 +16,40 @@ import {
   Activity, Clock, CheckCircle2, RefreshCw,
 } from "lucide-react";
 
+import WorkflowBoard, { type WorkflowScene, type WorkflowClip } from "@/components/video-studio/WorkflowBoard";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface StatusData {
-  id:           string;
-  status:       string;
-  progress:     number;
-  currentStep:  string | null;
-  trackTitle:   string;
-  bpm:          number | null;
-  musicalKey:   string | null;
-  energy:       number | null;
+  id:            string;
+  status:        string;
+  progress:      number;
+  currentStep:   string | null;
+  mode:          string;
+  trackTitle:    string;
+  trackDuration: number;
+  bpm:           number | null;
+  musicalKey:    string | null;
+  energy:        number | null;
   finalVideoUrl: string | null;
+  thumbnailUrl:  string | null;
   errorMessage:  string | null;
-  sceneCount:   number;
-  amount:       number;
-  createdAt:    string;
+  sceneCount:    number;
+  shotList:      WorkflowScene[];
+  clips:         WorkflowClip[];
+  songSections:  Array<{ type: string; startTime: number; endTime: number; energy: number }>;
+  brief:         {
+    title:          string;
+    logline:        string;
+    tone:           string;
+    cinematography?: string;
+    colorPalette?:  string[];
+  } | null;
+  amount:        number;
+  createdAt:     string;
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEP_LABELS: Record<string, string> = {
   PENDING:    "Waiting to start…",
@@ -52,6 +69,8 @@ const STATUS_PROGRESS: Record<string, number> = {
   STITCHING:  88,
   COMPLETE:   100,
 };
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function GeneratingClient({ id }: { id: string }) {
   const router = useRouter();
@@ -82,12 +101,12 @@ export default function GeneratingClient({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [poll]);
 
-  const progress     = data ? (data.progress > 0 ? data.progress : (STATUS_PROGRESS[data.status] ?? 5)) : 3;
-  const statusLabel  = data ? (data.currentStep ?? STEP_LABELS[data.status] ?? "Processing…") : "Starting…";
-  const isFailed     = data?.status === "FAILED";
-  const isComplete   = data?.status === "COMPLETE";
+  const progress    = data ? (data.progress > 0 ? data.progress : (STATUS_PROGRESS[data.status] ?? 5)) : 3;
+  const statusLabel = data ? (data.currentStep ?? STEP_LABELS[data.status] ?? "Processing…") : "Starting…";
+  const isFailed    = data?.status === "FAILED";
+  const isComplete  = data?.status === "COMPLETE";
+  const isDirector  = data?.mode === "DIRECTOR";
 
-  // Estimate time remaining based on progress
   function getTimeEstimate(p: number): string {
     if (p >= 95) return "Almost done…";
     if (p >= 80) return "~1 minute";
@@ -108,11 +127,13 @@ export default function GeneratingClient({ id }: { id: string }) {
         </div>
         <div>
           <p className="text-sm font-bold text-white leading-none">Music Video Studio</p>
-          <p className="text-[10px] leading-none mt-0.5" style={{ color: "#888" }}>by IndieThis</p>
+          <p className="text-[10px] leading-none mt-0.5" style={{ color: "#888" }}>
+            {isDirector ? "Director Mode" : "Quick Mode"}
+          </p>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-16 max-w-lg mx-auto w-full">
+      <div className={`flex-1 ${isDirector ? "px-6 py-8 max-w-6xl mx-auto w-full" : "flex flex-col items-center justify-center px-6 py-16 max-w-lg mx-auto w-full"}`}>
 
         {loading && !data && (
           <div className="flex flex-col items-center gap-4">
@@ -143,8 +164,56 @@ export default function GeneratingClient({ id }: { id: string }) {
           </div>
         )}
 
-        {/* ── Generating state ───────────────────────────────────────────────── */}
-        {!isFailed && !isComplete && data && (
+        {/* ── Director Mode: Workflow Board ─────────────────────────────────── */}
+        {!isFailed && !isComplete && data && isDirector && (
+          <div className="space-y-6">
+            {/* Status header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-3" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+                  <Loader2 size={11} className="animate-spin" />
+                  AI is creating your video
+                </div>
+                <h1 className="text-xl font-bold text-white">{data.trackTitle}</h1>
+              </div>
+              <div className="text-right">
+                <p className="text-xs" style={{ color: "#D4A843" }}>{statusLabel}</p>
+                <p className="text-sm font-bold text-white">{Math.round(progress)}%</p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#1E1E1E" }}>
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{ width: `${progress}%`, backgroundColor: "#D4A843" }}
+              />
+            </div>
+
+            {/* Workflow Board — live scene status */}
+            <WorkflowBoard
+              trackTitle={data.trackTitle}
+              trackDuration={data.trackDuration}
+              bpm={data.bpm}
+              musicalKey={data.musicalKey}
+              songSections={data.songSections}
+              brief={data.brief}
+              shotList={data.shotList}
+              clips={data.clips}
+              videoStatus={data.status}
+              finalVideoUrl={data.finalVideoUrl}
+              thumbnailUrl={data.thumbnailUrl}
+              videoId={id}
+            />
+
+            <p className="text-center text-xs" style={{ color: "#444" }}>
+              You can safely close this tab — your video will be ready when you return.
+            </p>
+          </div>
+        )}
+
+        {/* ── Quick Mode: Progress cards ─────────────────────────────────────── */}
+        {!isFailed && !isComplete && data && !isDirector && (
           <div className="w-full space-y-8">
             {/* Track title */}
             <div className="text-center">
@@ -175,9 +244,8 @@ export default function GeneratingClient({ id }: { id: string }) {
               <span>{getTimeEstimate(progress)}</span>
             </div>
 
-            {/* Feature cards — fill in as analysis data arrives */}
+            {/* Feature cards */}
             <div className="grid grid-cols-3 gap-3">
-              {/* BPM */}
               <div className="rounded-xl border px-4 py-4 text-center" style={{ borderColor: "#2A2A2A", backgroundColor: "#111" }}>
                 <Activity size={16} style={{ color: data.bpm ? "#D4A843" : "#444" }} className="mx-auto mb-2" />
                 <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#555" }}>BPM</p>
@@ -187,8 +255,6 @@ export default function GeneratingClient({ id }: { id: string }) {
                   <div className="h-5 w-10 rounded mx-auto animate-pulse" style={{ backgroundColor: "#2A2A2A" }} />
                 )}
               </div>
-
-              {/* Key */}
               <div className="rounded-xl border px-4 py-4 text-center" style={{ borderColor: "#2A2A2A", backgroundColor: "#111" }}>
                 <Music2 size={16} style={{ color: data.musicalKey ? "#D4A843" : "#444" }} className="mx-auto mb-2" />
                 <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#555" }}>Key</p>
@@ -198,8 +264,6 @@ export default function GeneratingClient({ id }: { id: string }) {
                   <div className="h-5 w-8 rounded mx-auto animate-pulse" style={{ backgroundColor: "#2A2A2A" }} />
                 )}
               </div>
-
-              {/* Energy */}
               <div className="rounded-xl border px-4 py-4 text-center" style={{ borderColor: "#2A2A2A", backgroundColor: "#111" }}>
                 <Zap size={16} style={{ color: data.energy !== null ? "#D4A843" : "#444" }} className="mx-auto mb-2" />
                 <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#555" }}>Energy</p>
@@ -230,13 +294,12 @@ export default function GeneratingClient({ id }: { id: string }) {
                 const stepIdx     = statusOrder.indexOf(s);
                 const isDone      = currentIdx > stepIdx;
                 const isActive    = currentIdx === stepIdx;
-
                 return (
                   <div key={s} className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
                       style={{
                         backgroundColor: isDone ? "rgba(52,199,89,0.2)" : isActive ? "rgba(212,168,67,0.2)" : "#1A1A1A",
-                        border:          `1px solid ${isDone ? "#34C759" : isActive ? "#D4A843" : "#2A2A2A"}`,
+                        border: `1px solid ${isDone ? "#34C759" : isActive ? "#D4A843" : "#2A2A2A"}`,
                       }}>
                       {isDone
                         ? <CheckCircle2 size={12} style={{ color: "#34C759" }} />
@@ -261,7 +324,7 @@ export default function GeneratingClient({ id }: { id: string }) {
           </div>
         )}
 
-        {/* ── Complete (shouldn't linger here, but just in case) ─────────────── */}
+        {/* ── Complete (redirect should fire, but fallback button) ───────────── */}
         {isComplete && (
           <div className="text-center space-y-4">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{ backgroundColor: "rgba(52,199,89,0.1)" }}>

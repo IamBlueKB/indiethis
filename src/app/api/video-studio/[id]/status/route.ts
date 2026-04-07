@@ -26,6 +26,7 @@ export async function GET(
       videoLength:    true,
       aspectRatio:    true,
       trackTitle:     true,
+      trackDuration:  true,
       bpm:            true,
       musicalKey:     true,
       energy:         true,
@@ -33,6 +34,9 @@ export async function GET(
       finalVideoUrls: true,
       thumbnailUrl:   true,
       scenes:         true,
+      shotList:       true,
+      songStructure:  true,
+      creativeBrief:  true,
       errorMessage:   true,
       amount:         true,
       createdAt:      true,
@@ -40,6 +44,23 @@ export async function GET(
   });
 
   if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Build per-scene clip status from the scenes JSON
+  type RawScene = { sceneIndex?: number; videoUrl?: string | null; thumbnailUrl?: string | null };
+  const rawScenes  = Array.isArray(video.scenes) ? (video.scenes as RawScene[]) : [];
+  const clips = rawScenes.map(s => ({
+    sceneIndex:   s.sceneIndex ?? 0,
+    videoUrl:     s.videoUrl ?? null,
+    thumbnailUrl: s.thumbnailUrl ?? null,
+    status:       s.videoUrl
+      ? "complete"
+      : (video.status === "GENERATING" ? "generating" : "pending"),
+  }));
+
+  // Song sections from analysis
+  type Analysis = { sections?: Array<{ type: string; startTime: number; endTime: number; energy: number }> };
+  const analysis     = video.songStructure as Analysis | null;
+  const songSections = analysis?.sections ?? [];
 
   return NextResponse.json({
     id:             video.id,
@@ -50,13 +71,18 @@ export async function GET(
     videoLength:    video.videoLength,
     aspectRatio:    video.aspectRatio,
     trackTitle:     video.trackTitle,
+    trackDuration:  video.trackDuration,
     bpm:            video.bpm,
     musicalKey:     video.musicalKey,
     energy:         video.energy,
     finalVideoUrl:  video.finalVideoUrl,
     finalVideoUrls: video.finalVideoUrls,
     thumbnailUrl:   video.thumbnailUrl,
-    sceneCount:     Array.isArray(video.scenes) ? video.scenes.length : 0,
+    sceneCount:     rawScenes.length > 0 ? rawScenes.length : (Array.isArray(video.shotList) ? (video.shotList as unknown[]).length : 0),
+    shotList:       Array.isArray(video.shotList) ? video.shotList : [],
+    clips,
+    songSections,
+    brief:          video.creativeBrief ?? null,
     errorMessage:   video.errorMessage,
     amount:         video.amount,
     createdAt:      video.createdAt.toISOString(),

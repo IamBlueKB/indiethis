@@ -24,6 +24,8 @@ export default async function DirectorPage({
     select: {
       id:              true,
       trackTitle:      true,
+      trackDuration:   true,
+      audioUrl:        true,
       mode:            true,
       status:          true,
       videoLength:     true,
@@ -54,6 +56,8 @@ export default async function DirectorPage({
     <DirectorClient
       id={id}
       trackTitle={video.trackTitle}
+      trackDuration={video.trackDuration}
+      audioUrl={video.audioUrl}
       videoLength={video.videoLength}
       aspectRatio={video.aspectRatio}
       bpm={video.bpm}

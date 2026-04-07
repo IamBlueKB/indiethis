@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * DirectorClient — Director Mode 4-phase workflow
+ * DirectorClient — Director Mode 5-phase workflow
  *
+ * Phase 0: Preset picker (choose a genre blueprint or start from scratch)
  * Phase 1: Chat with Claude (collect vision, one question at a time)
  * Phase 2: Creative Brief review (movie treatment card)
- * Phase 3: Shot List + audio-synced timeline preview
+ * Phase 3: Workflow Board (visual node map of scenes + clips)
  * Phase 4: Approve + Generate (redirects to /generating)
  */
 
@@ -14,9 +15,12 @@ import { useRouter }                                 from "next/navigation";
 import {
   Film, Clapperboard, Send, Loader2, ChevronRight,
   ChevronLeft, AlertCircle, Music2, Activity, Zap,
-  Play, Pause, Clock, Camera, Wand2, Check,
-  GripVertical, RefreshCw, Star,
+  Play, Clock, Camera, Wand2, Check,
+  Star,
 } from "lucide-react";
+
+import PresetPicker, { type VideoPreset } from "@/components/video-studio/PresetPicker";
+import WorkflowBoard, { type WorkflowScene, type WorkflowClip } from "@/components/video-studio/WorkflowBoard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,29 +42,15 @@ interface CreativeBrief {
   specialNotes:   string;
 }
 
-interface ShotListScene {
-  index:        number;
-  title:        string;
-  description:  string;
-  model:        string;
-  modelDisplay: string;
-  modelReason:  string;
-  startTime:    number;
-  endTime:      number;
-  duration:     number;
-  type:         string;
-  energyLevel:  number;
-  prompt:       string;
-  hasLipSync:   boolean;
-}
-
-type Phase = 1 | 2 | 3 | 4;
+type Phase = 0 | 1 | 2 | 3 | 4;
 
 interface Props {
   id:                  string;
   trackTitle:          string;
+  trackDuration:       number;
   videoLength:         string;
   aspectRatio:         string;
+  audioUrl:            string;
   bpm:                 number | null;
   musicalKey:          string | null;
   energy:              number | null;
@@ -70,20 +60,10 @@ interface Props {
   userId:              string | null;
 }
 
-// ─── Constants ─────────────────────────────────────────────────────────────────
-
-const MODEL_COLORS: Record<string, string> = {
-  "Veo 3.1":               "#A78BFA",
-  "Seedance 2.0":          "#34D399",
-  "Kling 3.0 Pro":         "#D4A843",
-  "Kling 2.6 Pro (Elements)": "#FB923C",
-  "Seedance 1.5 Pro":      "#60A5FA",
-};
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function DirectorClient({
-  id, trackTitle, videoLength, aspectRatio,
+  id, trackTitle, trackDuration, videoLength, aspectRatio, audioUrl,
   bpm, musicalKey, energy,
   initialConversation, initialBrief, initialShotList,
   userId,
@@ -94,13 +74,15 @@ export default function DirectorClient({
   const getInitialPhase = (): Phase => {
     if (initialShotList && initialShotList.length > 0) return 3;
     if (initialBrief) return 2;
-    return 1;
+    if (initialConversation.length > 0) return 1;
+    return 0;
   };
 
-  const [phase,       setPhase]       = useState<Phase>(getInitialPhase);
-  const [messages,    setMessages]    = useState<ChatMessage[]>(initialConversation);
-  const [brief,       setBrief]       = useState<CreativeBrief | null>(initialBrief as CreativeBrief | null);
-  const [shotList,    setShotList]    = useState<ShotListScene[]>((initialShotList as ShotListScene[]) ?? []);
+  const [phase,          setPhase]          = useState<Phase>(getInitialPhase);
+  const [messages,       setMessages]       = useState<ChatMessage[]>(initialConversation);
+  const [brief,          setBrief]          = useState<CreativeBrief | null>(initialBrief as CreativeBrief | null);
+  const [shotList,       setShotList]       = useState<WorkflowScene[]>((initialShotList as WorkflowScene[]) ?? []);
+  const [selectedPreset, setSelectedPreset] = useState<VideoPreset | null>(null);
 
   // Chat state
   const [inputMsg,    setInputMsg]    = useState("");
@@ -112,49 +94,40 @@ export default function DirectorClient({
   const [genShotList, setGenShotList] = useState(false);
   const [shotListErr, setShotListErr] = useState<string | null>(null);
 
-  // Shot list phase
-  const [audioEl,     setAudioEl]     = useState<HTMLAudioElement | null>(null);
-  const [playing,     setPlaying]     = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [activeScene, setActiveScene] = useState<number | null>(null);
-  const [dragging,    setDragging]    = useState<number | null>(null);
-
   // Approval
   const [guestEmail,  setGuestEmail]  = useState("");
   const [approving,   setApproving]   = useState(false);
   const [approveErr,  setApproveErr]  = useState<string | null>(null);
+
+  // Saving scene edits
+  const [savingScene, setSavingScene] = useState(false);
 
   // Scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Audio playback tracker for shot list timeline
-  useEffect(() => {
-    if (!audioEl) return;
-    const handler = () => {
-      setCurrentTime(audioEl.currentTime);
-      const active = shotList.findIndex(
-        s => audioEl.currentTime >= s.startTime && audioEl.currentTime < s.endTime
-      );
-      setActiveScene(active >= 0 ? active : null);
-    };
-    audioEl.addEventListener("timeupdate", handler);
-    audioEl.addEventListener("ended",     () => setPlaying(false));
-    return () => { audioEl.removeEventListener("timeupdate", handler); };
-  }, [audioEl, shotList]);
-
   // ── Initial assistant greeting ───────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 1 || messages.length > 0) return;
-    // Auto-send a greeting to kick off the conversation
+    const presetContext = selectedPreset
+      ? ` I can see you're going for a **${selectedPreset.name}** feel — ${selectedPreset.description.toLowerCase()}. Let's customize this to make it uniquely yours.`
+      : "";
     const greeting: ChatMessage = {
       role:      "assistant",
-      content:   `I've analyzed "${trackTitle}"${bpm ? ` — ${bpm} BPM` : ""}${musicalKey ? `, key of ${musicalKey}` : ""}. Let's craft your vision.\n\nFirst question: what's the one feeling you want people to walk away with after watching this video?`,
+      content:   `I've analyzed "${trackTitle}"${bpm ? ` — ${bpm} BPM` : ""}${musicalKey ? `, key of ${musicalKey}` : ""}.${presetContext}\n\nFirst question: what's the one feeling you want people to walk away with after watching this video?`,
       createdAt: new Date().toISOString(),
     };
     setMessages([greeting]);
-  }, [phase, messages.length, trackTitle, bpm, musicalKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // ── Handle preset select ─────────────────────────────────────────────────────
+  function handlePresetSelect(preset: VideoPreset) {
+    setSelectedPreset(preset);
+    setMessages([]); // clear so greeting fires with preset context
+    setPhase(1);
+  }
 
   // ── Send chat message ─────────────────────────────────────────────────────────
   async function sendMessage() {
@@ -171,10 +144,19 @@ export default function DirectorClient({
     setSending(true);
 
     try {
+      const body: Record<string, unknown> = { message: userMsg.content };
+      if (selectedPreset) body.presetContext = {
+        name:           selectedPreset.name,
+        genre:          selectedPreset.genre,
+        moodArc:        selectedPreset.moodArc,
+        briefTemplate:  selectedPreset.briefTemplate,
+        cameraSequence: selectedPreset.cameraSequence,
+      };
+
       const res  = await fetch(`/api/video-studio/director/${id}/chat`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ message: userMsg.content }),
+        body:    JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setChatError(data.error ?? "Failed to send"); setSending(false); return; }
@@ -202,7 +184,13 @@ export default function DirectorClient({
     setGenShotList(true);
     setShotListErr(null);
     try {
-      const res  = await fetch(`/api/video-studio/director/${id}/shot-list`, { method: "POST" });
+      const body: Record<string, unknown> = {};
+      if (selectedPreset) body.cameraSequence = selectedPreset.cameraSequence;
+      const res  = await fetch(`/api/video-studio/director/${id}/shot-list`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
       const data = await res.json();
       if (!res.ok) { setShotListErr(data.error ?? "Failed to generate"); setGenShotList(false); return; }
       setShotList(data.shotList ?? []);
@@ -214,36 +202,24 @@ export default function DirectorClient({
     }
   }
 
-  // ── Drag-reorder shot list ────────────────────────────────────────────────────
-  function handleDragStart(idx: number) { setDragging(idx); }
-  function handleDragOver(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    if (dragging === null || dragging === idx) return;
-    const updated = [...shotList];
-    const [moved] = updated.splice(dragging, 1);
-    updated.splice(idx, 0, moved);
-    // Re-index
-    const reindexed = updated.map((s, i) => ({ ...s, index: i }));
-    setShotList(reindexed);
-    setDragging(idx);
-  }
-  function handleDragEnd() { setDragging(null); }
-
-  // ── Toggle audio playback ─────────────────────────────────────────────────────
-  function togglePlay() {
-    if (!audioEl) return;
-    if (playing) { audioEl.pause(); setPlaying(false); }
-    else          { audioEl.play();  setPlaying(true);  }
-  }
-
-  // ── Jump to scene time ────────────────────────────────────────────────────────
-  function jumpToScene(s: ShotListScene) {
-    if (!audioEl) return;
-    audioEl.currentTime = s.startTime;
-    audioEl.play();
-    setPlaying(true);
-    setActiveScene(s.index);
-  }
+  // ── Edit scene from WorkflowBoard ─────────────────────────────────────────────
+  const handleEditScene = useCallback(async (index: number, updates: Partial<WorkflowScene>) => {
+    // Optimistic update
+    setShotList(prev => prev.map((s, i) => i === index ? { ...s, ...updates } : s));
+    setSavingScene(true);
+    try {
+      const updated = shotList.map((s, i) => i === index ? { ...s, ...updates } : s);
+      await fetch(`/api/video-studio/director/${id}/shot-list/update`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ shotList: updated }),
+      });
+    } catch {
+      // non-fatal — local state already updated
+    } finally {
+      setSavingScene(false);
+    }
+  }, [id, shotList]);
 
   // ── Approve and generate ──────────────────────────────────────────────────────
   async function handleApprove() {
@@ -265,7 +241,6 @@ export default function DirectorClient({
         router.push(`/video-studio/${id}/generating`);
         return;
       }
-      // Has checkout URL
       if (data.url) {
         if (!userId && guestEmail.trim()) {
           document.cookie = `videoStudio_guest=${encodeURIComponent(JSON.stringify({ email: guestEmail.trim(), videoId: id }))}; max-age=604800; path=/`;
@@ -299,60 +274,79 @@ export default function DirectorClient({
             </div>
           </div>
 
-          {/* Phase indicator */}
-          <div className="flex items-center gap-3">
-            {([1, 2, 3] as Phase[]).map(p => (
-              <div key={p} className="flex items-center gap-1.5">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all"
-                  style={{
-                    backgroundColor: phase >= p ? "#D4A843" : "#1A1A1A",
-                    color:           phase >= p ? "#0A0A0A" : "#555",
-                    border:          `1px solid ${phase >= p ? "#D4A843" : "#2A2A2A"}`,
-                  }}
-                >
-                  {phase > p ? <Check size={10} /> : p}
+          {/* Phase indicator — only show for phases 1-3 */}
+          {phase > 0 && (
+            <div className="flex items-center gap-3">
+              {([1, 2, 3] as const).map(p => (
+                <div key={p} className="flex items-center gap-1.5">
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+                    style={{
+                      backgroundColor: phase >= p ? "#D4A843" : "#1A1A1A",
+                      color:           phase >= p ? "#0A0A0A" : "#555",
+                      border:          `1px solid ${phase >= p ? "#D4A843" : "#2A2A2A"}`,
+                    }}
+                  >
+                    {phase > p ? <Check size={10} /> : p}
+                  </div>
+                  {p < 3 && <div className="w-8 h-px" style={{ backgroundColor: phase > p ? "#D4A843" : "#2A2A2A" }} />}
                 </div>
-                {p < 3 && <div className="w-8 h-px" style={{ backgroundColor: phase > p ? "#D4A843" : "#2A2A2A" }} />}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
       <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
 
-        {/* Track info badge */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: "#1A1A1A" }}>
-            <Music2 size={12} style={{ color: "#D4A843" }} />
-            <span className="text-xs font-semibold text-white">{trackTitle}</span>
+        {/* ══════════════════════════════════════════════════════════════════════
+            PHASE 0 — Preset Picker
+            ══════════════════════════════════════════════════════════════════════ */}
+        {phase === 0 && (
+          <PresetPicker
+            onSelect={handlePresetSelect}
+            onScratch={() => { setSelectedPreset(null); setMessages([]); setPhase(1); }}
+          />
+        )}
+
+        {/* Track info badge — show for phases 1-3 */}
+        {phase > 0 && (
+          <div className="flex items-center gap-3 mb-8 flex-wrap">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: "#1A1A1A" }}>
+              <Music2 size={12} style={{ color: "#D4A843" }} />
+              <span className="text-xs font-semibold text-white">{trackTitle}</span>
+            </div>
+            {bpm && (
+              <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
+                <Activity size={11} /> {bpm} BPM
+              </div>
+            )}
+            {musicalKey && (
+              <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
+                <Music2 size={11} /> {musicalKey}
+              </div>
+            )}
+            {energy != null && (
+              <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
+                <Zap size={11} /> {Math.round(energy * 10)}/10
+              </div>
+            )}
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#1A1A1A", color: "#888" }}>
+              {lengthLabel}
+            </span>
+            {selectedPreset && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: "rgba(212,168,67,0.12)", color: "#D4A843" }}>
+                {selectedPreset.name}
+              </span>
+            )}
           </div>
-          {bpm && (
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
-              <Activity size={11} /> {bpm} BPM
-            </div>
-          )}
-          {musicalKey && (
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
-              <Music2 size={11} /> {musicalKey}
-            </div>
-          )}
-          {energy != null && (
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: "#666" }}>
-              <Zap size={11} /> {Math.round(energy * 10)}/10
-            </div>
-          )}
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#1A1A1A", color: "#888" }}>
-            {lengthLabel}
-          </span>
-        </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════════
             PHASE 1 — Chat with Claude
             ══════════════════════════════════════════════════════════════════════ */}
         {phase === 1 && (
-          <div className="flex flex-col h-[calc(100vh-240px)]">
+          <div className="flex flex-col h-[calc(100vh-280px)]">
             <div className="mb-4">
               <h1 className="text-2xl font-bold text-white">Let's build your vision</h1>
               <p className="text-sm mt-1" style={{ color: "#888" }}>
@@ -406,6 +400,14 @@ export default function DirectorClient({
               </p>
             )}
             <div className="flex gap-3 pt-3 border-t" style={{ borderColor: "#1E1E1E" }}>
+              <button
+                onClick={() => setPhase(0)}
+                className="flex items-center gap-1 text-xs px-3 py-3 rounded-xl border shrink-0 transition"
+                style={{ borderColor: "#2A2A2A", color: "#666" }}
+                title="Back to presets"
+              >
+                <ChevronLeft size={12} />
+              </button>
               <input
                 value={inputMsg}
                 onChange={e => setInputMsg(e.target.value)}
@@ -528,116 +530,48 @@ export default function DirectorClient({
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
-            PHASE 3 — Shot List + Timeline Preview
+            PHASE 3 — Workflow Board
             ══════════════════════════════════════════════════════════════════════ */}
         {phase === 3 && shotList.length > 0 && (
           <div className="space-y-6">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-white">Your Shot List</h1>
+                <h1 className="text-2xl font-bold text-white">Your Production Map</h1>
                 <p className="text-sm mt-1" style={{ color: "#888" }}>
-                  {shotList.length} scenes — drag to reorder, or approve to generate.
+                  {shotList.length} scenes ready — review each shot, adjust camera directions, then approve.
+                  {savingScene && <span className="ml-2 text-xs" style={{ color: "#666" }}>Saving…</span>}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPhase(2)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border"
-                  style={{ borderColor: "#2A2A2A", color: "#888" }}
-                >
-                  <ChevronLeft size={12} /> Brief
-                </button>
-              </div>
+              <button
+                onClick={() => setPhase(2)}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border shrink-0"
+                style={{ borderColor: "#2A2A2A", color: "#888" }}
+              >
+                <ChevronLeft size={12} /> Brief
+              </button>
             </div>
 
-            {/* Scene type legend — color indicators only */}
-            <div className="flex flex-wrap gap-2">
-              {Array.from(new Set(shotList.map(s => s.modelDisplay))).map(model => (
-                <div key={model} className="w-3 h-3 rounded-full" style={{ backgroundColor: MODEL_COLORS[model] ?? "#888" }} />
-              ))}
-            </div>
-
-            {/* Scene cards */}
-            <div className="space-y-2">
-              {shotList.map((scene, idx) => (
-                <div
-                  key={scene.index}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={e => handleDragOver(e, idx)}
-                  onDragEnd={handleDragEnd}
-                  className="rounded-xl border px-4 py-4 transition-all cursor-grab active:cursor-grabbing"
-                  style={{
-                    borderColor:     activeScene === idx ? "#D4A843" : dragging === idx ? "#444" : "#2A2A2A",
-                    backgroundColor: activeScene === idx ? "rgba(212,168,67,0.06)" : "#0F0F0F",
-                    opacity:         dragging !== null && dragging !== idx ? 0.7 : 1,
-                  }}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Drag handle */}
-                    <div className="mt-1 shrink-0" style={{ color: "#444" }}>
-                      <GripVertical size={14} />
-                    </div>
-
-                    {/* Scene number */}
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
-                      style={{ backgroundColor: MODEL_COLORS[scene.modelDisplay] ? `${MODEL_COLORS[scene.modelDisplay]}20` : "#1A1A1A", color: MODEL_COLORS[scene.modelDisplay] ?? "#888" }}
-                    >
-                      {idx + 1}
-                    </div>
-
-                    {/* Scene info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-white truncate">{scene.title}</p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs" style={{ color: "#666" }}>
-                            {scene.startTime.toFixed(1)}s – {scene.endTime.toFixed(1)}s
-                          </span>
-                          <button
-                            onClick={() => jumpToScene(scene)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center transition"
-                            style={{ backgroundColor: "#1A1A1A", color: "#D4A843" }}
-                          >
-                            <Play size={9} className="ml-0.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs mt-1 line-clamp-2" style={{ color: "#888" }}>{scene.description}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: MODEL_COLORS[scene.modelDisplay] ?? "#888" }} />
-                        </div>
-                        <span className="text-xs" style={{ color: "#555" }}>{scene.modelReason}</span>
-                        {scene.hasLipSync && (
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(167,139,250,0.15)", color: "#A78BFA" }}>
-                            Lip sync
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Timeline bar */}
-                  <div className="mt-3 ml-10 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "#1A1A1A" }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        backgroundColor: MODEL_COLORS[scene.modelDisplay] ?? "#D4A843",
-                        opacity:         activeScene === idx ? 1 : 0.5,
-                        width:           "100%",
-                        transform:       activeScene === idx && audioEl
-                          ? `scaleX(${Math.min((currentTime - scene.startTime) / (scene.endTime - scene.startTime), 1)})`
-                          : "scaleX(0)",
-                        transformOrigin: "left",
-                        transition:      "transform 0.2s linear",
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Workflow Board */}
+            <WorkflowBoard
+              trackTitle={trackTitle}
+              trackDuration={trackDuration}
+              bpm={bpm}
+              musicalKey={musicalKey}
+              audioUrl={audioUrl}
+              brief={brief ? {
+                title:          brief.title,
+                logline:        brief.logline,
+                tone:           brief.tone,
+                cinematography: brief.cinematography,
+                colorPalette:   brief.colorPalette,
+              } : null}
+              onEditBrief={() => setPhase(2)}
+              shotList={shotList}
+              clips={[]}
+              videoStatus="PLANNING"
+              videoId={id}
+              onEditScene={handleEditScene}
+            />
 
             {/* Approve section */}
             <div className="rounded-2xl border p-5 space-y-4" style={{ borderColor: "#2A2A2A", backgroundColor: "#0F0F0F" }}>
