@@ -2723,6 +2723,9 @@ model MusicVideo {
   stripePaymentId String?
   amount          Int      // cents — what the user paid (0 for included credits)
 
+  // Director Mode regen flag (one free redo per video)
+  sceneRegenUsed  Boolean  @default(false)
+
   // Progress tracking
   progress        Int      @default(0)  // 0-100
   currentStep     String?  // human-readable step description

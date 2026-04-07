@@ -6,49 +6,39 @@
  * Orchestrates the full production pipeline for a MusicVideo record:
  *   1. ANALYZING  — detect BPM/key/energy, build section map
  *   2. PLANNING   — assign models + prompts to each scene
- *   3. GENERATING — generate each scene clip via fal.ai (parallel)
- *   4. STITCHING  — stitch clips into final video
- *   5. COMPLETE   — update record with output URLs
+ *   3. GENERATING — generate each scene clip via fal.ai (parallel, max 3)
+ *   4. STITCHING  — stitch clips into final video via Remotion Lambda
+ *   5. COMPLETE   — update record with output URLs + send notification email
  *
  * Called from:
  *   - POST /api/video-studio/stripe/webhook (payment confirmed)
  *   - POST /api/video-studio/create (subscriber with included credit)
+ *   - POST /api/video-studio/[id]/generate (manual trigger)
  */
 
 import { db }                   from "@/lib/db";
 import { fal }                  from "@fal-ai/client";
 import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
+import { sendMusicVideoCompleteEmail } from "@/lib/brevo/email";
 import type { MusicVideo }      from "@prisma/client";
 import {
   routeScene,
   inferSceneType,
   type SceneSpec,
 } from "@/lib/video-studio/model-router";
-
-// UTApi reserved for future upload-to-UT operations (scene thumbnails, etc.)
+import {
+  generateAllScenes,
+  generateCharacterPortrait,
+  generateMultiFormatVideos,
+  pickThumbnailScene,
+  type PlannedSceneInput,
+  type GeneratedSceneOutput,
+} from "@/lib/video-studio/generator";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface GeneratedScene {
-  sceneIndex:    number;
-  videoUrl:      string;
-  model:         string;
-  prompt:        string;
-  startTime:     number;
-  endTime:       number;
-  thumbnailUrl?: string;
-}
-
-interface PlannedScene {
-  index:       number;
-  model:       string;
-  prompt:      string;
-  startTime:   number;
-  endTime:     number;
-  duration:    number;
-  aspectRatio: string;
-  spec:        SceneSpec;
-}
+// Re-export for backward compatibility
+export type { PlannedSceneInput as PlannedScene, GeneratedSceneOutput as GeneratedScene };
 
 // ─── Progress helper ────────────────────────────────────────────────────────────
 
@@ -84,20 +74,20 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data:  {
-        status:         "PLANNING",
-        progress:       20,
-        currentStep:    "Planning your video…",
-        bpm:            Math.round(analysis.bpm),
-        musicalKey:     analysis.key,
-        energy:         analysis.energy,
-        lyrics:         analysis.lyrics ?? null,
+        status:          "PLANNING",
+        progress:        20,
+        currentStep:     "Planning your video…",
+        bpm:             Math.round(analysis.bpm),
+        musicalKey:      analysis.key,
+        energy:          analysis.energy,
+        lyrics:          analysis.lyrics ?? null,
         lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
-        songStructure:  analysis as object,
+        songStructure:   analysis as object,
       },
     });
 
     // ── Phase 2: Plan scenes ─────────────────────────────────────────────────
-    const videoLength = vid.videoLength; // SHORT | STANDARD | EXTENDED
+    const videoLength = vid.videoLength;
     const aspectRatio = vid.aspectRatio;
     const styleName   = vid.style ?? "Cinematic Noir";
     const mode        = (vid.mode as "QUICK" | "DIRECTOR") ?? "QUICK";
@@ -111,7 +101,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
 
     // Map sections → planned scenes
     const sections    = analysis.sections ?? [];
-    const plannedScenes: PlannedScene[] = sections.slice(0, getSceneLimit(videoLength)).map((section, idx) => {
+    const plannedScenes: PlannedSceneInput[] = sections.slice(0, getSceneLimit(videoLength)).map((section, idx) => {
       const hasLyrics = !!section.lyrics;
       const sceneType = inferSceneType(section.type, section.energy, hasLyrics);
       const spec: SceneSpec = {
@@ -141,6 +131,10 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
 
     if (plannedScenes.length === 0) {
       // Fallback: one scene for the whole track
+      const defaultSpec: SceneSpec = {
+        type: "performance", hasLipSync: false, hasFastMotion: false,
+        hasMultipleCharacters: false, characterRefs: [], energyLevel: 0.5, duration: 8,
+      };
       plannedScenes.push({
         index:       0,
         model:       "fal-ai/kling-video/v3/pro/image-to-video",
@@ -149,10 +143,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         endTime:     vid.trackDuration,
         duration:    Math.min(vid.trackDuration, 8),
         aspectRatio,
-        spec: {
-          type: "performance", hasLipSync: false, hasFastMotion: false,
-          hasMultipleCharacters: false, characterRefs: [], energyLevel: 0.5, duration: 8,
-        },
+        spec:        defaultSpec,
       });
     }
 
@@ -160,60 +151,52 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       status: "GENERATING",
     });
 
-    // ── Phase 3: Generate scenes in parallel (max 3 concurrent) ─────────────
+    // ── Phase 3: Character portrait (if reference image provided) ────────────
     const falKey = process.env.FAL_KEY;
     if (!falKey) throw new Error("FAL_KEY not configured");
     fal.config({ credentials: falKey });
 
-    const sceneResults: GeneratedScene[] = [];
-    const concurrency = 3;
-    const chunks = chunkArray(plannedScenes, concurrency);
-
-    let completedCount = 0;
-    for (const chunk of chunks) {
-      const chunkResults = await Promise.allSettled(
-        chunk.map(scene => generateScene(scene, vid.thumbnailUrl ?? undefined))
-      );
-
-      for (let i = 0; i < chunkResults.length; i++) {
-        const result = chunkResults[i];
-        const scene  = chunk[i];
-        if (result.status === "fulfilled") {
-          sceneResults.push(result.value);
-        } else {
-          console.error(`[video-studio] scene ${scene.index} failed:`, result.reason);
-          // Push a placeholder so downstream doesn't skip this index
-          sceneResults.push({
-            sceneIndex: scene.index,
-            videoUrl:   "",
-            model:      scene.model,
-            prompt:     scene.prompt,
-            startTime:  scene.startTime,
-            endTime:    scene.endTime,
-          });
-        }
+    let characterPortraitUrl: string | undefined;
+    if (vid.thumbnailUrl && plannedScenes.some(s => s.spec.characterRefs.length > 0 || s.spec.hasLipSync)) {
+      try {
+        characterPortraitUrl = await generateCharacterPortrait(vid.thumbnailUrl, stylePrompt);
+        await setProgress(musicVideoId, 27, "Character portrait generated…");
+      } catch (err) {
+        console.warn("[video-studio] Character portrait failed — continuing without:", err);
       }
-
-      completedCount += chunk.length;
-      const genProgress = 25 + Math.round((completedCount / plannedScenes.length) * 50);
-      await setProgress(musicVideoId, genProgress,
-        `Generated ${completedCount}/${plannedScenes.length} scenes…`);
     }
 
-    // ── Phase 4: Stitch scenes ────────────────────────────────────────────────
-    await setProgress(musicVideoId, 80, "Stitching your video…", { status: "STITCHING" });
+    // ── Phase 4: Generate scenes in parallel (max 3 concurrent) ─────────────
+    const sceneResults: GeneratedSceneOutput[] = await generateAllScenes(
+      plannedScenes,
+      characterPortraitUrl ?? vid.thumbnailUrl ?? undefined,
+      vid.audioUrl,
+      async (completed, total) => {
+        const genProgress = 28 + Math.round((completed / total) * 45);
+        await setProgress(musicVideoId, genProgress,
+          `Generated ${completed}/${total} scenes…`);
+      },
+    );
 
-    // Upload scene data back to DB
-    const validScenes = sceneResults.filter(s => s.videoUrl);
+    // ── Phase 5: Stitch via Remotion Lambda ───────────────────────────────────
+    await setProgress(musicVideoId, 75, "Stitching your video…", { status: "STITCHING" });
 
-    // For now: use the first valid scene URL as the final video
-    // (full FFmpeg stitching is wired in the production background worker)
-    const finalVideoUrl = validScenes[0]?.videoUrl ?? null;
+    const durationMs       = Math.round(vid.trackDuration * 1000);
+    const targetAspectRatios = [aspectRatio]; // extend to ["16:9","9:16","1:1"] for multi-format
 
-    // Build multi-format output object
-    const finalVideoUrls = finalVideoUrl
-      ? { [aspectRatio]: finalVideoUrl }
-      : null;
+    const finalVideoUrls = await generateMultiFormatVideos(
+      musicVideoId,
+      sceneResults,
+      vid.audioUrl,
+      targetAspectRatios,
+      durationMs,
+    );
+
+    const finalVideoUrl = finalVideoUrls[aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+
+    // Thumbnail — highest-energy scene URL
+    const thumbScene    = pickThumbnailScene(sceneResults);
+    const thumbnailUrl  = thumbScene?.videoUrl ?? vid.thumbnailUrl ?? null;
 
     await db.musicVideo.update({
       where: { id: musicVideoId },
@@ -223,9 +206,45 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         currentStep:    "Complete!",
         scenes:         sceneResults as object[],
         finalVideoUrl:  finalVideoUrl ?? undefined,
-        finalVideoUrls: finalVideoUrls as object | undefined,
+        finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
+        thumbnailUrl:   thumbnailUrl ?? undefined,
       },
     });
+
+    // ── Notification email ────────────────────────────────────────────────────
+    try {
+      // Look up the owner's email
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+      const previewUrl = `${appUrl}/video-studio/${musicVideoId}/preview`;
+
+      if (vid.userId) {
+        const user = await db.user.findUnique({
+          where:  { id: vid.userId },
+          select: { email: true, name: true, artistSlug: true },
+        });
+        if (user?.email) {
+          await sendMusicVideoCompleteEmail({
+            toEmail:    user.email,
+            toName:     user.name ?? "Artist",
+            trackTitle: vid.trackTitle,
+            previewUrl,
+            mode:       mode,
+            artistSlug: user.artistSlug ?? undefined,
+          });
+        }
+      } else if (vid.guestEmail) {
+        await sendMusicVideoCompleteEmail({
+          toEmail:    vid.guestEmail,
+          toName:     "Artist",
+          trackTitle: vid.trackTitle,
+          previewUrl,
+          mode:       mode,
+        });
+      }
+    } catch (emailErr) {
+      // Email failure is non-fatal
+      console.warn("[video-studio] notification email failed:", emailErr);
+    }
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -236,62 +255,6 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         data:  { status: "FAILED", errorMessage: msg, progress: 0 },
       });
     } catch { /* DB error during error handling — swallow */ }
-  }
-}
-
-// ─── Scene generation ────────────────────────────────────────────────────────────
-
-async function generateScene(
-  scene: PlannedScene,
-  referenceImageUrl?: string,
-): Promise<GeneratedScene> {
-  type FalInput = {
-    prompt: string;
-    duration?: number;
-    aspect_ratio?: string;
-    image_url?: string;
-  };
-
-  const input: FalInput = {
-    prompt:       scene.prompt,
-    duration:     Math.round(scene.duration),
-    aspect_ratio: scene.aspectRatio === "9:16" ? "9:16"
-                : scene.aspectRatio === "1:1"  ? "1:1"
-                : "16:9",
-  };
-
-  if (referenceImageUrl) input.image_url = referenceImageUrl;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await fal.subscribe(scene.model as any, {
-    input,
-    pollInterval: 4000,
-    logs:         false,
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const output    = (result as any).data ?? result;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const videoUrl  = (output as any)?.video?.url ?? (output as any)?.url ?? "";
-
-  return {
-    sceneIndex: scene.index,
-    videoUrl,
-    model:      scene.model,
-    prompt:     scene.prompt,
-    startTime:  scene.startTime,
-    endTime:    scene.endTime,
-  };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────────
-
-function getSceneLimit(videoLength: string): number {
-  switch (videoLength) {
-    case "SHORT":    return 4;
-    case "STANDARD": return 7;
-    case "EXTENDED": return 10;
-    default:         return 7;
   }
 }
 
@@ -337,10 +300,99 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
   }
 }
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
+// ─── Scene regeneration (Director Mode — one free redo per video) ──────────────────
+
+/**
+ * Re-generates a single scene clip and replaces it in the scenes array,
+ * then re-stitches the full video. Used by the "Review + Refine" panel.
+ */
+export async function regenerateScene(
+  musicVideoId: string,
+  sceneIndex:   number,
+): Promise<void> {
+  const video = await db.musicVideo.findUnique({ where: { id: musicVideoId } });
+  if (!video) throw new Error("Video not found");
+  if (video.status !== "COMPLETE") throw new Error("Video is not in COMPLETE state");
+
+  const existingScenes = (video.scenes as GeneratedSceneOutput[] | null) ?? [];
+  const sceneToRegen   = existingScenes.find(s => s.sceneIndex === sceneIndex);
+  if (!sceneToRegen) throw new Error(`Scene ${sceneIndex} not found`);
+
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) throw new Error("FAL_KEY not configured");
+  fal.config({ credentials: falKey });
+
+  // Re-generate just this scene using its original prompt + model
+  const plannedScene: PlannedSceneInput = {
+    index:       sceneIndex,
+    model:       sceneToRegen.model,
+    prompt:      sceneToRegen.prompt,
+    startTime:   sceneToRegen.startTime,
+    endTime:     sceneToRegen.endTime,
+    duration:    sceneToRegen.endTime - sceneToRegen.startTime,
+    aspectRatio: video.aspectRatio,
+    spec: {
+      type:                  "performance",
+      hasLipSync:            false,
+      hasFastMotion:         false,
+      hasMultipleCharacters: false,
+      characterRefs:         [],
+      energyLevel:           sceneToRegen.energyLevel ?? 0.5,
+      duration:              sceneToRegen.endTime - sceneToRegen.startTime,
+    },
+  };
+
+  const [regenResult] = await generateAllScenes(
+    [plannedScene],
+    video.thumbnailUrl ?? undefined,
+    video.audioUrl,
+  );
+
+  if (!regenResult.videoUrl) throw new Error("Scene regeneration returned no video URL");
+
+  // Replace scene in array
+  const updatedScenes = existingScenes.map(s =>
+    s.sceneIndex === sceneIndex ? { ...s, videoUrl: regenResult.videoUrl } : s
+  );
+
+  // Re-stitch
+  await db.musicVideo.update({
+    where: { id: musicVideoId },
+    data:  { status: "STITCHING", progress: 80, currentStep: "Re-stitching your video…" },
+  });
+
+  const durationMs      = Math.round(video.trackDuration * 1000);
+  const finalVideoUrls  = await generateMultiFormatVideos(
+    musicVideoId,
+    updatedScenes,
+    video.audioUrl,
+    [video.aspectRatio],
+    durationMs,
+  );
+
+  const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+
+  await db.musicVideo.update({
+    where: { id: musicVideoId },
+    data:  {
+      status:         "COMPLETE",
+      progress:       100,
+      currentStep:    "Complete!",
+      scenes:         updatedScenes as object[],
+      finalVideoUrl:  finalVideoUrl ?? undefined,
+      finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
+      sceneRegenUsed: true,
+    },
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────────
+
+function getSceneLimit(videoLength: string): number {
+  switch (videoLength) {
+    case "SHORT":    return 4;
+    case "STANDARD": return 7;
+    case "EXTENDED": return 10;
+    default:         return 7;
   }
-  return chunks;
 }

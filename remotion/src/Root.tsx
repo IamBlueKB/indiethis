@@ -4,6 +4,8 @@ import { LyricVideoWithOutro } from "./LyricVideoWithOutro";
 import type { LyricVideoProps } from "./LyricVideoContent";
 import { TrackCanvas } from "./TrackCanvas";
 import type { TrackCanvasProps } from "./TrackCanvas";
+import { MusicVideoComposition } from "./MusicVideoComposition";
+import type { MusicVideoProps } from "./MusicVideoComposition";
 
 // ─── Video dimensions keyed by aspect ratio ───────────────────────────────────
 
@@ -37,6 +39,14 @@ const DEFAULT_CANVAS_PROPS: TrackCanvasProps = {
   accentColor: "#D4A843",
 };
 
+const DEFAULT_MUSIC_VIDEO_PROPS: MusicVideoProps = {
+  scenes:      [],
+  audioUrl:    "",
+  aspectRatio: "16:9",
+  durationMs:  180000,
+  crossfadeMs: 500,
+};
+
 export function Root() {
   return (
     <>
@@ -49,6 +59,25 @@ export function Root() {
       height={1920}
       durationInFrames={180}
       defaultProps={DEFAULT_CANVAS_PROPS}
+    />
+
+    {/* ── Music Video ── */}
+    <Composition
+      id="MusicVideoComposition"
+      component={MusicVideoComposition as unknown as React.ComponentType<Record<string, unknown>>}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={Math.ceil((DEFAULT_MUSIC_VIDEO_PROPS.durationMs / 1000) * 30)}
+      defaultProps={DEFAULT_MUSIC_VIDEO_PROPS}
+      calculateMetadata={async ({ props }) => {
+        const p     = props as unknown as MusicVideoProps;
+        const ratio = p.aspectRatio ?? "16:9";
+        const dim   = DIM_MAP[ratio] ?? DIM_MAP["16:9"];
+        const durationMs    = p.durationMs ?? 180000;
+        const totalFrames   = Math.ceil((durationMs / 1000) * 30);
+        return { ...dim, durationInFrames: totalFrames };
+      }}
     />
 
     {/* ── Lyric Video ── */}

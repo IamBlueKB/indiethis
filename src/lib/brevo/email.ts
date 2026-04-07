@@ -2019,6 +2019,37 @@ export async function sendLyricVideoCompleteEmail(params: {
   });
 }
 
+export async function sendMusicVideoCompleteEmail(params: {
+  toEmail:     string;
+  toName:      string;
+  trackTitle:  string;
+  previewUrl:  string;
+  mode:        "QUICK" | "DIRECTOR";
+  artistSlug?: string;
+}): Promise<void> {
+  const modeLabel = params.mode === "DIRECTOR" ? "Director Mode" : "Quick Mode";
+  await sendBrandedEmail({
+    to:      { email: params.toEmail, name: params.toName },
+    subject: `Your music video is ready — "${params.trackTitle}"`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Music Video is Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 8px;">
+        Your ${modeLabel} music video for
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> has been generated.
+      </p>
+      <p style="color:#888;font-size:13px;line-height:1.6;margin:0 0 20px;">
+        Watch it, download the MP4, or share the link directly from your preview page.
+      </p>
+      <a href="${params.previewUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Watch Your Video &rarr;
+      </a>
+    `,
+    context:  "MUSIC_VIDEO_COMPLETE",
+    userData: { artistSlug: params.artistSlug },
+    tags:     ["ai", "music-video", "complete"],
+  });
+}
+
 export async function sendPressKitCompleteEmail(params: {
   artistEmail:  string;
   artistName:   string;
