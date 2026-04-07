@@ -42,8 +42,9 @@ type VideoLength  = "SHORT" | "STANDARD" | "EXTENDED";
 type AspectRatio  = "16:9" | "9:16" | "1:1";
 
 interface Props {
-  userId:   string | null;
-  userTier: string | null;
+  userId:      string | null;
+  userTier:    string | null;
+  initialMode?: "QUICK" | "DIRECTOR";
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -87,11 +88,11 @@ function fmtPrice(cents: number): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function VideoStudioClient({ userId, userTier }: Props) {
+export default function VideoStudioClient({ userId, userTier, initialMode }: Props) {
   const router = useRouter();
 
   // Wizard state
-  const [mode,    setMode]    = useState<WizardMode>("QUICK");
+  const [mode,    setMode]    = useState<WizardMode>(initialMode ?? "QUICK");
   const [step,    setStep]    = useState<1 | 2 | 3>(1);
 
   // Step 1 — track selection
