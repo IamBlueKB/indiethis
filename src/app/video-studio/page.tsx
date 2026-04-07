@@ -74,10 +74,14 @@ export default async function VideoStudioPage({
     userTier = sub?.tier ?? null;
   }
 
-  const initialMode = sp.mode === "DIRECTOR" ? "DIRECTOR" : sp.mode === "QUICK" ? "QUICK" : undefined;
+  const initialMode     = sp.mode === "DIRECTOR" ? "DIRECTOR" : sp.mode === "QUICK" ? "QUICK" : undefined;
+  const initialCoverArtUrl = sp.coverArtUrl ? decodeURIComponent(sp.coverArtUrl) : undefined;
 
   // If user came via ?start=1 (from landing CTAs or direct link), show the wizard
-  if (startWizard) {
+  // Also show wizard directly if coverArtUrl was passed from cover art studio
+  const showWizard = startWizard || !!initialCoverArtUrl;
+
+  if (showWizard) {
     // Non-authenticated users must pass through the gate screen first.
     // Gate is skipped if: (a) user is authenticated, OR (b) guest cookie already set.
     const cookieStore = await cookies();
@@ -105,6 +109,7 @@ export default async function VideoStudioPage({
         userTier={userTier}
         initialMode={initialMode}
         initialGuestEmail={initialGuestEmail}
+        initialCoverArtUrl={initialCoverArtUrl}
       />
     );
   }

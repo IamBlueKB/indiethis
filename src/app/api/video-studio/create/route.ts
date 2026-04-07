@@ -39,20 +39,22 @@ export async function POST(req: NextRequest) {
     const userId  = session?.user?.id ?? null;
 
     const body = await req.json() as {
-      audioUrl:      string;
-      trackTitle:    string;
-      trackDuration: number;
-      trackId?:      string;
-      mode:          string;
-      videoLength:   string;
-      style:         string;
-      aspectRatio:   string;
-      guestEmail?:   string;
+      audioUrl:       string;
+      trackTitle:     string;
+      trackDuration:  number;
+      trackId?:       string;
+      mode:           string;
+      videoLength:    string;
+      style:          string;
+      aspectRatio:    string;
+      guestEmail?:    string;
+      characterRefs?: string[]; // pre-seeded from cover art studio or Director Mode uploads
     };
 
     const {
       audioUrl, trackTitle, trackDuration, trackId,
       mode, videoLength, style, aspectRatio, guestEmail,
+      characterRefs,
     } = body;
 
     if (!audioUrl || !trackTitle || !trackDuration) {
@@ -100,19 +102,20 @@ export async function POST(req: NextRequest) {
     // ── Create record ────────────────────────────────────────────────────────
     const video = await db.musicVideo.create({
       data: {
-        userId:        userId ?? undefined,
-        guestEmail:    guestEmail ?? undefined,
-        trackId:       trackId ?? undefined,
+        userId:         userId ?? undefined,
+        guestEmail:     guestEmail ?? undefined,
+        trackId:        trackId ?? undefined,
         trackTitle,
-        trackDuration: Math.round(trackDuration),
+        trackDuration:  Math.round(trackDuration),
         audioUrl,
         mode,
         videoLength,
         style,
         aspectRatio,
-        status:        "PENDING",
+        status:         "PENDING",
         amount,
-        progress:      0,
+        progress:       0,
+        characterRefs:  characterRefs && characterRefs.length > 0 ? characterRefs : undefined,
       },
     });
 

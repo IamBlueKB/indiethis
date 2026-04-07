@@ -42,10 +42,11 @@ type VideoLength  = "SHORT" | "STANDARD" | "EXTENDED";
 type AspectRatio  = "16:9" | "9:16" | "1:1";
 
 interface Props {
-  userId:             string | null;
-  userTier:           string | null;
-  initialMode?:       "QUICK" | "DIRECTOR";
-  initialGuestEmail?: string;
+  userId:                string | null;
+  userTier:              string | null;
+  initialMode?:          "QUICK" | "DIRECTOR";
+  initialGuestEmail?:    string;
+  initialCoverArtUrl?:   string; // pre-seeded from cover art studio
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -89,12 +90,15 @@ function fmtPrice(cents: number): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function VideoStudioClient({ userId, userTier, initialMode, initialGuestEmail }: Props) {
+export default function VideoStudioClient({ userId, userTier, initialMode, initialGuestEmail, initialCoverArtUrl }: Props) {
   const router = useRouter();
 
   // Wizard state
   const [mode,    setMode]    = useState<WizardMode>(initialMode ?? "QUICK");
   const [step,    setStep]    = useState<1 | 2 | 3>(1);
+
+  // Cover art pre-seeded from cover art studio
+  const [coverArtRefUrl, setCoverArtRefUrl] = useState<string | null>(initialCoverArtUrl ?? null);
 
   // Step 1 — track selection
   const [audioUrl,       setAudioUrl]       = useState("");
@@ -216,6 +220,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
           style:         selectedStyle,
           aspectRatio,
           guestEmail:    !userId ? guestEmail.trim() : undefined,
+          characterRefs: coverArtRefUrl ? [coverArtRefUrl] : undefined,
         }),
       });
 
@@ -508,6 +513,20 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               </p>
             </div>
 
+            {/* Cover art ref banner */}
+            {coverArtRefUrl && (
+              <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "#2A2A2A", backgroundColor: "rgba(212,168,67,0.06)" }}>
+                <img src={coverArtRefUrl} alt="Cover art" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>Cover art added</p>
+                  <p className="text-[11px] mt-0.5 truncate" style={{ color: "#888" }}>Your cover art will be passed to the director as a visual reference</p>
+                </div>
+                <button onClick={() => setCoverArtRefUrl(null)} className="shrink-0" style={{ color: "#666" }}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Category tabs */}
             <div className="flex gap-2 flex-wrap">
               {CATEGORIES.map(cat => (
@@ -721,6 +740,17 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
                   </div>
                 </div>
               </div>
+
+              {/* Cover art ref (if pre-seeded) */}
+              {coverArtRefUrl && (
+                <div className="flex items-center gap-3 px-5 py-4">
+                  <img src={coverArtRefUrl} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#666" }}>Cover Art Ref</p>
+                    <p className="text-sm font-bold text-white">Included as visual reference</p>
+                  </div>
+                </div>
+              )}
 
               {/* Price */}
               <div className="flex items-center justify-between px-5 py-4" style={{ backgroundColor: "rgba(212,168,67,0.04)" }}>
