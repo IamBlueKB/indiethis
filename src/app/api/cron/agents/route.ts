@@ -298,15 +298,20 @@ export async function POST(req: NextRequest) {
   const shouldRunVideoConversion = await shouldRun("VIDEO_CONVERSION", 22); // 22h guard
   if (shouldRunVideoConversion) {
     try {
-      const { runVideoConversionAgent } = await import("@/lib/agents/video-conversion");
+      const { runVideoConversionAgent, runAbandonedCartAgent } = await import("@/lib/agents/video-conversion");
       await logAgentAction("VIDEO_CONVERSION", "AGENT_RUN_START");
       const result = await runVideoConversionAgent();
       results.videoConversion = `acted=${result.acted} (e1=${result.email1} e2=${result.email2} e3=${result.email3} e4=${result.email4} stopped=${result.stopped})`;
+
+      // Abandoned cart runs on the same cadence
+      const cartResult = await runAbandonedCartAgent();
+      results.abandonedCart = `checked=${cartResult.checked} sent=${cartResult.sent} skipped=${cartResult.skipped}`;
     } catch (err) {
       results.videoConversion = `error: ${String(err)}`;
     }
   } else {
     results.videoConversion = "skipped (not due)";
+    results.abandonedCart   = "skipped (not due)";
   }
 
   return NextResponse.json({

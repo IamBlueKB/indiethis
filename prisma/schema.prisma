@@ -2733,6 +2733,7 @@ model MusicVideo {
   conversionPromoCode String?               // Stripe promo code string for Email 4
   conversionDone      Boolean  @default(false)
   conversionAnyOpened Boolean  @default(false) // true once a link in any email was clicked
+  abandonedCartSent   Boolean  @default(false)  // true once abandoned-cart recovery email sent
 
   // Progress tracking
   progress        Int      @default(0)  // 0-100

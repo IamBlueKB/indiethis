@@ -10,10 +10,12 @@
  */
 
 import { Metadata }          from "next";
+import { cookies }           from "next/headers";
 import { auth }              from "@/lib/auth";
 import { db }                from "@/lib/db";
 import VideoStudioClient     from "./VideoStudioClient";
 import VideoStudioLanding    from "./VideoStudioLanding";
+import GateScreen            from "./GateScreen";
 
 // ─── OG Metadata ────────────────────────────────────────────────────────────────
 
@@ -72,13 +74,37 @@ export default async function VideoStudioPage({
     userTier = sub?.tier ?? null;
   }
 
+  const initialMode = sp.mode === "DIRECTOR" ? "DIRECTOR" : sp.mode === "QUICK" ? "QUICK" : undefined;
+
   // If user came via ?start=1 (from landing CTAs or direct link), show the wizard
   if (startWizard) {
+    // Non-authenticated users must pass through the gate screen first.
+    // Gate is skipped if: (a) user is authenticated, OR (b) guest cookie already set.
+    const cookieStore = await cookies();
+    const guestCookie = cookieStore.get("indiethis_guest_email")?.value;
+
+    if (!userId && !guestCookie) {
+      // Show gate — collect email before entering wizard
+      return <GateScreen initialMode={initialMode} />;
+    }
+
+    // Parse guest email from cookie for pre-filling Step 3
+    let initialGuestEmail: string | undefined;
+    if (guestCookie) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(guestCookie)) as { email?: string };
+        initialGuestEmail = parsed.email ?? undefined;
+      } catch {
+        // Malformed cookie — ignore; gate will collect email at Step 3
+      }
+    }
+
     return (
       <VideoStudioClient
         userId={userId}
         userTier={userTier}
-        initialMode={sp.mode === "DIRECTOR" ? "DIRECTOR" : sp.mode === "QUICK" ? "QUICK" : undefined}
+        initialMode={initialMode}
+        initialGuestEmail={initialGuestEmail}
       />
     );
   }

@@ -439,3 +439,129 @@ async function sendEmail4(video: {
     tags:    ["video-conversion", "email4", "promo"],
   });
 }
+
+// ─── Abandoned Cart Agent ─────────────────────────────────────────────────────
+//
+// Fires once for any MusicVideo where:
+//   - guestEmail is set (non-subscriber collected email via gate)
+//   - status is PENDING (wizard started but payment never completed)
+//   - createdAt > 24 hours ago
+//   - abandonedCartSent is false
+//
+// Sends one "Your music video is waiting" email with a resume link.
+// Resume link: /video-studio?resume=[id] — VideoStudioClient reads this to pre-fill
+// the wizard with the track/style/format from the saved record.
+
+export interface AbandonedCartResult {
+  checked:  number;
+  sent:     number;
+  skipped:  number;
+}
+
+export async function runAbandonedCartAgent(): Promise<AbandonedCartResult> {
+  const result: AbandonedCartResult = { checked: 0, sent: 0, skipped: 0 };
+
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
+  const maxAge = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7d ago — don't bother after a week
+
+  const abandoned = await db.musicVideo.findMany({
+    where: {
+      guestEmail:        { not: null },
+      status:            "PENDING",
+      abandonedCartSent: false,
+      createdAt:         { lte: cutoff, gte: maxAge },
+    },
+    select: {
+      id:         true,
+      trackTitle: true,
+      guestEmail: true,
+      mode:       true,
+      style:      true,
+      aspectRatio: true,
+      createdAt:  true,
+    },
+  });
+
+  result.checked = abandoned.length;
+
+  for (const video of abandoned) {
+    const { guestEmail } = video;
+    if (!guestEmail) { result.skipped++; continue; }
+
+    try {
+      // Check if email already converted (signed up + subscribed)
+      const isSubscriber = await db.user.findFirst({
+        where:  { email: guestEmail, subscription: { status: "ACTIVE" } },
+        select: { id: true },
+      });
+      if (isSubscriber) {
+        // Mark sent so we don't check again
+        await db.musicVideo.update({
+          where: { id: video.id },
+          data:  { abandonedCartSent: true },
+        });
+        result.skipped++;
+        continue;
+      }
+
+      const base      = APP_URL();
+      const resumeUrl = `${base}/video-studio?start=1&resume=${video.id}&mode=${video.mode}`;
+
+      await sendBrandedEmail({
+        to:      { email: guestEmail, name: "Artist" },
+        subject: `Your music video is waiting — "${video.trackTitle}"`,
+        primaryContent: `
+          <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 12px;">You started something. Let's finish it. 🎬</h1>
+          <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+            You uploaded your track <strong style="color:#fff;">&ldquo;${video.trackTitle}&rdquo;</strong>
+            to the Music Video Studio — but your video never started generating.
+          </p>
+          <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px;">
+            Your settings are saved. Pick up right where you left off:
+          </p>
+
+          <a href="${resumeUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;margin-bottom:28px;">
+            Resume My Video &rarr;
+          </a>
+
+          <div style="background:#0F0F0F;border:1px solid #2A2A2A;border-radius:12px;padding:16px;margin-bottom:20px;">
+            <p style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Your session</p>
+            <p style="color:#fff;font-size:14px;font-weight:600;margin:0 0 4px;">${video.trackTitle}</p>
+            <p style="color:#888;font-size:12px;margin:0;">
+              ${video.mode === "DIRECTOR" ? "Director Mode" : "Quick Mode"}
+              ${video.style ? ` &middot; ${video.style} style` : ""}
+              ${video.aspectRatio ? ` &middot; ${video.aspectRatio}` : ""}
+            </p>
+          </div>
+
+          <p style="color:#888;font-size:12px;line-height:1.6;margin:0 0 0;">
+            Quick Mode videos start at <strong style="color:#D4A843;">$14.99</strong> and are ready in about 15 minutes.
+            No account needed — just complete checkout and we&apos;ll email you the finished MP4.
+          </p>
+        `,
+        context: "ABANDONED_CART",
+        tags:    ["abandoned-cart", "video-studio"],
+      });
+
+      await db.musicVideo.update({
+        where: { id: video.id },
+        data:  { abandonedCartSent: true },
+      });
+
+      await logAgentAction("VIDEO_CONVERSION", "ABANDONED_CART_SENT", "MusicVideo", video.id, {
+        email:      guestEmail,
+        trackTitle: video.trackTitle,
+      });
+
+      result.sent++;
+    } catch (err) {
+      console.error(`[abandoned-cart] failed for video ${video.id}:`, err);
+      await logAgentAction("VIDEO_CONVERSION", "ABANDONED_CART_ERROR", "MusicVideo", video.id, {
+        error: String(err),
+      });
+      result.skipped++;
+    }
+  }
+
+  return result;
+}

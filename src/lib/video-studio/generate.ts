@@ -60,6 +60,11 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     const vid = video; // non-null reference for closures
     if (vid.status === "GENERATING" || vid.status === "COMPLETE") return; // idempotent
 
+    // Guard: never generate without confirmed payment (unless it's a free/included credit)
+    if (vid.amount > 0 && !vid.stripePaymentId) {
+      throw new Error(`Cannot start generation for MusicVideo ${musicVideoId}: payment not confirmed.`);
+    }
+
     // ── Phase 1: Analyze song ────────────────────────────────────────────────
     await db.musicVideo.update({
       where: { id: musicVideoId },

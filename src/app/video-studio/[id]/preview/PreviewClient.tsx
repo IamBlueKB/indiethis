@@ -311,6 +311,26 @@ export default function PreviewClient({
             </a>
           </div>
         )}
+
+        {/* Explore discovery */}
+        <div className="border-t pt-8" style={{ borderColor: "#1A1A1A" }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-white">Discover more on IndieThis</p>
+              <p className="text-xs mt-0.5" style={{ color: "#666" }}>
+                Browse music, merch, and beats from independent artists.
+              </p>
+            </div>
+            <a
+              href="/explore"
+              className="flex items-center gap-1.5 text-xs font-semibold shrink-0"
+              style={{ color: "#D4A843" }}
+            >
+              <Music2 size={12} /> Explore &rarr;
+            </a>
+          </div>
+        </div>
+
       </div>
     </div>
   );

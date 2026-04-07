@@ -42,9 +42,10 @@ type VideoLength  = "SHORT" | "STANDARD" | "EXTENDED";
 type AspectRatio  = "16:9" | "9:16" | "1:1";
 
 interface Props {
-  userId:      string | null;
-  userTier:    string | null;
-  initialMode?: "QUICK" | "DIRECTOR";
+  userId:             string | null;
+  userTier:           string | null;
+  initialMode?:       "QUICK" | "DIRECTOR";
+  initialGuestEmail?: string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ function fmtPrice(cents: number): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function VideoStudioClient({ userId, userTier, initialMode }: Props) {
+export default function VideoStudioClient({ userId, userTier, initialMode, initialGuestEmail }: Props) {
   const router = useRouter();
 
   // Wizard state
@@ -116,7 +117,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode }: Pro
   const previewRefs = useRef<Record<string, HTMLVideoElement | null>>({});
 
   // Step 3 — confirm + pay
-  const [guestEmail,  setGuestEmail]  = useState("");
+  const [guestEmail,  setGuestEmail]  = useState(initialGuestEmail ?? "");
   const [creating,    setCreating]    = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
