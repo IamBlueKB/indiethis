@@ -2759,7 +2759,30 @@ model VideoStyle {
   sortOrder   Int      @default(0)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
+  presets     VideoPreset[]
 
   @@index([category])
   @@index([sortOrder])
+}
+
+model VideoPreset {
+  id             String   @id @default(cuid())
+  name           String   @unique  // "Hip-Hop Performance"
+  genre          String            // HIP_HOP | RNB | POP | EDM | ROCK | INDIE | LATIN | ACOUSTIC | ABSTRACT | NARRATIVE
+  description    String            // one-line description shown on preset card
+  previewUrl     String?           // 3-second looping preview video URL
+  styleId        String?           // optional FK to VideoStyle
+  styleName      String?           // VideoStyle.name — used to pre-select style in wizard
+  moodArc        String            // intense_throughout | dark_to_bright | building_energy | emotional_journey
+  cameraSequence Json              // { intro, verse, chorus, bridge, outro } → CameraDirectionKey
+  briefTemplate  Json              // { logline, tone, colorPalette, visualThemes, cinematography }
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  style          VideoStyle? @relation(fields: [styleId], references: [id])
+
+  @@index([genre])
+  @@index([sortOrder])
+  @@index([active])
 }
