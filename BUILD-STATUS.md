@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-05 (session 11)_
+_Last updated: 2026-04-07 (session 12)_
 
 ---
 
@@ -306,6 +306,7 @@ _Last updated: 2026-04-05 (session 11)_
 | `/splits/review/[token]` | Split sheet review and e-sign |
 | `/dj/[djSlug]` | Public DJ profile — sets, mixes, crates, events |
 | `/dj/[djSlug]/crate/[crateName]` | Public DJ crate page |
+| `/lyric-video` | Public Lyric Video Studio — gate screen (email/Google OAuth), mode picker (Quick / Director), wizard, post-Stripe return handler |
 
 ---
 
@@ -653,6 +654,17 @@ _Last updated: 2026-04-05 (session 11)_
 | `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
 | Booking Agent (`src/lib/agents/booking-agent.ts`) | DJ booking reminders and follow-up automation |
 
+### Lyric Video Studio
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/lyric-video/styles` | Active TypographyStyles ordered by sortOrder |
+| `GET /api/lyric-video/status` | Poll job status — progress, currentStep, finalVideoUrl, errorMessage |
+| `POST /api/lyric-video/checkout` | Stripe Checkout for Quick or Director mode (guest + subscriber) |
+| `POST /api/lyric-video/brief` | Create draft LyricVideo job + Claude greeting (Director Mode) |
+| `POST /api/lyric-video/brief/chat` | Claude conversation turn as creative director |
+| `POST /api/lyric-video/brief/lock` | Save conversationLog + creativeBrief to DB |
+| `GET /api/lyric-video/section-plan` | Run analyzeSong → Claude per-section background prompts (cached) |
+
 ### Cron Jobs (protected by CRON_SECRET)
 | Endpoint | Description |
 |----------|-------------|
@@ -713,7 +725,7 @@ _Last updated: 2026-04-05 (session 11)_
 
 ---
 
-## PRISMA MODELS (116 total)
+## PRISMA MODELS (118 total)
 
 ```
 Account              ActivityLog          AdminAccount
@@ -734,25 +746,26 @@ DJWithdrawal         EmailCampaign        ExploreFeatureCard
 FanAutomation        FanContact           FanFunding
 FanScore             GenerationFeedback   GenerationLog
 IntakeLink           IntakeSubmission     Invoice
-LicenseDocument      LinkClick            MerchOrder
-MerchOrderItem       MerchProduct         MerchVariant
-Notification         OnboardingEmailLog   PageView
-Payment              PendingSignup        PlatformPricing
-PreSaveCampaign      PreSaveClick         ProducerLeaseSettings
-ProducerProfile      PromoCode            PromoRedemption
-QuickSend            RecentPlay           ReEngagementEmailLog
-Receipt              Referral             ReleasePlan
-ReleasePlanTask      SampleLog            ScheduledEmail
-SessionNote          SessionNoteAttachment ShowInterest
-ShowWaitlist         Split                SplitPayment
-SplitSheet           StemSeparation       StreamLease
-StreamLeaseAgreement StreamLeaseBookmark  StreamLeasePayment
-StreamLeasePlay      Studio               StudioArtist
-StudioCredit         StudioEngineer       StudioEquipment
-StudioPortfolioTrack Subscription         Track
-TrackPlay            TrackShieldResult    TrackShieldScan
-User                 UserAttribution      VerificationToken
-YouTubeSync          YoutubeReference
+LicenseDocument      LinkClick            LyricVideo
+MerchOrder           MerchOrderItem       MerchProduct
+MerchVariant         Notification         OnboardingEmailLog
+PageView             Payment              PendingSignup
+PlatformPricing      PreSaveCampaign      PreSaveClick
+ProducerLeaseSettings ProducerProfile     PromoCode
+PromoRedemption      QuickSend            RecentPlay
+ReEngagementEmailLog Receipt              Referral
+ReleasePlan          ReleasePlanTask      SampleLog
+ScheduledEmail       SessionNote          SessionNoteAttachment
+ShowInterest         ShowWaitlist         Split
+SplitPayment         SplitSheet           StemSeparation
+StreamLease          StreamLeaseAgreement StreamLeaseBookmark
+StreamLeasePayment   StreamLeasePlay      Studio
+StudioArtist         StudioCredit         StudioEngineer
+StudioEquipment      StudioPortfolioTrack Subscription
+Track                TrackPlay            TrackShieldResult
+TrackShieldScan      TypographyStyle      User
+UserAttribution      VerificationToken    YouTubeSync
+YoutubeReference
 ```
 
 ---
@@ -842,7 +855,7 @@ YouTubeSync          YoutubeReference
 | AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 | ✅ DONE |
 | AI Mastering (Auphonic) — $7.99 PPU | ✅ DONE |
 | AI Music Video (Kling via FAL) | ✅ DONE |
-| AI Lyric Video (Remotion Lambda) — $14.99 PPU | ✅ BUILT — Whisper via Replicate, multi-step UI, Remotion deployed |
+| AI Lyric Video Studio (Remotion Lambda) — Quick $17.99 guest / $14.99 sub · Director $29.99 guest / $24.99 sub | ✅ DONE — 5 Framer Motion typography styles, Kling v3 Pro AI backgrounds per section, Director Mode Claude chat + section plan editor, public `/lyric-video` gate screen, 4-email conversion drip, guest linking on login |
 | A&R Report (Claude) | ✅ DONE |
 | Press Kit (Claude + PDF) — $9.99 PPU | ✅ DONE |
 | Bio Generator (Claude, free) | ✅ DONE |
@@ -887,7 +900,7 @@ YouTubeSync          YoutubeReference
 | Affiliate commission on renewals | ✅ DONE |
 | Stripe Connect DJ + producer payouts (`transfer.paid`/`transfer.failed` wired) | ✅ DONE (code) — needs Stripe account connected |
 | DB-backed PlatformPricing (admin editable) | ✅ DONE |
-| Price standardization (Reign $99, Mastering $7.99, Lyric Video $14.99, Press Kit $9.99, Cover Art $4.99/$7.99) | ✅ DONE |
+| Price standardization (Reign $99, Mastering $7.99, Lyric Video Quick $17.99g/$14.99s, Director $29.99g/$24.99s, Press Kit $9.99, Cover Art $4.99/$7.99) | ✅ DONE |
 
 ### Beat Marketplace
 | Feature | Status |
@@ -1272,6 +1285,48 @@ YouTubeSync          YoutubeReference
 | Premium landing page `/video-studio` — hero + bg video loop, mode cards, OG/Twitter metadata; `?start=1` gates wizard | ✅ DONE |
 | Admin panel `/admin/video-studio` — metrics dashboard, video list table, VideoStyle CRUD | ✅ DONE |
 | VideoStyle API: `GET/POST /api/admin/video-studio/styles`, `PATCH/DELETE …/[id]` (PLATFORM_ADMIN only) | ✅ DONE |
+
+### Cover Art Generator (Steps 1–7)
+| Feature | Status |
+|---------|--------|
+| Schema: `CoverArtJob`, `CoverArtStyle`, `COVER_ART_CONVERSION` AgentType | ✅ DONE |
+| Style seed: 6 presets (Cinematic Glow, Retro Grain, Neon Noir, Minimal, Abstract Burst, Golden Hour) | ✅ DONE |
+| Claude prompt enhancement engine — style-aware enrichment before generation | ✅ DONE |
+| Generation service: Replicate FLUX-dev (Standard) + FLUX-pro (Pro), 4 variations in parallel | ✅ DONE |
+| API routes: generate, regenerate, publish, styles CRUD (PLATFORM_ADMIN) | ✅ DONE |
+| Dashboard wizard — 5 steps, variation grid, fullscreen preview, Pro refinement flow | ✅ DONE |
+| Stripe checkout at `/api/dashboard/ai/cover-art/checkout` (subscriber PPU) | ✅ DONE |
+| Cover Art Conversion Agent — 4-email drip + 30% promo (Email 4 gated on open tracking) | ✅ DONE |
+| Public landing page `/cover-art` — gate screen (email/Google OAuth), wizard, post-Stripe return | ✅ DONE |
+| `linkGuestCoverArtsByEmail()` — links guest jobs to user on first dashboard login | ✅ DONE |
+| Admin panel `/admin/cover-art` — metrics dashboard, job list, CoverArtStyle CRUD | ✅ DONE |
+
+### Lyric Video Studio Upgrade (Steps 1–9)
+| Feature | Status |
+|---------|--------|
+| Schema: `LyricVideo` (guest + subscriber, Quick + Director), `TypographyStyle`, `LYRIC_VIDEO_CONVERSION` AgentType | ✅ DONE |
+| Pricing: Quick $17.99 guest / $14.99 sub · Director $29.99 guest / $24.99 sub | ✅ DONE |
+| `TypographyStyle` seed: KARAOKE, KINETIC_BOUNCE, SMOOTH_FADE, GLITCH, HANDWRITTEN (5 styles) | ✅ DONE |
+| `TypographyPreview` component — Framer Motion animations per style, 5s auto-loop, compact mode | ✅ DONE |
+| Background scene generator — fal.ai Kling v3 Pro, cover art as seed, 3-concurrent batch, mood/section prompt maps | ✅ DONE |
+| `CinematicLyricVideo` Remotion composition — 4 layers: Background (crossfade clips), Effects (beat pulse + vignette), Typography (5 styles), Branding (watermark) | ✅ DONE |
+| Registered `CinematicLyricVideo` composition in `remotion/src/Root.tsx` alongside legacy `LyricVideo` | ✅ DONE |
+| Quick Mode wizard — 5 phases: upload → style picker → confirm+pay → generating → download | ✅ DONE |
+| Director Mode wizard — 6 phases: upload → Claude chat → section plan editor → confirm+pay → generating → review | ✅ DONE |
+| `lyricVideoAudio` UploadThing endpoint — public, no auth, 64MB audio | ✅ DONE |
+| Generation pipeline: analyzeSong → color extraction (sharp) → Kling backgrounds → Remotion Lambda → email | ✅ DONE |
+| Payment guard in pipeline — throws if amount > 0 and no `stripePaymentId` | ✅ DONE |
+| Stripe webhook handler for `LYRIC_VIDEO_QUICK` and `LYRIC_VIDEO_DIRECTOR` tools | ✅ DONE |
+| Lyric Video Conversion Agent — 4-email drip (ready / value / social proof / 30% promo gated on open) | ✅ DONE |
+| Lyric Video Abandoned Cart Agent — targets PENDING jobs >2h, sends re-engagement email | ✅ DONE |
+| `LYRIC_VIDEO_CONVERSION` wired into `/api/cron/agents` with 22h dedup guard | ✅ DONE |
+| Public `/lyric-video` page — `LyricVideoGateScreen` (email/Google OAuth), `LyricVideoClient` mode picker, OG + Twitter metadata | ✅ DONE |
+| `indiethis_guest_email` cookie shared with cover-art gate (7-day, JSON `{email, name}`) | ✅ DONE |
+| Subscriber redirect to `/dashboard/ai/lyric-video` on page load | ✅ DONE |
+| `?paid=1&jobId=...&mode=...` post-Stripe return auto-polls and advances wizard | ✅ DONE |
+| `?mode=director` / `?mode=quick` URL param pre-selects mode | ✅ DONE |
+| `/api/lyric-video/*` added to `PUBLIC_PATHS` in `src/proxy.ts` | ✅ DONE |
+| `linkGuestLyricVideosByEmail()` — links guest jobs to user on first dashboard login (parallel with music video linking) | ✅ DONE |
 
 ### Not Started
 | Feature | Status |
