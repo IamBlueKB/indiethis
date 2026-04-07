@@ -95,6 +95,21 @@ export default function GeneratingClient({ id }: { id: string }) {
     }
   }, [id, router]);
 
+  // ── Reject & Redirect ────────────────────────────────────────────────────────
+  const handleManualReject = useCallback(async (sceneIndex: number, note: string) => {
+    const res = await fetch(`/api/video-studio/director/${id}/scene-regen`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ sceneIndex, redirectNote: note }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(d.error ?? "Failed to redirect scene");
+    }
+    // Immediately poll for updated clip status
+    await poll();
+  }, [id, poll]);
+
   useEffect(() => {
     poll();
     const t = setInterval(poll, 5000);
@@ -204,6 +219,7 @@ export default function GeneratingClient({ id }: { id: string }) {
               finalVideoUrl={data.finalVideoUrl}
               thumbnailUrl={data.thumbnailUrl}
               videoId={id}
+              onManualReject={handleManualReject}
             />
 
             <p className="text-center text-xs" style={{ color: "#444" }}>

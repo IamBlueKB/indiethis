@@ -46,15 +46,16 @@ export async function GET(
   if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Build per-scene clip status from the scenes JSON
-  type RawScene = { sceneIndex?: number; videoUrl?: string | null; thumbnailUrl?: string | null };
+  type RawScene = { sceneIndex?: number; videoUrl?: string | null; thumbnailUrl?: string | null; manualRejected?: boolean };
   const rawScenes  = Array.isArray(video.scenes) ? (video.scenes as RawScene[]) : [];
   const clips = rawScenes.map(s => ({
-    sceneIndex:   s.sceneIndex ?? 0,
-    videoUrl:     s.videoUrl ?? null,
-    thumbnailUrl: s.thumbnailUrl ?? null,
-    status:       s.videoUrl
+    sceneIndex:     s.sceneIndex ?? 0,
+    videoUrl:       s.videoUrl ?? null,
+    thumbnailUrl:   s.thumbnailUrl ?? null,
+    status:         s.videoUrl
       ? "complete"
       : (video.status === "GENERATING" ? "generating" : "pending"),
+    manualRejected: s.manualRejected ?? false,
   }));
 
   // Song sections from analysis

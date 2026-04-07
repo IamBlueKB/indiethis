@@ -55,6 +55,9 @@ export interface GeneratedSceneOutput {
   actualModel:     string;
   fallbackUsed:    boolean;
   fallbackAttempts: number;
+  // Manual rejection tracking (Reject & Redirect)
+  manualRejected?:     boolean;
+  manualRedirectNote?: string;
 }
 
 // ─── 6a: Character portrait via FLUX Kontext Pro ────────────────────────────────

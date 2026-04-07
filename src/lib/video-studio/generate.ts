@@ -327,29 +327,52 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
 
 /**
  * Re-generates a single scene clip and replaces it in the scenes array,
- * then re-stitches the full video. Used by the "Review + Refine" panel.
+ * then re-stitches the full video. Used by the "Review + Refine" panel
+ * and the Reject & Redirect feature.
+ *
+ * @param redirectNote  When provided, this is a manual rejection — the note is
+ *                      appended to the original scene prompt. Status check is
+ *                      relaxed to allow GENERATING state (mid-generation redirects).
  */
 export async function regenerateScene(
   musicVideoId: string,
   sceneIndex:   number,
+  redirectNote?: string,
 ): Promise<void> {
+  const isManualReject = !!redirectNote;
+
   const video = await db.musicVideo.findUnique({ where: { id: musicVideoId } });
   if (!video) throw new Error("Video not found");
-  if (video.status !== "COMPLETE") throw new Error("Video is not in COMPLETE state");
+
+  // Standard regen requires COMPLETE; manual rejection also allows GENERATING
+  if (!isManualReject && video.status !== "COMPLETE") {
+    throw new Error("Video is not in COMPLETE state");
+  }
 
   const existingScenes = (video.scenes as GeneratedSceneOutput[] | null) ?? [];
   const sceneToRegen   = existingScenes.find(s => s.sceneIndex === sceneIndex);
   if (!sceneToRegen) throw new Error(`Scene ${sceneIndex} not found`);
 
+  // Prevent double-rejection on the same scene
+  if (isManualReject && sceneToRegen.manualRejected) {
+    throw new Error("Scene has already been manually rejected once");
+  }
+
   const falKey = process.env.FAL_KEY;
   if (!falKey) throw new Error("FAL_KEY not configured");
   fal.config({ credentials: falKey });
 
-  // Re-generate just this scene using its original prompt + model
+  // Build the prompt — append redirect note when provided
+  const basePrompt   = sceneToRegen.originalPrompt || sceneToRegen.prompt;
+  const regenPrompt  = redirectNote
+    ? `${basePrompt}. Artist direction: ${redirectNote}`
+    : sceneToRegen.prompt;
+
+  // Re-generate just this scene
   const plannedScene: PlannedSceneInput = {
     index:       sceneIndex,
     model:       sceneToRegen.model,
-    prompt:      sceneToRegen.prompt,
+    prompt:      regenPrompt,
     startTime:   sceneToRegen.startTime,
     endTime:     sceneToRegen.endTime,
     duration:    sceneToRegen.endTime - sceneToRegen.startTime,
@@ -373,40 +396,61 @@ export async function regenerateScene(
 
   if (!regenResult.videoUrl) throw new Error("Scene regeneration returned no video URL");
 
-  // Replace scene in array
+  // Replace scene in array, preserving all tracking fields + adding manual rejection info
   const updatedScenes = existingScenes.map(s =>
-    s.sceneIndex === sceneIndex ? { ...s, videoUrl: regenResult.videoUrl } : s
+    s.sceneIndex === sceneIndex
+      ? {
+          ...s,
+          videoUrl:           regenResult.videoUrl,
+          thumbnailUrl:       regenResult.thumbnailUrl,
+          prompt:             regenPrompt,
+          ...(isManualReject && {
+            manualRejected:     true,
+            manualRedirectNote: redirectNote,
+          }),
+        }
+      : s
   );
 
-  // Re-stitch
-  await db.musicVideo.update({
-    where: { id: musicVideoId },
-    data:  { status: "STITCHING", progress: 80, currentStep: "Re-stitching your video…" },
-  });
+  // Re-stitch (only for standard regens; mid-generation redirects skip stitching
+  // because the main generation pipeline will stitch when all scenes complete)
+  if (!isManualReject) {
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { status: "STITCHING", progress: 80, currentStep: "Re-stitching your video…" },
+    });
 
-  const durationMs      = Math.round(video.trackDuration * 1000);
-  const finalVideoUrls  = await generateMultiFormatVideos(
-    musicVideoId,
-    updatedScenes,
-    video.audioUrl,
-    [video.aspectRatio],
-    durationMs,
-  );
+    const durationMs     = Math.round(video.trackDuration * 1000);
+    const finalVideoUrls = await generateMultiFormatVideos(
+      musicVideoId,
+      updatedScenes,
+      video.audioUrl,
+      [video.aspectRatio],
+      durationMs,
+    );
 
-  const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+    const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
 
-  await db.musicVideo.update({
-    where: { id: musicVideoId },
-    data:  {
-      status:         "COMPLETE",
-      progress:       100,
-      currentStep:    "Complete!",
-      scenes:         updatedScenes as object[],
-      finalVideoUrl:  finalVideoUrl ?? undefined,
-      finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
-      sceneRegenUsed: true,
-    },
-  });
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  {
+        status:         "COMPLETE",
+        progress:       100,
+        currentStep:    "Complete!",
+        scenes:         updatedScenes as object[],
+        finalVideoUrl:  finalVideoUrl ?? undefined,
+        finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
+        sceneRegenUsed: true,
+      },
+    });
+  } else {
+    // Manual rejection: persist the updated scenes (with new clip + rejection flag)
+    // without changing overall video status — let the main pipeline continue
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { scenes: updatedScenes as object[] },
+    });
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────

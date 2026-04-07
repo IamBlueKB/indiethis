@@ -14,7 +14,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   Music2, Activity, Star, Film, Download, Check,
   X, Loader2, Play, ChevronRight, Edit2, Camera,
-  Zap, AlertCircle,
+  Zap, AlertCircle, CornerDownRight,
 } from "lucide-react";
 import { CameraDirectionPicker, CAMERA_DIRECTION_MAP, type CameraDirectionKey } from "./CameraDirectionPicker";
 
@@ -34,10 +34,11 @@ export interface WorkflowScene {
 }
 
 export interface WorkflowClip {
-  sceneIndex:   number;
-  videoUrl?:    string;
-  thumbnailUrl?: string;
-  status:       "pending" | "generating" | "complete" | "failed";
+  sceneIndex:      number;
+  videoUrl?:       string;
+  thumbnailUrl?:   string;
+  status:          "pending" | "generating" | "complete" | "failed";
+  manualRejected?: boolean;
 }
 
 interface WorkflowBoardProps {
@@ -73,8 +74,9 @@ interface WorkflowBoardProps {
   videoId?:       string;
 
   // Callbacks
-  onEditScene?:   (index: number, updates: Partial<WorkflowScene>) => void;
-  onRegenClip?:   (index: number) => void;
+  onEditScene?:    (index: number, updates: Partial<WorkflowScene>) => void;
+  onRegenClip?:    (index: number) => void;
+  onManualReject?: (index: number, note: string) => void;
 }
 
 // ─── Energy color ─────────────────────────────────────────────────────────────
@@ -411,32 +413,64 @@ function SceneNode({
 // ─── Clip Node ────────────────────────────────────────────────────────────────
 
 function ClipNode({
-  sceneIndex, clip, onRegen, videoId,
+  sceneIndex, clip, onRegen, onManualReject, videoId,
 }: {
-  sceneIndex: number;
-  clip?: WorkflowClip;
-  onRegen?: (i: number) => void;
-  videoId?: string;
+  sceneIndex:      number;
+  clip?:           WorkflowClip;
+  onRegen?:        (i: number) => void;
+  onManualReject?: (i: number, note: string) => void;
+  videoId?:        string;
 }) {
-  const status = clip?.status ?? "pending";
-  const isComplete = status === "complete";
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectNote,      setRejectNote]      = useState("");
+  const [submitting,      setSubmitting]      = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const status       = clip?.status ?? "pending";
+  const isComplete   = status === "complete";
   const isGenerating = status === "generating";
-  const isFailed = status === "failed";
+  const isFailed     = status === "failed";
+  const isRejected   = clip?.manualRejected ?? false;
+
+  // Focus textarea when reject panel opens
+  useEffect(() => {
+    if (showRejectInput) inputRef.current?.focus();
+  }, [showRejectInput]);
+
+  async function handleRejectSubmit() {
+    const note = rejectNote.trim();
+    if (!note || !onManualReject) return;
+    setSubmitting(true);
+    try {
+      await onManualReject(sceneIndex, note);
+      setShowRejectInput(false);
+      setRejectNote("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Show reject button when clip is complete and not yet manually rejected
+  const canReject = isComplete && !isRejected && !!onManualReject;
 
   return (
     <div
       className="rounded-xl border flex flex-col overflow-hidden shrink-0 transition-all"
       style={{
         width: 156,
-        minHeight: 88,
         backgroundColor: "#111",
-        borderColor: isComplete ? "#34C759" : isFailed ? "#E85D4A" : isGenerating ? "#D4A843" : "#1A1A1A",
+        borderColor: isRejected ? "#555" : isComplete ? "#34C759" : isFailed ? "#E85D4A" : isGenerating ? "#D4A843" : "#1A1A1A",
       }}
     >
       {/* Thumbnail */}
-      <div className="relative flex-1 flex items-center justify-center" style={{ minHeight: 52, backgroundColor: "#0A0A0A" }}>
+      <div className="relative flex items-center justify-center" style={{ minHeight: 52, backgroundColor: "#0A0A0A" }}>
         {isComplete && clip?.thumbnailUrl ? (
-          <img src={clip.thumbnailUrl} alt={`Clip ${sceneIndex + 1}`} className="w-full h-full object-cover" style={{ maxHeight: 52 }} />
+          <img
+            src={clip.thumbnailUrl}
+            alt={`Clip ${sceneIndex + 1}`}
+            className="w-full h-full object-cover"
+            style={{ maxHeight: 52, opacity: isRejected ? 0.4 : 1 }}
+          />
         ) : isGenerating ? (
           <Loader2 size={18} className="animate-spin" style={{ color: "#D4A843" }} />
         ) : isFailed ? (
@@ -446,39 +480,103 @@ function ClipNode({
         ) : (
           <Film size={16} style={{ color: "#333" }} />
         )}
-        {isComplete && (
+        {isComplete && !isRejected && (
           <div className="absolute top-1 right-1">
             <Check size={10} style={{ color: "#34C759" }} />
+          </div>
+        )}
+        {isRejected && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          >
+            <p className="text-[9px] font-semibold" style={{ color: "#888" }}>Redirected</p>
           </div>
         )}
       </div>
 
       {/* Footer */}
       <div className="px-2.5 py-2 flex items-center justify-between">
-        <p className="text-[10px] font-semibold" style={{ color: isComplete ? "#34C759" : isFailed ? "#E85D4A" : "#555" }}>
+        <p className="text-[10px] font-semibold" style={{ color: isRejected ? "#555" : isComplete ? "#34C759" : isFailed ? "#E85D4A" : "#555" }}>
           Clip {sceneIndex + 1}
         </p>
-        {isFailed && onRegen && (
-          <button
-            onClick={() => onRegen(sceneIndex)}
-            className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-            style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}
-          >
-            Retry
-          </button>
-        )}
-        {isComplete && clip?.videoUrl && (
-          <a
-            href={clip.videoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] font-semibold"
-            style={{ color: "#D4A843" }}
-          >
-            <Play size={10} />
-          </a>
-        )}
+        <div className="flex items-center gap-1.5">
+          {isFailed && onRegen && (
+            <button
+              onClick={() => onRegen(sceneIndex)}
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: "rgba(232,93,74,0.12)", color: "#E85D4A" }}
+            >
+              Retry
+            </button>
+          )}
+          {isComplete && clip?.videoUrl && !isRejected && (
+            <a
+              href={clip.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-semibold"
+              style={{ color: "#D4A843" }}
+            >
+              <Play size={10} />
+            </a>
+          )}
+          {canReject && !showRejectInput && (
+            <button
+              onClick={() => setShowRejectInput(true)}
+              title="Reject & Redirect"
+              className="flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: "rgba(212,168,67,0.08)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}
+            >
+              <CornerDownRight size={8} />
+              Redirect
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Inline reject input */}
+      {showRejectInput && (
+        <div className="px-2.5 pb-2.5 space-y-1.5 border-t" style={{ borderColor: "#1E1E1E" }}>
+          <p className="text-[9px] font-semibold pt-2" style={{ color: "#D4A843" }}>
+            What should change?
+          </p>
+          <textarea
+            ref={inputRef}
+            value={rejectNote}
+            onChange={e => setRejectNote(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleRejectSubmit(); }
+              if (e.key === "Escape") { setShowRejectInput(false); setRejectNote(""); }
+            }}
+            placeholder="Make it darker…"
+            rows={2}
+            className="w-full text-[10px] text-white rounded px-2 py-1 resize-none"
+            style={{ backgroundColor: "#0A0A0A", border: "1px solid #2A2A2A", outline: "none" }}
+          />
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => { setShowRejectInput(false); setRejectNote(""); }}
+              className="flex-1 text-[9px] font-semibold py-1 rounded"
+              style={{ backgroundColor: "#1A1A1A", color: "#555" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRejectSubmit}
+              disabled={!rejectNote.trim() || submitting}
+              className="flex-1 text-[9px] font-semibold py-1 rounded flex items-center justify-center gap-1"
+              style={{
+                backgroundColor: rejectNote.trim() && !submitting ? "#D4A843" : "#1A1A1A",
+                color: rejectNote.trim() && !submitting ? "#0A0A0A" : "#444",
+              }}
+            >
+              {submitting ? <Loader2 size={8} className="animate-spin" /> : null}
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -666,7 +764,7 @@ export default function WorkflowBoard({
   brief, onEditBrief,
   shotList, clips = [],
   videoStatus, finalVideoUrl, thumbnailUrl, videoId,
-  onEditScene, onRegenClip,
+  onEditScene, onRegenClip, onManualReject,
 }: WorkflowBoardProps) {
   const [selectedScene, setSelectedScene] = useState<number | null>(null);
 
@@ -750,6 +848,7 @@ export default function WorkflowBoard({
                         sceneIndex={scene.index}
                         clip={clip}
                         onRegen={onRegenClip}
+                        onManualReject={onManualReject}
                         videoId={videoId}
                       />
                     </div>
@@ -808,6 +907,7 @@ export default function WorkflowBoard({
                         sceneIndex={scene.index}
                         clip={clip}
                         onRegen={onRegenClip}
+                        onManualReject={onManualReject}
                         videoId={videoId}
                       />
                     </div>
