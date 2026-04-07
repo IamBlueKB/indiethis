@@ -2544,6 +2544,7 @@ enum AgentType {
   BOOKING_AGENT
   COLLABORATION_MATCHMAKER
   RELEASE_BUNDLE
+  REVENUE_REPORT
 }
 
 model TrackShieldScan {
@@ -2627,4 +2628,51 @@ model PromoPopup {
   ctaClicks       Int       @default(0)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+// ─── Revenue Report ───────────────────────────────────────────────────────────
+
+model RevenueReportConfig {
+  id              String   @id @default(cuid())
+  frequency       String   @default("WEEKLY") // DAILY, WEEKLY, MONTHLY
+  dayOfWeek       Int      @default(1) // 0=Sunday, 1=Monday (for WEEKLY)
+  dayOfMonth      Int      @default(1) // 1-28 (for MONTHLY)
+  timeUtc         String   @default("12:00") // 24hr UTC time HH:00
+  recipients      Json     @default("[]")
+  enabledSections Json     @default("[\"revenue\",\"users\",\"products\",\"engagement\",\"agents\",\"goals\"]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model RevenueReportAlert {
+  id              String    @id @default(cuid())
+  metric          String    // DAILY_REVENUE, DAILY_CHURN, DAILY_SIGNUPS
+  condition       String    // BELOW, ABOVE
+  threshold       Int       // cents for revenue, count for users
+  active          Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model RevenueReportGoal {
+  id           String   @id @default(cuid())
+  metric       String   // SUBSCRIBERS, MRR, REVENUE, SIGNUPS
+  targetValue  Int      // cents for money, count for users
+  currentValue Int      @default(0)
+  period       String   // "2026-04" year-month format
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([period])
+}
+
+model RevenueReportLog {
+  id        String   @id @default(cuid())
+  period    String   // "2026-04-07", "2026-W15", or "2026-04"
+  frequency String   // DAILY, WEEKLY, MONTHLY
+  data      Json
+  sentTo    Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
