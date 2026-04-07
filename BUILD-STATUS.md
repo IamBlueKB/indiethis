@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-07 (session 13)_
+_Last updated: 2026-04-07 (session 14)_
 
 ---
 
@@ -96,6 +96,10 @@ _Last updated: 2026-04-07 (session 13)_
 | `src/lib/avatar/styles.ts` | Client-safe `AVATAR_STYLES` export (no server imports) — prevents sharp from bundling into client |
 | `src/lib/avatar/generator.ts` | Avatar generation engine — fal.ai FLUX, dominant color extraction, saves to `ArtistAvatar` model |
 | `src/components/avatar/AvatarPicker.tsx` | Reusable avatar picker — compact/standard, `onSelect(AvatarSelectPayload)` + `onUploadUrl(url)` callbacks |
+| `src/lib/video-studio/generator.ts` | Scene generation engine — `GeneratedSceneOutput` type, `generateSceneClip`, `qaReviewScene`, `generateSceneWithFallback`, `generateAllScenes` |
+| `src/lib/release-board/auto-link.ts` | Fire-and-forget `autoLinkToRelease(trackId, assetType, assetId)` — wired into music video, cover art, lyric video pipelines |
+| `src/app/(dashboard)/dashboard/releases/ReleasesClient.tsx` | Release Board list — `CreateReleaseModal`, asset dots, release cards |
+| `src/app/(dashboard)/dashboard/releases/[id]/ReleaseBoardClient.tsx` | Individual release board — 5 asset cards, inline title edit, track carousel, date picker |
 
 ---
 
@@ -221,6 +225,8 @@ _Last updated: 2026-04-07 (session 13)_
 | `/dashboard/dj/merch` | DJ merch product + order management |
 | `/dashboard/merch` | Artist merch dashboard — products, orders, defect claims, earnings |
 | `/dashboard/earnings` | Artist earnings — merch balance, withdrawal history, earnings projector |
+| `/dashboard/releases` | Release Board — list of all releases with asset status dots and cover art thumbnails |
+| `/dashboard/releases/[id]` | Individual release board — 5 asset cards (Cover Art, Music Video, Lyric Video, Mastered Track, Canvas Video), track carousel, inline title + date editing |
 
 ---
 
@@ -665,6 +671,15 @@ _Last updated: 2026-04-07 (session 13)_
 | `POST /api/agents/admin-dashboard` | Admin Dashboard Agent — weekly platform KPI summary email |
 | Booking Agent (`src/lib/agents/booking-agent.ts`) | DJ booking reminders and follow-up automation |
 
+### Release Board
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/dashboard/releases` | List all releases for authenticated user (enriched with track data + linked assets) |
+| `POST /api/dashboard/releases` | Create new release — validates `artistId` ownership of all trackIds |
+| `GET /api/dashboard/releases/[id]` | Enriched single release with all linked asset details |
+| `PUT /api/dashboard/releases/[id]` | Partial update — title, trackIds, asset IDs, releaseDate |
+| `DELETE /api/dashboard/releases/[id]` | Delete release grouping only (assets untouched) |
+
 ### Artist Avatar Studio
 | Endpoint | Description |
 |----------|-------------|
@@ -776,12 +791,12 @@ _Last updated: 2026-04-07 (session 13)_
 
 ---
 
-## PRISMA MODELS (127 total)
+## PRISMA MODELS (128 total)
 
 ```
 Account              ActivityLog          AdminAccount
 Affiliate            AffiliateReferral    AIGeneration
-ArtistAvatar
+ArtistAvatar         Release
 AIInsightsLog        AIJob                AgentLog
 Ambassador           AmbassadorPayout     ArtistBookingInquiry
 ArtistCollaborator   ArtistPhoto          ArtistPressItem
@@ -1357,6 +1372,11 @@ YoutubeReference
 | Preview page (`/video-studio/[id]/preview`) — "Discover more" section shows 4 trending track cards (2×2/4-col grid, cover art, artist name, links to artist profile) | ✅ DONE |
 | Trending tracks fetched server-side (ordered by plays desc, must have coverArtUrl, status PUBLISHED) | ✅ DONE |
 | Audio file validation on `videoStudioAudio` UploadThing endpoint via `validateUT()` → `validateUpload("audio")` | ✅ DONE |
+| **Claude QA loop** — `qaReviewScene()` sends thumbnail + scene description to Claude vision; returns `{approved, reason, refinedPrompt}`; auto-regenerates once on rejection; graceful fallback if no thumbnail or parse error | ✅ DONE |
+| **Model fallback chain** — `MODEL_FALLBACKS` maps each primary fal.ai model to ordered fallbacks; tried on infrastructure failure; `fallbackUsed` + `fallbackAttempts` tracked per scene | ✅ DONE |
+| `GeneratedSceneOutput` extended — 10 new tracking fields: `thumbnailUrl`, `qaApproved`, `qaReason`, `qaRetried`, `originalPrompt`, `refinedPrompt`, `primaryModel`, `actualModel`, `fallbackUsed`, `fallbackAttempts`, `manualRejected`, `manualRedirectNote` | ✅ DONE |
+| **Reject & Redirect** — "Redirect" button on complete `ClipNode`s during Director Mode generation; inline textarea "What should change?"; Enter to submit, Escape to cancel; appends `Artist direction: <note>` to base prompt; re-generates that scene; one-per-scene cap; `manualRejected` overlay shown after submission | ✅ DONE |
+| `autoLinkToRelease()` fire-and-forget — wired into music video, cover art, and lyric video completion pipelines; links asset to any Release containing the trackId | ✅ DONE |
 
 ### Artist Avatar System (Steps 1–11)
 | Feature | Status |
@@ -1418,6 +1438,22 @@ YoutubeReference
 | `?mode=director` / `?mode=quick` URL param pre-selects mode | ✅ DONE |
 | `/api/lyric-video/*` added to `PUBLIC_PATHS` in `src/proxy.ts` | ✅ DONE |
 | `linkGuestLyricVideosByEmail()` — links guest jobs to user on first dashboard login (parallel with music video linking) | ✅ DONE |
+
+### Release Board (Steps 3–7)
+| Feature | Status |
+|---------|--------|
+| Schema: `Release` model — `id`, `userId`, `title`, `trackIds Json` (String[]), `coverArtJobId?`, `musicVideoId?`, `lyricVideoId?`, `canvasVideoId?`, `masteredTrackId?`, `releaseDate?` | ✅ DONE |
+| API routes: GET/POST `/api/dashboard/releases`, GET/PUT/DELETE `/api/dashboard/releases/[id]`, `enrichRelease()` helper | ✅ DONE |
+| `autoLinkToRelease(trackId, assetType, assetId)` — `array_contains` query, non-blocking; only sets field if not already linked | ✅ DONE |
+| Auto-link wired into music video, cover art, and lyric video completion pipelines | ✅ DONE |
+| Releases list page `/dashboard/releases` — grid of release cards with cover art thumbnail, track count badge, 5 `AssetDots` (gold when linked, grey when not), formatted release date | ✅ DONE |
+| `CreateReleaseModal` — title input, multi-select track picker with cover art thumbnails; navigates directly to new release on create | ✅ DONE |
+| Empty state — Package icon + "Create Your First Release" CTA | ✅ DONE |
+| Individual release page `/dashboard/releases/[id]` — `EditableTitle` click-to-edit inline, inline date picker auto-saves on change | ✅ DONE |
+| 5 `AssetCard`s: Cover Art, Music Video, Lyric Video, Mastered Track, Canvas Video — gold icon when linked, grey+subtle CTA when not; no red Xs | ✅ DONE |
+| Track carousel — horizontal scroll with `useRef` left/right `ChevronLeft`/`ChevronRight` arrows (appear when >3 tracks) | ✅ DONE |
+| Delete button with `confirm()` dialog | ✅ DONE |
+| DashboardSidebar + DashboardMobileNav: "Releases" entry with Package icon after Music | ✅ DONE |
 
 ### Not Started
 | Feature | Status |
