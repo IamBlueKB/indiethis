@@ -28,6 +28,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/stripe/checkout") return true;
   // Music Video Studio — public (guests + subscribers)
   if (pathname.startsWith("/api/video-studio")) return true;
+  // Cover Art Studio — public (guests + subscribers); /api/cover-art/* only
+  if (pathname.startsWith("/api/cover-art")) return true;
   // Public invoice pages — no auth required (artists paying invoices)
   if (pathname.startsWith("/api/invoice")) return true;
   // Invoice pay route — called from public invoice page

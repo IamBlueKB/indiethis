@@ -294,6 +294,25 @@ export async function POST(req: NextRequest) {
     results.collaborationMatchmaker = isFirstOfMonth ? "skipped (not due)" : "skipped (not 1st of month)";
   }
 
+  // ── Cover Art Conversion Agent — daily ──────────────────────────────────
+  const shouldRunCoverArtConversion = await shouldRun("COVER_ART_CONVERSION", 22); // 22h guard
+  if (shouldRunCoverArtConversion) {
+    try {
+      const { runCoverArtConversionAgent, runCoverArtAbandonedCartAgent } = await import("@/lib/agents/cover-art-conversion");
+      await logAgentAction("COVER_ART_CONVERSION", "AGENT_RUN_START");
+      const result = await runCoverArtConversionAgent();
+      results.coverArtConversion = `acted=${result.acted} (e1=${result.email1} e2=${result.email2} e3=${result.email3} e4=${result.email4} stopped=${result.stopped})`;
+
+      const cartResult = await runCoverArtAbandonedCartAgent();
+      results.coverArtAbandonedCart = `acted=${cartResult.acted} sent=${cartResult.emails}`;
+    } catch (err) {
+      results.coverArtConversion = `error: ${String(err)}`;
+    }
+  } else {
+    results.coverArtConversion    = "skipped (not due)";
+    results.coverArtAbandonedCart = "skipped (not due)";
+  }
+
   // ── Video Conversion Agent — daily ───────────────────────────────────────
   const shouldRunVideoConversion = await shouldRun("VIDEO_CONVERSION", 22); // 22h guard
   if (shouldRunVideoConversion) {
