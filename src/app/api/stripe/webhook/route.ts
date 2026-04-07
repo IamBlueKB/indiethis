@@ -28,6 +28,7 @@ import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
+import { startGeneration }       from "@/lib/video-studio/generate";
 import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
 import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
@@ -787,6 +788,38 @@ export async function POST(req: NextRequest) {
                 totalCredits: totalCredits,
               }).catch(() => {});
             }
+          }
+        }
+        break;
+      }
+
+      // --- Music Video Studio one-time payment ---
+      if (checkSession.metadata?.tool === "MUSIC_VIDEO") {
+        const musicVideoId = checkSession.metadata?.musicVideoId;
+        const paidUserId   = checkSession.metadata?.userId ?? null;
+        const paidAmount   = checkSession.amount_total ?? 0;
+
+        if (musicVideoId) {
+          // Check idempotency
+          const mvideo = await db.musicVideo.findUnique({
+            where:  { id: musicVideoId },
+            select: { id: true, status: true, stripePaymentId: true },
+          });
+
+          if (mvideo && mvideo.status === "PENDING" && !mvideo.stripePaymentId) {
+            await db.musicVideo.update({
+              where: { id: musicVideoId },
+              data:  {
+                stripePaymentId: checkSession.payment_intent as string ?? checkSession.id,
+                amount:          paidAmount,
+                ...(paidUserId ? { userId: paidUserId } : {}),
+              },
+            });
+
+            // Fire generation in background
+            void startGeneration(musicVideoId).catch(err =>
+              console.error("[webhook/music-video] generation failed:", err)
+            );
           }
         }
         break;
