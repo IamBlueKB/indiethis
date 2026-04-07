@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { linkGuestVideosByEmail } from "@/lib/video-studio/link-guest";
+import { linkGuestVideosByEmail }       from "@/lib/video-studio/link-guest";
+import { linkGuestLyricVideosByEmail }  from "@/lib/lyric-video/link-guest";
 import Link from "next/link";
 import ReleaseTimingCard from "@/components/dashboard/ReleaseTimingCard";
 import {
@@ -114,7 +115,7 @@ export default async function DashboardPage(
   const sp         = await searchParams;
   const showWelcome = sp.welcome === "1";
 
-  // Session linking: link any guest-purchased videos to this userId on first visit
+  // Session linking: link any guest-purchased videos/lyric-videos to this userId on first visit
   let linkedVideoCount = 0;
   try {
     const userEmail = await db.user.findUnique({
@@ -122,8 +123,11 @@ export default async function DashboardPage(
       select: { email: true },
     });
     if (userEmail?.email) {
-      const { linked } = await linkGuestVideosByEmail(userId, userEmail.email);
-      linkedVideoCount = linked;
+      const [{ linked: mv }, { linked: lv }] = await Promise.all([
+        linkGuestVideosByEmail(userId, userEmail.email),
+        linkGuestLyricVideosByEmail(userId, userEmail.email),
+      ]);
+      linkedVideoCount = mv + lv;
     }
   } catch { /* non-fatal */ }
 
