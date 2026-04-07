@@ -6,6 +6,8 @@ import { TrackCanvas } from "./TrackCanvas";
 import type { TrackCanvasProps } from "./TrackCanvas";
 import { MusicVideoComposition } from "./MusicVideoComposition";
 import type { MusicVideoProps } from "./MusicVideoComposition";
+import { CinematicLyricVideo } from "./CinematicLyricVideo";
+import type { CinematicLyricVideoProps } from "./CinematicLyricVideo";
 
 // ─── Video dimensions keyed by aspect ratio ───────────────────────────────────
 
@@ -47,6 +49,17 @@ const DEFAULT_MUSIC_VIDEO_PROPS: MusicVideoProps = {
   crossfadeMs: 500,
 };
 
+const DEFAULT_CINEMATIC_LYRIC_PROPS: CinematicLyricVideoProps = {
+  audioUrl:         "",
+  trackTitle:       "Untitled",
+  artistName:       "Artist",
+  backgroundScenes: [],
+  lyrics:           [],
+  typographyStyle:  "KARAOKE",
+  aspectRatio:      "16:9",
+  durationMs:       180000,
+};
+
 export function Root() {
   return (
     <>
@@ -80,7 +93,7 @@ export function Root() {
       }}
     />
 
-    {/* ── Lyric Video ── */}
+    {/* ── Lyric Video (legacy) ── */}
     <Composition
       id="LyricVideo"
       component={LyricVideoWithOutro}
@@ -100,6 +113,24 @@ export function Root() {
           ...dim,
           durationInFrames: contentFrames + OUTRO_FRAMES,
         };
+      }}
+    />
+
+    {/* ── Cinematic Lyric Video (new) ── */}
+    <Composition
+      id="CinematicLyricVideo"
+      component={CinematicLyricVideo as unknown as React.ComponentType<Record<string, unknown>>}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={Math.ceil((DEFAULT_CINEMATIC_LYRIC_PROPS.durationMs / 1000) * 30)}
+      defaultProps={DEFAULT_CINEMATIC_LYRIC_PROPS}
+      calculateMetadata={async ({ props }) => {
+        const p     = props as unknown as CinematicLyricVideoProps;
+        const ratio = p.aspectRatio ?? "16:9";
+        const dim   = DIM_MAP[ratio] ?? DIM_MAP["16:9"];
+        const totalFrames = Math.ceil(((p.durationMs ?? 180000) / 1000) * 30);
+        return { ...dim, durationInFrames: totalFrames };
       }}
     />
     </>
