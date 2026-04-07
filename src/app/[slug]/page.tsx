@@ -55,6 +55,7 @@ async function ArtistSite({ slug }: { slug: string }) {
     where: { artistSlug: slug },
     select: {
       id: true, name: true, artistName: true, bio: true, photo: true,
+      avatars: { where: { isDefault: true }, select: { avatarUrl: true }, take: 1 },
       instagramHandle: true, tiktokHandle: true, youtubeChannel: true,
       spotifyUrl: true, appleMusicUrl: true, supporterCount: true,
       artistSite: {
@@ -119,6 +120,8 @@ async function ArtistSite({ slug }: { slug: string }) {
   const displayName = artist.artistName || artist.name;
   const bio         = site.bioContent || artist.bio;
   const studioSlug  = artist.studios[0]?.studio?.slug;
+  // Prefer default avatar as profile photo on the public page
+  const profilePhoto = artist.avatars?.[0]?.avatarUrl ?? artist.photo ?? null;
 
   // Filter releases that actually have tracks
   const releases = artist.artistReleases.filter((r) => r.tracks.length > 0);
@@ -357,7 +360,7 @@ async function ArtistSite({ slug }: { slug: string }) {
       {/* 1. Hero — full-bleed */}
       <ArtistHero
         displayName={displayName}
-        photo={artist.photo ?? null}
+        photo={profilePhoto}
         heroImage={site.heroImage ?? null}
         instagramHandle={artist.instagramHandle ?? null}
         tiktokHandle={artist.tiktokHandle ?? null}
@@ -539,7 +542,7 @@ async function ArtistSite({ slug }: { slug: string }) {
           <div id="about">
             <AboutSection
               bio={bio}
-              photo={artist.photo ?? null}
+              photo={profilePhoto}
               displayName={displayName}
               credentials={site.credentials ?? []}
               studioSlug={studioSlug ?? null}
