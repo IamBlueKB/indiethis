@@ -1238,6 +1238,41 @@ YouTubeSync          YoutubeReference
 | Env vars: `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` | ✅ SET |
 | Sentry error monitoring | ⏭️ SKIPPED — PostHog covers error tracking |
 
+### Revenue Report Agent
+| Feature | Status |
+|---------|--------|
+| `src/lib/agents/revenue-report.ts` — scheduled business summary email (DAILY/WEEKLY/MONTHLY) | ✅ DONE |
+| Revenue breakdown: subscriptions, PPU, merch cut, beat licensing, digital sales, fan funding, sample packs, MRR, period-over-period % change | ✅ DONE |
+| User metrics: signups, new subscribers, churn, net growth, signups by provider | ✅ DONE |
+| Product usage: top/least-used AI tools, top merch product, top digital product | ✅ DONE |
+| Threshold alerts (`RevenueReportAlert`): DAILY_REVENUE / DAILY_SIGNUPS / DAILY_CHURN, ABOVE/BELOW conditions, 24h cooldown | ✅ DONE |
+| Cron wired: `runRevenueReportAgent` + `checkAlerts` on every cron cycle | ✅ DONE |
+| Admin panel: `/admin/revenue-report` — live preview, Send Now, alert config UI | ✅ DONE |
+| API: `POST /api/admin/revenue-report/send-now`, `GET /api/admin/revenue-report/preview` | ✅ DONE |
+| AdminSidebar: "Rev Report" nav entry | ✅ DONE |
+
+### Music Video Studio (Steps 1–10)
+| Feature | Status |
+|---------|--------|
+| Schema: `MusicVideo`, `VideoStyle`, `VIDEO_CONVERSION` AgentType | ✅ DONE |
+| Stripe checkout at `/api/video-studio/checkout` (guest + subscriber) | ✅ DONE |
+| Song analyzer: BPM, key, energy, lyrics, structure via fal.ai Whisper + Claude | ✅ DONE |
+| Quick Mode: style picker, vision prompt, aspect ratio selector | ✅ DONE |
+| Director Mode: Claude creative brief, shot list editor, character ref uploads, conversation log | ✅ DONE |
+| `VideoStudioClient` wizard UI (multi-step, both modes) | ✅ DONE |
+| Character portrait via FLUX Kontext Pro | ✅ DONE |
+| Parallel scene generation — max 3 concurrent, model-specific fal.ai params (Seedance 2.0, Seedance 1.5 Pro, Kling, etc.) | ✅ DONE |
+| Remotion Lambda stitching — `MusicVideoComposition` with per-scene crossfade, `renderMediaOnLambda` | ✅ DONE |
+| Thumbnail from highest-energy scene | ✅ DONE |
+| API routes: download, refs, generate, regenerate, publish, brief, brief/lock, shots, scene-regen | ✅ DONE |
+| Stripe webhook handler for `tool === "MUSIC_VIDEO"` | ✅ DONE |
+| Video Conversion Agent: 4-email drip (immediate / 48h / 5d / 10d), Email 4 gated on click tracking, unique 50%-off Stripe promo code | ✅ DONE |
+| Redirect click tracking at `/api/video-studio/track/click` | ✅ DONE |
+| Session linking: `linkGuestVideosByEmail()` claims guest videos on first dashboard login | ✅ DONE |
+| Premium landing page `/video-studio` — hero + bg video loop, mode cards, OG/Twitter metadata; `?start=1` gates wizard | ✅ DONE |
+| Admin panel `/admin/video-studio` — metrics dashboard, video list table, VideoStyle CRUD | ✅ DONE |
+| VideoStyle API: `GET/POST /api/admin/video-studio/styles`, `PATCH/DELETE …/[id]` (PLATFORM_ADMIN only) | ✅ DONE |
+
 ### Not Started
 | Feature | Status |
 |---------|--------|
