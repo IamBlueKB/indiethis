@@ -1062,6 +1062,71 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        // --- Cover Art Studio (new 3-tier system) ---
+        if (tool === "COVER_ART_STANDARD" || tool === "COVER_ART_PREMIUM" || tool === "COVER_ART_PRO") {
+          const jobId = checkSession.metadata?.jobId;
+          if (jobId) {
+            void (async () => {
+              try {
+                const { generateCoverArtJob } = await import("@/lib/cover-art/generator");
+                const job = await db.coverArtJob.findUnique({
+                  where:  { id: jobId },
+                  select: {
+                    id:               true,
+                    tier:             true,
+                    status:           true,
+                    prompt:           true,
+                    referenceImageUrl:true,
+                    trackId:          true,
+                    style:            { select: { promptBase: true } },
+                    userId:           true,
+                    guestEmail:       true,
+                  },
+                });
+                if (!job || job.status !== "PENDING") return;
+
+                const stripePaymentId =
+                  typeof checkSession.payment_intent === "string"
+                    ? checkSession.payment_intent
+                    : checkSession.id;
+
+                await db.coverArtJob.update({
+                  where: { id: jobId },
+                  data:  { stripePaymentId },
+                });
+
+                const trackData = job.trackId
+                  ? await db.track.findUnique({
+                      where:  { id: job.trackId },
+                      select: { title: true, audioFeatures: { select: { genre: true, mood: true, energy: true } } },
+                    })
+                  : null;
+
+                const user = job.userId
+                  ? await db.user.findUnique({ where: { id: job.userId }, select: { name: true, artistName: true } })
+                  : null;
+
+                await generateCoverArtJob({
+                  jobId:           job.id,
+                  tier:            job.tier as "STANDARD" | "PREMIUM" | "PRO",
+                  prompt:          job.prompt,
+                  stylePromptBase: job.style?.promptBase ?? "",
+                  referenceImageUrl: job.referenceImageUrl,
+                  genre:           trackData?.audioFeatures?.genre ?? null,
+                  mood:            trackData?.audioFeatures?.mood  ?? null,
+                  bpm:             null,
+                  energy:          trackData?.audioFeatures?.energy ?? null,
+                  trackTitle:      trackData?.title ?? "Untitled",
+                  artistName:      user?.artistName ?? user?.name ?? "Artist",
+                });
+              } catch (err) {
+                console.error("[webhook] COVER_ART generation error:", err);
+              }
+            })();
+          }
+          break;
+        }
+
         // Credit increments by tool
         const creditField: Record<string, { increment: number }> | null =
           tool === "LYRIC_VIDEO" ? { lyricVideoCreditsLimit: { increment: 1 } }
