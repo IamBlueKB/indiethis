@@ -11,8 +11,9 @@ import { useState }               from "react";
 import { useRouter }              from "next/navigation";
 import {
   Film, Zap, Clapperboard, Download, ChevronRight,
-  Check, Music2, Sparkles, Globe, Play,
+  Check, Music2, Sparkles, Globe,
 } from "lucide-react";
+import DemoReel                   from "./DemoReel";
 
 // ─── Feature row ───────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ interface Props {
 
 export default function VideoStudioLanding({ userId, userTier }: Props) {
   const router       = useRouter();
-  const [playing, setPlaying] = useState(false);
+
 
   function handleStart(mode?: "QUICK" | "DIRECTOR") {
     const q = mode ? `?start=1&mode=${mode}` : "?start=1";
@@ -194,44 +195,9 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
         </div>
       </section>
 
-      {/* ── Example output preview ── */}
+      {/* ── Demo reel ── */}
       <section className="max-w-4xl mx-auto px-6 pb-16">
-        <div className="rounded-2xl overflow-hidden border relative group cursor-pointer"
-          style={{ borderColor: "#1E1E1E", backgroundColor: "#0F0F0F", aspectRatio: "16/9" }}
-          onClick={() => setPlaying(true)}>
-          {playing ? (
-            <video
-              autoPlay
-              controls
-              className="w-full h-full object-cover"
-              src="https://res.cloudinary.com/indiethis/video/upload/v1/video-studio/example-output.mp4"
-            />
-          ) : (
-            <>
-              {/* Poster / thumbnail */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 transition group-hover:scale-110"
-                  style={{ backgroundColor: "rgba(212,168,67,0.2)", border: "2px solid rgba(212,168,67,0.4)" }}>
-                  <Play size={22} style={{ color: "#D4A843" }} className="ml-1" />
-                </div>
-                <p className="text-sm font-semibold text-white">Watch Example Output</p>
-                <p className="text-xs mt-1" style={{ color: "#666" }}>Generated in Director Mode</p>
-              </div>
-              <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #0F0F0F 0%, #111 50%, #0A0A0A 100%)" }} />
-              {/* Film strip decoration */}
-              <div className="absolute top-0 left-0 right-0 flex gap-2 px-2 pt-2 opacity-20">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="flex-1 h-4 rounded-sm" style={{ backgroundColor: "#333" }} />
-                ))}
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 flex gap-2 px-2 pb-2 opacity-20">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="flex-1 h-4 rounded-sm" style={{ backgroundColor: "#333" }} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <DemoReel />
       </section>
 
       {/* ── Mode cards ── */}
