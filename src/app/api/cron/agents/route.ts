@@ -172,6 +172,20 @@ export async function POST(req: NextRequest) {
     results.inactiveContent = "skipped (not due or not Tuesday)";
   }
 
+  // ── Release Bundle — weekly (Tuesday) — notify artists missing 2+ release assets ──
+  const shouldRunReleaseBundle = isTuesday && await shouldRun("RELEASE_BUNDLE", 6 * 24); // 6d guard
+  if (shouldRunReleaseBundle) {
+    try {
+      const { runReleaseBundleAgent } = await import("@/lib/agents/release-bundle");
+      const result = await runReleaseBundleAgent();
+      results.releaseBundle = `checked ${result.checked}, acted on ${result.acted}`;
+    } catch (err) {
+      results.releaseBundle = `error: ${String(err)}`;
+    }
+  } else {
+    results.releaseBundle = "skipped (not due or not Tuesday)";
+  }
+
   // ── Trend Forecaster — weekly teaser (Friday) ────────────────────────────────
   const shouldRunTrend = isFriday && await shouldRun("TREND_FORECASTER", 6 * 24); // 6d guard
   if (shouldRunTrend) {

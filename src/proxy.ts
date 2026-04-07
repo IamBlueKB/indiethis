@@ -34,6 +34,12 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/artists")) return true;
   if (pathname.startsWith("/api/studios")) return true;
   if (pathname.startsWith("/api/beats")) return true;
+  // OG image API — public (used for social share previews)
+  if (pathname.startsWith("/api/og")) return true;
+  // Merch catalog — public (used on artist public merch pages)
+  if (pathname.startsWith("/api/merch/catalog")) return true;
+  // Printful webhook — public (called by Printful servers)
+  if (pathname.startsWith("/api/webhooks/printful")) return true;
   // Track overlay endpoint — public (used on explore / artist pages)
   if (pathname.match(/^\/api\/tracks\/[^/]+\/overlay$/)) return true;
   // Audio features endpoint — public (used by LazyAudioRadar on explore / artist pages)

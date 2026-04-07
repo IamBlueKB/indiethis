@@ -1005,7 +1005,8 @@ YouTubeSync          YoutubeReference
 | Producer–Artist Match Agent — weekly (Thursdays) matches producers to compatible artists | ✅ DONE |
 | Payment Recovery Agent — daily escalation emails at Day 2 / 5 / 10 for failed payments | ✅ DONE |
 | Collaboration Matchmaker Agent — monthly (1st of month) surfaces collab opportunities | ✅ DONE |
-| Release Bundle Agent — coordinates pre-release coaching across multi-step release plans | ✅ DONE |
+| Release Bundle Agent — weekly (Tuesdays) finds artists with tracks missing 2+ of cover art/canvas/lyric video, sends $18.99 bundle notification | ✅ DONE |
+| `RELEASE_BUNDLE` added to `AgentType` enum in Prisma schema | ✅ DONE |
 | All batch 2 agents orchestrated via `POST /api/cron/agents` cron route | ✅ DONE |
 | `dj-monthly-earnings` cron wired in `vercel.json` — fires 1st of each month at 07:00 UTC | ✅ DONE |
 | `dj-weekly-summary` cron wired in `vercel.json` — fires every Monday at 07:00 UTC | ✅ DONE |

@@ -10,7 +10,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { db } from "@/lib/db";
 
 function parseSignedRequest(signedRequest: string, appSecret: string): { user_id: string } | null {
   try {
@@ -27,8 +26,13 @@ function parseSignedRequest(signedRequest: string, appSecret: string): { user_id
 
 export async function POST(req: NextRequest) {
   try {
-    const body           = await req.formData();
-    const signedRequest  = body.get("signed_request") as string | null;
+    let formBody: FormData;
+    try {
+      formBody = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid request format" }, { status: 400 });
+    }
+    const signedRequest  = formBody.get("signed_request") as string | null;
     const appSecret      = process.env.FACEBOOK_CLIENT_SECRET;
     const appUrl         = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
 
