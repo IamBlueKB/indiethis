@@ -438,6 +438,17 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Lyric Video Studio: guest/subscriber audio upload (mp3/wav/flac/aac, max 64MB)
+  lyricVideoAudio: f({ audio: { maxFileSize: "64MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      // Public — guests and subscribers both upload here; no auth check
+      return {};
+    })
+    .onUploadComplete(async ({ file }) => {
+      await validateUT(file);
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Cover Art Studio: reference image upload (subscribers + guests, max 16MB)
   coverArtRef: f({ image: { maxFileSize: "16MB", maxFileCount: 1 } })
     .middleware(async () => {
