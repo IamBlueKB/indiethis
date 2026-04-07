@@ -19,6 +19,7 @@ import {
   Zap,
   Share2,
   Compass,
+  UserCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,8 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard",       icon: LayoutDashboard },
   { label: "Explore",   href: "/explore",          icon: Compass },
   { label: "Music",     href: "/dashboard/music",  icon: Music },
-  { label: "AI Tools", href: "/dashboard/ai/video", icon: Wand2 },
+  { label: "AI Tools",      href: "/dashboard/ai/video",  icon: Wand2 },
+  { label: "Avatar Studio", href: "/dashboard/avatar",    icon: UserCircle },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },
   { label: "Marketplace", href: "/dashboard/marketplace", icon: Store },
   { label: "Artist Site", href: "/dashboard/site", icon: Globe },

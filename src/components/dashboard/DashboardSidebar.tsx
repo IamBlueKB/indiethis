@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Settings2,
   Shield,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -65,6 +66,7 @@ const navItems: NavItem[] = [
   { label: "Broadcasts",    href: "/dashboard/broadcasts",   icon: MessageSquare },
   { label: "QR Code",       href: "/dashboard/qr",           icon: QrCode },
   { label: "AI Tools",      href: "/dashboard/ai/video",        icon: Wand2,        tourId: "ai-tools" },
+  { label: "Avatar Studio", href: "/dashboard/avatar",          icon: UserCircle },
   { label: "Track Shield", href: "/dashboard/ai/track-shield", icon: Shield },
   { label: "Merch",         href: "/dashboard/merch",        icon: ShoppingBag,  tourId: "merch" },
   { label: "Marketplace",   href: "/dashboard/marketplace",  icon: Store },
