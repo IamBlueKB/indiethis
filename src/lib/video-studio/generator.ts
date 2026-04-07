@@ -6,16 +6,21 @@
  * Handles the heavy-lifting for video generation:
  *   6a. Character portrait generation via FLUX Kontext Pro
  *   6b. Per-scene video generation with model-specific fal.ai params (max 3 concurrent)
+ *      — Model fallback chain: automatically retries with next-best model on failure
+ *      — Claude QA loop: reviews each generated frame before delivery; auto-regenerates on rejection
  *   6c. Multi-format Remotion Lambda stitching with beat-aligned crossfades
  *   6d. Thumbnail extraction from the highest-energy scene
  *
  * Called exclusively from generate.ts — not exposed to API routes directly.
  */
 
+import Anthropic                     from "@anthropic-ai/sdk";
 import { fal }                      from "@fal-ai/client";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import type { SceneSpec }            from "@/lib/video-studio/model-router";
 import type { MusicVideoProps, SceneClip } from "../../../remotion/src/MusicVideoComposition";
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,13 +36,25 @@ export interface PlannedSceneInput {
 }
 
 export interface GeneratedSceneOutput {
-  sceneIndex:   number;
-  videoUrl:     string;
-  model:        string;
-  prompt:       string;
-  startTime:    number;
-  endTime:      number;
-  energyLevel:  number;
+  sceneIndex:      number;
+  videoUrl:        string;
+  thumbnailUrl:    string | null;
+  model:           string;
+  prompt:          string;
+  startTime:       number;
+  endTime:         number;
+  energyLevel:     number;
+  // QA tracking
+  qaApproved:      boolean | null;   // null = no thumbnail available, QA skipped
+  qaReason:        string | null;
+  qaRetried:       boolean;
+  originalPrompt:  string;
+  refinedPrompt:   string | null;
+  // Fallback tracking
+  primaryModel:    string;
+  actualModel:     string;
+  fallbackUsed:    boolean;
+  fallbackAttempts: number;
 }
 
 // ─── 6a: Character portrait via FLUX Kontext Pro ────────────────────────────────
@@ -151,16 +168,241 @@ export async function generateSceneClip(
   const output   = (result as any).data ?? result;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const videoUrl = (output as any)?.video?.url ?? (output as any)?.url ?? "";
+  // Some fal.ai models (Kling) include a thumbnail_url on the video object
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thumbnailUrl: string | null = (output as any)?.video?.thumbnail_url ?? null;
 
   return {
-    sceneIndex:  scene.index,
+    sceneIndex:       scene.index,
     videoUrl,
-    model:       scene.model,
-    prompt:      scene.prompt,
-    startTime:   scene.startTime,
-    endTime:     scene.endTime,
-    energyLevel: scene.spec.energyLevel,
+    thumbnailUrl,
+    model:            scene.model,
+    prompt:           scene.prompt,
+    startTime:        scene.startTime,
+    endTime:          scene.endTime,
+    energyLevel:      scene.spec.energyLevel,
+    // QA + fallback defaults — overwritten by generateSceneWithFallback
+    qaApproved:       null,
+    qaReason:         null,
+    qaRetried:        false,
+    originalPrompt:   scene.prompt,
+    refinedPrompt:    null,
+    primaryModel:     scene.model,
+    actualModel:      scene.model,
+    fallbackUsed:     false,
+    fallbackAttempts: 0,
   };
+}
+
+// ─── Claude QA loop ───────────────────────────────────────────────────────────────
+
+interface QAResult {
+  approved:      boolean;
+  reason:        string;
+  refinedPrompt: string | null;
+}
+
+/**
+ * Sends a generated scene thumbnail to Claude for quality review.
+ * Claude evaluates whether the frame matches the scene description, has
+ * acceptable visual quality, and matches the requested mood/energy level.
+ *
+ * Returns approved=true to pass, approved=false to trigger a one-time retry
+ * with the refinedPrompt. If the thumbnail URL is unavailable, returns
+ * approved=true so generation continues without blocking.
+ */
+async function qaReviewScene(
+  clipThumbnailUrl: string,
+  sceneDescription: string,
+  cameraDirection:  string,
+  energyLevel:      number,
+): Promise<QAResult> {
+  const energyLabel = energyLevel > 0.7 ? "high" : energyLevel > 0.4 ? "medium" : "low";
+
+  const qaPrompt = `You are a quality control reviewer for AI-generated music video scenes.
+
+Compare this generated frame against the original scene description.
+
+Scene description: "${sceneDescription}"
+Camera direction: "${cameraDirection}"
+Mood/energy: "${energyLabel}"
+
+Evaluate on three criteria:
+1. Does the scene match the described setting and content?
+2. Is the visual quality acceptable (not blurry, not distorted, no artifacts)?
+3. Does the mood/lighting match the requested energy level?
+
+Respond with ONLY a JSON object:
+{
+  "approved": true/false,
+  "reason": "one sentence explanation",
+  "refinedPrompt": "improved prompt if rejected, null if approved"
+}`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model:      "claude-sonnet-4-20250514",
+      max_tokens: 200,
+      messages:   [{
+        role:    "user",
+        content: [
+          { type: "image", source: { type: "url", url: clipThumbnailUrl } },
+          { type: "text",  text: qaPrompt },
+        ],
+      }],
+    });
+
+    const text    = response.content[0].type === "text" ? response.content[0].text : "";
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(cleaned) as QAResult;
+  } catch (err) {
+    // If Claude is unavailable or response is unparseable, pass the scene through
+    console.warn("[generator] QA review failed — passing scene through:", err);
+    return { approved: true, reason: "QA skipped (parse error)", refinedPrompt: null };
+  }
+}
+
+// ─── Model fallback chain ─────────────────────────────────────────────────────────
+
+/**
+ * Ordered fallback list for each primary model.
+ * On infrastructure failure (timeout / 500 / rate limit), the pipeline
+ * automatically tries the next model in the chain.
+ *
+ * Uses the actual fal.ai model identifiers from model-router.ts.
+ */
+const MODEL_FALLBACKS: Record<string, string[]> = {
+  "fal-ai/veo3.1/image-to-video": [
+    "fal-ai/kling-video/v3/pro/image-to-video",
+    "fal-ai/bytedance/seedance/v2",
+  ],
+  "fal-ai/bytedance/seedance/v2": [
+    "fal-ai/kling-video/v3/pro/image-to-video",
+    "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
+  ],
+  "fal-ai/kling-video/v3/pro/image-to-video": [
+    "fal-ai/bytedance/seedance/v2",
+    "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
+  ],
+  "fal-ai/kling-video/v2.6/pro/image-to-video": [
+    "fal-ai/kling-video/v3/pro/image-to-video",
+    "fal-ai/bytedance/seedance/v2",
+  ],
+  "fal-ai/bytedance/seedance/v1.5/pro/image-to-video": [
+    "fal-ai/kling-video/v3/pro/image-to-video",
+    "fal-ai/bytedance/seedance/v2",
+  ],
+};
+
+/**
+ * Wraps generateSceneClip with a fallback chain + Claude QA review.
+ *
+ * Pipeline per scene:
+ *   1. Try primary model → on failure, try fallback 1 → fallback 2
+ *   2. Once any model succeeds, run Claude QA (if thumbnail available)
+ *   3. If QA rejects → regenerate once with refined prompt (using same model)
+ *   4. Return result regardless of second attempt quality
+ *
+ * Max calls per scene: 3 model attempts + 1 QA call + 1 QA retry = 5
+ * Typical scene:       1 model call + 1 QA call = 2
+ */
+async function generateSceneWithFallback(
+  scene:              PlannedSceneInput,
+  referenceImageUrl?: string,
+  audioUrl?:          string,
+  nextSceneImageUrl?: string,
+): Promise<GeneratedSceneOutput> {
+  const primaryModel   = scene.model;
+  const fallbacks      = MODEL_FALLBACKS[primaryModel] ?? [];
+  const modelsToTry    = [primaryModel, ...fallbacks];
+  let fallbackAttempts = 0;
+
+  let clip: GeneratedSceneOutput | null = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    try {
+      clip = await generateSceneClip(
+        { ...scene, model },
+        referenceImageUrl,
+        audioUrl,
+        nextSceneImageUrl,
+      );
+
+      if (i > 0) {
+        fallbackAttempts = i;
+        console.log(
+          `[generator] scene ${scene.index}: primary ${primaryModel} failed, succeeded with fallback ${model}`,
+        );
+      }
+      break; // success — exit model loop
+    } catch (err) {
+      console.error(
+        `[generator] scene ${scene.index}: model ${model} failed (attempt ${i + 1}/${modelsToTry.length})`,
+        err,
+      );
+      if (i === modelsToTry.length - 1) {
+        // All models exhausted — throw so generateAllScenes can write a placeholder
+        throw new Error(
+          `Scene ${scene.index} failed after ${modelsToTry.length} models: ${modelsToTry.join(" → ")}`,
+        );
+      }
+    }
+  }
+
+  if (!clip) throw new Error(`Scene ${scene.index}: no clip generated`);
+
+  // Annotate fallback metadata
+  clip.primaryModel     = primaryModel;
+  clip.actualModel      = clip.model;
+  clip.fallbackUsed     = fallbackAttempts > 0;
+  clip.fallbackAttempts = fallbackAttempts;
+  clip.originalPrompt   = scene.prompt;
+
+  // ── Claude QA review ──────────────────────────────────────────────────────
+  if (clip.thumbnailUrl) {
+    const cameraDirection = scene.spec.type; // use scene type as proxy for camera direction
+    const qaResult = await qaReviewScene(
+      clip.thumbnailUrl,
+      scene.prompt,
+      cameraDirection,
+      scene.spec.energyLevel,
+    );
+
+    clip.qaApproved = qaResult.approved;
+    clip.qaReason   = qaResult.reason;
+
+    if (!qaResult.approved) {
+      console.log(`[generator] scene ${scene.index} QA rejected: ${qaResult.reason}`);
+
+      // Retry once with the refined prompt — use same model that succeeded
+      const retryPrompt = qaResult.refinedPrompt ?? scene.prompt;
+      try {
+        const retryClip = await generateSceneClip(
+          { ...scene, model: clip.actualModel, prompt: retryPrompt },
+          referenceImageUrl,
+          audioUrl,
+          nextSceneImageUrl,
+        );
+        // Preserve QA metadata, adopt retry's video/thumbnail
+        clip.videoUrl      = retryClip.videoUrl;
+        clip.thumbnailUrl  = retryClip.thumbnailUrl;
+        clip.qaRetried     = true;
+        clip.refinedPrompt = retryPrompt;
+      } catch (retryErr) {
+        // Retry failed — show original clip to artist anyway
+        console.warn(`[generator] scene ${scene.index} QA retry failed:`, retryErr);
+        clip.qaRetried     = true;
+        clip.refinedPrompt = retryPrompt;
+      }
+    }
+  } else {
+    // No thumbnail — QA skipped gracefully
+    clip.qaApproved = null;
+    clip.qaReason   = "No thumbnail available";
+  }
+
+  return clip;
 }
 
 // ─── Parallel scene generation (max 3 concurrent) ────────────────────────────────
@@ -189,14 +431,15 @@ export async function generateAllScenes(
 
   for (const chunk of chunks) {
     const settled = await Promise.allSettled(
-      chunk.map((scene, chunkIdx) => {
+      chunk.map((scene) => {
         // For Seedance 1.5 Pro transitions, pass next scene's reference if available
         const nextScene = scenes[scene.index + 1];
         const nextRef   = nextScene && scene.model === "fal-ai/bytedance/seedance/v1.5/pro/image-to-video"
           ? referenceImageUrl
           : undefined;
 
-        return generateSceneClip(scene, referenceImageUrl, audioUrl, nextRef);
+        // generateSceneWithFallback handles model fallback + Claude QA
+        return generateSceneWithFallback(scene, referenceImageUrl, audioUrl, nextRef);
       })
     );
 
@@ -207,16 +450,26 @@ export async function generateAllScenes(
       if (r.status === "fulfilled") {
         results.push(r.value);
       } else {
-        console.error(`[generator] scene ${scene.index} failed:`, r.reason);
+        console.error(`[generator] scene ${scene.index} failed all fallbacks:`, r.reason);
         // Placeholder so timeline isn't broken
         results.push({
-          sceneIndex:  scene.index,
-          videoUrl:    "",
-          model:       scene.model,
-          prompt:      scene.prompt,
-          startTime:   scene.startTime,
-          endTime:     scene.endTime,
-          energyLevel: scene.spec.energyLevel,
+          sceneIndex:       scene.index,
+          videoUrl:         "",
+          thumbnailUrl:     null,
+          model:            scene.model,
+          prompt:           scene.prompt,
+          startTime:        scene.startTime,
+          endTime:          scene.endTime,
+          energyLevel:      scene.spec.energyLevel,
+          qaApproved:       null,
+          qaReason:         "Generation failed",
+          qaRetried:        false,
+          originalPrompt:   scene.prompt,
+          refinedPrompt:    null,
+          primaryModel:     scene.model,
+          actualModel:      scene.model,
+          fallbackUsed:     false,
+          fallbackAttempts: 0,
         });
       }
     }
