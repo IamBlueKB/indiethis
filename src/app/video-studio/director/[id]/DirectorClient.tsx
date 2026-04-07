@@ -21,6 +21,7 @@ import {
 
 import PresetPicker, { type VideoPreset } from "@/components/video-studio/PresetPicker";
 import WorkflowBoard, { type WorkflowScene, type WorkflowClip } from "@/components/video-studio/WorkflowBoard";
+import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,9 @@ export default function DirectorClient({
 
   // Saving scene edits
   const [savingScene, setSavingScene] = useState(false);
+
+  // Avatar character reference (Director Mode)
+  const [avatarRefUrl, setAvatarRefUrl] = useState<string | null>(null);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -251,6 +255,21 @@ export default function DirectorClient({
       setApproveErr("Something went wrong. Please try again.");
     } finally {
       setApproving(false);
+    }
+  }
+
+  // ── Save avatar as character ref ──────────────────────────────────────────────
+  async function handleAvatarSelect(payload: AvatarSelectPayload) {
+    setAvatarRefUrl(payload.url);
+    // Persist to MusicVideo record so the generation engine picks it up
+    try {
+      await fetch(`/api/video-studio/${id}/refs`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ url: payload.url }),
+      });
+    } catch {
+      // non-fatal — best effort
     }
   }
 
@@ -494,6 +513,25 @@ export default function DirectorClient({
                 </div>
               )}
             </div>
+
+            {/* Avatar character reference (logged-in users) */}
+            {userId && (
+              <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: "#2A2A2A", backgroundColor: "#0F0F0F" }}>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>Artist Reference</p>
+                  <p className="text-[11px] mt-1" style={{ color: "#666" }}>
+                    Select your avatar to use as a character reference throughout this video.
+                  </p>
+                </div>
+                <AvatarPicker
+                  compact
+                  label="Artist Reference"
+                  selectedUrl={avatarRefUrl ?? undefined}
+                  onSelect={handleAvatarSelect}
+                  onUploadUrl={(url: string) => handleAvatarSelect({ url, dominantColors: null, avatarId: "" })}
+                />
+              </div>
+            )}
 
             {/* Continue chat or generate shot list */}
             <div className="pt-4 border-t space-y-4" style={{ borderColor: "#1E1E1E" }}>

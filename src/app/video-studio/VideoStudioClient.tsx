@@ -16,8 +16,9 @@ import {
   Film, Upload, Music2, Zap, ChevronRight, ChevronLeft,
   Loader2, AlertCircle, Check, Play, X, Wand2, Clapperboard,
 } from "lucide-react";
-import { useUploadThing } from "@/lib/uploadthing-client";
+import { useUploadThing }  from "@/lib/uploadthing-client";
 import { DEFAULT_VIDEO_PRICES } from "@/lib/video-studio/model-router";
+import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,9 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
 
   // Cover art pre-seeded from cover art studio
   const [coverArtRefUrl, setCoverArtRefUrl] = useState<string | null>(initialCoverArtUrl ?? null);
+
+  // Avatar ref — selected from AvatarPicker (takes priority over cover art ref)
+  const [avatarRefUrl, setAvatarRefUrl] = useState<string | null>(null);
 
   // Step 1 — track selection
   const [audioUrl,       setAudioUrl]       = useState("");
@@ -220,7 +224,10 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
           style:         selectedStyle,
           aspectRatio,
           guestEmail:    !userId ? guestEmail.trim() : undefined,
-          characterRefs: coverArtRefUrl ? [coverArtRefUrl] : undefined,
+          characterRefs: (() => {
+            const refs = [avatarRefUrl ?? coverArtRefUrl].filter((u): u is string => Boolean(u));
+            return refs.length > 0 ? refs : undefined;
+          })(),
         }),
       });
 
@@ -513,8 +520,22 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               </p>
             </div>
 
-            {/* Cover art ref banner */}
-            {coverArtRefUrl && (
+            {/* Reference photo — avatar picker for logged-in users, cover art banner for guests */}
+            {userId ? (
+              <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: "#1E1E1E", backgroundColor: "#111" }}>
+                <p className="text-xs font-semibold text-white">Artist Reference</p>
+                <p className="text-[11px]" style={{ color: "#666" }}>
+                  Your avatar will be passed to the director as a character reference.
+                </p>
+                <AvatarPicker
+                  compact
+                  label="Artist Reference"
+                  selectedUrl={avatarRefUrl ?? undefined}
+                  onSelect={(p: AvatarSelectPayload) => setAvatarRefUrl(p.url)}
+                  onUploadUrl={(url: string) => setAvatarRefUrl(url)}
+                />
+              </div>
+            ) : coverArtRefUrl ? (
               <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "#2A2A2A", backgroundColor: "rgba(212,168,67,0.06)" }}>
                 <img src={coverArtRefUrl} alt="Cover art" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -525,7 +546,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
                   <X size={14} />
                 </button>
               </div>
-            )}
+            ) : null}
 
             {/* Category tabs */}
             <div className="flex gap-2 flex-wrap">
