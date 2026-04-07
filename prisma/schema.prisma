@@ -2786,3 +2786,68 @@ model VideoPreset {
   @@index([sortOrder])
   @@index([active])
 }
+
+// ─── Cover Art Studio ─────────────────────────────────────────────────────────
+
+model CoverArtStyle {
+  id         String        @id @default(cuid())
+  name       String        @unique
+  category   String        // MINIMAL, DARK, VIBRANT, CLASSIC, EXPERIMENTAL
+  previewUrl String        // example cover art image URL
+  promptBase String        // base prompt blended with artist description by Claude
+  sortOrder  Int           @default(0)
+  active     Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  jobs       CoverArtJob[]
+}
+
+model CoverArtJob {
+  id                  String         @id @default(cuid())
+  // Owner — null for guests
+  userId              String?        // FK to User.id — no explicit Prisma relation (avoids touching large User model)
+  guestEmail          String?
+  guestName           String?
+
+  // Configuration
+  tier                String         // STANDARD | PREMIUM | PRO
+  stripePaymentId     String?        // set after successful Stripe checkout
+  styleId             String?
+  style               CoverArtStyle? @relation(fields: [styleId], references: [id])
+  trackId             String?        // optional linked Track.id for "Set as Track Cover"
+
+  // Prompt
+  prompt              String         // artist's raw description
+  enhancedPrompt      String?        // Claude-enhanced prompt used for generation
+
+  // Reference image (Premium / Pro)
+  referenceImageUrl   String?
+
+  // Output — initial generation
+  variationUrls       Json?          // String[] of generated image URLs (4 or 8)
+  selectedUrl         String?        // URL the artist picked from initial variations
+
+  // Pro tier refinement
+  refinementRound     Int            @default(0)   // 0=initial, 1=round1 done, 2=round2 done
+  refinementHistory   Json?          // RefinementRound[]: {round, instruction, prompt, urls, selectedUrl}[]
+
+  // Job state
+  status              String         @default("PENDING")
+  // PENDING → GENERATING → COMPLETE | FAILED
+  errorMessage        String?
+
+  // Non-subscriber conversion tracking (mirrors MusicVideo pattern)
+  conversionStep      Int            @default(0)
+  conversionNextAt    DateTime?
+  conversionPromoCode String?
+  conversionAnyOpened Boolean        @default(false)
+  conversionDone      Boolean        @default(false)
+  abandonedCartSent   Boolean        @default(false)
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([guestEmail])
+  @@index([status])
+  @@index([createdAt])
+}
