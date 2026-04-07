@@ -159,6 +159,7 @@ model User {
   moderationFlags          ModerationFlag[]
   fanFundingReceived       FanFunding[]           @relation("FanFundingReceived")
   musicVideos              MusicVideo[]
+  lyricVideos              LyricVideo[]
 }
 
 model Studio {
@@ -2547,6 +2548,8 @@ enum AgentType {
   RELEASE_BUNDLE
   REVENUE_REPORT
   VIDEO_CONVERSION
+  COVER_ART_CONVERSION
+  LYRIC_VIDEO_CONVERSION
 }
 
 model TrackShieldScan {
@@ -2845,6 +2848,97 @@ model CoverArtJob {
 
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([guestEmail])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─── Lyric Video Studio ───────────────────────────────────────────────────────
+
+model TypographyStyle {
+  id            String       @id @default(cuid())
+  name          String       @unique  // KARAOKE | KINETIC_BOUNCE | SMOOTH_FADE | GLITCH | HANDWRITTEN
+  displayName   String                // Human-readable: "Karaoke Highlight"
+  description   String                // One-line description shown in picker
+  previewCss    Json                  // CSS vars / props used by TypographyPreview component
+  remotionConfig Json                 // Remotion animation params (easing, stagger, scale, etc.)
+  sortOrder     Int          @default(0)
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  lyricVideos   LyricVideo[]
+
+  @@index([sortOrder])
+}
+
+model LyricVideo {
+  id              String          @id @default(cuid())
+
+  // Owner — null for guests
+  userId          String?
+  guestEmail      String?
+  guestName       String?
+
+  // Source track
+  trackId         String?          // linked IndieThis Track (subscribers only)
+  trackTitle      String
+  trackDuration   Int              // seconds
+  audioUrl        String           // uploaded or pulled from Track.fileUrl
+  coverArtUrl     String?          // used as Kling image seed + color extraction
+
+  // Mode
+  mode            String           // QUICK | DIRECTOR
+
+  // Typography
+  typographyStyleId String?
+  typographyStyle   TypographyStyle? @relation(fields: [typographyStyleId], references: [id])
+
+  // Style
+  colorPalette    Json?            // { primary, secondary, accent } extracted from cover art
+  visionPrompt    String?          // user's free-text direction
+
+  // Song analysis
+  songStructure   Json?            // SongAnalysis object from song-analyzer
+  bpm             Int?
+  musicalKey      String?
+  energy          Float?
+  lyrics          String?
+  lyricTimestamps Json?            // LyricWord[]: { word, start, end }[]
+
+  // Director Mode
+  creativeBrief   Json?            // Claude-generated creative brief
+  sectionPlan     Json?            // SectionPlan[]: { sectionIndex, type, lyrics, typographyOverride, backgroundPrompt }
+  conversationLog Json?            // ChatMessage[]: { role, content, createdAt }
+
+  // Generation output
+  backgroundScenes Json?           // BackgroundScene[]: { sectionIndex, videoUrl, prompt, startTime, endTime }
+  finalVideoUrl   String?
+  thumbnailUrl    String?
+
+  // Job state
+  status          String           @default("PENDING")
+  // PENDING → ANALYZING → GENERATING → STITCHING → COMPLETE | FAILED
+  progress        Int              @default(0)   // 0-100
+  currentStep     String?
+  errorMessage    String?
+
+  // Billing
+  stripePaymentId String?
+  amount          Int              // cents paid (0 for included subscription credits)
+
+  // Non-subscriber conversion tracking (mirrors MusicVideo / CoverArtJob pattern)
+  conversionStep      Int          @default(0)
+  conversionNextAt    DateTime?
+  conversionPromoCode String?
+  conversionAnyOpened Boolean      @default(false)
+  conversionDone      Boolean      @default(false)
+  abandonedCartSent   Boolean      @default(false)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User?            @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([guestEmail])
