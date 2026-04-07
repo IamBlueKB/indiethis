@@ -20,6 +20,7 @@ import { db }                   from "@/lib/db";
 import { fal }                  from "@fal-ai/client";
 import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
 import { sendMusicVideoCompleteEmail } from "@/lib/brevo/email";
+import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
 import { sendVideoConversionEmail1 }  from "@/lib/agents/video-conversion";
 import type { MusicVideo }      from "@prisma/client";
 import {
@@ -216,6 +217,11 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         thumbnailUrl:   thumbnailUrl ?? undefined,
       },
     });
+
+    // ── Auto-link to Release Board ────────────────────────────────────────────
+    if (vid.trackId) {
+      autoLinkToRelease(vid.trackId, "musicVideo", musicVideoId).catch(() => {});
+    }
 
     // ── Notification email ────────────────────────────────────────────────────
     try {

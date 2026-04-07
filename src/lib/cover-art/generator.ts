@@ -19,6 +19,7 @@ import { fal }         from "@fal-ai/client";
 import { db }          from "@/lib/db";
 import { UTApi }       from "uploadthing/server";
 import { embedIndieThisMetadata } from "@/lib/image-metadata";
+import { autoLinkToRelease }      from "@/lib/release-board/auto-link";
 import {
   enhanceCoverArtPrompt,
   refinePrompt,
@@ -176,6 +177,12 @@ export async function generateCoverArtJob(input: CoverArtGenerateInput): Promise
       where: { id: jobId },
       data:  { status: "COMPLETE", variationUrls },
     });
+
+    // Auto-link to Release Board if this job is tied to a track
+    const job = await db.coverArtJob.findUnique({ where: { id: jobId }, select: { trackId: true } });
+    if (job?.trackId) {
+      autoLinkToRelease(job.trackId, "coverArt", jobId).catch(() => {});
+    }
 
   } catch (err) {
     await db.coverArtJob.update({

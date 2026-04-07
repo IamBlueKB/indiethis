@@ -20,6 +20,7 @@ import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client"
 import { db }                   from "@/lib/db";
 import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
 import { generateBackgrounds }  from "@/lib/lyric-video/background-generator";
+import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
 import { sendBrandedEmail }     from "@/lib/brevo/email";
 import type { LyricVideo }      from "@prisma/client";
 import type { CinematicLyricVideoProps, LyricWordTimestamp, BackgroundSceneClip } from "../../../remotion/src/CinematicLyricVideo";
@@ -358,6 +359,11 @@ export async function startLyricVideoGeneration(lyricVideoId: string): Promise<v
         thumbnailUrl:  thumbnailUrl || undefined,
       },
     });
+
+    // ── Auto-link to Release Board ─────────────────────────────────────────
+    if (j.trackId) {
+      autoLinkToRelease(j.trackId, "lyricVideo", lyricVideoId).catch(() => {});
+    }
 
     // ── Phase 4: Notification email ────────────────────────────────────────
     try {
