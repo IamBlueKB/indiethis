@@ -316,6 +316,26 @@ export const ourFileRouter = {
       return { url: file.ufsUrl ?? file.url };
     }),
 
+  // Music Video Studio: guest/subscriber audio upload (mp3/wav/flac/aac, max 64MB)
+  videoStudioAudio: f({ audio: { maxFileSize: "64MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      // Public — guests and subscribers both upload here; no auth check
+      return {};
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
+  // Music Video Studio: character reference images for Director Mode (up to 3, 8MB each)
+  videoStudioRef: f({ image: { maxFileSize: "8MB", maxFileCount: 3 } })
+    .middleware(async () => {
+      // Public — allow guests and subscribers
+      return {};
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
+
   // Sample pack individual preview audio files (after zip extraction, max 50MB each, up to 5)
   samplePackPreview: f({ audio: { maxFileSize: "32MB", maxFileCount: 5 } })
     .middleware(async ({ req }) => {

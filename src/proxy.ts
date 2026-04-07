@@ -26,6 +26,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/dev")) return true;
   // Stripe checkout — handles both new signups (unauthenticated) and upgrades (authenticated)
   if (pathname === "/api/stripe/checkout") return true;
+  // Music Video Studio — public (guests + subscribers)
+  if (pathname.startsWith("/api/video-studio")) return true;
   // Public invoice pages — no auth required (artists paying invoices)
   if (pathname.startsWith("/api/invoice")) return true;
   // Invoice pay route — called from public invoice page
