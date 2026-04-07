@@ -20,6 +20,7 @@ import {
   Share2,
   Compass,
   UserCircle,
+  Package,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -31,9 +32,10 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard",       icon: LayoutDashboard },
-  { label: "Explore",   href: "/explore",          icon: Compass },
-  { label: "Music",     href: "/dashboard/music",  icon: Music },
+  { label: "Dashboard", href: "/dashboard",           icon: LayoutDashboard },
+  { label: "Explore",   href: "/explore",              icon: Compass },
+  { label: "Music",     href: "/dashboard/music",      icon: Music },
+  { label: "Releases",  href: "/dashboard/releases",   icon: Package },
   { label: "AI Tools",      href: "/dashboard/ai/video",  icon: Wand2 },
   { label: "Avatar Studio", href: "/dashboard/avatar",    icon: UserCircle },
   { label: "Merch", href: "/dashboard/merch", icon: ShoppingBag },

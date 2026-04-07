@@ -42,6 +42,7 @@ import {
   Settings2,
   Shield,
   UserCircle,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store";
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard",     href: "/dashboard",              icon: LayoutDashboard },
   { label: "Explore",       href: "/explore",                icon: Compass,      tourId: "explore" },
   { label: "Music",         href: "/dashboard/music",        icon: Music,        tourId: "music" },
+  { label: "Releases",      href: "/dashboard/releases",     icon: Package },
   { label: "Sales",         href: "/dashboard/music/sales",  icon: ShoppingCart },
   { label: "Videos",        href: "/dashboard/videos",       icon: Video },
   { label: "Shows",         href: "/dashboard/shows",        icon: Mic2 },
