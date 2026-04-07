@@ -16,21 +16,27 @@ import {
   type SceneSpec,
 } from "@/lib/video-studio/model-router";
 import type { SongSection }    from "@/lib/video-studio/song-analyzer";
+import {
+  detectCameraDirection,
+  CAMERA_DIRECTION_MAP,
+  type CameraDirectionKey,
+} from "@/components/video-studio/CameraDirectionPicker";
 
 interface ShotListScene {
-  index:          number;
-  title:          string;       // short scene title e.g. "Rooftop Opening"
-  description:    string;       // visual description for the prompt
-  model:          string;
-  modelDisplay:   string;
-  modelReason:    string;
-  startTime:      number;
-  endTime:        number;
-  duration:       number;
-  type:           string;
-  energyLevel:    number;
-  prompt:         string;
-  hasLipSync:     boolean;
+  index:           number;
+  title:           string;       // short scene title e.g. "Rooftop Opening"
+  description:     string;       // visual description for the prompt
+  cameraDirection: CameraDirectionKey; // detected from description or default
+  model:           string;
+  modelDisplay:    string;
+  modelReason:     string;
+  startTime:       number;
+  endTime:         number;
+  duration:        number;
+  type:            string;
+  energyLevel:     number;
+  prompt:          string;
+  hasLipSync:      boolean;
 }
 
 export async function POST(
@@ -139,21 +145,25 @@ Return ONLY a JSON array, no other text. Example:
         energyLevel:           section.energy,
         duration:              Math.min(section.duration, 8),
       };
-      const modelConfig = selectModel(spec);
-      const prompt      = `${stylePrompt}, ${desc?.description ?? section.type + " scene"}, ${sceneType} music video scene, energy ${Math.round(section.energy * 10)}/10`.slice(0, 500);
+      const modelConfig      = selectModel(spec);
+      const description      = desc?.description ?? `${section.type} section of the music video`;
+      const cameraDirection  = detectCameraDirection(description);
+      const cameraPrompt     = CAMERA_DIRECTION_MAP[cameraDirection]?.prompt ?? "";
+      const prompt           = `${stylePrompt}, ${description}, ${cameraPrompt}, ${sceneType} music video scene, energy ${Math.round(section.energy * 10)}/10`.slice(0, 600);
 
       return {
-        index:        idx,
-        title:        desc?.title ?? `Scene ${idx + 1}`,
-        description:  desc?.description ?? "",
-        model:        modelConfig.model,
-        modelDisplay: modelConfig.displayName,
-        modelReason:  modelConfig.reason,
-        startTime:    section.startTime,
-        endTime:      section.endTime,
-        duration:     spec.duration,
-        type:         sceneType,
-        energyLevel:  section.energy,
+        index:           idx,
+        title:           desc?.title ?? `Scene ${idx + 1}`,
+        description,
+        cameraDirection,
+        model:           modelConfig.model,
+        modelDisplay:    modelConfig.displayName,
+        modelReason:     modelConfig.reason,
+        startTime:       section.startTime,
+        endTime:         section.endTime,
+        duration:        spec.duration,
+        type:            sceneType,
+        energyLevel:     section.energy,
         prompt,
         hasLipSync,
       };
