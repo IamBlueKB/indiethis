@@ -32,6 +32,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/cover-art")) return true;
   // Lyric Video Studio — public (guests + subscribers)
   if (pathname.startsWith("/api/lyric-video")) return true;
+  // AI Mastering — public (guests pay, then process; subscribers redirect to dashboard)
+  if (pathname.startsWith("/api/mastering")) return true;
+  if (pathname.startsWith("/master")) return true;
   // Public invoice pages — no auth required (artists paying invoices)
   if (pathname.startsWith("/api/invoice")) return true;
   // Invoice pay route — called from public invoice page

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     // Verify payment intent is succeeded
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
     const paymentIntent = await stripe.paymentIntents.retrieve(body.stripePaymentId);
     if (paymentIntent.status !== "succeeded") {
       return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
