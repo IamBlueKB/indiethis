@@ -17,7 +17,7 @@ function startOfMonth(): Date {
 }
 
 export default async function MasteringAdminPage() {
-  await requireAdminAccess();
+  await requireAdminAccess("mastering");
 
   const now   = new Date();
   const month = startOfMonth();
