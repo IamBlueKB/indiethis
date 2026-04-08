@@ -6,7 +6,7 @@
  * Designed to run as a background job (called from an API route, not blocking).
  */
 
-import { prisma } from "@/lib/prisma";
+import { db as prisma } from "@/lib/db";
 import {
   analyzeAudio,
   separateStems,

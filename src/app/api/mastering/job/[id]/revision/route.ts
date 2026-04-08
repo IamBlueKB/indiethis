@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db as prisma } from "@/lib/db";
 import { runRevisionPipeline } from "@/lib/mastering/pipeline";
 
 export async function POST(

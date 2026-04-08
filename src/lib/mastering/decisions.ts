@@ -19,7 +19,7 @@ import type {
   MultibandBand,
   MasterVersion,
 } from "./engine";
-import { prisma } from "@/lib/prisma";
+import { db as prisma } from "@/lib/db";
 
 const anthropic = new Anthropic();
 
