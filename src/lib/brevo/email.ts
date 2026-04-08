@@ -2261,3 +2261,31 @@ export async function sendSessionFollowUpEmail(params: {
     tags:    ["session", "follow-up"],
   });
 }
+
+export async function sendMasteringCompleteEmail(params: {
+  email:  string;
+  name:   string;
+  jobId:  string;
+}): Promise<void> {
+  const url = `${process.env.NEXTAUTH_URL ?? "https://indiethis.com"}/master/${params.jobId}`;
+  await sendBrandedEmail({
+    to:      { email: params.email, name: params.name },
+    subject: "Your master is ready — listen and download",
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Master is Ready</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 8px;">
+        Hi ${params.name}, your AI-mastered track has been processed and is ready to compare.
+      </p>
+      <p style="color:#888;font-size:13px;line-height:1.6;margin:0 0 20px;">
+        Four versions are waiting — Clean, Warm, Punch, and Loud.
+        Listen to all four, pick your favorite, and download platform-ready files.
+      </p>
+      <a href="${url}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Compare &amp; Download &rarr;
+      </a>
+    `,
+    context:  "MASTERING_COMPLETE",
+    userData: {},
+    tags:     ["ai", "mastering", "complete"],
+  });
+}
