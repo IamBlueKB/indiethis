@@ -7,6 +7,7 @@
 
 import { auth }                      from "@/lib/auth";
 import { db }                        from "@/lib/db";
+import { Prisma }                    from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 async function assertAdmin() {
@@ -43,8 +44,8 @@ export async function PATCH(
       ...(body.name          !== undefined && { name:          body.name.trim() }),
       ...(body.genre         !== undefined && { genre:         body.genre.trim() }),
       ...(body.description   !== undefined && { description:   body.description.trim() }),
-      ...(body.mixProfile    !== undefined && { mixProfile:    body.mixProfile }),
-      ...(body.masterProfile !== undefined && { masterProfile: body.masterProfile }),
+      ...(body.mixProfile    !== undefined && { mixProfile:    body.mixProfile    as Prisma.InputJsonValue }),
+      ...(body.masterProfile !== undefined && { masterProfile: body.masterProfile as Prisma.InputJsonValue }),
       ...(body.active        !== undefined && { active:        body.active }),
       ...(body.sortOrder     !== undefined && { sortOrder:     body.sortOrder }),
     },
