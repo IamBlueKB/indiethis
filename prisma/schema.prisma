@@ -162,6 +162,7 @@ model User {
   lyricVideos              LyricVideo[]
   avatars                  ArtistAvatar[]
   releases                 Release[]
+  masteringJobs            MasteringJob[]
 }
 
 model Studio {
@@ -2570,6 +2571,10 @@ enum AgentType {
   VIDEO_CONVERSION
   COVER_ART_CONVERSION
   LYRIC_VIDEO_CONVERSION
+  MASTERING_CONVERSION
+  MIX_QUALITY_FOLLOWUP
+  ALBUM_MASTERING_NUDGE
+  MASTERING_ABANDONED_CART
 }
 
 model TrackShieldScan {
@@ -2985,4 +2990,98 @@ model Release {
 
   @@index([userId])
   @@index([updatedAt])
+}
+
+// ─── AI Mix & Master Studio ────────────────────────────────────────────────────
+
+model MasteringJob {
+  id                      String    @id @default(cuid())
+  userId                  String?
+  user                    User?     @relation(fields: [userId], references: [id])
+
+  // Guest fields
+  guestEmail              String?
+  guestName               String?
+
+  // Mode
+  mode                    String    // MIX_AND_MASTER | MASTER_ONLY
+  tier                    String    // STANDARD | PREMIUM | PRO
+
+  // Input
+  inputType               String    // STEMS | STEREO
+  inputFileUrl            String?   // stereo mix URL (MASTER_ONLY)
+  stems                   Json?     // array of stem objects (MIX_AND_MASTER)
+
+  // Track reference
+  trackId                 String?   // linked IndieThis track (subscribers)
+
+  // Configuration
+  mood                    String?   // CLEAN | WARM | PUNCH | LOUD
+  genre                   String?
+  platforms               Json?     // target platform array
+  referenceTrackUrl       String?
+
+  // Processing
+  status                  String    @default("PENDING")
+  // PENDING | ANALYZING | SEPARATING | MIXING | MASTERING | COMPLETE | FAILED
+  analysisData            Json?     // BPM, key, sections, per-stem analysis
+  mixParameters           Json?     // Claude's per-stem processing decisions
+  masterParameters        Json?     // Claude's mastering chain decisions
+
+  // Versions — always 4: Clean, Warm, Punch, Loud
+  versions                Json?     // [{ name, lufs, url, waveformData }]
+  selectedVersion         String?
+
+  // Exports
+  exports                 Json?     // [{ platform, lufs, format, url }]
+
+  // Preview (30s, always free)
+  previewUrl              String?
+  previewExpiresAt        DateTime?
+
+  // Revision (Pro tier only)
+  revisionNote            String?
+  revisionUsed            Boolean   @default(false)
+
+  // Album mastering
+  albumGroupId            String?
+
+  // Mastering report (on-screen card, not PDF)
+  reportData              Json?     // { finalLufs, truePeak, dynamicRange, loudnessPenalties }
+
+  // Payment
+  stripePaymentId         String?
+  amount                  Int?      // cents
+
+  // Conversion agents
+  conversionStep          Int       @default(0)
+  conversionNextAt        DateTime?
+  conversionDone          Boolean   @default(false)
+  conversionAnyOpened     Boolean   @default(false)
+  conversionPromoCode     String?
+  abandonedCartSent       Boolean   @default(false)
+
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([albumGroupId])
+  @@index([guestEmail])
+  @@index([createdAt])
+}
+
+model MasteringPreset {
+  id            String   @id @default(cuid())
+  name          String   @unique  // "Dark Trap", "Bright Pop", etc.
+  genre         String            // HIP_HOP | POP | RNB | ELECTRONIC | ROCK | INDIE | LATIN | ACOUSTIC | JAZZ
+  description   String
+  mixProfile    Json              // per-stem default processing parameters
+  masterProfile Json              // mastering chain defaults
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([genre])
+  @@index([sortOrder])
 }
