@@ -145,6 +145,11 @@ const PERMISSIONS: Record<string, Record<AdminRole, AccessLevel>> = {
     OPS_ADMIN:     "view-only",
     SUPPORT_ADMIN: "none",
   },
+  mastering: {
+    SUPER_ADMIN:   "full",
+    OPS_ADMIN:     "full",
+    SUPPORT_ADMIN: "none",
+  },
 };
 
 // ---------------------------------------------------------------------------
