@@ -35,10 +35,11 @@ const PLAN_FACTORS: Record<string, Record<string, number>> = {
   reign:  { STANDARD: 0.50, PREMIUM: 0.56, PRO: 0.53 }, // $5.99 / $9.99  / $14.99
 };
 
-function getPlanKey(planId: string): string | null {
-  if (planId.toLowerCase().includes("launch")) return "launch";
-  if (planId.toLowerCase().includes("push"))   return "push";
-  if (planId.toLowerCase().includes("reign"))  return "reign";
+function getPlanKey(subTier: string): string | null {
+  const t = subTier.toLowerCase();
+  if (t === "launch") return "launch";
+  if (t === "push")   return "push";
+  if (t === "reign")  return "reign";
   return null;
 }
 
@@ -62,11 +63,11 @@ export async function POST(req: NextRequest) {
     if (session?.user?.id) {
       const sub = await prisma.subscription.findUnique({
         where:  { userId: session.user.id },
-        select: { stripePriceId: true, status: true },
+        select: { tier: true, status: true },
       });
 
-      if (sub?.status === "active" && sub.stripePriceId) {
-        const planKey = getPlanKey(sub.stripePriceId);
+      if (sub?.status === "ACTIVE" && sub.tier) {
+        const planKey = getPlanKey(sub.tier);
         if (planKey && PLAN_FACTORS[planKey]?.[tier]) {
           amountCents = Math.round(amountCents * PLAN_FACTORS[planKey][tier]);
         }
