@@ -7,6 +7,7 @@
 
 import { auth }                      from "@/lib/auth";
 import { db }                        from "@/lib/db";
+import { Prisma }                    from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 async function assertAdmin() {
@@ -52,8 +53,8 @@ export async function POST(req: NextRequest) {
       name:          body.name.trim(),
       genre:         body.genre.trim(),
       description:   body.description.trim(),
-      mixProfile:    body.mixProfile    ?? {},
-      masterProfile: body.masterProfile ?? {},
+      mixProfile:    (body.mixProfile    ?? {}) as Prisma.InputJsonValue,
+      masterProfile: (body.masterProfile ?? {}) as Prisma.InputJsonValue,
       active:        true,
       sortOrder:     body.sortOrder ?? 0,
     },
