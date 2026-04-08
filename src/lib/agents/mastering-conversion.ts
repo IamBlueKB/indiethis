@@ -332,8 +332,9 @@ export async function runMasteringAbandonedCartAgent(): Promise<MasteringAbandon
 // ─── Promo code helper ─────────────────────────────────────────────────────────
 
 async function createMasteringPromoCode(jobId: string): Promise<string> {
+  if (!stripe) return `MASTER50-${jobId.slice(-6).toUpperCase()}`;
   const code = `MASTER50-${jobId.slice(-6).toUpperCase()}`;
-  await stripe.promotionCodes.create({
+  await (stripe.promotionCodes.create as Function)({
     coupon: await getOrCreateMasteringCoupon(),
     code,
     max_redemptions: 1,
@@ -344,6 +345,7 @@ async function createMasteringPromoCode(jobId: string): Promise<string> {
 let _masteringCouponId: string | null = null;
 async function getOrCreateMasteringCoupon(): Promise<string> {
   if (_masteringCouponId) return _masteringCouponId;
+  if (!stripe) return "";
   const existing = await stripe.coupons.list({ limit: 100 });
   const found = existing.data.find((c) => c.name === "Mastering 50% Off");
   if (found) { _masteringCouponId = found.id; return found.id; }

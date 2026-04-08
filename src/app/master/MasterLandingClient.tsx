@@ -263,7 +263,7 @@ export function MasterLandingClient() {
 
         <div
           className="mt-6 p-4 rounded-xl border text-center"
-          style={{ backgroundColor: "#D4A843/5", borderColor: "#D4A843", borderOpacity: 0.3 }}
+          style={{ backgroundColor: "rgba(212,168,67,0.05)", borderColor: "rgba(212,168,67,0.3)" }}
         >
           <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>
             IndieThis subscribers get up to 50% off every master

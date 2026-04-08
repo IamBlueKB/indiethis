@@ -14,8 +14,6 @@ import {
   mixStems,
   masterAudio,
   generatePreview,
-  getVersionTargets as _getVersionTargets,
-  PLATFORM_TARGETS,
 } from "./engine";
 import {
   decideMixParameters,
@@ -98,7 +96,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       where: { id: jobId },
       data:  {
         genre,
-        analysisData,
+        analysisData: analysisData as any,
       },
     });
 
@@ -125,10 +123,10 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       where: { id: jobId },
       data:  {
         mixParameters: {
-          chains:    mixDecision.chains,
+          chains:    mixDecision.chains as any[],
           reasoning: mixDecision.reasoning,
           naturalLanguagePrompt: nlPrompt,
-        },
+        } as any,
       },
     });
 
@@ -163,7 +161,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
         masterParameters: {
           ...masterDecision.params,
           reasoning: masterDecision.reasoning,
-        },
+        } as any,
       },
     });
 
@@ -232,7 +230,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
 
     await prisma.masteringJob.update({
       where: { id: jobId },
-      data:  { genre, analysisData: analysis as unknown as Record<string, unknown> },
+      data:  { genre, analysisData: analysis as any },
     });
 
     // ── 2. Separate stems (for per-stem mastering adjustments) ────────────────
@@ -263,7 +261,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
 
     await prisma.masteringJob.update({
       where: { id: jobId },
-      data:  { mixParameters: { chains: mixDecision.chains, reasoning: mixDecision.reasoning } },
+      data:  { mixParameters: { chains: mixDecision.chains as any[], reasoning: mixDecision.reasoning } as any },
     });
 
     // ── 5. Reprocess stems and recombine ──────────────────────────────────────
@@ -293,7 +291,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
 
     await prisma.masteringJob.update({
       where: { id: jobId },
-      data:  { masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } },
+      data:  { masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } as any },
     });
 
     // ── 8. Master → 4 versions + platform exports ─────────────────────────────
@@ -555,10 +553,12 @@ async function sendAlbumCompleteEmail(albumGroupId: string): Promise<void> {
     });
     if (!firstJob) return;
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
     await sendMasteringCompleteEmail({
-      email:  user.email,
-      name:   user.name ?? "Artist",
-      jobId:  firstJob.id,
+      artistEmail:  user.email,
+      artistName:   user.name ?? "Artist",
+      trackTitle:   group.title ?? "Your Album",
+      downloadUrl:  `${appUrl}/dashboard/ai/master`,
     });
   } catch (err) {
     console.error("Failed to send album complete email:", err);
@@ -582,7 +582,13 @@ async function sendCompletionEmail(jobId: string): Promise<void> {
     );
 
     if (!email) return;
-    await sendMasteringCompleteEmail({ email, name: name ?? "Artist", jobId });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+    await sendMasteringCompleteEmail({
+      artistEmail: email,
+      artistName:  name ?? "Artist",
+      trackTitle:  "Your Track",
+      downloadUrl: `${appUrl}/dashboard/ai/master`,
+    });
   } catch (err) {
     // Non-fatal — don't fail the pipeline over email
     console.error("Failed to send mastering complete email:", err);

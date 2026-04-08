@@ -80,14 +80,14 @@ export async function POST(req: NextRequest) {
         tier:                body.tier,
         inputType:           body.inputType,
         inputFileUrl:        body.inputFileUrl ?? null,
-        stems:               body.stems        ?? null,
+        stems:               (body.stems ?? undefined) as any,
         genre:               body.genre        ?? null,
         mood:                body.mood         ?? "CLEAN",
         platforms:           body.platforms    ?? ["spotify", "apple_music", "youtube", "wav_master"],
         referenceTrackUrl:   body.referenceTrackUrl ?? null,
         mixParameters:       body.naturalLanguagePrompt
-                               ? { naturalLanguagePrompt: body.naturalLanguagePrompt }
-                               : null,
+                               ? { naturalLanguagePrompt: body.naturalLanguagePrompt } as any
+                               : undefined,
         stripePaymentId:     body.stripePaymentId,
         amount:              paymentIntent.amount,
         albumGroupId:        body.albumGroupId ?? null,
