@@ -47,8 +47,14 @@ const PRICING = [
   },
 ];
 
-export function MasterLandingClient() {
-  const [view,         setView]         = useState<View>("landing");
+export function MasterLandingClient({
+  autoStart   = false,
+  resumeJobId = null,
+}: {
+  autoStart?:   boolean;
+  resumeJobId?: string | null;
+} = {}) {
+  const [view,         setView]         = useState<View>(autoStart ? "wizard" : "landing");
   const [selectedTier, setSelectedTier] = useState<string>("PREMIUM");
   const [selectedMode, setSelectedMode] = useState<Mode>("MASTER_ONLY");
   const [demoPlaying,  setDemoPlaying]  = useState(false);
@@ -89,6 +95,7 @@ export function MasterLandingClient() {
       <MasterGuestWizard
         initialTier={selectedTier}
         initialMode={selectedMode}
+        resumeJobId={resumeJobId}
         onBack={() => setView("landing")}
       />
     );

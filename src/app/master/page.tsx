@@ -12,7 +12,9 @@ export const metadata = {
   },
 };
 
-export default async function MasterPage() {
+export default async function MasterPage(
+  { searchParams }: { searchParams: Promise<Record<string, string>> }
+) {
   const session = await auth();
 
   // Subscribers go straight to dashboard — they get discounted pricing there
@@ -20,5 +22,9 @@ export default async function MasterPage() {
     redirect("/dashboard/ai/master");
   }
 
-  return <MasterLandingClient />;
+  const sp       = await searchParams;
+  const autoStart = sp.start === "1";
+  const resumeJobId = sp.resume ?? null;
+
+  return <MasterLandingClient autoStart={autoStart} resumeJobId={resumeJobId} />;
 }

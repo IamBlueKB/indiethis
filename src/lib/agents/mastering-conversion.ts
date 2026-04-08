@@ -645,24 +645,27 @@ async function sendMasteringAbandonedCartEmail(job: {
   id: string; guestEmail: string; guestName?: string | null;
   mode?: string | null; tier?: string | null;
 }): Promise<void> {
-  const name = job.guestName || "Artist";
+  const name      = job.guestName || "Artist";
+  const resumeUrl = `${MASTER_URL()}?start=1&resume=${job.id}`;
   await sendBrandedEmail({
     to:      { email: job.guestEmail, name },
-    subject: "You were close — your free preview is still waiting",
+    subject: "Your track is waiting to be mastered",
     primaryContent: `
-      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">You left before hearing it.</h1>
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Pick up where you left off.</h1>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        Hey ${name}, you started the mastering process but didn't finish. The AI is ready to generate your free
-        30-second preview — no card required to hear it.
+        Hey ${name}, you started mastering a track on IndieThis but didn't finish.
+        Your session is still here — pick up where you left off.
       </p>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px;">
-        Upload your track, hear exactly what the AI will do to it, then decide if you want the full master.
-        No risk. No account needed.
+        Upload your track, get a free 30-second AI preview, then decide if you want the full master.
+        Four versions ready in minutes. No account needed.
       </p>
-      <a href="${MASTER_URL()}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
-        Get your free preview &rarr;
-      </a>
-      <p style="color:#555;font-size:12px;margin:24px 0 0;">
+      <p style="margin:0 0 24px;">
+        <a href="${resumeUrl}" style="background:#E85D4A;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px;">
+          Continue mastering &rarr;
+        </a>
+      </p>
+      <p style="color:#555;font-size:12px;margin:0;">
         Full masters from $11.99 · 4 versions · platform-ready exports · ready in minutes.
       </p>
     `,

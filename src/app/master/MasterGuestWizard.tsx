@@ -77,11 +77,13 @@ const VERSION_DESCRIPTIONS: Record<VersionName, string> = {
 export function MasterGuestWizard({
   initialTier,
   initialMode,
+  resumeJobId = null,
   onBack,
 }: {
-  initialTier: string;
-  initialMode: Mode;
-  onBack:      () => void;
+  initialTier:  string;
+  initialMode:  Mode;
+  resumeJobId?: string | null;
+  onBack:       () => void;
 }) {
   const { data: session } = useSession();
 
@@ -367,6 +369,12 @@ export function MasterGuestWizard({
         {/* ── STEP: Email gate ──────────────────────────────────────────── */}
         {step === "email" && (
           <div className={card}>
+            {/* Welcome back banner — shown when arriving via abandoned-cart email */}
+            {resumeJobId && (
+              <div className="mb-5 px-4 py-3 rounded-xl text-sm font-medium" style={{ background: "#1A1A1A", border: "1px solid #D4A843", color: "#D4A843" }}>
+                Welcome back — pick up where you left off.
+              </div>
+            )}
             <h2 className="text-xl font-bold mb-1">Where should we send your master?</h2>
             <p className="text-sm mb-6" style={{ color: "#777" }}>
               Sign in for one-click access, or drop your email below.
