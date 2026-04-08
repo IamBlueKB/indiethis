@@ -227,21 +227,20 @@ export async function runAlbumMasteringNudgeAgent(): Promise<AlbumMasteringNudge
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
   // Aggregate: find users with 2-3 complete single masters, no album jobs
-  const candidates = await db.masteringJob.groupBy({
+  const rawCandidates = await db.masteringJob.groupBy({
     by:    ["userId"],
     where: {
-      userId:      { not: null },
-      mode:        "MASTER_ONLY",
-      status:      "COMPLETE",
+      userId:       { not: null },
+      mode:         "MASTER_ONLY",
+      status:       "COMPLETE",
       albumGroupId: null,
-      updatedAt:   { lte: threeDaysAgo },
-    },
-    having: {
-      userId: { _count: { gte: 2, lte: 3 } },
+      updatedAt:    { lte: threeDaysAgo },
     },
     _count: { id: true },
   });
 
+  // Filter to 2-3 completed single masters in application code
+  const candidates = rawCandidates.filter((c) => c._count.id >= 2 && c._count.id <= 3);
   result.checked = candidates.length;
 
   for (const c of candidates) {
