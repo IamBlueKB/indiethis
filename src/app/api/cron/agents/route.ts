@@ -352,6 +352,39 @@ export async function POST(req: NextRequest) {
     results.lyricVideoAbandonedCart = "skipped (not due)";
   }
 
+  // ── Mastering Conversion Agent — daily ───────────────────────────────────
+  const shouldRunMasteringConversion = await shouldRun("MASTERING_CONVERSION", 22); // 22h guard
+  if (shouldRunMasteringConversion) {
+    try {
+      const {
+        runMasteringConversionAgent,
+        runMixQualityFollowUpAgent,
+        runAlbumMasteringNudgeAgent,
+        runMasteringAbandonedCartAgent,
+      } = await import("@/lib/agents/mastering-conversion");
+      await logAgentAction("MASTERING_CONVERSION", "AGENT_RUN_START");
+
+      const convResult = await runMasteringConversionAgent();
+      results.masteringConversion = `acted=${convResult.acted} (e1=${convResult.email1} e2=${convResult.email2} e3=${convResult.email3} e4=${convResult.email4} stopped=${convResult.stopped})`;
+
+      const qualityResult = await runMixQualityFollowUpAgent();
+      results.mixQualityFollowUp = `checked=${qualityResult.checked} acted=${qualityResult.acted}`;
+
+      const nudgeResult = await runAlbumMasteringNudgeAgent();
+      results.albumMasteringNudge = `checked=${nudgeResult.checked} acted=${nudgeResult.acted}`;
+
+      const cartResult = await runMasteringAbandonedCartAgent();
+      results.masteringAbandonedCart = `checked=${cartResult.checked} sent=${cartResult.sent}`;
+    } catch (err) {
+      results.masteringConversion = `error: ${String(err)}`;
+    }
+  } else {
+    results.masteringConversion    = "skipped (not due)";
+    results.mixQualityFollowUp     = "skipped (not due)";
+    results.albumMasteringNudge    = "skipped (not due)";
+    results.masteringAbandonedCart = "skipped (not due)";
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,
