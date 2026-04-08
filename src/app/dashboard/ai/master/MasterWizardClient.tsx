@@ -170,8 +170,20 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   const [revSubmitting, setRevSubmitting] = useState(false);
   const [setMasterLoading, setSetMasterLoading] = useState(false);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── Configure-step preview state ────────────────────────────────────────────
+  const [configPreviewUrl,     setConfigPreviewUrl]     = useState<string | null>(null);
+  const [configPreviewStart,   setConfigPreviewStart]   = useState<number>(0);
+  const [configOriginalUrl,    setConfigOriginalUrl]    = useState<string | null>(null);
+  const [configPreviewPlaying, setConfigPreviewPlaying] = useState(false);
+  const [configAbMode,         setConfigAbMode]         = useState<"original" | "preview">("preview");
+  const [previewing,           setPreviewing]           = useState(false);
+  // Cached upload URLs so we don't re-upload after preview
+  const [cachedInputFileUrl,   setCachedInputFileUrl]   = useState<string | null>(null);
+  const [cachedUploadedStems,  setCachedUploadedStems]  = useState<{ url: string; filename: string; stemType: string }[] | null>(null);
+
+  const audioRef       = useRef<HTMLAudioElement | null>(null);
+  const configAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pollRef        = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Status polling ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -220,19 +232,109 @@ export function MasterWizardClient({ userId }: { userId: string }) {
     return fileUrl;
   }
 
+  // ── Config-step 30s preview ──────────────────────────────────────────────────
+  async function generateConfigPreview() {
+    setPreviewing(true);
+    setError(null);
+    try {
+      // Upload files (cache to avoid re-uploading later)
+      let inputFileUrl = cachedInputFileUrl;
+      let uploadedStems = cachedUploadedStems;
+
+      if (!inputFileUrl && !uploadedStems) {
+        if (mode === "MASTER_ONLY" && stereoFile) {
+          inputFileUrl = await uploadFile(stereoFile);
+          setCachedInputFileUrl(inputFileUrl);
+        } else {
+          const mapped = await Promise.all(
+            stems.map(async (s) => ({ url: await uploadFile(s.file), filename: s.name, stemType: s.type }))
+          );
+          setCachedUploadedStems(mapped);
+          uploadedStems = mapped;
+        }
+      }
+
+      // Build a local object URL for original A/B side
+      const sourceFile = mode === "MASTER_ONLY" ? stereoFile : stems[0]?.file;
+      if (sourceFile && !configOriginalUrl) {
+        setConfigOriginalUrl(URL.createObjectURL(sourceFile));
+      }
+
+      const res = await fetch("/api/mastering/preview", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          inputType:    mode === "MASTER_ONLY" ? "STEREO" : "STEMS",
+          inputFileUrl: inputFileUrl ?? undefined,
+          stems:        uploadedStems?.map((s) => ({ url: s.url, filename: s.filename })) ?? undefined,
+          mood,
+          genre:        genre || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Preview generation failed.");
+      const { previewUrl: url, startSec } = await res.json() as { previewUrl: string; startSec: number; endSec: number };
+      setConfigPreviewUrl(url);
+      setConfigPreviewStart(startSec ?? 0);
+      setConfigAbMode("preview");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview failed. Please try again.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  function toggleConfigPreview() {
+    const url = configAbMode === "preview" ? configPreviewUrl : configOriginalUrl;
+    if (!url) return;
+    if (configPreviewPlaying) {
+      configAudioRef.current?.pause();
+      setConfigPreviewPlaying(false);
+    } else {
+      if (configAudioRef.current) configAudioRef.current.pause();
+      configAudioRef.current = new Audio(url);
+      // For original, seek to same 30s window; for preview the clip is already trimmed
+      if (configAbMode === "original" && configPreviewStart > 0) {
+        configAudioRef.current.addEventListener("loadedmetadata", () => {
+          if (configAudioRef.current) configAudioRef.current.currentTime = configPreviewStart;
+        });
+      }
+      // Stop after 30 seconds of playback
+      const stopAfter = configAbMode === "original" ? configPreviewStart + 30 : 30;
+      configAudioRef.current.ontimeupdate = () => {
+        const ref = configAudioRef.current;
+        if (!ref) return;
+        const elapsed = configAbMode === "original" ? ref.currentTime - configPreviewStart : ref.currentTime;
+        if (elapsed >= 30) { ref.pause(); setConfigPreviewPlaying(false); }
+      };
+      configAudioRef.current.onended = () => setConfigPreviewPlaying(false);
+      configAudioRef.current.play().catch(() => {});
+      setConfigPreviewPlaying(true);
+    }
+  }
+
+  function switchConfigAbMode(m: "original" | "preview") {
+    if (configAudioRef.current) { configAudioRef.current.pause(); setConfigPreviewPlaying(false); }
+    setConfigAbMode(m);
+  }
+
   // ── Start processing ────────────────────────────────────────────────────────
   async function startProcessing() {
     setUploading(true);
     setError(null);
     try {
-      let inputFileUrl: string | undefined;
-      let uploadedStems: { url: string; filename: string; stemType: string }[] | undefined;
-      if (mode === "MASTER_ONLY" && stereoFile) {
-        inputFileUrl = await uploadFile(stereoFile);
-      } else {
-        uploadedStems = await Promise.all(
-          stems.map(async (s) => ({ url: await uploadFile(s.file), filename: s.name, stemType: s.type }))
-        );
+      // Reuse cached uploads from preview if available — skip redundant re-upload
+      let inputFileUrl: string | undefined = cachedInputFileUrl ?? undefined;
+      let uploadedStems: { url: string; filename: string; stemType: string }[] | undefined = cachedUploadedStems ?? undefined;
+
+      if (!inputFileUrl && !uploadedStems) {
+        if (mode === "MASTER_ONLY" && stereoFile) {
+          inputFileUrl = await uploadFile(stereoFile);
+        } else {
+          uploadedStems = await Promise.all(
+            stems.map(async (s) => ({ url: await uploadFile(s.file), filename: s.name, stemType: s.type }))
+          );
+        }
       }
       let referenceUrl: string | undefined;
       if (referenceFile) referenceUrl = await uploadFile(referenceFile);
@@ -674,6 +776,95 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             </p>
           )}
 
+          {/* ── 30-second preview player ─────────────────────────────────── */}
+          {configPreviewUrl && (
+            <div
+              className="rounded-2xl border p-4 space-y-3"
+              style={{ backgroundColor: "#0D0D0D", borderColor: "#D4A843", boxShadow: "0 0 0 1px rgba(212,168,67,0.15)" }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold" style={{ color: "#D4A843" }}>FREE PREVIEW · 30 seconds</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "#777" }}>Highest-energy section of your track</p>
+                </div>
+                <button
+                  onClick={generateConfigPreview}
+                  disabled={previewing}
+                  className="text-[11px] flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-colors hover:border-[#444] disabled:opacity-40"
+                  style={{ borderColor: "#2A2A2A", color: "#777" }}
+                >
+                  {previewing ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+                  Regenerate
+                </button>
+              </div>
+
+              {/* A/B toggle */}
+              <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "#2A2A2A" }}>
+                <button
+                  onClick={() => switchConfigAbMode("original")}
+                  className="flex-1 py-1.5 text-xs font-semibold transition-all"
+                  style={configAbMode === "original"
+                    ? { backgroundColor: "#2A2A2A", color: "#fff" }
+                    : { color: "#555" }}
+                >
+                  Original
+                </button>
+                <button
+                  onClick={() => switchConfigAbMode("preview")}
+                  className="flex-1 py-1.5 text-xs font-semibold transition-all"
+                  style={configAbMode === "preview"
+                    ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                    : { color: "#555" }}
+                >
+                  AI Preview
+                </button>
+              </div>
+
+              {/* Waveform bars + play control */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleConfigPreview}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all hover:opacity-90"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  {configPreviewPlaying ? <Pause size={16} /> : <Play size={16} />}
+                </button>
+                <div className="flex-1 flex items-end gap-px h-9 overflow-hidden rounded">
+                  {Array.from({ length: 60 }, (_, i) => {
+                    const h = 25 + Math.abs(Math.sin(i * 0.5 + 0.3) * 55 + Math.sin(i * 1.1) * 20);
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          flex: 1,
+                          height: `${Math.min(100, h)}%`,
+                          borderRadius: 1,
+                          backgroundColor: configAbMode === "preview"
+                            ? (i % 3 === 0 ? "#D4A843" : i % 3 === 1 ? "#c4943a" : "#E85D4A")
+                            : "#2A2A2A",
+                          transition: "background-color 0.3s ease, height 0.3s ease",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="text-right shrink-0">
+                  <div
+                    className="text-xs font-bold"
+                    style={{ color: configAbMode === "preview" ? "#D4A843" : "#555" }}
+                  >
+                    {configAbMode === "preview" ? "−14 LUFS" : "Unprocessed"}
+                  </div>
+                  <div className="text-[10px] mt-0.5" style={{ color: "#555" }}>30s</div>
+                </div>
+              </div>
+
+              <p className="text-[11px]" style={{ color: "#555" }}>
+                Like it? Adjust direction above or proceed to the full render.
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={() => setStep("upload")}
@@ -682,15 +873,34 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             >
               <ChevronLeft size={15} /> Back
             </button>
+            {/* Free preview — shown when no preview yet */}
+            {!configPreviewUrl && (
+              <button
+                onClick={generateConfigPreview}
+                disabled={previewing}
+                className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {previewing
+                  ? <><Loader2 size={16} className="animate-spin" /> Generating preview…</>
+                  : <><Play size={15} /> Free 30s Preview</>
+                }
+              </button>
+            )}
             <button
               onClick={startProcessing}
               disabled={uploading}
-              className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+              className={cn(
+                "py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2",
+                configPreviewUrl ? "flex-1" : "px-5"
+              )}
               style={{ backgroundColor: "#E85D4A", color: "#fff" }}
             >
               {uploading
                 ? <><Loader2 size={16} className="animate-spin" /> Uploading &amp; paying…</>
-                : <>Pay &amp; Start Mastering <ChevronRight size={16} /></>
+                : configPreviewUrl
+                  ? <>Pay &amp; Generate Full Mix <ChevronRight size={16} /></>
+                  : <ChevronRight size={16} />
               }
             </button>
           </div>
