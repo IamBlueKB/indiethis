@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import {
   Music, Wand2, Play, Pause, ChevronRight, Zap, Check,
@@ -52,6 +52,31 @@ export function MasterLandingClient() {
   const [selectedTier, setSelectedTier] = useState<string>("PREMIUM");
   const [selectedMode, setSelectedMode] = useState<Mode>("MASTER_ONLY");
   const [demoPlaying,  setDemoPlaying]  = useState(false);
+  const [abDemo,       setAbDemo]       = useState<"before" | "after">("after");
+  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Placeholder demo audio URLs — swap for real samples at launch
+  const DEMO_BEFORE_URL = "/audio/demo-unmastered.wav";
+  const DEMO_AFTER_URL  = "/audio/demo-mastered.wav";
+
+  function toggleDemoPlay() {
+    const url = abDemo === "before" ? DEMO_BEFORE_URL : DEMO_AFTER_URL;
+    if (demoPlaying) {
+      demoAudioRef.current?.pause();
+      setDemoPlaying(false);
+    } else {
+      if (demoAudioRef.current) demoAudioRef.current.pause();
+      demoAudioRef.current = new Audio(url);
+      demoAudioRef.current.play().catch(() => {}); // graceful fail on placeholder
+      demoAudioRef.current.onended = () => setDemoPlaying(false);
+      setDemoPlaying(true);
+    }
+  }
+
+  function switchAbMode(mode: "before" | "after") {
+    if (demoAudioRef.current) { demoAudioRef.current.pause(); setDemoPlaying(false); }
+    setAbDemo(mode);
+  }
 
   function startWizard(tier: string, mode: Mode) {
     setSelectedTier(tier);
@@ -129,6 +154,110 @@ export function MasterLandingClient() {
         <p className="text-xs mt-4" style={{ color: "#555" }}>
           Subscribers get up to 50% off · <Link href="/pricing" className="underline hover:text-white transition-colors">See subscriber pricing</Link>
         </p>
+      </section>
+
+      {/* ── A/B Demo Player ─────────────────────────────────────────────── */}
+      <section className="max-w-3xl mx-auto px-6 pb-16">
+        <div
+          className="rounded-2xl border p-6"
+          style={{ backgroundColor: "#111", borderColor: "#1A1A1A" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#D4A843" }}>Live comparison</p>
+              <p className="font-bold text-base mt-0.5">Hear the difference AI mastering makes</p>
+            </div>
+            {/* Before / After toggle */}
+            <div className="flex rounded-lg overflow-hidden border border-[#2A2A2A]">
+              <button
+                onClick={() => switchAbMode("before")}
+                className="px-4 py-1.5 text-xs font-semibold transition-all"
+                style={abDemo === "before"
+                  ? { backgroundColor: "#2A2A2A", color: "#fff" }
+                  : { backgroundColor: "transparent", color: "#555" }}
+              >
+                Before
+              </button>
+              <button
+                onClick={() => switchAbMode("after")}
+                className="px-4 py-1.5 text-xs font-semibold transition-all"
+                style={abDemo === "after"
+                  ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                  : { backgroundColor: "transparent", color: "#555" }}
+              >
+                After
+              </button>
+            </div>
+          </div>
+
+          {/* Waveform visualization */}
+          <div className="flex items-end gap-[2px] h-14 mb-5 overflow-hidden rounded-lg px-1">
+            {Array.from({ length: 80 }, (_, i) => {
+              const h = 20 + Math.abs(Math.sin(i * 0.4 + 1) * 60 + Math.sin(i * 0.9) * 30);
+              const active = abDemo === "after";
+              return (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${Math.min(100, h * (active ? 1 : 0.45))}%`,
+                    borderRadius: 1,
+                    backgroundColor: active
+                      ? i % 3 === 0 ? "#D4A843" : i % 3 === 1 ? "#E85D4A" : "#c4943a"
+                      : "#333",
+                    transition: "height 0.4s ease, background-color 0.4s ease",
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Play button */}
+            <button
+              onClick={toggleDemoPlay}
+              className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all hover:opacity-90"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              {demoPlaying ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+
+            {/* Track info + LUFS */}
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Sample Track</p>
+              <p className="text-xs mt-0.5" style={{ color: "#777" }}>
+                {abDemo === "before" ? "Unmastered · −23 LUFS · Raw mix" : "AI Mastered · −14 LUFS · Spotify-ready"}
+              </p>
+            </div>
+
+            {/* LUFS pill */}
+            <div
+              className="text-[11px] font-bold px-3 py-1.5 rounded-lg"
+              style={abDemo === "after"
+                ? { backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }
+                : { backgroundColor: "#1A1A1A", color: "#555" }}
+            >
+              {abDemo === "before" ? "−23 LUFS" : "−14 LUFS"}
+            </div>
+          </div>
+
+          {/* Platform loudness targets */}
+          {abDemo === "after" && (
+            <div className="mt-4 pt-4 border-t border-[#1A1A1A] grid grid-cols-4 gap-2">
+              {[
+                { name: "Spotify",     lufs: "−14" },
+                { name: "Apple",       lufs: "−16" },
+                { name: "YouTube",     lufs: "−13" },
+                { name: "WAV Master",  lufs: "0"   },
+              ].map((p) => (
+                <div key={p.name} className="text-center">
+                  <div className="text-xs font-bold" style={{ color: "#D4A843" }}>{p.lufs}</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: "#555" }}>{p.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── Free preview callout ─────────────────────────────────────────── */}

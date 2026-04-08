@@ -10,10 +10,11 @@
  * - Free 30-second preview before payment prompt
  */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useSession, signIn } from "next-auth/react";
 import {
   Upload, Loader2, ChevronRight, ChevronLeft, Check, Download,
-  Play, Pause, Zap, Info, RotateCcw, X, Music, Wand2,
+  Play, Pause, Zap, Info, X, Music, Wand2, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,8 @@ export function MasterGuestWizard({
   initialMode: Mode;
   onBack:      () => void;
 }) {
+  const { data: session } = useSession();
+
   const [step,       setStep]       = useState<Step>("email");
   const [email,      setEmail]      = useState("");
   const [name,       setName]       = useState("");
@@ -106,10 +109,31 @@ export function MasterGuestWizard({
   const [error,      setError]      = useState<string | null>(null);
   const [uploading,  setUploading]  = useState(false);
 
+  interface TrendingTrack { id: string; title: string; artistName: string; coverUrl: string | null; slug: string; }
+  const [trendingTracks, setTrendingTracks] = useState<TrendingTrack[]>([]);
+
   const audioRef    = useRef<HTMLAudioElement | null>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef    = useRef<HTMLInputElement | null>(null);
   const stemsRef    = useRef<HTMLInputElement | null>(null);
+
+  // ── Auto-advance past email if user has a session ─────────────────────────
+  useEffect(() => {
+    if (session?.user?.email && step === "email") {
+      setEmail(session.user.email);
+      setName(session.user.name ?? "");
+      setStep("mode");
+    }
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch trending tracks for post-delivery section ───────────────────────
+  useEffect(() => {
+    if (step !== "export") return;
+    fetch("/api/explore/tracks?limit=4")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Array.isArray(d?.tracks)) setTrendingTracks(d.tracks.slice(0, 4)); })
+      .catch(() => {});
+  }, [step]);
 
   // ── Status polling ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -345,16 +369,45 @@ export function MasterGuestWizard({
           <div className={card}>
             <h2 className="text-xl font-bold mb-1">Where should we send your master?</h2>
             <p className="text-sm mb-6" style={{ color: "#777" }}>
-              We'll email you when your master is ready. No account required.
+              Sign in for one-click access, or drop your email below.
             </p>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Your name (optional)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-transparent border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A843] transition-colors"
-              />
+            <div className="space-y-3">
+
+              {/* Google OAuth */}
+              <button
+                onClick={() => signIn("google", { callbackUrl: "/master" })}
+                className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border border-[#2A2A2A] text-sm font-medium hover:border-[#444] transition-colors"
+                style={{ backgroundColor: "#fff", color: "#111" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                  <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </button>
+
+              {/* Facebook OAuth */}
+              <button
+                onClick={() => signIn("facebook", { callbackUrl: "/master" })}
+                className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: "#1877F2", color: "#fff" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+                </svg>
+                Continue with Facebook
+              </button>
+
+              {/* OR divider */}
+              <div className="flex items-center gap-3 my-1">
+                <div className="flex-1 h-px" style={{ backgroundColor: "#2A2A2A" }} />
+                <span className="text-xs" style={{ color: "#555" }}>or</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: "#2A2A2A" }} />
+              </div>
+
+              {/* Email field */}
               <input
                 type="email"
                 placeholder="your@email.com"
@@ -362,7 +415,18 @@ export function MasterGuestWizard({
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-transparent border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A843] transition-colors"
               />
+
+              {/* Name field */}
+              <input
+                type="text"
+                placeholder="Your name (optional)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-transparent border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A843] transition-colors"
+              />
+
               {error && <p className="text-sm text-red-400">{error}</p>}
+
               <button
                 onClick={() => {
                   if (!email.includes("@")) { setError("Please enter a valid email."); return; }
@@ -374,10 +438,14 @@ export function MasterGuestWizard({
               >
                 Continue <ChevronRight size={16} />
               </button>
-              <p className="text-center text-xs" style={{ color: "#555" }}>
-                Already have an account?{" "}
-                <a href="/login" className="underline hover:text-white transition-colors">Sign in</a>
-              </p>
+
+              <a
+                href="/explore"
+                className="block text-center text-xs hover:text-white transition-colors"
+                style={{ color: "#555" }}
+              >
+                Just want to listen? Explore music →
+              </a>
             </div>
           </div>
         )}
@@ -680,6 +748,52 @@ export function MasterGuestWizard({
               <a href="/pricing" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
                 Start your subscription <ChevronRight size={15} />
               </a>
+            </div>
+
+            {/* Post-delivery: Discover more music */}
+            <div className="pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Discover more music on IndieThis</p>
+                <a
+                  href="/explore"
+                  className="flex items-center gap-1 text-xs hover:text-white transition-colors"
+                  style={{ color: "#D4A843" }}
+                >
+                  Explore all <ExternalLink size={11} />
+                </a>
+              </div>
+              {trendingTracks.length > 0 ? (
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+                  {trendingTracks.map((t) => (
+                    <a
+                      key={t.id}
+                      href={`/${t.slug}`}
+                      className="shrink-0 w-36 rounded-xl border border-[#2A2A2A] overflow-hidden hover:border-[#444] transition-colors"
+                      style={{ backgroundColor: "#111" }}
+                    >
+                      <div className="w-full h-28 bg-[#1A1A1A] flex items-center justify-center overflow-hidden">
+                        {t.coverUrl ? (
+                          <img src={t.coverUrl} alt={t.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <Music size={20} style={{ color: "#333" }} />
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-semibold truncate">{t.title}</p>
+                        <p className="text-[10px] truncate mt-0.5" style={{ color: "#777" }}>{t.artistName}</p>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <a
+                  href="/explore"
+                  className="flex items-center justify-center gap-2 p-4 rounded-xl border border-[#2A2A2A] text-sm hover:border-[#444] transition-colors"
+                  style={{ color: "#777" }}
+                >
+                  <Music size={15} /> Browse independent artists on IndieThis
+                </a>
+              )}
             </div>
           </div>
         )}
