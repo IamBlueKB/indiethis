@@ -358,7 +358,6 @@ export async function POST(req: NextRequest) {
     try {
       const {
         runMasteringConversionAgent,
-        runMixQualityFollowUpAgent,
         runAlbumMasteringNudgeAgent,
         runMasteringAbandonedCartAgent,
       } = await import("@/lib/agents/mastering-conversion");
@@ -366,9 +365,6 @@ export async function POST(req: NextRequest) {
 
       const convResult = await runMasteringConversionAgent();
       results.masteringConversion = `acted=${convResult.acted} (e1=${convResult.email1} e2=${convResult.email2} e3=${convResult.email3} e4=${convResult.email4} stopped=${convResult.stopped})`;
-
-      const qualityResult = await runMixQualityFollowUpAgent();
-      results.mixQualityFollowUp = `checked=${qualityResult.checked} acted=${qualityResult.acted}`;
 
       const nudgeResult = await runAlbumMasteringNudgeAgent();
       results.albumMasteringNudge = `checked=${nudgeResult.checked} acted=${nudgeResult.acted}`;
@@ -380,9 +376,24 @@ export async function POST(req: NextRequest) {
     }
   } else {
     results.masteringConversion    = "skipped (not due)";
-    results.mixQualityFollowUp     = "skipped (not due)";
     results.albumMasteringNudge    = "skipped (not due)";
     results.masteringAbandonedCart = "skipped (not due)";
+  }
+
+
+  // ── Mix Quality Follow-Up Agent — daily ──────────────────────────────────────────────
+  const shouldRunMixQuality = await shouldRun("MIX_QUALITY_FOLLOWUP", 22); // 22h guard
+  if (shouldRunMixQuality) {
+    try {
+      const { runMixQualityFollowUpAgent } = await import("@/lib/agents/mix-quality-followup");
+      await logAgentAction("MIX_QUALITY_FOLLOWUP", "AGENT_RUN_START");
+      const result = await runMixQualityFollowUpAgent();
+      results.mixQualityFollowUp = `checked=${result.checked} acted=${result.acted}`;
+    } catch (err) {
+      results.mixQualityFollowUp = `error: ${String(err)}`;
+    }
+  } else {
+    results.mixQualityFollowUp = "skipped (not due)";
   }
 
   return NextResponse.json({

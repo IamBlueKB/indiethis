@@ -3061,6 +3061,7 @@ model MasteringJob {
   conversionAnyOpened     Boolean   @default(false)
   conversionPromoCode     String?
   abandonedCartSent       Boolean   @default(false)
+  followUpSent            Boolean   @default(false)  // true once mix-quality follow-up email sent (48h post-COMPLETE)
 
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
