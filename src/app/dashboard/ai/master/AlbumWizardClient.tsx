@@ -10,13 +10,13 @@
  * Steps: configure → upload tracks → checkout → processing → compare & export
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   Upload, Trash2, ChevronRight, ChevronLeft,
-  Loader2, Check, Download, Music, Zap, GripVertical,
+  Loader2, Check, Download, Music, Zap,
+  Play, Pause, Archive, Disc3, Activity, Sun, Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadStripe } from "@stripe/stripe-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ function uid(): string {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AlbumWizardClient({ userId }: { userId: string }) {
+export function AlbumWizardClient({ userId, onBack }: { userId: string; onBack?: () => void }) {
   const [step,        setStep]        = useState<AlbumStep>("configure");
   const [albumTitle,  setAlbumTitle]  = useState("");
   const [artist,      setArtist]      = useState("");
@@ -87,6 +87,11 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
   const [groupStatus, setGroupStatus]  = useState<AlbumGroupStatus | null>(null);
   const [trackResults, setTrackResults] = useState<AlbumTrackResult[]>([]);
   const [error,       setError]       = useState<string | null>(null);
+
+  // ── Version selection + playback ────────────────────────────────────────────
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
+  const audioRef   = useRef<HTMLAudioElement | null>(null);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
 
   // ── Track management ────────────────────────────────────────────────────────
   function addTrack() {
@@ -118,10 +123,10 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
         if (!track.file || track.status === "ready") continue;
         updateTrack(track.id, { status: "uploading" });
 
-        const res = await fetch("/api/mastering/upload-url", {
+        const res = await fetch("/api/upload/presign", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ filename: track.file.name, mimeType: track.file.type }),
+          body:    JSON.stringify({ filename: track.file.name, contentType: track.file.type, folder: "mastering" }),
         });
         const { uploadUrl, fileUrl } = await res.json() as { uploadUrl: string; fileUrl: string };
         await fetch(uploadUrl, { method: "PUT", body: track.file, headers: { "Content-Type": track.file.type } });
@@ -137,41 +142,35 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
     await checkoutAll();
   }
 
-  // ── Checkout each track ─────────────────────────────────────────────────────
+  // ── Single checkout for entire album ────────────────────────────────────────
   async function checkoutAll() {
     setPaying(true);
     setError(null);
     try {
+      const { loadStripe } = await import("@stripe/stripe-js");
       const stripeJs = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
       if (!stripeJs) throw new Error("Stripe failed to load.");
 
-      for (const track of tracks) {
-        if (track.status === "paid") continue;
-        if (!track.fileUrl) continue;
+      // One payment intent for total album cost
+      const checkoutRes = await fetch("/api/mastering/album/checkout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ tier, trackCount: tracks.length }),
+      });
+      if (!checkoutRes.ok) throw new Error("Checkout failed.");
+      const { clientSecret } = await checkoutRes.json() as { clientSecret: string; paymentIntentId: string };
 
-        // Create PaymentIntent per track
-        const piRes = await fetch("/api/mastering/checkout", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ mode: "MASTER_ONLY", tier }),
-        });
-        const { clientSecret, paymentIntentId } = await piRes.json() as {
-          clientSecret: string;
-          paymentIntentId: string;
-        };
+      const { error: stripeErr, paymentIntent } = await stripeJs.confirmPayment({
+        clientSecret,
+        confirmParams: { return_url: window.location.href },
+        redirect: "if_required",
+      });
+      if (stripeErr) throw new Error(stripeErr.message);
+      if (paymentIntent?.status !== "succeeded") throw new Error("Payment was not confirmed.");
 
-        const { error: stripeError } = await stripeJs.confirmPayment({
-          clientSecret,
-          confirmParams: { return_url: window.location.href },
-          redirect: "if_required",
-        });
-
-        if (stripeError) throw new Error(stripeError.message);
-        updateTrack(track.id, { stripePaymentId: paymentIntentId, status: "paid" });
-      }
-
-      // All paid — submit album mastering job
-      await submitAlbum();
+      const confirmedId = paymentIntent!.id;
+      setTracks((prev) => prev.map((t) => ({ ...t, stripePaymentId: confirmedId, status: "paid" as const })));
+      await submitAlbum(confirmedId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment failed.");
     } finally {
@@ -180,7 +179,7 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
   }
 
   // ── Submit album group ──────────────────────────────────────────────────────
-  async function submitAlbum() {
+  async function submitAlbum(paymentIntentId: string) {
     const res = await fetch("/api/mastering/album", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -191,20 +190,67 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
         mood,
         naturalLanguagePrompt: nlPrompt.trim() || undefined,
         tier,
-        tracks: tracks
-          .filter((t) => t.status === "paid")
-          .map((t) => ({
-            inputFileUrl:    t.fileUrl,
-            trackTitle:      t.trackTitle,
-            stripePaymentId: t.stripePaymentId!,
-          })),
+        tracks: tracks.map((t) => ({
+          inputFileUrl:    t.fileUrl,
+          trackTitle:      t.trackTitle,
+          stripePaymentId: paymentIntentId,
+        })),
       }),
     });
-
+    if (!res.ok) {
+      const d = await res.json() as { error?: string };
+      throw new Error(d.error ?? "Album submission failed.");
+    }
     const data = await res.json() as { albumGroupId: string; jobIds: string[] };
     setAlbumGroupId(data.albumGroupId);
     setStep("processing");
     pollAlbumStatus(data.albumGroupId);
+  }
+
+  // ── Version selection + playback ─────────────────────────────────────────────
+  function selectVersion(trackId: string, version: string) {
+    setSelectedVersions((prev) => ({ ...prev, [trackId]: version }));
+  }
+
+  function applyVersionToAll(version: string) {
+    const all: Record<string, string> = {};
+    trackResults.forEach((t) => { all[t.id] = version; });
+    setSelectedVersions(all);
+  }
+
+  function togglePlay(key: string, url: string) {
+    if (playingKey === key) {
+      audioRef.current?.pause();
+      setPlayingKey(null);
+    } else {
+      audioRef.current?.pause();
+      audioRef.current = new Audio(url);
+      audioRef.current.play().catch(() => {});
+      audioRef.current.onended = () => setPlayingKey(null);
+      setPlayingKey(key);
+    }
+  }
+
+  async function downloadAlbum() {
+    for (let i = 0; i < trackResults.length; i++) {
+      const t       = trackResults[i]!;
+      const version = selectedVersions[t.id] ?? t.versions?.[0]?.name ?? "Clean";
+      const vdata   = (t.versions ?? []).find((v: { name: string }) => v.name === version);
+      const url     = (t.exports ?? []).find((e: { platform: string }) => e.platform === "wav_master")?.url ?? vdata?.url;
+      const title   = tracks[i]?.trackTitle ?? `Track ${i + 1}`;
+      const num     = String(i + 1).padStart(2, "0");
+      const fname   = `${num} - ${title}.wav`;
+      if (!url) continue;
+      setTimeout(async () => {
+        try {
+          const blob   = await fetch(url).then((r) => r.blob());
+          const objUrl = URL.createObjectURL(blob);
+          const a      = document.createElement("a");
+          a.href = objUrl; a.download = fname; a.click();
+          setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
+        } catch { /* non-fatal */ }
+      }, i * 600);
+    }
   }
 
   // ── Poll album status ───────────────────────────────────────────────────────
@@ -456,76 +502,161 @@ export function AlbumWizardClient({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* ══ STEP: Export ════════════════════════════════════════════════════════ */}
+      {/* ══ STEP: Export / Album Review ══════════════════════════════════════ */}
       {step === "export" && trackResults.length > 0 && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold mb-1">Your album is ready</h2>
-            <p className="text-sm" style={{ color: "#777" }}>
-              All tracks mastered to a shared loudness target{groupStatus?.sharedLufsTarget ? ` (${groupStatus.sharedLufsTarget} LUFS)` : ""}.
+        <div className="space-y-5">
+          <div className="text-center">
+            <h2 className="text-lg font-semibold">Review your album</h2>
+            <p className="text-sm mt-1" style={{ color: "#777" }}>
+              Select a version per track, then download
             </p>
           </div>
 
-          {trackResults.map((track, i) => {
-            const versions = (track.versions ?? []) as { name: string; lufs: number; url: string }[];
-            const exports  = (track.exports  ?? []) as { platform: string; lufs: number; format: string; url: string }[];
-            if (versions.length === 0) return null;
+          {/* Consistency badge */}
+          <div
+            className="flex items-center justify-between px-4 py-2.5 rounded-xl"
+            style={{ backgroundColor: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.2)" }}
+          >
+            <div className="flex items-center gap-2">
+              <Disc3 size={14} style={{ color: "#D4A843" }} />
+              <span className="text-xs font-semibold" style={{ color: "#D4A843" }}>Album-consistent mastering</span>
+            </div>
+            <span className="text-xs" style={{ color: "#777" }}>
+              {groupStatus?.sharedLufsTarget ? `Shared target: ${groupStatus.sharedLufsTarget} LUFS` : "Shared LUFS · Tonal balance matched"}
+            </span>
+          </div>
 
-            return (
-              <div key={track.id} className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "#111", borderColor: "#1A1A1A" }}>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                  >
-                    {i + 1}
+          {/* Apply to all */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] shrink-0" style={{ color: "#777" }}>Apply to all:</span>
+            {(["Clean", "Warm", "Punch", "Loud"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => applyVersionToAll(v)}
+                className="px-3 py-1 rounded-lg text-[11px] font-semibold border transition-all hover:border-[#D4A843] hover:text-[#D4A843]"
+                style={{ borderColor: "#2A2A2A", color: "#777" }}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {/* Track list */}
+          <div className="space-y-3">
+            {trackResults.map((track, i) => {
+              const versions = (track.versions ?? []) as { name: string; lufs: number; truePeak: number; url: string }[];
+              const selectedV = selectedVersions[track.id] ?? versions[0]?.name ?? "Clean";
+              const selectedVdata = versions.find((v) => v.name === selectedV);
+              if (track.status === "FAILED") {
+                return (
+                  <div key={track.id} className="rounded-xl border border-red-400/20 p-3 text-sm text-red-400">
+                    Track {i + 1} — processing failed
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">Track {i + 1}</p>
-                    <p className="text-xs" style={{ color: "#777" }}>{track.status === "FAILED" ? "Processing failed" : `${versions.length} versions`}</p>
+                );
+              }
+              if (versions.length === 0) return null;
+              const trackTitle = tracks[i]?.trackTitle ?? `Track ${i + 1}`;
+
+              return (
+                <div
+                  key={track.id}
+                  className="rounded-2xl border p-4 space-y-3"
+                  style={{ backgroundColor: "#0D0D0D", borderColor: "#2A2A2A" }}
+                >
+                  {/* Header */}
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-7 h-7 rounded-full text-xs font-black flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "#1A1A1A", color: "#D4A843" }}
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{trackTitle}</p>
+                      <p className="text-[11px]" style={{ color: "#555" }}>
+                        {selectedV} · {selectedVdata?.lufs.toFixed(1) ?? "—"} LUFS
+                      </p>
+                    </div>
+                    {/* Play selected version */}
+                    <button
+                      onClick={() => {
+                        if (selectedVdata?.url) togglePlay(`${track.id}-${selectedV}`, selectedVdata.url);
+                      }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "#1A1A1A", border: "1px solid #333" }}
+                    >
+                      {playingKey === `${track.id}-${selectedV}`
+                        ? <Pause size={12} style={{ color: "#D4A843" }} />
+                        : <Play  size={12} style={{ color: "#D4A843" }} />
+                      }
+                    </button>
+                  </div>
+
+                  {/* Mini waveform */}
+                  <div className="flex items-end gap-px h-6 overflow-hidden rounded px-0.5">
+                    {Array.from({ length: 50 }, (_, j) => {
+                      const h = 20 + Math.abs(Math.sin(j * 0.5 + (track.id.charCodeAt(0) ?? 65) * 0.05) * 65);
+                      return (
+                        <div
+                          key={j}
+                          style={{ flex: 1, height: `${Math.min(100, h)}%`, borderRadius: 1, backgroundColor: "#D4A843", opacity: 0.7 }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Version pills */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(["Clean", "Warm", "Punch", "Loud"] as const).map((v) => {
+                      const vdata    = versions.find((x) => x.name === v);
+                      const isSel    = selectedV === v;
+                      return (
+                        <button
+                          key={v}
+                          onClick={() => {
+                            selectVersion(track.id, v);
+                            if (playingKey?.startsWith(track.id)) {
+                              audioRef.current?.pause();
+                              setPlayingKey(null);
+                            }
+                          }}
+                          disabled={!vdata}
+                          className="py-1.5 rounded-lg text-[11px] font-semibold border transition-all disabled:opacity-30"
+                          style={isSel
+                            ? { backgroundColor: "#D4A843", color: "#0A0A0A", borderColor: "#D4A843" }
+                            : { borderColor: "#2A2A2A", color: "#777" }}
+                        >
+                          {v}
+                          {vdata && (
+                            <div className="text-[9px] mt-0.5 font-normal opacity-70">
+                              {vdata.lufs.toFixed(0)} LUFS
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {track.status !== "FAILED" && (
-                  <>
-                    {/* Versions */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {versions.map((v) => (
-                        <a
-                          key={v.name}
-                          href={v.url}
-                          download
-                          className="flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                          style={{ backgroundColor: "#1A1A1A", color: "#ccc" }}
-                        >
-                          <Download size={12} style={{ color: "#D4A843" }} />
-                          {v.name} · {v.lufs.toFixed(1)} LUFS
-                        </a>
-                      ))}
-                    </div>
-
-                    {/* Platform exports */}
-                    {exports.length > 0 && (
-                      <div className="grid grid-cols-2 gap-2">
-                        {exports.map((e) => (
-                          <a
-                            key={e.platform}
-                            href={e.url}
-                            download
-                            className="flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                            style={{ backgroundColor: "#1A1A1A", color: "#ccc", border: "1px solid #2A2A2A" }}
-                          >
-                            <Check size={12} style={{ color: "#D4A843" }} />
-                            {e.platform} · {e.format.toUpperCase()}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
+          {/* Download album */}
+          <div className="space-y-2 pt-2">
+            <button
+              onClick={downloadAlbum}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+            >
+              <Archive size={16} /> Download Album
+              <span className="text-xs font-normal opacity-80">
+                ({trackResults.length} tracks · WAV)
+              </span>
+            </button>
+            <p className="text-[11px] text-center" style={{ color: "#555" }}>
+              Files saved as <code className="text-[#777]">01 - Track Title.wav</code>, <code className="text-[#777]">02 - Track Title.wav</code>…
+            </p>
+          </div>
         </div>
       )}
     </div>

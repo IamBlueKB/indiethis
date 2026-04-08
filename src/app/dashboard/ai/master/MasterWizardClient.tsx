@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   Upload, SlidersHorizontal, Activity, Loader2, ChevronRight, ChevronLeft,
   Check, Download, Play, Pause, RotateCcw, Info, Zap, Sun, Volume2,
-  CheckCircle2, AlertTriangle, Sparkles, ChevronDown, X, Archive,
+  CheckCircle2, AlertTriangle, Sparkles, ChevronDown, X, Archive, Disc3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AlbumWizardClient } from "./AlbumWizardClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WizardStep = "mode" | "upload" | "configure" | "processing" | "compare" | "export";
+type WizardStep = "mode" | "upload" | "configure" | "processing" | "compare" | "export" | "album";
 type Mode       = "MIX_AND_MASTER" | "MASTER_ONLY";
 type Tier       = "STANDARD" | "PREMIUM" | "PRO";
 type Mood       = "CLEAN" | "WARM" | "PUNCH" | "LOUD";
@@ -524,6 +525,16 @@ export function MasterWizardClient({ userId }: { userId: string }) {
 
   // ─────────────────────────────────────────────────────────────────────────────
 
+  // Album mode — hand off to dedicated wizard
+  if (step === "album") {
+    return (
+      <AlbumWizardClient
+        userId={userId}
+        onBack={() => setStep("mode")}
+      />
+    );
+  }
+
   return (
     <div className="space-y-0">
       <StepIndicator current={step} />
@@ -578,6 +589,27 @@ export function MasterWizardClient({ userId }: { userId: string }) {
               {mode === opt.value && <Check size={16} className="shrink-0 mt-1" style={{ color: "#D4A843" }} />}
             </button>
           ))}
+
+          {/* Album mastering option */}
+          <button
+            onClick={() => setStep("album")}
+            className="w-full flex items-start gap-4 p-5 rounded-2xl border text-left transition-all border-[#2A2A2A] hover:border-[#D4A843]"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: "#1A1A1A" }}>
+              <Archive size={20} style={{ color: "#D4A843" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="font-bold text-sm">Album Mastering</div>
+                <div className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>PRO</div>
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: "#999" }}>Master 2–20 tracks with a consistent album profile</div>
+              <div className="text-[11px] mt-2" style={{ color: "#666" }}>
+                Shared LUFS target · Matched tonal balance · Download all as 01 - Title.wav…
+              </div>
+            </div>
+            <ChevronRight size={16} className="shrink-0 mt-1" style={{ color: "#555" }} />
+          </button>
 
           {/* Tier */}
           <div className="mt-6">
