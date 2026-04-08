@@ -1,4 +1,6 @@
-import { Suspense } from "react";
+import { Suspense }  from "react";
+import { auth }      from "@/lib/auth";
+import { db }        from "@/lib/db";
 import ExploreClient from "./ExploreClient";
 
 import type { Metadata } from "next";
@@ -19,10 +21,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ExplorePage() {
+export default async function ExplorePage() {
+  const session = await auth();
+  let isSubscriber = false;
+
+  if (session?.user?.id) {
+    const sub = await db.subscription.findFirst({
+      where:  { userId: session.user.id, status: "ACTIVE" },
+      select: { id: true },
+    });
+    isSubscriber = !!sub;
+  }
+
   return (
     <Suspense>
-      <ExploreClient />
+      <ExploreClient isSubscriber={isSubscriber} />
     </Suspense>
   );
 }

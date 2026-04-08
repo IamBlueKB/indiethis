@@ -24,7 +24,7 @@ import PromoPopupManager from "@/components/PromoPopupManager";
 import {
   Search, Play, ChevronLeft, ChevronRight, Music2, Users, Building2,
   Headphones, Mic2, Wand2, TrendingUp, Loader2, Zap, X, Radar, ShoppingBag,
-  Disc, Disc3, Pause, ShoppingCart, Archive,
+  Disc, Disc3, Pause, ShoppingCart, Archive, Sliders,
 } from "lucide-react";
 import { parseNaturalLanguageSearch, hasNLPSignals, type NLPPill, type SearchFeatureProfile } from "@/lib/natural-language-search";
 
@@ -1025,8 +1025,9 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
 
 // ── AI Tools Showcase ──────────────────────────────────────────────────────
 
-function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
-  const cta = (path: string) => loggedIn ? path : `/signup?next=${path}`;
+function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscriber: boolean }) {
+  // Subscribers → dashboard route. Everyone else (logged-in non-sub or guest) → public route.
+  const link = (dashPath: string, pubPath: string) => (loggedIn && isSubscriber) ? dashPath : pubPath;
 
   const items = [
     {
@@ -1035,7 +1036,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
       desc: "Generate stunning cover artwork from a simple text prompt. Professional quality in seconds.",
       cta: "Create yours",
       price: "$4.99",
-      link: cta("/dashboard/ai/cover-art"),
+      link: link("/dashboard/ai/cover-art", "/cover-art"),
       gradient: "linear-gradient(135deg, #1a0a2e, #0a0a1a)",
     },
     {
@@ -1044,22 +1045,31 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
       desc: "Turn your track into a professional AI-generated music video. Share-worthy in minutes.",
       cta: "Create yours",
       price: "from $19",
-      link: cta("/dashboard/ai/video"),
+      link: link("/dashboard/ai/video", "/video-studio"),
       gradient: "linear-gradient(135deg, #0a1a0a, #0a0a0a)",
     },
     {
       icon: <Zap size={20} style={{ color: "#D4A843" }} />,
-      title: "AI Mastering",
-      desc: "Pro-quality mastering powered by AI. Upload your mix, download a release-ready master.",
+      title: "AI Lyric Video",
+      desc: "Cinematic lyric videos with AI-generated visuals synced to your track. 5 animation styles.",
+      cta: "Create yours",
+      price: "from $17.99",
+      link: link("/dashboard/ai/lyric-video", "/lyric-video"),
+      gradient: "linear-gradient(135deg, #0a0a1a, #1a0a1a)",
+    },
+    {
+      icon: <Sliders size={20} style={{ color: "#D4A843" }} />,
+      title: "Mix & Master Studio",
+      desc: "Professional mixing and mastering with AI. Upload your mix, download a release-ready master.",
       cta: "Master your track",
-      price: "$7.99",
-      link: cta("/dashboard/ai/mastering"),
+      price: "from $11.99",
+      link: link("/dashboard/ai/master", "/master"),
       gradient: "linear-gradient(135deg, #1a0a00, #0a0a0a)",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {items.map((item) => (
         <div
           key={item.title}
@@ -1088,7 +1098,7 @@ function AIShowcase({ loggedIn }: { loggedIn: boolean }) {
 
 // ── Main Explore Client ────────────────────────────────────────────────────
 
-export default function ExploreClient() {
+export default function ExploreClient({ isSubscriber = false }: { isSubscriber?: boolean }) {
   const { data: session } = useSession();
   const { play, currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
   const { OverlayComponent } = useTrackOverlay();
@@ -2095,7 +2105,7 @@ export default function ExploreClient() {
         {showSection("ai") && (
           <section ref={sectionRefs.ai as React.RefObject<HTMLElement>}>
             <SectionHeader label="CREATE" title="Make something with AI" />
-            <AIShowcase loggedIn={loggedIn} />
+            <AIShowcase loggedIn={loggedIn} isSubscriber={isSubscriber} />
           </section>
         )}
 
