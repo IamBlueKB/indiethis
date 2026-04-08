@@ -25,9 +25,15 @@ import { stripe }         from "@/lib/stripe";
 import { logAgentAction } from "@/lib/agents";
 import { sendBrandedEmail } from "@/lib/brevo/email";
 
-const APP_URL = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
-const MASTER_URL = () => `${APP_URL()}/master`;
-const PRICING_URL = () => `${APP_URL()}/pricing`;
+const APP_URL      = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+const MASTER_URL   = () => `${APP_URL()}/master`;
+const PRICING_URL  = () => `${APP_URL()}/pricing`;
+const DASHBOARD_MASTER_URL = () => `${APP_URL()}/dashboard/ai/master`;
+
+/** Wraps a destination URL with the mastering click-tracking endpoint. */
+function trackUrl(jobId: string, dest: string): string {
+  return `${APP_URL()}/api/mastering/track/click?j=${jobId}&url=${encodeURIComponent(dest)}`;
+}
 
 // ─── Result types ──────────────────────────────────────────────────────────────
 
@@ -65,7 +71,9 @@ export async function runMasteringConversionAgent(): Promise<MasteringConversion
   const now      = new Date();
   const cutoff   = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
 
-  // Find guest jobs (no userId) that are COMPLETE or have a preview, not yet converted
+  // Find guest jobs (no userId) that are COMPLETE and not yet converted.
+  // Step 0 requires status=COMPLETE (track must be delivered before Email 1).
+  // Steps 1–3 just need the timer to have elapsed.
   const jobs = await db.masteringJob.findMany({
     where: {
       userId:         null,
@@ -73,8 +81,8 @@ export async function runMasteringConversionAgent(): Promise<MasteringConversion
       conversionDone: false,
       createdAt:      { gte: cutoff },
       OR: [
-        { conversionStep: 0 },
-        { conversionStep: { lt: 4 }, conversionNextAt: { lte: now } },
+        { conversionStep: 0, status: "COMPLETE" },
+        { conversionStep: { gt: 0, lt: 4 }, conversionNextAt: { lte: now } },
       ],
     },
     select: {
@@ -366,30 +374,30 @@ async function sendMasteringEmail1(job: {
   id: string; guestEmail: string; guestName?: string | null;
   mode?: string | null; tier?: string | null; previewUrl?: string | null;
 }): Promise<void> {
-  const name = job.guestName || "Artist";
+  const name        = job.guestName || "Artist";
+  const downloadCta = trackUrl(job.id, DASHBOARD_MASTER_URL());
   await sendBrandedEmail({
     to:      { email: job.guestEmail, name },
-    subject: "Your mastered preview is ready — hear the difference",
+    subject: "Your master is ready — download your track",
     primaryContent: `
-      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your preview is ready, ${name}.</h1>
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your master is ready, ${name}.</h1>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        Our AI just mastered a 30-second preview of your track. Log in to hear exactly what the full master sounds like
-        before you pay a single dollar.
+        The AI has finished mastering your track. Log in to download your file — 4 versions
+        (Clean, Warm, Punch, Loud) and platform-ready exports for Spotify, Apple Music, and YouTube are all waiting for you.
       </p>
-      ${job.previewUrl ? `
       <p style="margin:0 0 24px;">
-        <a href="${job.previewUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
-          Listen to your preview &rarr;
+        <a href="${downloadCta}" style="background:#D4A843;color:#0A0A0A;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px;">
+          Download your track &rarr;
         </a>
       </p>
-      ` : ""}
-      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        When you're ready for the full master — 4 versions (Clean, Warm, Punch, Loud), platform-ready exports for Spotify,
-        Apple Music, YouTube — click below.
+      <p style="color:#888;font-size:13px;line-height:1.6;margin:0 0 8px;">
+        Your files include a lossless WAV master plus a full mastering report (LUFS, true peak, dynamic range).
+        They'll be available in your dashboard.
       </p>
-      <a href="${MASTER_URL()}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
-        Get the full master &rarr;
-      </a>
+      <p style="color:#555;font-size:12px;margin:16px 0 0;">
+        IndieThis subscribers get discounted mastering on every future track.
+        <a href="${trackUrl(job.id, PRICING_URL())}" style="color:#D4A843;">See subscriber pricing.</a>
+      </p>
     `,
     context: "MASTERING_CONVERSION_1",
     tags:    ["ai", "mastering", "conversion"],
@@ -399,33 +407,56 @@ async function sendMasteringEmail1(job: {
 async function sendMasteringEmail2(job: {
   id: string; guestEmail: string; guestName?: string | null;
 }): Promise<void> {
-  const name = job.guestName || "Artist";
+  const name       = job.guestName || "Artist";
+  const pricingCta = trackUrl(job.id, PRICING_URL());
   await sendBrandedEmail({
     to:      { email: job.guestEmail, name },
-    subject: "4 versions. Every platform. One price.",
+    subject: "You mastered a track. Now sell it on IndieThis.",
     primaryContent: `
-      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Why IndieThis mastering is different.</h1>
-      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 8px;">
-        Most online mastering gives you one version and hopes for the best. We give you four — so you pick the sound
-        that fits your vision:
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your track is mastered. Here's what comes next.</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        IndieThis isn't just a mastering tool — it's everything an independent artist needs to release, promote,
+        and sell music. Here's what subscribers get:
       </p>
-      <ul style="color:#ccc;font-size:14px;line-height:2;margin:0 0 16px;padding-left:20px;">
-        <li><strong style="color:#D4A843;">Clean</strong> — balanced, flat reference</li>
-        <li><strong style="color:#D4A843;">Warm</strong> — smooth, vintage character</li>
-        <li><strong style="color:#D4A843;">Punch</strong> — aggressive, transient-forward</li>
-        <li><strong style="color:#D4A843;">Loud</strong> — maximum competitive loudness</li>
-      </ul>
-      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        Every master includes platform-ready exports — Spotify at -14 LUFS, Apple Music, YouTube, and a lossless WAV
-        you keep forever. Ready in 4–7 minutes. Starting at $11.99.
-      </p>
-      <a href="${MASTER_URL()}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
-        Master your track &rarr;
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;padding:0 0 10px;border-bottom:1px solid #2a2a2a;font-weight:600;">Feature</th>
+            <th style="text-align:center;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;padding:0 0 10px 12px;border-bottom:1px solid #2a2a2a;font-weight:600;">Guest</th>
+            <th style="text-align:center;color:#D4A843;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;padding:0 0 10px 12px;border-bottom:1px solid #2a2a2a;font-weight:600;">Subscriber</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#ccc;font-size:13px;padding:10px 0;border-bottom:1px solid #1a1a1a;">AI Mastering</td>
+            <td style="text-align:center;color:#ccc;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">$11.99/track</td>
+            <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;font-weight:700;">Up to 50% off</td>
+          </tr>
+          <tr>
+            <td style="color:#ccc;font-size:13px;padding:10px 0;border-bottom:1px solid #1a1a1a;">AI Cover Art</td>
+            <td style="text-align:center;color:#888;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">✗</td>
+            <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;font-weight:700;">✓ Included</td>
+          </tr>
+          <tr>
+            <td style="color:#ccc;font-size:13px;padding:10px 0;border-bottom:1px solid #1a1a1a;">AI Music Videos</td>
+            <td style="text-align:center;color:#888;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">✗</td>
+            <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;font-weight:700;">✓ Included</td>
+          </tr>
+          <tr>
+            <td style="color:#ccc;font-size:13px;padding:10px 0;border-bottom:1px solid #1a1a1a;">Artist Page & Store</td>
+            <td style="text-align:center;color:#888;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">✗</td>
+            <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;font-weight:700;">✓ Included</td>
+          </tr>
+          <tr>
+            <td style="color:#ccc;font-size:13px;padding:10px 0;">Merch Store (Print-on-Demand)</td>
+            <td style="text-align:center;color:#888;font-size:13px;padding:10px 12px;">✗</td>
+            <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;font-weight:700;">✓ Included</td>
+          </tr>
+        </tbody>
+      </table>
+      <a href="${pricingCta}" style="background:#E85D4A;color:#fff;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        See subscription plans &rarr;
       </a>
-      <p style="color:#555;font-size:12px;margin:24px 0 0;">
-        IndieThis subscribers pay up to 50% less on every master.
-        <a href="${PRICING_URL()}" style="color:#D4A843;">See subscriber pricing.</a>
-      </p>
     `,
     context: "MASTERING_CONVERSION_2",
     tags:    ["ai", "mastering", "conversion"],
@@ -435,31 +466,47 @@ async function sendMasteringEmail2(job: {
 async function sendMasteringEmail3(job: {
   id: string; guestEmail: string; guestName?: string | null;
 }): Promise<void> {
-  const name = job.guestName || "Artist";
+  const name      = job.guestName || "Artist";
+  const joinCta   = trackUrl(job.id, PRICING_URL());
+
+  // Pull live platform stats for social proof
+  const [artistCount, masterCount] = await Promise.all([
+    db.user.count({ where: { subscription: { status: "ACTIVE" } } }),
+    db.masteringJob.count({ where: { status: "COMPLETE" } }),
+  ]);
+
   await sendBrandedEmail({
     to:      { email: job.guestEmail, name },
-    subject: "Your track deserves a professional master",
+    subject: `Join ${artistCount.toLocaleString()} artists already selling music on IndieThis`,
     primaryContent: `
-      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">The full master is one click away.</h1>
-      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        Hey ${name}, your 30-second preview is still on file. The AI analyzed your track's BPM, key, frequency balance,
-        and dynamic range — and built a custom mastering chain specifically for it.
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">You're not alone in this.</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Hey ${name} — here's where the IndieThis community stands right now:
       </p>
+      <div style="display:flex;gap:16px;margin:0 0 28px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:120px;background:#1A1A1A;border:1px solid #2a2a2a;border-radius:12px;padding:16px;text-align:center;">
+          <p style="color:#D4A843;font-size:28px;font-weight:900;margin:0 0 4px;">${artistCount.toLocaleString()}</p>
+          <p style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin:0;">Active Artists</p>
+        </div>
+        <div style="flex:1;min-width:120px;background:#1A1A1A;border:1px solid #2a2a2a;border-radius:12px;padding:16px;text-align:center;">
+          <p style="color:#D4A843;font-size:28px;font-weight:900;margin:0 0 4px;">${masterCount.toLocaleString()}</p>
+          <p style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin:0;">Tracks Mastered</p>
+        </div>
+      </div>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
-        When you order the full master, you get:
+        Every one of them started with a single track — just like yours. They're releasing music, building merch stores,
+        and growing audiences with tools that used to cost thousands of dollars a year.
       </p>
-      <ul style="color:#ccc;font-size:14px;line-height:2;margin:0 0 16px;padding-left:20px;">
-        <li>All 4 versions (Clean, Warm, Punch, Loud)</li>
-        <li>Platform-ready exports for every streaming service</li>
-        <li>A full mastering report (LUFS, true peak, dynamic range)</li>
-        <li>Your files ready to upload in minutes</li>
-      </ul>
-      <a href="${MASTER_URL()}" style="background:#E85D4A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
-        Get the full master &rarr;
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        A subscription gives you AI mastering, cover art, music videos, an artist page, and a merch store —
+        all in one place. Starting at a price that makes sense for independent artists.
+      </p>
+      <a href="${joinCta}" style="background:#E85D4A;color:#fff;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Join IndieThis &rarr;
       </a>
     `,
     context: "MASTERING_CONVERSION_3",
-    tags:    ["ai", "mastering", "conversion"],
+    tags:    ["ai", "mastering", "conversion", "social-proof"],
   });
 }
 
@@ -565,6 +612,34 @@ async function sendAlbumNudgeEmail(
     tags:    ["ai", "mastering", "album", "nudge"],
   });
 }
+
+// ─── Session linking ───────────────────────────────────────────────────────────
+
+/**
+ * Called from the dashboard on first login — links any MasteringJob records
+ * with guestEmail matching the new user's email, assigns them to userId,
+ * and stops the conversion email sequence.
+ *
+ * Returns the number of records linked.
+ */
+export async function linkGuestMasteringJobsByEmail(
+  email:  string,
+  userId: string,
+): Promise<number> {
+  const result = await db.masteringJob.updateMany({
+    where: {
+      guestEmail: email,
+      userId:     null,
+    },
+    data: {
+      userId:         userId,
+      conversionDone: true,   // Stop the drip — they signed up!
+    },
+  });
+  return result.count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function sendMasteringAbandonedCartEmail(job: {
   id: string; guestEmail: string; guestName?: string | null;

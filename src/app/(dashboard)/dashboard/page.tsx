@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { linkGuestVideosByEmail }       from "@/lib/video-studio/link-guest";
-import { linkGuestLyricVideosByEmail }  from "@/lib/lyric-video/link-guest";
+import { linkGuestVideosByEmail }            from "@/lib/video-studio/link-guest";
+import { linkGuestLyricVideosByEmail }       from "@/lib/lyric-video/link-guest";
+import { linkGuestMasteringJobsByEmail }     from "@/lib/agents/mastering-conversion";
 import Link from "next/link";
 import ReleaseTimingCard from "@/components/dashboard/ReleaseTimingCard";
 import {
@@ -123,11 +124,12 @@ export default async function DashboardPage(
       select: { email: true },
     });
     if (userEmail?.email) {
-      const [{ linked: mv }, { linked: lv }] = await Promise.all([
+      const [{ linked: mv }, { linked: lv }, mjLinked] = await Promise.all([
         linkGuestVideosByEmail(userId, userEmail.email),
         linkGuestLyricVideosByEmail(userId, userEmail.email),
+        linkGuestMasteringJobsByEmail(userEmail.email, userId),
       ]);
-      linkedVideoCount = mv + lv;
+      linkedVideoCount = mv + lv + mjLinked;
     }
   } catch { /* non-fatal */ }
 
