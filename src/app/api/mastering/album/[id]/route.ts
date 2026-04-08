@@ -13,16 +13,17 @@ import { db as prisma } from "@/lib/db";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
     const group = await prisma.masteringAlbumGroup.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!group) {
@@ -33,7 +34,7 @@ export async function GET(
     }
 
     const jobs = await prisma.masteringJob.findMany({
-      where:   { albumGroupId: params.id },
+      where:   { albumGroupId: id },
       orderBy: { createdAt: "asc" },
       select: {
         id:              true,
