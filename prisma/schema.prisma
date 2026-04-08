@@ -163,6 +163,7 @@ model User {
   avatars                  ArtistAvatar[]
   releases                 Release[]
   masteringJobs            MasteringJob[]
+  masteringAlbumGroups     MasteringAlbumGroup[]
 }
 
 model Studio {
@@ -3069,6 +3070,42 @@ model MasteringJob {
   @@index([albumGroupId])
   @@index([guestEmail])
   @@index([createdAt])
+}
+
+model MasteringAlbumGroup {
+  id              String    @id @default(cuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id])
+
+  // Album metadata
+  title           String
+  artist          String?
+  genre           String?
+  mood            String?   // shared mood override
+  naturalLanguagePrompt String?
+
+  // Cross-track consistency snapshot (set after first track is analyzed)
+  sharedLufsTarget  Float?    // target LUFS applied to all tracks
+  sharedEqCurve     Json?     // shared EQ profile for consistency
+  referenceTrackUrl String?   // optional reference track
+
+  // Tracks are MasteringJob records linked by albumGroupId = this.id
+  trackOrder      Json?     // [jobId, jobId, ...] — defines track sequence
+
+  // Status
+  status          String    @default("PENDING")
+  // PENDING | PROCESSING | COMPLETE | FAILED
+  completedTracks Int       @default(0)
+  totalTracks     Int       @default(0)
+
+  // Payment — per-track PaymentIntent, stored as JSON array
+  paymentIds      Json?     // [{ jobId, stripePaymentId }]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model MasteringPreset {

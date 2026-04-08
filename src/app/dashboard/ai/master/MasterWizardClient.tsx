@@ -352,17 +352,7 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#fff" }}>
-      <div className="max-w-2xl mx-auto px-4 py-12">
-
-        <div className="text-center mb-10">
-          <h1 className="font-display text-3xl font-bold tracking-tight" style={{ color: "#D4A843" }}>
-            AI Mix &amp; Master
-          </h1>
-          <p className="text-sm mt-2" style={{ color: "#777" }}>
-            Professional-grade mixing and mastering — no plug-ins, no engineers
-          </p>
-        </div>
+    <div className="space-y-0">
 
         <StepIndicator current={step} />
 
@@ -760,7 +750,6 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           </div>
         )}
 
-      </div>
     </div>
   );
 }

@@ -381,6 +381,190 @@ function getPresetNameForGenre(genre: string): string {
   return map[genre.toUpperCase()] ?? "Bright Pop";
 }
 
+// ─── Album mastering pipeline ──────────────────────────────────────────────────
+
+/**
+ * runAlbumMasteringPipeline
+ *
+ * Processes all tracks in an album group with cross-track consistency:
+ * 1. Analyze all tracks to derive a shared LUFS target and tonal EQ curve
+ * 2. Process each track sequentially (MASTER_ONLY mode for albums)
+ * 3. Apply the shared profile so all tracks sit at the same loudness/tonality
+ * 4. Mark the group COMPLETE when all tracks finish
+ *
+ * This is always MASTER_ONLY — album mastering takes a stereo mix per track.
+ * MIX_AND_MASTER mode must be completed before submitting for album mastering.
+ */
+export async function runAlbumMasteringPipeline(albumGroupId: string): Promise<void> {
+  const group = await prisma.masteringAlbumGroup.findUniqueOrThrow({
+    where: { id: albumGroupId },
+  });
+
+  const jobs = await prisma.masteringJob.findMany({
+    where:   { albumGroupId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (jobs.length === 0) {
+    throw new Error(`Album group ${albumGroupId} has no tracks.`);
+  }
+
+  await prisma.masteringAlbumGroup.update({
+    where: { id: albumGroupId },
+    data:  { status: "PROCESSING", totalTracks: jobs.length },
+  });
+
+  try {
+    // ── Phase 1: Analyze all tracks → derive shared profile ──────────────────
+    const analyses = await Promise.all(
+      jobs.map((job) => analyzeAudio(job.inputFileUrl!))
+    );
+
+    // Shared LUFS target: average of all integrated loudness values, clamped -14 to -8
+    const avgLufs      = analyses.reduce((s, a) => s + a.lufs, 0) / analyses.length;
+    const sharedLufs   = Math.max(-14, Math.min(-8, Math.round(avgLufs)));
+
+    // Shared EQ curve: average spectral centroid drives a tilt correction
+    const avgCentroid   = analyses.reduce((s, a) => s + a.spectralCentroid, 0) / analyses.length;
+    const brightnessTilt = avgCentroid > 3500 ? -1.5 : avgCentroid < 2000 ? 1.5 : 0;
+    const sharedEqCurve = [
+      { type: "lowshelf" as const, freq: 120, gain: 0.5, q: 0.7 },
+      { type: "highshelf" as const, freq: 8000, gain: brightnessTilt, q: 0.7 },
+    ];
+
+    // Store shared profile on the album group
+    await prisma.masteringAlbumGroup.update({
+      where: { id: albumGroupId },
+      data:  {
+        sharedLufsTarget: sharedLufs,
+        sharedEqCurve,
+        genre: group.genre ?? (await detectGenre(analyses[0])),
+      },
+    });
+
+    // ── Phase 2: Process each track with shared profile ──────────────────────
+    for (let i = 0; i < jobs.length; i++) {
+      const job       = jobs[i];
+      const analysis  = analyses[i];
+
+      try {
+        await setStatus(job.id, "MASTERING");
+
+        // Decide mastering params (uses shared EQ as base, genre from group)
+        const genre = group.genre ?? (await detectGenre(analysis));
+        const masterDecision = await decideMasterParameters({
+          analysis,
+          genre,
+          mood:                  group.mood ?? "CLEAN",
+          naturalLanguagePrompt: group.naturalLanguagePrompt ?? null,
+        });
+
+        // Merge shared EQ on top of per-track decisions (album curve takes precedence on shelves)
+        const mergedEq = [
+          ...masterDecision.params.eq!.filter(
+            (b) => b.type !== "highshelf" && b.type !== "lowshelf"
+          ),
+          ...sharedEqCurve,
+        ];
+
+        // Build version targets at the shared LUFS
+        const versions = [
+          { name: "Clean" as const, targetLufs: sharedLufs },
+          { name: "Warm"  as const, targetLufs: sharedLufs + 0.5 },
+          { name: "Punch" as const, targetLufs: sharedLufs + 1 },
+          { name: "Loud"  as const, targetLufs: sharedLufs + 2 },
+        ];
+
+        const masterResult = await masterAudio({
+          audioUrl:              job.inputFileUrl!,
+          ...masterDecision.params,
+          eq:                    mergedEq,
+          versions,
+          platforms:             (job.platforms as string[] | null) ?? ["spotify", "apple_music", "youtube", "wav_master"],
+        });
+
+        // Generate 30s preview (highest-energy section)
+        const previewResult = await generatePreview(
+          {
+            audioUrl:  job.inputFileUrl!,
+            ...masterDecision.params,
+            eq:        mergedEq,
+            versions:  [versions[0]],
+            platforms: ["spotify"],
+          },
+          "master"
+        );
+
+        await setStatus(job.id, "COMPLETE", {
+          versions:   masterResult.versions,
+          exports:    masterResult.exports,
+          reportData: masterResult.report,
+          previewUrl: previewResult.previewUrl,
+        });
+
+        // Increment completed track count on group
+        await prisma.masteringAlbumGroup.update({
+          where: { id: albumGroupId },
+          data:  { completedTracks: { increment: 1 } },
+        });
+      } catch (trackErr) {
+        // Mark individual track failed but continue album
+        const msg = trackErr instanceof Error ? trackErr.message : String(trackErr);
+        console.error(`Album ${albumGroupId} — track ${job.id} failed:`, msg);
+        await setStatus(job.id, "FAILED");
+        await prisma.masteringAlbumGroup.update({
+          where: { id: albumGroupId },
+          data:  { completedTracks: { increment: 1 } },
+        });
+      }
+    }
+
+    // ── Phase 3: Mark album complete ─────────────────────────────────────────
+    await prisma.masteringAlbumGroup.update({
+      where: { id: albumGroupId },
+      data:  { status: "COMPLETE" },
+    });
+
+    // Send completion email to the owner
+    await sendAlbumCompleteEmail(albumGroupId);
+  } catch (err) {
+    await prisma.masteringAlbumGroup.update({
+      where: { id: albumGroupId },
+      data:  { status: "FAILED" },
+    });
+    console.error(`Album mastering group ${albumGroupId} failed:`, err);
+    throw err;
+  }
+}
+
+async function sendAlbumCompleteEmail(albumGroupId: string): Promise<void> {
+  try {
+    const group = await prisma.masteringAlbumGroup.findUnique({ where: { id: albumGroupId } });
+    if (!group?.userId) return;
+
+    const user = await prisma.user.findUnique({
+      where:  { id: group.userId },
+      select: { email: true, name: true },
+    });
+    if (!user?.email) return;
+
+    // Reuse the standard mastering complete email — subject line mentions album
+    const firstJob = await prisma.masteringJob.findFirst({
+      where:   { albumGroupId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!firstJob) return;
+
+    await sendMasteringCompleteEmail({
+      email:  user.email,
+      name:   user.name ?? "Artist",
+      jobId:  firstJob.id,
+    });
+  } catch (err) {
+    console.error("Failed to send album complete email:", err);
+  }
+}
+
 async function sendCompletionEmail(jobId: string): Promise<void> {
   try {
     const job = await prisma.masteringJob.findUnique({ where: { id: jobId } });
