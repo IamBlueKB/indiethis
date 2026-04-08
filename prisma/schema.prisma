@@ -90,6 +90,7 @@ model User {
   winBackUsed              Boolean                @default(false)
   openToCollaborations     Boolean                @default(false)
   onboardingTourCompleted  Boolean                @default(false)
+  albumNudgeSent            Boolean                @default(false)  // true once album-mastering nudge email sent
   aiGenerations            AIGeneration[]
   artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]

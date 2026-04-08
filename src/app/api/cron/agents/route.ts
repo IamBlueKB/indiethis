@@ -358,7 +358,6 @@ export async function POST(req: NextRequest) {
     try {
       const {
         runMasteringConversionAgent,
-        runAlbumMasteringNudgeAgent,
         runMasteringAbandonedCartAgent,
       } = await import("@/lib/agents/mastering-conversion");
       await logAgentAction("MASTERING_CONVERSION", "AGENT_RUN_START");
@@ -366,8 +365,6 @@ export async function POST(req: NextRequest) {
       const convResult = await runMasteringConversionAgent();
       results.masteringConversion = `acted=${convResult.acted} (e1=${convResult.email1} e2=${convResult.email2} e3=${convResult.email3} e4=${convResult.email4} stopped=${convResult.stopped})`;
 
-      const nudgeResult = await runAlbumMasteringNudgeAgent();
-      results.albumMasteringNudge = `checked=${nudgeResult.checked} acted=${nudgeResult.acted}`;
 
       const cartResult = await runMasteringAbandonedCartAgent();
       results.masteringAbandonedCart = `checked=${cartResult.checked} sent=${cartResult.sent}`;
@@ -376,7 +373,6 @@ export async function POST(req: NextRequest) {
     }
   } else {
     results.masteringConversion    = "skipped (not due)";
-    results.albumMasteringNudge    = "skipped (not due)";
     results.masteringAbandonedCart = "skipped (not due)";
   }
 
@@ -394,6 +390,22 @@ export async function POST(req: NextRequest) {
     }
   } else {
     results.mixQualityFollowUp = "skipped (not due)";
+  }
+
+
+  // ── Album Mastering Nudge Agent — daily ─────────────────────────────────────────────
+  const shouldRunAlbumNudge = await shouldRun("ALBUM_MASTERING_NUDGE", 22); // 22h guard
+  if (shouldRunAlbumNudge) {
+    try {
+      const { runAlbumMasteringNudgeAgent } = await import("@/lib/agents/album-mastering-nudge");
+      await logAgentAction("ALBUM_MASTERING_NUDGE", "AGENT_RUN_START");
+      const result = await runAlbumMasteringNudgeAgent();
+      results.albumMasteringNudge = `checked=${result.checked} acted=${result.acted}`;
+    } catch (err) {
+      results.albumMasteringNudge = `error: ${String(err)}`;
+    }
+  } else {
+    results.albumMasteringNudge = "skipped (not due)";
   }
 
   return NextResponse.json({
