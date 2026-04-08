@@ -14,7 +14,7 @@ export interface MasteringVersion {
 }
 
 export interface MasteringComparisonPlayerProps {
-  /** Mastered versions to compare — typically the three Auphonic profiles. */
+  /** Mastered versions to compare — typically the four AI Mix & Master Studio profiles. */
   versions: MasteringVersion[];
 }
 

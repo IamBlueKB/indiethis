@@ -9,7 +9,7 @@
  *   5. On failure  → sets status FAILED + stores errorMessage.
  *
  * Provider integrations:
- *   Step 4  — AR_REPORT:   Whisper (transcription) + Auphonic analyzeMusic + Claude Sonnet
+ *   Step 4  — AR_REPORT:   Whisper (transcription) + Claude Sonnet (analysis)
  *   Step 5+ — remaining handlers wired in subsequent steps
  */
 
@@ -389,200 +389,16 @@ Return only the prompt text, nothing else. No intro, no explanation.`,
   };
 }
 
-async function handleMastering(job: AIJob): Promise<HandlerResult> {
-  console.log(`[ai-jobs] processing MASTERING job ${job.id} via ${job.provider}`);
-
-  // ── Env checks ───────────────────────────────────────────────────────────
-  const auphonicKey = process.env.AUPHONIC_API_KEY;
-
-  if (!auphonicKey || auphonicKey.startsWith("your_"))
-    throw new Error("AUPHONIC_API_KEY is not configured — add it to .env.local to use AI Mastering.");
-
-  // ── Extract inputs ────────────────────────────────────────────────────────
-  const input = (job.inputData ?? {}) as Record<string, string>;
-  const { trackUrl } = input;
-
-  if (!trackUrl?.trim())
-    throw new Error("MASTERING job missing required input: trackUrl");
-
-  // ── Define the 3 mastering profiles ──────────────────────────────────────
-  const PROFILES = [
-    {
-      label:          "Warm",
-      description:    "Boosted low-mids, gentle compression — ideal for late-night listening",
-      loudnesstarget: "-14",
-      filtering:      "0",
-    },
-    {
-      label:          "Punchy",
-      description:    "Emphasized transients, tighter compression — energetic and club-ready",
-      loudnesstarget: "-9",
-      filtering:      "0",
-    },
-    {
-      label:          "Broadcast Ready",
-      description:    "Loudness normalized to -14 LUFS, balanced EQ — Spotify / Apple Music compliant",
-      loudnesstarget: "-14",
-      filtering:      "1",
-    },
-  ] as const;
-
-  const authHeader = `bearer ${auphonicKey}`;
-
-  // ── Start all 3 productions in parallel ──────────────────────────────────
-  console.log(`[mastering] starting 3 Auphonic productions in parallel`);
-
-  type AuphonicProduction = {
-    profile: (typeof PROFILES)[number];
-    uuid:    string;
-  };
-
-  const startResults = await Promise.allSettled(
-    PROFILES.map(async (profile): Promise<AuphonicProduction> => {
-      const form = new URLSearchParams();
-      form.set("input_file",      trackUrl);
-      form.set("action",          "start");
-      form.set("loudnesstarget",  profile.loudnesstarget);
-      form.set("filtering",       profile.filtering);
-
-      const res = await fetch("https://auphonic.com/api/simple/productions.json", {
-        method:  "POST",
-        headers: {
-          Authorization:  authHeader,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: form.toString(),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => res.statusText);
-        throw new Error(`Auphonic create failed for ${profile.label}: ${res.status} ${text}`);
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const json: any = await res.json();
-      const uuid: string = json?.data?.uuid;
-      if (!uuid) throw new Error(`Auphonic did not return uuid for ${profile.label}`);
-      console.log(`[mastering] ${profile.label} production started — uuid: ${uuid}`);
-      return { profile, uuid };
-    }),
+async function handleMastering(_job: AIJob): Promise<HandlerResult> {
+  // Legacy MASTERING job type — the Auphonic integration has been replaced by
+  // the new AI Mix & Master Studio (MasteringJob model, /dashboard/ai/master).
+  // This handler is kept to prevent crashes on any queued legacy jobs,
+  // but will not generate new output. New mastering requests go through
+  // POST /api/mastering and the runMasteringPipeline() function.
+  throw new Error(
+    "Legacy MASTERING job type is no longer supported. " +
+    "Please use the new AI Mix & Master Studio at /dashboard/ai/master."
   );
-
-  // ── Poll each production until Done / Error ───────────────────────────────
-  const MAX_WAIT_MS = 600_000; // 10 minutes
-  const POLL_MS     = 6_000;
-
-  type PollResult = {
-    statusString: string;
-    downloadUrl:  string | null;
-    measuredLUFS: number | null;
-  };
-
-  const pollProduction = async (uuid: string, label: string): Promise<PollResult> => {
-    const started = Date.now();
-    while (Date.now() - started < MAX_WAIT_MS) {
-      await new Promise((r) => setTimeout(r, POLL_MS));
-      const res = await fetch(`https://auphonic.com/api/production/${uuid}.json`, {
-        headers: { Authorization: authHeader },
-      });
-      if (!res.ok) {
-        console.warn(`[mastering] poll HTTP error for ${label}: ${res.status}`);
-        continue;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const json: any = await res.json();
-      const statusString: string = json?.data?.status_string ?? "Unknown";
-      console.log(`[mastering] ${label} status: ${statusString}`);
-      if (statusString === "Done") {
-        const downloadUrl = (json?.data?.output_files?.[0]?.download_url as string) ?? null;
-        return { statusString, downloadUrl, measuredLUFS: null };
-      }
-      if (statusString === "Error") {
-        return { statusString, downloadUrl: null, measuredLUFS: null };
-      }
-    }
-    return { statusString: "Timeout", downloadUrl: null, measuredLUFS: null };
-  };
-
-  // Build poll tasks only for successfully started productions
-  type OutputEntry = {
-    label:        string;
-    description:  string;
-    downloadUrl:  string | null;
-    measuredLUFS: number | null;
-    status:       string;
-  };
-
-  const outputs: OutputEntry[] = [];
-  const pollTasks: Array<{ index: number; profile: (typeof PROFILES)[number]; uuid: string }> = [];
-
-  for (let i = 0; i < startResults.length; i++) {
-    const sr = startResults[i];
-    const profile = PROFILES[i];
-    if (sr.status === "rejected") {
-      console.warn(`[mastering] ${profile.label} start failed: ${sr.reason}`);
-      outputs.push({
-        label:       profile.label,
-        description: profile.description,
-        downloadUrl: null,
-        measuredLUFS: null,
-        status:      "Failed",
-      });
-    } else {
-      pollTasks.push({ index: i, profile, uuid: sr.value.uuid });
-      outputs.push(null as unknown as OutputEntry); // placeholder
-    }
-  }
-
-  const pollResults = await Promise.allSettled(
-    pollTasks.map(({ profile, uuid }) => pollProduction(uuid, profile.label)),
-  );
-
-  for (let t = 0; t < pollTasks.length; t++) {
-    const { index, profile } = pollTasks[t];
-    const pr = pollResults[t];
-    if (pr.status === "rejected") {
-      console.warn(`[mastering] ${profile.label} poll threw: ${pr.reason}`);
-      outputs[index] = {
-        label:       profile.label,
-        description: profile.description,
-        downloadUrl: null,
-        measuredLUFS: null,
-        status:      "Failed",
-      };
-    } else {
-      const { statusString, downloadUrl, measuredLUFS } = pr.value;
-      outputs[index] = {
-        label:       profile.label,
-        description: profile.description,
-        downloadUrl: statusString === "Done" ? downloadUrl : null,
-        measuredLUFS,
-        status:      statusString === "Done" ? "Success" : statusString,
-      };
-      if (statusString === "Done") {
-        console.log(
-          `[mastering] ${profile.label} complete. ` +
-          `Download: ${downloadUrl?.slice(0, 60)}…`,
-        );
-      } else {
-        console.warn(`[mastering] ${profile.label} ended with status: ${statusString}`);
-      }
-    }
-  }
-
-  const successCount = outputs.filter((o) => o.status === "Success").length;
-  if (successCount === 0)
-    throw new Error("All 3 Auphonic mastering productions failed. Check AUPHONIC_API_KEY and try again.");
-
-  console.log(`[mastering] done — ${successCount}/3 succeeded.`);
-
-  return {
-    outputData: {
-      outputs,        // array of { label, description, downloadUrl, measuredLUFS, status }
-      sourceTrackUrl: trackUrl,
-      successCount,
-    },
-  };
 }
 
 async function handleLyricVideo(job: AIJob): Promise<HandlerResult> {
