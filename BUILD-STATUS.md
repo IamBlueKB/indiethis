@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-07 (session 14)_
+_Last updated: 2026-04-09 (session 15)_
 
 ---
 
@@ -1377,6 +1377,12 @@ YoutubeReference
 | `GeneratedSceneOutput` extended — 10 new tracking fields: `thumbnailUrl`, `qaApproved`, `qaReason`, `qaRetried`, `originalPrompt`, `refinedPrompt`, `primaryModel`, `actualModel`, `fallbackUsed`, `fallbackAttempts`, `manualRejected`, `manualRedirectNote` | ✅ DONE |
 | **Reject & Redirect** — "Redirect" button on complete `ClipNode`s during Director Mode generation; inline textarea "What should change?"; Enter to submit, Escape to cancel; appends `Artist direction: <note>` to base prompt; re-generates that scene; one-per-scene cap; `manualRejected` overlay shown after submission | ✅ DONE |
 | `autoLinkToRelease()` fire-and-forget — wired into music video, cover art, and lyric video completion pipelines; links asset to any Release containing the trackId | ✅ DONE |
+| **Film Look Presets** — 6 cinematic grade presets: Clean Digital, 35mm Film, 16mm Grain, Anamorphic, VHS Retro, Noir; `FILM_LOOKS` constant + `FilmLookKey` type in `CameraDirectionPicker.tsx` | ✅ DONE |
+| `FilmLookPicker.tsx` — 2-col card grid with per-look colour accents; "Apply to All Scenes" button in `WorkflowBoard` SceneEditPanel | ✅ DONE |
+| `filmLook` field on `WorkflowScene`; `filmLookPrompt` appended to all scene generation prompts in shot-list + shot-list/update routes | ✅ DONE |
+| Claude shot-list prompt updated to recommend `filmLook` per scene based on genre, mood, and energy level | ✅ DONE |
+| `defaultFilmLook` field on `VideoPreset` schema (db pushed, Prisma client regenerated); 10 presets seeded with genre-appropriate defaults (Hip-Hop → 35mm Film, Trap/Drill → Noir, EDM → Anamorphic, Indie → 16mm Grain, etc.) | ✅ DONE |
+| Admin Presets tab in `/admin/video-studio` — lists all 10 presets with inline `defaultFilmLook` dropdown editor | ✅ DONE |
 
 ### Artist Avatar System (Steps 1–11)
 | Feature | Status |
