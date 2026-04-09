@@ -1073,19 +1073,19 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       {items.map((item) => (
         <div
           key={item.title}
-          className="rounded-2xl border p-5 space-y-3"
+          className="rounded-2xl border p-5 flex flex-col gap-3"
           style={{ background: item.gradient, borderColor: "#2a2a2a" }}
         >
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(212,168,67,0.12)" }}>
             {item.icon}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="font-bold text-white">{item.title}</p>
             <p className="text-sm mt-1 leading-relaxed" style={{ color: "#aaa" }}>{item.desc}</p>
           </div>
           <Link
             href={item.link}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold self-start mt-auto"
             style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
           >
             {item.cta} — {item.price}
