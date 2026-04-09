@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import {
   Music, Wand2, Play, Pause, ChevronRight, Zap, Check,
-  Upload, Shield, Clock, Star, Sliders,
+  Upload, Shield, Clock, Star, Sliders, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MasterGuestWizard } from "./MasterGuestWizard";
@@ -135,7 +135,7 @@ export function MasterLandingClient({
           className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-6"
           style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
         >
-          <Star size={11} fill="#0A0A0A" /> Free 30-second preview — no account required
+          <Star size={11} fill="#0A0A0A" /> MP3, WAV, FLAC, AIFF — every format included
         </div>
 
         <h1 className="text-5xl font-display font-black tracking-tight leading-tight mb-6">
@@ -275,20 +275,20 @@ export function MasterLandingClient({
         </div>
       </section>
 
-      {/* ── Free preview callout ─────────────────────────────────────────── */}
+      {/* ── Format downloads callout ─────────────────────────────────────── */}
       <section className="border-y border-[#1A1A1A] py-8">
         <div className="max-w-3xl mx-auto px-6 flex flex-col sm:flex-row items-center gap-6">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
             style={{ backgroundColor: "#1A1A1A", border: "1px solid #2A2A2A" }}
           >
-            <Play size={22} style={{ color: "#D4A843" }} />
+            <Download size={22} style={{ color: "#D4A843" }} />
           </div>
           <div className="flex-1 text-center sm:text-left">
-            <p className="font-bold text-base">Free 30-second preview — always</p>
+            <p className="font-bold text-base">Every format included — no extra charge</p>
             <p className="text-sm mt-1" style={{ color: "#777" }}>
-              Before you pay for your full master, we generate a free preview of the highest-energy
-              section so you can hear exactly what the AI will do to your track.
+              MP3 320kbps, WAV 16 &amp; 24-bit, WAV 48kHz, FLAC, and AIFF — all derived from your
+              master WAV 24-bit 48kHz and ready to download the moment processing completes.
             </p>
           </div>
           <button
@@ -296,7 +296,7 @@ export function MasterLandingClient({
             className="shrink-0 px-5 py-2.5 rounded-lg text-sm font-bold border transition-all hover:border-[#D4A843] hover:text-[#D4A843]"
             style={{ borderColor: "#2A2A2A", color: "#ccc" }}
           >
-            Hear your preview
+            Start mastering
           </button>
         </div>
       </section>
@@ -426,14 +426,14 @@ export function MasterLandingClient({
       <section className="border-t border-[#1A1A1A] py-16 text-center">
         <h2 className="text-2xl font-bold mb-4">Ready to hear it?</h2>
         <p className="text-sm mb-8" style={{ color: "#777" }}>
-          Free 30-second preview. No account needed to listen.
+          Upload your mix and get 4 mastered versions in minutes. Every format included.
         </p>
         <button
           onClick={() => startWizard("PREMIUM", "MASTER_ONLY")}
           className="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all hover:opacity-90"
           style={{ backgroundColor: "#E85D4A", color: "#fff" }}
         >
-          Get a free preview <ChevronRight size={18} />
+          Master a track — $14.99 <ChevronRight size={18} />
         </button>
       </section>
 
