@@ -288,6 +288,17 @@ _Last updated: 2026-04-09 (session 15)_
 | `/admin/dj-verification` | DJ verification queue (approve/deny applications) |
 | `/admin/video-studio` | Music video metrics dashboard, video list table, VideoStyle CRUD |
 | `/admin/revenue-report` | Revenue report preview, Send Now button, alert config UI |
+| `/admin/cover-art` | Cover Art style CRUD + generate-previews action |
+| `/admin/mastering` | Mastering job list, usage stats, preset management |
+| `/admin/agents` | Agent monitoring — job history, status, error log |
+| `/admin/ai-learning` | AI feedback and learning analytics |
+| `/admin/attribution` | Platform-wide attribution analytics |
+| `/admin/audio-features` | Audio features backfill management |
+| `/admin/content` | Platform content moderation and management |
+| `/admin/explore` | Explore feature card management |
+| `/admin/promo-popups` | Promo popup CRUD (create/edit/schedule popups) |
+| `/admin/revenue` | Revenue tracking dashboard (period breakdown, charts) |
+| `/admin/support-chat` | Support chat queue and management |
 
 ---
 
