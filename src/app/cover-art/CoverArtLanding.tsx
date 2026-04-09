@@ -86,7 +86,7 @@ const HOW_STEPS = [
   {
     n: "03",
     title: "Download in Seconds",
-    body: "Get 4–8 high-res cover art variations instantly. 3000×3000px, ready for Spotify, Apple Music, and every major DSP.",
+    body: "Get 4–8 high-res cover art variations instantly — ready for Spotify, Apple Music, and every major DSP.",
   },
 ];
 
@@ -349,11 +349,9 @@ export default function CoverArtLanding({
               className="font-black leading-none mb-6"
               style={{ fontSize: "clamp(2.5rem, 6vw, 4rem)" }}
             >
-              Your music deserves
+              Create Album
               <br />
-              <span style={{ color: GOLD }}>cover art</span>
-              <br />
-              that hits.
+              <span style={{ color: GOLD }}>Cover Art</span>
             </motion.h1>
 
             <motion.p
@@ -377,9 +375,10 @@ export default function CoverArtLanding({
               className="flex gap-8 mb-10"
             >
               {[
-                { value: "3000px", label: "Resolution" },
                 { value: "15", label: "Art Styles" },
-                { value: "$6.99", label: "Starting at" },
+                { value: "4–8", label: "Variations" },
+                { value: "~2 min", label: "To Generate" },
+                { value: "1:1", label: "Album-Ready" },
               ].map((s, i) => (
                 <div key={i}>
                   <div className="font-black text-2xl" style={{ color: GOLD }}>{s.value}</div>
@@ -402,17 +401,8 @@ export default function CoverArtLanding({
                 style={{ background: GOLD, color: "#0A0A0A" }}
               >
                 <Play size={16} fill="#0A0A0A" />
-                Create Cover Art — $6.99
+                Create yours — from $6.99 →
               </button>
-              {!userId && (
-                <button
-                  onClick={() => router.push("/sign-up")}
-                  className="px-6 py-4 rounded-xl font-semibold text-sm border"
-                  style={{ borderColor: "rgba(255,255,255,0.15)", color: "#ccc" }}
-                >
-                  Free trial with account
-                </button>
-              )}
             </motion.div>
           </div>
 
@@ -556,7 +546,7 @@ export default function CoverArtLanding({
               {[
                 "Upload any photo or describe your vibe",
                 "AI applies professional art direction",
-                "Download 3000×3000px, DSP-ready files",
+                "Download high-res files, DSP-ready",
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-sm" style={{ color: "#ccc" }}>
                   <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(212,168,67,0.15)", color: GOLD }}>
@@ -635,111 +625,151 @@ export default function CoverArtLanding({
             transition={{ duration: 0.6 }}
             className="text-center mb-14"
           >
-            <h2 className="font-black text-4xl mb-3">Simple pricing</h2>
-            <p style={{ color: "#888" }}>No subscription. No account required. Pay once, download instantly.</p>
+            <h2 className="font-black text-4xl mb-3">Choose your tier</h2>
+            <p style={{ color: "#888" }}>Pay once, download instantly. No subscription required.</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Guest tier */}
+          <div className="grid sm:grid-cols-3 gap-4">
+            {/* Standard */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: false, amount: 0.3 }}
               transition={{ duration: 0.55 }}
-              className="rounded-2xl p-8"
-              style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
+              className="rounded-2xl p-6 flex flex-col"
+              style={{ background: "#111", border: "1px solid #2a2a2a" }}
             >
-              <div className="text-sm font-semibold mb-2" style={{ color: "#888" }}>PAY-PER-USE</div>
-              <div className="font-black text-4xl mb-1">$6.99</div>
-              <div className="text-sm mb-6" style={{ color: "#666" }}>per generation</div>
-              <ul className="space-y-3 mb-8">
+              <p className="font-black text-white text-lg mb-1">Standard</p>
+              <p className="font-black text-white text-3xl mb-5">$6.99</p>
+              <ul className="space-y-2 flex-1 mb-6">
                 {[
-                  "4 cover art variations",
-                  "15 AI art styles",
-                  "3000×3000px download",
-                  "Instant delivery",
-                  "No account needed",
+                  "4 AI variations",
+                  "6 style presets",
+                  "Square 1:1 format",
+                  "Download instantly",
                 ].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm" style={{ color: "#ccc" }}>
-                    <Check size={14} style={{ color: GOLD }} />
+                  <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#aaa" }}>
+                    <Check size={12} style={{ color: GOLD }} className="shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
               <button
                 onClick={handleStart}
-                className="w-full py-3.5 rounded-xl font-bold"
+                className="w-full py-3 rounded-xl font-bold text-sm"
                 style={{ background: GOLD, color: "#0A0A0A" }}
               >
-                Get Started — $6.99
+                Start for $6.99
               </button>
             </motion.div>
 
-            {/* Subscriber tier */}
+            {/* Premium */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: false, amount: 0.3 }}
-              transition={{ duration: 0.55, delay: 0.1 }}
-              className="rounded-2xl p-8 relative overflow-hidden"
-              style={{ background: "linear-gradient(135deg, #1a1500 0%, #111 60%)", border: `1px solid rgba(212,168,67,0.35)` }}
+              transition={{ duration: 0.55, delay: 0.07 }}
+              className="rounded-2xl p-6 flex flex-col relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #1a1500 0%, #111 60%)", border: `1px solid rgba(212,168,67,0.5)` }}
             >
               <div
-                className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full text-xs font-bold"
+                className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-xs font-bold"
                 style={{ background: GOLD, color: "#0A0A0A" }}
               >
-                BEST VALUE
+                MOST POPULAR
               </div>
-              <div className="text-sm font-semibold mb-2" style={{ color: GOLD }}>SUBSCRIBER</div>
-              <div className="font-black text-4xl mb-1">Included</div>
-              <div className="text-sm mb-6" style={{ color: "#666" }}>with any IndieThis plan</div>
-              <ul className="space-y-3 mb-8">
+              <p className="font-black text-white text-lg mb-1">Premium</p>
+              <p className="font-black text-white text-3xl mb-5">$9.99</p>
+              <ul className="space-y-2 flex-1 mb-6">
                 {[
-                  "8 cover art variations (2×)",
-                  "All 15 AI art styles",
-                  "3000×3000px download",
-                  "Unlimited generations",
-                  "Priority processing",
-                  "Music Video Studio + more",
+                  "4 AI variations",
+                  "6 style presets",
+                  "Reference image input",
+                  "AI prompt enhancement",
+                  "Download instantly",
                 ].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm" style={{ color: "#ddd" }}>
-                    <Check size={14} style={{ color: GOLD }} />
+                  <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#aaa" }}>
+                    <Check size={12} style={{ color: GOLD }} className="shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
               <button
-                onClick={() => router.push("/pricing")}
-                className="w-full py-3.5 rounded-xl font-bold border"
-                style={{ borderColor: GOLD, color: GOLD, background: "transparent" }}
+                onClick={handleStart}
+                className="w-full py-3 rounded-xl font-bold text-sm"
+                style={{ background: GOLD, color: "#0A0A0A" }}
               >
-                View Plans
+                Start for $9.99
+              </button>
+            </motion.div>
+
+            {/* Pro */}
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.3 }}
+              transition={{ duration: 0.55, delay: 0.14 }}
+              className="rounded-2xl p-6 flex flex-col"
+              style={{ background: "#111", border: "1px solid #2a2a2a" }}
+            >
+              <p className="font-black text-white text-lg mb-1">Pro</p>
+              <p className="font-black text-white text-3xl mb-5">$14.99</p>
+              <ul className="space-y-2 flex-1 mb-6">
+                {[
+                  "8 AI variations",
+                  "6 style presets",
+                  "Reference image input",
+                  "AI prompt enhancement",
+                  "1 refinement round",
+                  "Download instantly",
+                ].map((f, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#aaa" }}>
+                    <Check size={12} style={{ color: GOLD }} className="shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={handleStart}
+                className="w-full py-3 rounded-xl font-bold text-sm"
+                style={{ background: GOLD, color: "#0A0A0A" }}
+              >
+                Start for $14.99
               </button>
             </motion.div>
           </div>
 
-          {/* Subscriber already has access callout */}
-          {userId && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.5 }}
-              transition={{ duration: 0.5 }}
-              className="mt-6 p-4 rounded-xl text-sm text-center"
-              style={{ background: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.2)", color: "#ccc" }}
-            >
-              <Sparkles size={14} style={{ display: "inline", color: GOLD, marginRight: 6 }} />
-              You&apos;re logged in. Check your{" "}
+          {/* Subscriber upsell */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.5 }}
+            transition={{ duration: 0.5 }}
+            className="mt-8 p-6 rounded-2xl"
+            style={{ background: "rgba(212,168,67,0.07)", border: "1px solid rgba(212,168,67,0.2)" }}
+          >
+            <p className="text-sm mb-1 font-semibold" style={{ color: GOLD }}>Already on IndieThis?</p>
+            <p className="text-sm mb-4" style={{ color: "#aaa" }}>
+              Subscribers get cover art from $3.99. Plus music videos, lyric videos, mastering, merch store,
+              and an artist page — all for $19/month.
+            </p>
+            <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => router.push("/dashboard/ai/cover-art")}
-                className="font-semibold underline"
-                style={{ color: GOLD }}
+                onClick={() => router.push("/pricing")}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-semibold text-sm border"
+                style={{ borderColor: "rgba(212,168,67,0.4)", color: GOLD }}
               >
-                dashboard
-              </button>{" "}
-              for full access.
-            </motion.div>
-          )}
+                View Plans <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={handleStart}
+                className="px-5 py-2.5 rounded-xl font-semibold text-sm"
+                style={{ background: "rgba(255,255,255,0.06)", color: "#aaa" }}
+              >
+                Continue without account
+              </button>
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -771,9 +801,8 @@ export default function CoverArtLanding({
               <span style={{ color: GOLD }}>this good.</span>
             </h2>
             <p className="mb-8 text-lg" style={{ color: "#888", lineHeight: 1.6 }}>
-              Join thousands of independent artists generating
-              professional cover art without agencies, designers,
-              or big budgets.
+              Your music deserves to be seen. Professional cover art
+              in minutes — no agencies, no designers, no big budgets.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -795,7 +824,7 @@ export default function CoverArtLanding({
 
             {/* Trust line */}
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: "#555" }}>
-              {["No account required", "Instant download", "3000×3000px resolution", "DSP-ready files"].map((t, i) => (
+              {["No account required", "Instant download", "Album-ready format", "DSP-ready files"].map((t, i) => (
                 <span key={i} className="flex items-center gap-1.5">
                   <Check size={10} style={{ color: GOLD }} />
                   {t}
