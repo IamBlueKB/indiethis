@@ -925,7 +925,7 @@ YoutubeReference
 | Feature | Status |
 |---------|--------|
 | AI Cover Art (Replicate/Flux) — Standard $4.99 / Premium $7.99 — public `/cover-art` + subscriber dashboard — 6 styles, Claude prompt enhancement, 4 variations, Pro refinement, 4-email conversion drip | ✅ DONE |
-| AI Mastering (Auphonic) — $7.99 PPU | ✅ DONE |
+| AI Mix & Master Studio — public `/master` + subscriber dashboard `/dashboard/ai/master` — Standard/Premium/Pro tiers, stereo + stems modes, 4 mood versions (Clean/Warm/Punch/Loud), album mastering, 3-agent conversion drip | ✅ DONE |
 | AI Music Video (Kling via FAL) — public `/video-studio` + subscriber dashboard — Quick + Director modes, WorkflowBoard, VideoPreset picker, CameraDirectionPicker, 4-email conversion drip | ✅ DONE |
 | AI Lyric Video Studio (Remotion Lambda) — Quick $17.99 guest / $14.99 sub · Director $29.99 guest / $24.99 sub | ✅ DONE — 5 Framer Motion typography styles, Kling v3 Pro AI backgrounds per section, Director Mode Claude chat + section plan editor, public `/lyric-video` gate screen, 4-email conversion drip, guest linking on login |
 | A&R Report (Claude) | ✅ DONE |
@@ -1324,6 +1324,31 @@ YoutubeReference
 | Env vars: `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` | ✅ SET |
 | Sentry error monitoring | ⏭️ SKIPPED — PostHog covers error tracking |
 
+### Mix & Master Studio
+| Feature | Status |
+|---------|--------|
+| Schema: `MasteringJob`, `MasteringAlbumGroup`, `MasteringPreset`; `MASTERING_CONVERSION` + `MIX_QUALITY_FOLLOWUP` + `ALBUM_MASTERING_NUDGE` AgentTypes | ✅ DONE |
+| `MasteringJob` — mode (MIX_AND_MASTER / MASTER_ONLY), tier (STANDARD / PREMIUM / PRO), inputType (STEMS / STEREO), 4 mood versions (Clean/Warm/Punch/Loud), Pro revision, album group linking, conversion drip tracking | ✅ DONE |
+| `MasteringAlbumGroup` — shared LUFS target + EQ curve across all tracks for consistency, track ordering, per-track payment tracking | ✅ DONE |
+| `MasteringPreset` — genre-based mixing + mastering profiles (HIP_HOP, POP, RNB, ELECTRONIC, ROCK, INDIE, LATIN, ACOUSTIC, JAZZ) | ✅ DONE |
+| Public landing page `/master` — `MasterLandingClient.tsx`: hero, format grid (MP3/WAV/FLAC/AIFF), A/B demo toggle, tier cards, waveform bars | ✅ DONE |
+| Guest wizard `/master` — `MasterGuestWizard.tsx`: email → mode → upload → payment → processing → compare → export | ✅ DONE |
+| Dashboard wizard `/dashboard/ai/master` — `MasterWizardClient.tsx`: same flow for subscribers; `MasterPageClient.tsx` wraps both single + album modes | ✅ DONE |
+| Album mastering wizard `/dashboard/ai/master` — `AlbumWizardClient.tsx`: upload 2–20 stereo masters, AI derives shared loudness/EQ profile across all tracks for consistency | ✅ DONE |
+| Legacy redirect `/dashboard/ai/mastering` → `/dashboard/ai/master` | ✅ DONE |
+| 6-format download grid — MP3 320kbps, WAV 16-bit 44kHz, WAV 24-bit 44kHz, WAV 24-bit 48kHz, FLAC, AIFF — in both guest and dashboard wizards | ✅ DONE |
+| API: `POST /api/mastering/job` (create), `GET /api/mastering/job/[id]/status` (poll), `POST /api/mastering/job/[id]/select-version`, `POST /api/mastering/job/[id]/revision` (Pro), `GET /api/mastering/job/[id]/download?format=&version=` | ✅ DONE |
+| API: `POST /api/mastering/checkout` (Stripe), `POST /api/mastering/preview` (free 30s preview), `GET /api/mastering/presets`, `POST /api/mastering/track/click` (conversion tracking) | ✅ DONE |
+| API: `POST /api/mastering/album` (create album group), `GET /api/mastering/album/[id]` (status), `POST /api/mastering/album/checkout` (per-track Stripe) | ✅ DONE |
+| API: `POST /api/dashboard/mastering` (subscriber job create) | ✅ DONE |
+| Admin: `/admin/mastering` — `MasteringAdminClient.tsx`: jobs list, metrics, MasteringPreset CRUD | ✅ DONE |
+| Admin API: `GET /api/admin/mastering` (list jobs), `POST /api/admin/mastering/presets`, `PATCH/DELETE /api/admin/mastering/presets/[id]` | ✅ DONE |
+| Mastering Conversion Agent (`src/lib/agents/mastering-conversion.ts`) — 4-email drip for non-subscriber guests | ✅ DONE |
+| Mix Quality Follow-Up Agent (`src/lib/agents/mix-quality-followup.ts`) — 48h post-complete quality feedback email | ✅ DONE |
+| Album Mastering Nudge Agent (`src/lib/agents/album-mastering-nudge.ts`) — nudges artists with multiple tracks to master as a full album | ✅ DONE |
+| All 3 mastering agents wired into `/api/cron/agents` | ✅ DONE |
+| Dashboard routing: `/dashboard/ai` hub lists Mix & Master; sidebar "AI Tools" → `/dashboard/ai`; `AIToolsNav` mastering href set to `/dashboard/ai/master` | ✅ DONE |
+
 ### Revenue Report Agent
 | Feature | Status |
 |---------|--------|
@@ -1494,6 +1519,7 @@ YoutubeReference
 | 6 | ~~SMS limits hardcoded~~ | ~~SMS limit values are hardcoded per tier, not in PlatformPricing~~ **FIXED** — moved to `PlatformPricing` table; editable from `/admin/settings/pricing` |
 | 7 | ~~`STRIPE_PRICE_ID_PUSH_LIFETIME` / `STRIPE_PRICE_ID_REIGN_LIFETIME`~~ | **FIXED** — $0 Stripe prices created, IDs set in `.env.local`, billing + tier-drop logic fully wired |
 | 10 | ~~Chromaprint / fpcalc not on Vercel~~ | **FIXED** — SHA-256 fallback replaced with ACRCloud File Scanning API; stores matched title/artist/ISRC/confidence as JSON |
+| 11 | ~~`/api/admin/cover-art/styles` Vercel build error~~ | ~~`Type 'null' is not assignable to type 'string \| StringFilter'` on `{ previewUrl: null }` Prisma filter~~ **FIXED** — `previewUrl` is non-nullable String; changed filter to `{ previewUrl: "" }` only |
 
 ---
 
