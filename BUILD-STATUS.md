@@ -1417,6 +1417,15 @@ YoutubeReference
 | Public landing page `/cover-art` — gate screen (email/Google OAuth), wizard, post-Stripe return | ✅ DONE |
 | `linkGuestCoverArtsByEmail()` — links guest jobs to user on first dashboard login | ✅ DONE |
 | Admin panel `/admin/cover-art` — metrics dashboard, job list, CoverArtStyle CRUD | ✅ DONE |
+| **Phase 2 — Style Picker Upgrade**: 15 `CoverArtStyle` records seeded in DB — minimalist-typography, monochrome-film, clean-gradient, dark-gritty, smoke-shadow, gothic-portrait, vibrant-illustrated, neon-futuristic, psychedelic, vintage-vinyl, street-photography, photo-real-portrait, abstract-geometric, collage-mixed-media, watercolor-dreamy | ✅ DONE |
+| 15 real FLUX.1 [dev] preview images generated + saved to `/public/images/cover-art-examples/`; previewUrls written to DB | ✅ DONE |
+| `StylePlaceholder` component (`src/components/cover-art/StylePlaceholder.tsx`) — gradient+SVG fallback for empty previewUrls; 15 named gradients, 5 category shapes | ✅ DONE |
+| `CoverArtClient.tsx` (guest) + `/dashboard/ai/cover-art/page.tsx` (subscriber) — style cards show real image or `StylePlaceholder` fallback | ✅ DONE |
+| `POST /api/admin/cover-art/styles?action=generate-previews` — generates fal.ai previews for styles with empty previewUrl, uploads to UploadThing, saves to DB | ✅ DONE |
+| vintage-vinyl style replaced with user-provided photo (warm vinyl record + needle, Polaroid-style border) | ✅ DONE |
+| Landing page (`/cover-art`) — 6-genre example gallery using real FLUX.1 [dev] generated images (hiphop-trap, rnb-soul, pop, indie-alternative, electronic-edm, acoustic-singer-songwriter); `ExampleCover` component with hover scale + gold label overlay | ✅ DONE |
+| Generation scripts: `scripts/generate-style-previews.mjs` (15 styles) + `scripts/generate-landing-examples.mjs` (6 genres) | ✅ DONE |
+| fal.ai model IDs: production uses `fal-ai/bytedance/seedream/v4/text-to-image` ($0.03/image); previews/examples generated with `fal-ai/flux/dev` ($0.025/image) | ✅ DONE |
 
 ### Lyric Video Studio Upgrade (Steps 1–9)
 | Feature | Status |
