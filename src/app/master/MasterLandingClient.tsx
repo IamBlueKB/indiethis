@@ -205,14 +205,20 @@ export function MasterLandingClient({
             </div>
           </div>
 
-          {/* Waveform visualization */}
-          <div className="flex items-end gap-[2px] h-14 mb-5 overflow-hidden rounded-lg px-1">
+          {/* Waveform visualization — suppressHydrationWarning: heights are
+              computed from Math.sin() and differ between SSR/client float
+              serialization; the element is purely decorative. */}
+          <div
+            className="flex items-end gap-[2px] h-14 mb-5 overflow-hidden rounded-lg px-1"
+            suppressHydrationWarning
+          >
             {Array.from({ length: 80 }, (_, i) => {
               const h = 20 + Math.abs(Math.sin(i * 0.4 + 1) * 60 + Math.sin(i * 0.9) * 30);
               const active = abDemo === "after";
               return (
                 <div
                   key={i}
+                  suppressHydrationWarning
                   style={{
                     flex: 1,
                     height: `${Math.min(100, h * (active ? 1 : 0.45)).toFixed(2)}%`,
