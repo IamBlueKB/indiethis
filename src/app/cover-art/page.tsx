@@ -2,11 +2,10 @@
  * /cover-art — Cover Art Studio (public, no auth required)
  *
  * URL behaviour:
- *   /cover-art                   → GateScreen (if no cookie and not authenticated)
- *   /cover-art (cookie set)      → CoverArtClient wizard
- *   /cover-art?paid=1&jobId=...  → CoverArtClient (post-Stripe return)
+ *   /cover-art             → CoverArtLanding  (premium marketing page)
+ *   /cover-art?start=1     → GateScreen → CoverArtClient wizard
  *
- * Subscriber users are redirected to the full-featured dashboard wizard.
+ * Authenticated subscribers are redirected to the full-featured dashboard wizard.
  */
 
 import { Metadata, Viewport } from "next";
@@ -15,6 +14,7 @@ import { cookies }            from "next/headers";
 import { Suspense }           from "react";
 import { auth }               from "@/lib/auth";
 import { db }                 from "@/lib/db";
+import CoverArtLanding        from "./CoverArtLanding";
 import GateScreen             from "./GateScreen";
 import CoverArtClient         from "./CoverArtClient";
 
@@ -46,35 +46,40 @@ export const metadata: Metadata = {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function CoverArtPage() {
+export default async function CoverArtPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ start?: string }>;
+}) {
+  const sp      = await searchParams;
   const session = await auth();
+  const userId  = session?.user?.id ?? null;
 
   // Authenticated subscribers → redirect to the full dashboard wizard
-  if (session?.user?.id) {
+  if (userId) {
     const sub = await db.subscription.findFirst({
-      where:  { userId: session.user.id, status: "ACTIVE" },
+      where:  { userId, status: "ACTIVE" },
       select: { tier: true },
     });
-    if (sub) {
-      redirect("/dashboard/ai/cover-art");
-    }
+    if (sub) redirect("/dashboard/ai/cover-art");
   }
 
-  const cookieStore = await cookies();
+  // Default view: premium landing page
+  if (sp?.start !== "1") {
+    return <CoverArtLanding userId={userId} userTier={null} />;
+  }
 
-  // Google OAuth return: user is authenticated but not a subscriber → let them use the wizard
-  // Read guest cookie for their email
-  const coverArtCookie  = cookieStore.get("indiethis_guest_cover_art")?.value;
-  // Also check the shared indithis_guest_email cookie (used across tools)
-  const sharedCookie    = cookieStore.get("indiethis_guest_email")?.value;
+  // ?start=1 — show gate screen or jump straight to wizard if cookie already set
+  const cookieStore    = await cookies();
+  const coverArtCookie = cookieStore.get("indiethis_guest_cover_art")?.value;
+  const sharedCookie   = cookieStore.get("indiethis_guest_email")?.value;
 
-  let guestEmail:  string | null = null;
-  let artistName:  string | null = null;
+  let guestEmail: string | null = null;
+  let artistName: string | null = null;
 
-  // If authenticated (non-subscriber) — use their profile
   if (session?.user) {
-    guestEmail  = session.user.email ?? null;
-    artistName  = (session.user as { artistName?: string }).artistName ?? session.user.name ?? null;
+    guestEmail = session.user.email ?? null;
+    artistName = (session.user as { artistName?: string }).artistName ?? session.user.name ?? null;
   } else if (coverArtCookie) {
     try {
       const parsed = JSON.parse(decodeURIComponent(coverArtCookie)) as { email?: string; name?: string };
@@ -89,7 +94,7 @@ export default async function CoverArtPage() {
     } catch { /* malformed cookie */ }
   }
 
-  // No email identified → show gate screen
+  // No email → gate screen collects it
   if (!guestEmail) {
     return <GateScreen />;
   }
@@ -99,7 +104,7 @@ export default async function CoverArtPage() {
       <CoverArtClient
         guestEmail={guestEmail}
         artistName={artistName}
-        userId={session?.user?.id ?? null}
+        userId={userId}
       />
     </Suspense>
   );
