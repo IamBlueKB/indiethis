@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify Stripe payment if present (skip for credit-based jobs)
+    let chargedAmount = 0;
     if (body.stripePaymentId) {
       const Stripe = (await import("stripe")).default;
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       if (paymentIntent.status !== "succeeded") {
         return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
       }
+      chargedAmount = paymentIntent.amount;
     } else if (body.creditsUsed) {
       // Credit was already deducted in /api/mastering/checkout — verify user is authenticated
       if (!session?.user?.id) {
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest) {
                                ? { naturalLanguagePrompt: body.naturalLanguagePrompt } as any
                                : undefined,
         stripePaymentId:     body.stripePaymentId,
-        amount:              paymentIntent.amount,
+        amount:              chargedAmount,
         albumGroupId:        body.albumGroupId ?? null,
         status:              "PENDING",
       },
