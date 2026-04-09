@@ -57,16 +57,32 @@ export async function POST(req: NextRequest) {
     }
 
     let amountCents = BASE_PRICES[tier][mode];
+    let subId: string | null = null;
 
-    // Apply exact subscriber PPU pricing
+    // Check subscription status and included credits
     if (session?.user?.id) {
       const sub = await prisma.subscription.findUnique({
         where:  { userId: session.user.id },
-        select: { tier: true, status: true },
+        select: { id: true, tier: true, status: true, aiMasterCreditsUsed: true, aiMasterCreditsLimit: true },
       });
 
-      if (sub?.status === "ACTIVE" && sub.tier) {
-        const planKey = getPlanKey(sub.tier);
+      if (sub?.status === "ACTIVE") {
+        subId = sub.id;
+
+        // If the subscriber has included credits remaining, use one instead of charging
+        if (sub.aiMasterCreditsUsed < sub.aiMasterCreditsLimit) {
+          await prisma.subscription.update({
+            where: { id: sub.id },
+            data:  { aiMasterCreditsUsed: { increment: 1 } },
+          });
+          return NextResponse.json({
+            creditsUsed:     true,
+            creditsRemaining: sub.aiMasterCreditsLimit - sub.aiMasterCreditsUsed - 1,
+          });
+        }
+
+        // Credits exhausted — apply subscriber PPU pricing
+        const planKey = getPlanKey(sub.tier ?? "");
         if (planKey && SUBSCRIBER_PRICES[planKey]?.[tier]) {
           amountCents = SUBSCRIBER_PRICES[planKey][tier];
         }

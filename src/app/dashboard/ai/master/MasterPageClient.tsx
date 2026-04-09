@@ -14,8 +14,17 @@ import { AlbumWizardClient } from "./AlbumWizardClient";
 
 type Tab = "single" | "album";
 
-export function MasterPageClient({ userId }: { userId: string }) {
+export function MasterPageClient({
+  userId,
+  creditsUsed  = 0,
+  creditsLimit = 0,
+}: {
+  userId:        string;
+  creditsUsed?:  number;
+  creditsLimit?: number;
+}) {
   const [tab, setTab] = useState<Tab>("single");
+  const creditsRemaining = Math.max(0, creditsLimit - creditsUsed);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#fff" }}>
@@ -29,6 +38,18 @@ export function MasterPageClient({ userId }: { userId: string }) {
           <p className="text-sm mt-2" style={{ color: "#777" }}>
             Professional-grade mixing and mastering — no plug-ins, no engineers
           </p>
+          {creditsLimit > 0 && (
+            <p className="text-xs mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{
+                backgroundColor: creditsRemaining > 0 ? "rgba(212,168,67,0.1)" : "rgba(255,255,255,0.05)",
+                color:           creditsRemaining > 0 ? "#D4A843" : "#666",
+                border:          `1px solid ${creditsRemaining > 0 ? "rgba(212,168,67,0.2)" : "#2a2a2a"}`,
+              }}>
+              {creditsRemaining > 0
+                ? `${creditsRemaining} master${creditsRemaining === 1 ? "" : "s"} remaining this month`
+                : "No included masters remaining this month"}
+            </p>
+          )}
         </div>
 
         {/* Tab switcher */}

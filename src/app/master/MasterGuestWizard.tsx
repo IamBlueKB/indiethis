@@ -223,8 +223,8 @@ export function MasterGuestWizard({
     }
   }
 
-  // ── Full job start (post-payment) ──────────────────────────────────────────
-  async function startProcessing(paymentIntentId: string) {
+  // ── Full job start (post-payment or included credit) ──────────────────────
+  async function startProcessing(paymentIntentId?: string, creditsUsed?: boolean) {
     setError(null);
     setUploading(true);
     try {
@@ -252,6 +252,7 @@ export function MasterGuestWizard({
           platforms,
           naturalLanguagePrompt: nlPrompt.trim() || undefined,
           stripePaymentId:       paymentIntentId,
+          creditsUsed:           creditsUsed ?? false,
           guestEmail:            email,
           guestName:             name || undefined,
         }),
@@ -281,7 +282,19 @@ export function MasterGuestWizard({
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ mode, tier }),
       });
-      const { clientSecret } = await checkoutRes.json() as { clientSecret: string };
+      const checkoutData = await checkoutRes.json() as {
+        creditsUsed?: boolean;
+        clientSecret?: string;
+      };
+
+      // Subscriber used an included credit — skip Stripe entirely
+      if (checkoutData.creditsUsed) {
+        await startProcessing(undefined, true);
+        return;
+      }
+
+      const { clientSecret } = checkoutData;
+      if (!clientSecret) throw new Error("Checkout failed — no payment intent.");
 
       const { loadStripe } = await import("@stripe/stripe-js");
       const stripeJs = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);

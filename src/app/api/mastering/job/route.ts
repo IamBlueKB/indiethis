@@ -40,23 +40,31 @@ export async function POST(req: NextRequest) {
       platforms?:            string[];
       referenceTrackUrl?:    string;
       naturalLanguagePrompt?: string;
-      stripePaymentId:       string;
+      stripePaymentId?:      string;
+      creditsUsed?:          boolean;
       guestEmail?:           string;
       guestName?:            string;
       albumGroupId?:         string;
     };
 
-    // Payment verification — must have a stripePaymentId before we process
-    if (!body.stripePaymentId) {
+    // Payment verification — must have either a Stripe payment or an included credit
+    if (!body.stripePaymentId && !body.creditsUsed) {
       return NextResponse.json({ error: "Payment required before processing." }, { status: 402 });
     }
 
-    // Verify payment intent is succeeded
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
-    const paymentIntent = await stripe.paymentIntents.retrieve(body.stripePaymentId);
-    if (paymentIntent.status !== "succeeded") {
-      return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
+    // Verify Stripe payment if present (skip for credit-based jobs)
+    if (body.stripePaymentId) {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+      const paymentIntent = await stripe.paymentIntents.retrieve(body.stripePaymentId);
+      if (paymentIntent.status !== "succeeded") {
+        return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
+      }
+    } else if (body.creditsUsed) {
+      // Credit was already deducted in /api/mastering/checkout — verify user is authenticated
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Authentication required for credit-based jobs." }, { status: 401 });
+      }
     }
 
     // Validate required fields per mode
