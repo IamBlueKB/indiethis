@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-09 (session 15)_
+_Last updated: 2026-04-09 (session 16)_
 
 ---
 
@@ -1462,6 +1462,15 @@ YoutubeReference
 | Landing page (`/cover-art`) — 6-genre example gallery using real FLUX.1 [dev] generated images (hiphop-trap, rnb-soul, pop, indie-alternative, electronic-edm, acoustic-singer-songwriter); `ExampleCover` component with hover scale + gold label overlay | ✅ DONE |
 | Generation scripts: `scripts/generate-style-previews.mjs` (15 styles) + `scripts/generate-landing-examples.mjs` (6 genres) | ✅ DONE |
 | fal.ai model IDs: production uses `fal-ai/bytedance/seedream/v4/text-to-image` ($0.03/image); previews/examples generated with `fal-ai/flux/dev` ($0.025/image) | ✅ DONE |
+| **Phase 3 — Landing Page Premium Visual Polish (session 16)** | |
+| Step 1 — Gradient mesh backgrounds: each section gets 2–3 layered radial gradients (max 8% opacity) — hero (gold+purple), gallery (teal+blue), stats (amber), pricing (charcoal+gold), features (dark purple), upsell (warm brown+gold) | ✅ DONE |
+| Step 2 — Blurred cover art texture layers: heavily blurred (80px) cover art images at 5–6% opacity behind gallery, pricing, features, and upsell sections using absolute-positioned `BlurBg` component | ✅ DONE |
+| Step 3 — Live morph hero: 8 diverse style images crossfade every 4s at 18% opacity + 40px blur behind hero text; 2s crossfade transition; mobile rotates 4 images; dark overlay keeps text readable | ✅ DONE |
+| Step 4 — Sticky CTA bar: Framer Motion AnimatePresence slides 48px bar in from top when hero exits viewport (IntersectionObserver); left: brand logo; right: "from $6.99" + coral CTA button; mobile: shortened copy | ✅ DONE |
+| Step 5 — Animated stat counters: 4 stats between hero and gallery (15 Art Styles, 4–8 Variations, ~2 Minutes, 1:1 Format); count-up from 0 on scroll-into-view via `useInView` (once); gold icons + large number + label per card | ✅ DONE |
+| Step 6 — Floating 3D album mockup: desktop hero right column uses `useScroll`+`useTransform` for rotateY/rotateX/translateY parallax; perspective 1000px; gothic-portrait image; gradient-masked reflection at 10% opacity; mobile: static angled version | ✅ DONE |
+| Step 7 — Style comparison drag slider: before (photo-real-portrait) vs after (smoke-shadow); `clipPath` drives reveal at dragged position; gold-accented handle; Before/After labels; full mouse + touch support | ✅ DONE |
+| Step 8 — Interactive genre cards: all 6 genre example cards crossfade to alt style on hover (desktop) / tap (mobile); 700ms transition; label updates to show alt style name; "Hover to remix ✦" hint; uses existing images, no new assets | ✅ DONE |
 
 ### Lyric Video Studio Upgrade (Steps 1–9)
 | Feature | Status |
