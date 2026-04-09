@@ -2,10 +2,10 @@
  * /lyric-video — Lyric Video Studio (public, no auth required)
  *
  * URL behaviour:
- *   /lyric-video                   → LyricVideoGateScreen (if no email cookie)
- *   /lyric-video (cookie set)      → LyricVideoClient mode picker
- *   /lyric-video?paid=1&jobId=...  → LyricVideoClient (post-Stripe return, auto-shows wizard)
- *   /lyric-video?mode=director     → LyricVideoClient (pre-selects Director Mode)
+ *   /lyric-video                    → LyricVideoLanding  (premium marketing page)
+ *   /lyric-video?start=1            → GateScreen → LyricVideoClient
+ *   /lyric-video?start=1&mode=quick    → GateScreen → wizard pre-set to Quick
+ *   /lyric-video?start=1&mode=director → GateScreen → wizard pre-set to Director
  *
  * Authenticated subscribers are redirected to the full-featured dashboard wizard.
  */
@@ -16,6 +16,7 @@ import { cookies }            from "next/headers";
 import { Suspense }           from "react";
 import { auth }               from "@/lib/auth";
 import { db }                 from "@/lib/db";
+import LyricVideoLanding      from "./LyricVideoLanding";
 import LyricVideoGateScreen   from "./LyricVideoGateScreen";
 import LyricVideoClient       from "./LyricVideoClient";
 
@@ -50,31 +51,33 @@ export const metadata: Metadata = {
 export default async function LyricVideoPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ mode?: string; paid?: string; jobId?: string }>;
+  searchParams?: Promise<{ start?: string; mode?: string; paid?: string; jobId?: string }>;
 }) {
-  const sp     = await searchParams;
+  const sp      = await searchParams;
   const session = await auth();
+  const userId  = session?.user?.id ?? null;
 
   // Authenticated subscribers → redirect to dashboard wizard
-  if (session?.user?.id) {
+  if (userId) {
     const sub = await db.subscription.findFirst({
-      where:  { userId: session.user.id, status: "ACTIVE" },
+      where:  { userId, status: "ACTIVE" },
       select: { tier: true },
     });
-    if (sub) {
-      redirect("/dashboard/ai/lyric-video");
-    }
+    if (sub) redirect("/dashboard/ai/lyric-video");
   }
 
-  const cookieStore = await cookies();
+  // Default view: premium landing page
+  if (sp?.start !== "1") {
+    return <LyricVideoLanding userId={userId} userTier={null} />;
+  }
 
-  // Read shared guest email cookie (set by GateScreen)
+  // ?start=1 — show gate screen or jump to wizard if cookie already set
+  const cookieStore  = await cookies();
   const sharedCookie = cookieStore.get("indiethis_guest_email")?.value;
 
-  let guestEmail:  string | null = null;
-  let artistName:  string | null = null;
+  let guestEmail: string | null = null;
+  let artistName: string | null = null;
 
-  // Authenticated non-subscriber — use their profile
   if (session?.user) {
     guestEmail = session.user.email ?? null;
     artistName = (session.user as { artistName?: string }).artistName ?? session.user.name ?? null;
@@ -86,12 +89,11 @@ export default async function LyricVideoPage({
     } catch { /* malformed cookie */ }
   }
 
-  // No email → show gate screen
+  // No email → gate screen collects it
   if (!guestEmail) {
     return <LyricVideoGateScreen />;
   }
 
-  // Determine initial mode from URL param
   const initialMode = sp?.mode === "director" ? "director" : sp?.mode === "quick" ? "quick" : null;
 
   return (
@@ -101,7 +103,7 @@ export default async function LyricVideoPage({
         artistName={artistName}
         isSubscriber={false}
         initialMode={initialMode as "quick" | "director" | null}
-        userId={session?.user?.id ?? null}
+        userId={userId}
       />
     </Suspense>
   );
