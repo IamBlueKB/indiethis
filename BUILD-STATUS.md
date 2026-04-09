@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-09 (session 16)_
+_Last updated: 2026-04-09 (session 17)_
 
 ---
 
@@ -1471,6 +1471,18 @@ YoutubeReference
 | Step 6 — Floating 3D album mockup: desktop hero right column uses `useScroll`+`useTransform` for rotateY/rotateX/translateY parallax; perspective 1000px; gothic-portrait image; gradient-masked reflection at 10% opacity; mobile: static angled version | ✅ DONE |
 | Step 7 — Style comparison drag slider: before (photo-real-portrait) vs after (smoke-shadow); `clipPath` drives reveal at dragged position; gold-accented handle; Before/After labels; full mouse + touch support | ✅ DONE |
 | Step 8 — Interactive genre cards: all 6 genre example cards crossfade to alt style on hover (desktop) / tap (mobile); 700ms transition; label updates to show alt style name; "Hover to remix ✦" hint; uses existing images, no new assets | ✅ DONE |
+| **Phase 4 — Landing Page v3 Full Redesign (session 17)** | |
+| Generated 4 new hero images via fal.ai Seedream V4 → `/public/images/cover-art-hero/` (hero-moody, hero-street, hero-chrome, hero-cinematic); generation script: `scripts/generate-v3-landing-images.mjs` | ✅ DONE |
+| Generated 2 new before/after comparison images (same subject — hooded young man) → `/public/images/cover-art-comparison/original.png` + `styled.png` | ✅ DONE |
+| Full `CoverArtLanding.tsx` replacement — 6-act scroll-driven page; all animations use `viewport={{ once: false }}`; no sticky sections; no empty space | ✅ DONE |
+| Act 1 Hero — staggered 2×2 `HeroAlbumGrid` (4 cards with per-card rotation/offset/delay, gold glow); headline "Create Album / Cover Art" (gold); stats row: 15 Art Styles · 4–8 Variations · ~2 min · 1:1 Album-Ready; single CTA "Create yours — from $6.99 →" | ✅ DONE |
+| Act 2 Gallery — tight 2×3 genre grid with whileInView stagger reveals; blurred art texture backgrounds (4 images at 7% opacity, 70px blur); CTA below grid | ✅ DONE |
+| Act 3 Transformation — `TransformationSlider` drag reveal (before/after same subject); gold divider + handle; BEFORE/AFTER labels; copy + checklist beside slider | ✅ DONE |
+| Act 4 How It Works — 3 numbered steps (01/02/03) in grid cards; large gold step numbers at 20% opacity | ✅ DONE |
+| Act 5 Pricing — 3 correct tiers: Standard $6.99 / Premium $9.99 (MOST POPULAR gold badge) / Pro $14.99 with exact features; subscriber upsell below cards (always visible): "from $3.99" + "View Plans" + "Continue without account" buttons | ✅ DONE |
+| Act 6 Exit — `MorphLoop` crossfade (8 images, 2.8s interval, pauses when off-screen); final CTA; trust line: No account required · Instant download · Album-ready format · DSP-ready files | ✅ DONE |
+| `StickyNav` — IntersectionObserver on `#act1-hero`; slides in from top when hero leaves viewport | ✅ DONE |
+| Pricing data corrections: removed all "3000×3000px"/"3000px" references (0 remaining); removed "Free trial with account" CTA; removed "Join thousands of independent artists" (not launched); removed "Unlimited generations" (subscribers get discounted PPU, not unlimited) | ✅ DONE |
 
 ### Lyric Video Studio Upgrade (Steps 1–9)
 | Feature | Status |
