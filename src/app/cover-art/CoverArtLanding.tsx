@@ -1,1107 +1,813 @@
 "use client";
 
 /**
- * CoverArtLanding — scroll-driven art gallery landing page for /cover-art.
+ * CoverArtLanding v3 — Cover Art Studio premium landing page.
  *
- * Architecture: 7 Acts that reveal the product through the art itself.
- * Each act manages its own scroll animations. Color shifts between acts make
- * the page feel alive. The artist doesn't read about cover art — they experience it.
+ * 6 Acts:
+ *   1. Hero — staggered 2x2 album grid + headline + CTA
+ *   2. Gallery — tight 2x3 genre grid with whileInView reveals
+ *   3. Transformation — before/after drag slider
+ *   4. How It Works — 3 steps
+ *   5. Pricing — tier cards + subscriber upsell
+ *   6. Exit — morph crossfade loop
  *
- * Image base: /public/images/cover-art-examples/*.png (no separate styles dir)
- * Comparison: /public/images/cover-art-comparison/{before,after}.png
+ * Rules:
+ *   - viewport={{ once: false }} on ALL animations
+ *   - No sticky sections, no 300vh scroll sequences
+ *   - No empty space
+ *   - Gold accent: #D4A843
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  motion, AnimatePresence,
-  useScroll, useTransform, useInView,
-} from "framer-motion";
-import { ChevronDown, Check, Sparkles, ChevronRight, X } from "lucide-react";
+import { motion, AnimatePresence, useInView } from "framer-motion";
+import { Check, Sparkles, ChevronRight, Play } from "lucide-react";
 
 // ─── Image paths ──────────────────────────────────────────────────────────────
-// All files are .png in /images/cover-art-examples/ — no separate styles dir.
 
-const E = "/images/cover-art-examples";
-const C = "/images/cover-art-comparison";
+const H  = "/images/cover-art-hero";
+const E  = "/images/cover-art-examples";
+const C  = "/images/cover-art-comparison";
 
 const IMG = {
-  hiphop:               `${E}/hiphop-trap.png`,
-  rnb:                  `${E}/rnb-soul.png`,
-  pop:                  `${E}/pop.png`,
-  indie:                `${E}/indie-alternative.png`,
-  electronic:           `${E}/electronic-edm.png`,
-  acoustic:             `${E}/acoustic-singer-songwriter.png`,
-  vibrantIllustrated:   `${E}/vibrant-illustrated.png`,
-  smokeShadow:          `${E}/smoke-shadow.png`,
-  psychedelic:          `${E}/psychedelic.png`,
-  gothicPortrait:       `${E}/gothic-portrait.png`,
-  neonFuturistic:       `${E}/neon-futuristic.png`,
-  darkGritty:           `${E}/dark-gritty.png`,
-  watercolorDreamy:     `${E}/watercolor-dreamy.png`,
-  abstractGeometric:    `${E}/abstract-geometric.png`,
-  minimalistTypography: `${E}/minimalist-typography.png`,
-  monochromeFilm:       `${E}/monochrome-film.png`,
-  cleanGradient:        `${E}/clean-gradient.png`,
-  vintageVinyl:         `${E}/vintage-vinyl.png`,
-  streetPhotography:    `${E}/street-photography.png`,
-  photoRealPortrait:    `${E}/photo-real-portrait.png`,
-  collage:              `${E}/collage-mixed-media.png`,
-  before:               `${C}/before.png`,
-  after:                `${C}/after.png`,
+  // Hero 2x2 grid
+  heroMoody:      `${H}/hero-moody.png`,
+  heroStreet:     `${H}/hero-street.png`,
+  heroChrome:     `${H}/hero-chrome.png`,
+  heroCinematic:  `${H}/hero-cinematic.png`,
+  // Genre gallery (existing)
+  hiphop:         `${E}/hiphop-trap.png`,
+  rnb:            `${E}/rnb-soul.png`,
+  pop:            `${E}/pop.png`,
+  indie:          `${E}/indie-alternative.png`,
+  electronic:     `${E}/electronic-edm.png`,
+  acoustic:       `${E}/acoustic-singer-songwriter.png`,
+  // Blur backgrounds
+  vibrant:        `${E}/vibrant-illustrated.png`,
+  psychedelic:    `${E}/psychedelic.png`,
+  smoke:          `${E}/smoke-shadow.png`,
+  gothic:         `${E}/gothic-portrait.png`,
+  // Before/after
+  original:       `${C}/original.png`,
+  styled:         `${C}/styled.png`,
+  // Morph exit loop
+  neon:           `${E}/neon-futuristic.png`,
+  dark:           `${E}/dark-gritty.png`,
+  watercolor:     `${E}/watercolor-dreamy.png`,
+  abstract:       `${E}/abstract-geometric.png`,
+  collage:        `${E}/collage-mixed-media.png`,
+  street:         `${E}/street-photography.png`,
 };
-
-// ─── Color system ─────────────────────────────────────────────────────────────
-// Each act has its own background color + radial gradient accent.
-// Shifts are subtle (1-2 hex digits) so sections bleed together naturally.
-
-const PAGE_COLORS = [
-  { bg: "#0a0a0a", accent: "rgba(212,168,67,0.08)"  }, // Act 1: deep black + gold
-  { bg: "#0c0a10", accent: "rgba(120,60,180,0.06)"  }, // Act 2: hint of purple
-  { bg: "#0a0d0d", accent: "rgba(0,128,128,0.06)"   }, // Act 3: teal undertone
-  { bg: "#0d0a10", accent: "rgba(100,40,160,0.07)"  }, // Act 4: purple gallery
-  { bg: "#0a0a0a", accent: "rgba(212,168,67,0.04)"  }, // Act 5: clean
-  { bg: "#0d0b08", accent: "rgba(180,120,40,0.07)"  }, // Act 6: warm brown
-  { bg: "#0a0a0a", accent: "rgba(212,168,67,0.10)"  }, // Act 7: gold finale
-] as const;
-
-function actBg(i: number, pos1 = "20% 40%", pos2 = "75% 70%") {
-  const { bg, accent } = PAGE_COLORS[i];
-  return `
-    radial-gradient(ellipse at ${pos1}, ${accent} 0%, transparent 60%),
-    radial-gradient(ellipse at ${pos2}, ${accent} 0%, transparent 50%),
-    ${bg}
-  `;
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const GALLERY_ITEMS = [
-  { genre: "HIP-HOP",    title: "Hip-Hop / Trap",              style: "Dark & Gritty",        image: IMG.hiphop    },
-  { genre: "R&B",        title: "R&B / Soul",                  style: "Smoke & Shadow",       image: IMG.rnb       },
-  { genre: "POP",        title: "Pop",                         style: "Vibrant Illustrated",  image: IMG.pop       },
-  { genre: "INDIE",      title: "Indie / Alternative",         style: "Vintage Vinyl",        image: IMG.indie     },
-  { genre: "ELECTRONIC", title: "Electronic / EDM",            style: "Neon Futuristic",      image: IMG.electronic },
-  { genre: "ACOUSTIC",   title: "Acoustic / Singer-Songwriter",style: "Watercolor Dreamy",    image: IMG.acoustic  },
+const GOLD = "#D4A843";
+
+const GENRE_CARDS = [
+  { src: IMG.hiphop,    label: "Hip-Hop / Trap",    alt: "Hip-hop album cover" },
+  { src: IMG.rnb,       label: "R&B / Soul",         alt: "R&B album cover" },
+  { src: IMG.pop,       label: "Pop",                alt: "Pop album cover" },
+  { src: IMG.indie,     label: "Indie / Alternative", alt: "Indie album cover" },
+  { src: IMG.electronic,label: "Electronic / EDM",   alt: "Electronic album cover" },
+  { src: IMG.acoustic,  label: "Acoustic / Singer-Songwriter", alt: "Acoustic album cover" },
 ];
 
-const STYLE_ITEMS = [
-  { name: "Minimalist Typography", image: IMG.minimalistTypography, category: "Minimal"      },
-  { name: "Clean Gradient",        image: IMG.cleanGradient,        category: "Minimal"      },
-  { name: "Dark & Gritty",         image: IMG.darkGritty,           category: "Dark"         },
-  { name: "Smoke & Shadow",        image: IMG.smokeShadow,          category: "Dark"         },
-  { name: "Gothic Portrait",       image: IMG.gothicPortrait,       category: "Dark"         },
-  { name: "Vibrant Illustrated",   image: IMG.vibrantIllustrated,   category: "Vibrant"      },
-  { name: "Neon Futuristic",       image: IMG.neonFuturistic,       category: "Vibrant"      },
-  { name: "Watercolor Dreamy",     image: IMG.watercolorDreamy,     category: "Vibrant"      },
-  { name: "Psychedelic",           image: IMG.psychedelic,          category: "Experimental" },
-  { name: "Abstract Geometric",    image: IMG.abstractGeometric,    category: "Experimental" },
-  { name: "Collage Mixed Media",   image: IMG.collage,              category: "Experimental" },
-  { name: "Vintage Vinyl",         image: IMG.vintageVinyl,         category: "Classic"      },
-  { name: "Monochrome Film",       image: IMG.monochromeFilm,       category: "Classic"      },
-  { name: "Street Photography",    image: IMG.streetPhotography,    category: "Classic"      },
-  { name: "Photo Real Portrait",   image: IMG.photoRealPortrait,    category: "Classic"      },
-] as const;
-
-const CATEGORIES = ["All", "Minimal", "Dark", "Vibrant", "Classic", "Experimental"] as const;
-type Category = (typeof CATEGORIES)[number];
-
-const STEPS = [
-  { number: "1", title: "Describe",  desc: "Tell us your vision in plain language — or upload a reference image." },
-  { number: "2", title: "Generate",  desc: "AI creates 4–8 unique variations in your chosen style, album-ready."  },
-  { number: "3", title: "Download",  desc: "Pick your favorite. Download in high resolution. Release it."          },
-];
-
-const TIERS = [
+const HOW_STEPS = [
   {
-    title: "Standard", price: "$6.99", popular: false,
-    features: [
-      { text: "4 AI variations",        ok: true  },
-      { text: "6 style presets",         ok: true  },
-      { text: "Reference image input",   ok: false },
-      { text: "AI prompt enhancement",   ok: false },
-      { text: "Refinement round",        ok: false },
-      { text: "Download instantly",      ok: true  },
-    ],
+    n: "01",
+    title: "Describe Your Sound",
+    body: "Tell us your genre, mood, and artist name. Or upload a reference photo — a selfie, a landscape, anything that captures your vibe.",
   },
   {
-    title: "Premium", price: "$9.99", popular: true,
-    features: [
-      { text: "4 AI variations",         ok: true  },
-      { text: "6 style presets",         ok: true  },
-      { text: "Reference image input",   ok: true  },
-      { text: "AI prompt enhancement",   ok: true  },
-      { text: "Refinement round",        ok: false },
-      { text: "Download instantly",      ok: true  },
-    ],
+    n: "02",
+    title: "Choose Your Style",
+    body: "Pick from 15 AI art styles — Smoke & Shadow, Neon Futuristic, Watercolor Dreamy, Street Photography, and more. Preview every style before you pay.",
   },
   {
-    title: "Pro", price: "$14.99", popular: false,
-    features: [
-      { text: "8 AI variations",         ok: true  },
-      { text: "6 style presets",         ok: true  },
-      { text: "Reference image input",   ok: true  },
-      { text: "AI prompt enhancement",   ok: true  },
-      { text: "Refinement round (1)",    ok: true  },
-      { text: "Download instantly",      ok: true  },
-    ],
+    n: "03",
+    title: "Download in Seconds",
+    body: "Get 4–8 high-res cover art variations instantly. 3000×3000px, ready for Spotify, Apple Music, and every major DSP.",
   },
 ];
 
 const MORPH_IMAGES = [
-  IMG.neonFuturistic,
-  IMG.gothicPortrait,
-  IMG.vibrantIllustrated,
-  IMG.smokeShadow,
-  IMG.psychedelic,
-  IMG.darkGritty,
-  IMG.watercolorDreamy,
-  IMG.abstractGeometric,
+  IMG.neon, IMG.gothic, IMG.vibrant, IMG.smoke,
+  IMG.psychedelic, IMG.dark, IMG.watercolor, IMG.abstract,
 ];
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Blurred cover-art image used as atmospheric depth layer behind section content. */
-function BlurBg({ src }: { src: string }) {
+/** Staggered 2×2 album grid for the hero section */
+function HeroAlbumGrid() {
+  const cards = [
+    { src: IMG.heroMoody,     rotate: -3, x: 8,  y: 0,  delay: 0 },
+    { src: IMG.heroStreet,    rotate:  2, x: -5, y: 6,  delay: 0.1 },
+    { src: IMG.heroChrome,    rotate: -1, x: 12, y: -8, delay: 0.2 },
+    { src: IMG.heroCinematic, rotate:  4, x: -3, y: 0,  delay: 0.3 },
+  ];
+
   return (
-    <div
-      aria-hidden
-      className="absolute inset-0 pointer-events-none z-0"
-      style={{
-        backgroundImage:    `url('${src}')`,
-        backgroundSize:     "cover",
-        backgroundPosition: "center",
-        filter:             "blur(70px)",
-        opacity:            0.08,
-        transform:          "scale(1.2)",
-      }}
-    />
+    <div className="relative w-full max-w-sm mx-auto" style={{ aspectRatio: "1/1" }}>
+      <div className="grid grid-cols-2 gap-3 relative z-10">
+        {cards.map((card, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.85, rotate: card.rotate - 5 }}
+            whileInView={{ opacity: 1, scale: 1, rotate: card.rotate }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.6, delay: card.delay, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ scale: 1.05, rotate: 0, zIndex: 10 }}
+            style={{
+              translateX: `${card.x}px`,
+              translateY: `${card.y}px`,
+              zIndex: cards.length - i,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+            }}
+            className="rounded-xl overflow-hidden aspect-square"
+          >
+            <img src={card.src} alt="Album cover" className="w-full h-full object-cover" />
+          </motion.div>
+        ))}
+      </div>
+      {/* Gold glow behind the grid */}
+      <div
+        className="absolute inset-0 -z-10 rounded-full"
+        style={{
+          background: "radial-gradient(circle at 50% 50%, rgba(212,168,67,0.2) 0%, transparent 70%)",
+          filter: "blur(40px)",
+          transform: "scale(1.3)",
+        }}
+      />
+    </div>
   );
 }
 
-// ─── Sticky CTA Nav ───────────────────────────────────────────────────────────
+/** Before/after drag slider */
+function TransformationSlider() {
+  const [pos, setPos] = useState(50); // percentage
+  const dragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-function StickyNav() {
+  const calcPos = useCallback((clientX: number) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    setPos(pct);
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    calcPos(e.clientX);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    calcPos(e.clientX);
+  };
+  const onPointerUp = () => { dragging.current = false; };
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full rounded-2xl overflow-hidden select-none cursor-ew-resize"
+      style={{ aspectRatio: "1/1", maxWidth: 480, margin: "0 auto" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {/* After (styled) — full */}
+      <img src={IMG.styled} alt="After" className="absolute inset-0 w-full h-full object-cover" />
+      {/* Before (original) — clipped */}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+      >
+        <img src={IMG.original} alt="Before" className="w-full h-full object-cover" />
+      </div>
+      {/* Divider line */}
+      <div
+        className="absolute top-0 bottom-0 w-0.5 z-20"
+        style={{ left: `${pos}%`, background: GOLD }}
+      >
+        {/* Handle */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-2 flex items-center justify-center"
+          style={{ background: "#0A0A0A", borderColor: GOLD }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M5 8H2M2 8L4 6M2 8L4 10M11 8H14M14 8L12 6M14 8L12 10" stroke={GOLD} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      {/* Labels */}
+      <div className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded text-xs font-bold" style={{ background: "rgba(0,0,0,0.7)", color: "#aaa" }}>BEFORE</div>
+      <div className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded text-xs font-bold" style={{ background: "rgba(0,0,0,0.7)", color: GOLD }}>AFTER</div>
+    </div>
+  );
+}
+
+/** Morph crossfade exit loop */
+function MorphLoop() {
+  const [idx, setIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: false, amount: 0.3 });
+
+  useEffect(() => {
+    if (!inView) return;
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIdx(i => (i + 1) % MORPH_IMAGES.length);
+        setVisible(true);
+      }, 600);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [inView]);
+
+  return (
+    <div ref={ref} className="relative w-full rounded-2xl overflow-hidden" style={{ aspectRatio: "1/1", maxWidth: 400, margin: "0 auto" }}>
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={idx}
+          src={MORPH_IMAGES[idx]}
+          alt="Cover art example"
+          className="absolute inset-0 w-full h-full object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: visible ? 1 : 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+        />
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Sticky nav that appears after scrolling past hero */
+function StickyNav({ onStart }: { onStart: () => void }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     const hero = document.getElementById("act1-hero");
     if (!hero) return;
-    const observer = new IntersectionObserver(
+    const obs = new IntersectionObserver(
       ([entry]) => setShow(!entry.isIntersecting),
-      { threshold: 0 },
+      { threshold: 0.1 }
     );
-    observer.observe(hero);
-    return () => observer.disconnect();
+    obs.observe(hero);
+    return () => obs.disconnect();
   }, []);
 
   return (
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ y: -60, opacity: 0 }}
+          initial={{ y: -56, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -60, opacity: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-8"
-          style={{
-            backdropFilter:  "blur(14px)",
-            backgroundColor: "rgba(10,10,10,0.85)",
-            borderBottom:    "1px solid rgba(212,168,67,0.12)",
-          }}
+          exit={{ y: -56, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-3"
+          style={{ background: "rgba(10,10,10,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(212,168,67,0.15)" }}
         >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-white">Cover Art Studio</span>
-            <span
-              className="text-xs px-2 py-0.5 rounded hidden sm:inline"
-              style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}
-            >
-              by IndieThis
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden md:inline text-sm" style={{ color: "#888" }}>From $6.99</span>
-            <a
-              href="/cover-art?start=1"
-              className="text-sm font-semibold px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
-            >
-              Get Started →
-            </a>
-          </div>
+          <span className="font-bold text-white tracking-wide" style={{ fontSize: 15 }}>AI Cover Art Studio</span>
+          <button
+            onClick={onStart}
+            className="px-4 py-1.5 rounded-lg font-semibold text-sm"
+            style={{ background: GOLD, color: "#0A0A0A" }}
+          >
+            Get Started →
+          </button>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
 
-// ─── Act 1: THE ENTRANCE ──────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
-function Act1Hero({ reducedMotion }: { reducedMotion: boolean }) {
-  const [showScrollHint, setShowScrollHint] = useState(true);
+export default function CoverArtLanding({
+  userId,
+  userTier,
+}: {
+  userId: string | null;
+  userTier: string | null;
+}) {
+  const router = useRouter();
 
-  useEffect(() => {
-    const handler = () => setShowScrollHint(window.scrollY < 100);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
-  const fadeIn = (delay: number) =>
-    reducedMotion
-      ? {}
-      : { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay } };
+  const handleStart = useCallback(() => {
+    router.push("/cover-art?start=1");
+  }, [router]);
 
   return (
-    <section
-      id="act1-hero"
-      className="relative overflow-hidden min-h-screen flex flex-col"
-      style={{ background: actBg(0) }}
-    >
-      <BlurBg src={IMG.vibrantIllustrated} />
+    <div className="min-h-screen" style={{ background: "#0A0A0A", color: "#fff" }}>
+      <StickyNav onStart={handleStart} />
 
-      {/* Dark bottom fade so scroll hint is readable */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-10"
-        style={{ background: "linear-gradient(to top, #0a0a0a 0%, transparent 100%)" }}
-      />
+      {/* ── ACT 1: HERO ─────────────────────────────────────────────────────── */}
+      <section
+        id="act1-hero"
+        className="relative overflow-hidden"
+        style={{ paddingTop: 80, paddingBottom: 80 }}
+      >
+        {/* Gradient mesh background */}
+        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+          <div style={{
+            position: "absolute", width: "60%", height: "60%",
+            top: "-10%", left: "-10%",
+            background: "radial-gradient(circle, rgba(212,168,67,0.12) 0%, transparent 70%)",
+            filter: "blur(80px)",
+          }} />
+          <div style={{
+            position: "absolute", width: "50%", height: "50%",
+            bottom: "-5%", right: "-5%",
+            background: "radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)",
+            filter: "blur(80px)",
+          }} />
+        </div>
 
-      <div className="relative z-10 flex-1 flex items-center max-w-6xl mx-auto w-full px-6 py-24 md:py-32">
-        <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16 w-full">
-
-          {/* ── Left col: copy ── */}
-          <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left">
-
-            {/* Gold pill badge */}
+        <div className="relative z-10 max-w-6xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
+          {/* Left: headline */}
+          <div>
+            {/* Badge */}
             <motion.div
-              {...(reducedMotion ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { delay: 0.5 } })}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-6"
-              style={{ border: "1px solid rgba(212,168,67,0.3)", color: "#D4A843", backgroundColor: "rgba(212,168,67,0.06)" }}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.5 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
+              style={{ background: "rgba(212,168,67,0.12)", color: GOLD, border: `1px solid rgba(212,168,67,0.3)` }}
             >
-              <Sparkles size={11} /> AI-Powered Album Art — no account required
+              <Sparkles size={12} />
+              AI-Powered Album Art
             </motion.div>
 
-            {/* Headline */}
             <motion.h1
-              {...fadeIn(0.3)}
-              className="font-black leading-tight mb-5"
-              style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", letterSpacing: "-0.02em" }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.4 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="font-black leading-none mb-6"
+              style={{ fontSize: "clamp(2.5rem, 6vw, 4rem)" }}
             >
-              Create Album{" "}
-              <span style={{ color: "#D4A843" }}>Cover Art</span>
+              Your music deserves
+              <br />
+              <span style={{ color: GOLD }}>cover art</span>
+              <br />
+              that hits.
             </motion.h1>
 
-            {/* Subheadline */}
             <motion.p
-              {...fadeIn(0.6)}
-              className="text-lg md:text-xl mb-3 max-w-md"
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.4 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-lg mb-8"
               style={{ color: "#aaa", lineHeight: 1.6 }}
             >
-              Upload a reference or describe your vision. Get 4 AI-generated variations in album-ready 1:1 format — designed for music.
+              Generate 4–8 professional album cover variations in seconds.
+              No design skills. No account required. From $6.99.
             </motion.p>
 
-            {/* Gold subtext */}
-            <motion.p
-              {...fadeIn(0.8)}
-              className="text-sm font-semibold mb-8"
-              style={{ color: "#D4A843" }}
-            >
-              No account needed. Pay once. Download + keep forever.
-            </motion.p>
-
-            {/* CTA */}
-            <motion.div {...fadeIn(1.0)}>
-              <a
-                href="/cover-art?start=1"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-black transition-transform hover:scale-[1.03]"
-                style={{ backgroundColor: "#E85D4A", color: "#fff" }}
-              >
-                Create yours — from $6.99 →
-              </a>
-            </motion.div>
-          </div>
-
-          {/* ── Right col (desktop): floating 3D mockup ── */}
-          <div className="hidden md:block shrink-0">
-            <HeroMockup reducedMotion={reducedMotion} />
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile mockup: below headline, above fold */}
-      <div className="md:hidden relative z-10 flex justify-center pb-10">
-        <HeroMockup reducedMotion={reducedMotion} mobile />
-      </div>
-
-      {/* Scroll hint */}
-      <AnimatePresence>
-        {showScrollHint && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1"
-          >
+            {/* Stats row */}
             <motion.div
-              animate={reducedMotion ? {} : { opacity: [0.3, 0.7, 0.3] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.4 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex gap-8 mb-10"
             >
-              <ChevronDown size={22} style={{ color: "rgba(255,255,255,0.5)" }} />
+              {[
+                { value: "3000px", label: "Resolution" },
+                { value: "15", label: "Art Styles" },
+                { value: "$6.99", label: "Starting at" },
+              ].map((s, i) => (
+                <div key={i}>
+                  <div className="font-black text-2xl" style={{ color: GOLD }}>{s.value}</div>
+                  <div className="text-xs" style={{ color: "#666" }}>{s.label}</div>
+                </div>
+              ))}
             </motion.div>
+
+            {/* CTA buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.4 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="flex flex-wrap gap-3"
+            >
+              <button
+                onClick={handleStart}
+                className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
+                style={{ background: GOLD, color: "#0A0A0A" }}
+              >
+                <Play size={16} fill="#0A0A0A" />
+                Create Cover Art — $6.99
+              </button>
+              {!userId && (
+                <button
+                  onClick={() => router.push("/sign-up")}
+                  className="px-6 py-4 rounded-xl font-semibold text-sm border"
+                  style={{ borderColor: "rgba(255,255,255,0.15)", color: "#ccc" }}
+                >
+                  Free trial with account
+                </button>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Right: staggered album grid */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <HeroAlbumGrid />
           </motion.div>
-        )}
-      </AnimatePresence>
-    </section>
-  );
-}
-
-function HeroMockup({ reducedMotion, mobile }: { reducedMotion: boolean; mobile?: boolean }) {
-  const size = mobile ? "w-52 h-52" : "w-72 h-72 md:w-80 md:h-80";
-
-  return (
-    <motion.div
-      className="relative"
-      style={{ perspective: "1000px" }}
-      {...(reducedMotion
-        ? {}
-        : {
-            initial:    { opacity: 0, scale: 0.9 },
-            animate:    { opacity: 1, scale: 1 },
-            transition: { duration: 1.2, delay: 0.4, ease: "easeOut" },
-          })}
-    >
-      {/* Gold glow ring behind mockup */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute", inset: -24, borderRadius: 24,
-          boxShadow: "0 0 100px rgba(212,168,67,0.10)", pointerEvents: "none",
-        }}
-      />
-
-      <motion.div
-        animate={
-          reducedMotion
-            ? {}
-            : { rotateY: [-6, 6, -6], rotateX: [2, -2, 2] }
-        }
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        style={{
-          position:     "relative",
-          borderRadius: "12px",
-          overflow:     "hidden",
-          boxShadow:    "0 25px 60px rgba(0,0,0,0.5)",
-          willChange:   "transform",
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={IMG.vibrantIllustrated}
-          alt="AI-generated album cover art — Vibrant Illustrated style"
-          className={`${size} object-cover`}
-        />
-      </motion.div>
-
-      {/* Reflection */}
-      <div
-        aria-hidden
-        className="mt-1 overflow-hidden"
-        style={{
-          height:                mobile ? 48 : 64,
-          width:                 "100%",
-          opacity:               0.15,
-          transform:             "scaleY(-1)",
-          maskImage:             "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)",
-          WebkitMaskImage:       "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)",
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={IMG.vibrantIllustrated}
-          alt=""
-          className="w-full object-cover object-top"
-          style={{ height: mobile ? 48 : 64 }}
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Act 2: THE GALLERY WALK ──────────────────────────────────────────────────
-
-function Act2GalleryWalk({ reducedMotion }: { reducedMotion: boolean }) {
-  const headerRef = useRef<HTMLDivElement>(null);
-  const headerInView = useInView(headerRef, { once: true, margin: "-80px" });
-
-  return (
-    <section
-      className="relative overflow-hidden"
-      style={{ background: actBg(1) }}
-    >
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-20">
-        {/* Section header */}
-        <div ref={headerRef} className="text-center mb-6">
-          <motion.h2
-            className="text-3xl md:text-4xl font-black text-white mb-3"
-            initial={{ opacity: 0, y: 20 }}
-            animate={headerInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6 }}
-          >
-            See what the AI creates
-          </motion.h2>
-          <motion.p
-            className="text-sm"
-            style={{ color: "#666" }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={headerInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            6 genres. 6 moods. Find yours.
-          </motion.p>
         </div>
+      </section>
 
-        {/* Gallery items */}
-        <div className="space-y-0">
-          {GALLERY_ITEMS.map((item, i) => {
-            const isOdd = i % 2 === 0;
-            return (
-              <GalleryItem
-                key={item.genre}
-                item={item}
-                isOdd={isOdd}
-                reducedMotion={reducedMotion}
+      {/* ── ACT 2: GALLERY ──────────────────────────────────────────────────── */}
+      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        {/* Blur art texture backgrounds */}
+        <div className="relative">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {[IMG.vibrant, IMG.psychedelic, IMG.smoke, IMG.gothic].map((src, i) => (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  width: 300,
+                  height: 300,
+                  top: i < 2 ? "-10%" : "60%",
+                  left: i % 2 === 0 ? "-5%" : "75%",
+                  backgroundImage: `url(${src})`,
+                  backgroundSize: "cover",
+                  opacity: 0.07,
+                  filter: "blur(70px)",
+                  transform: "scale(1.1)",
+                  borderRadius: "50%",
+                }}
               />
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
+            ))}
+          </div>
 
-function GalleryItem({
-  item, isOdd, reducedMotion,
-}: {
-  item:          (typeof GALLERY_ITEMS)[number];
-  isOdd:         boolean;
-  reducedMotion: boolean;
-}) {
-  return (
-    <motion.div
-      className={`flex flex-col md:flex-row ${isOdd ? "" : "md:flex-row-reverse"} items-center gap-8 md:gap-16 py-16 md:py-24`}
-      initial={reducedMotion ? {} : { opacity: 0, x: isOdd ? -80 : 80 }}
-      whileInView={reducedMotion ? {} : { opacity: 1, x: 0 }}
-      viewport={{ once: true, amount: 0.25 }}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-    >
-      {/* Image */}
-      <motion.div
-        className="shrink-0 group cursor-pointer"
-        whileHover={reducedMotion ? {} : { scale: 1.03 }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.image}
-          alt={item.title}
-          loading="lazy"
-          className="w-64 h-64 md:w-80 md:h-80 object-cover rounded-xl shadow-2xl ring-0 group-hover:ring-2 transition-all duration-300"
-          style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.5)" }}
-        />
-      </motion.div>
+          <div className="relative z-10 max-w-6xl mx-auto px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.4 }}
+              transition={{ duration: 0.6 }}
+              className="text-center mb-12"
+            >
+              <h2 className="font-black text-4xl mb-3">Every genre. Every sound.</h2>
+              <p style={{ color: "#888" }}>15 AI art styles crafted for real artists.</p>
+            </motion.div>
 
-      {/* Text */}
-      <div className={`flex flex-col ${isOdd ? "md:items-start" : "md:items-end"} items-center text-center md:text-${isOdd ? "left" : "right"}`}>
-        <p
-          className="text-sm font-black uppercase tracking-widest mb-2"
-          style={{ color: "#D4A843" }}
-        >
-          {item.genre}
-        </p>
-        <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">{item.title}</h3>
-        <p className="text-sm" style={{ color: "#666" }}>Created with {item.style} style</p>
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Act 3: THE TRANSFORMATION ────────────────────────────────────────────────
-
-function Act3Transformation({ reducedMotion }: { reducedMotion: boolean }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const { scrollYProgress } = useScroll({
-    target:  containerRef,
-    offset:  ["start start", "end end"],
-  });
-
-  // All transforms defined at component top level (hooks rules)
-  const clipPercent      = useTransform(scrollYProgress, [0.1, 0.8], [0, 100]);
-  const clipPath         = useTransform(clipPercent, (v: number) => `inset(0 ${100 - v}% 0 0)`);
-  const dividerLeft      = useTransform(clipPercent, (v: number) => `${v}%`);
-  const beforeTextOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0]);
-  const afterTextOpacity  = useTransform(scrollYProgress, [0.55, 0.8], [0, 1]);
-  const hintOpacity       = useTransform(scrollYProgress, [0, 0.2],  [1, 0]);
-
-  // Reduced motion: show side-by-side instead of sticky scroll
-  if (reducedMotion) {
-    return (
-      <section
-        className="relative overflow-hidden"
-        style={{ background: actBg(2) }}
-      >
-        <BlurBg src={IMG.smokeShadow} />
-        <div className="relative z-10 max-w-3xl mx-auto px-6 py-20 text-center">
-          <p className="text-sm uppercase tracking-widest mb-2" style={{ color: "#D4A843" }}>See the transformation</p>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-10">Your reference → Your album cover</h2>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={IMG.before} alt="Before — reference photo" className="w-64 h-64 object-cover rounded-xl" loading="lazy" />
-              <span className="absolute top-3 left-3 text-xs font-semibold rounded px-2 py-1" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "rgba(255,255,255,0.8)" }}>Before</span>
+            {/* 2×3 tight grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {GENRE_CARDS.map((card, i) => (
+                <motion.div
+                  key={card.label}
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                  viewport={{ once: false, amount: 0.2 }}
+                  transition={{ duration: 0.5, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                  whileHover={{ scale: 1.03 }}
+                  className="group relative rounded-xl overflow-hidden cursor-pointer"
+                  style={{ aspectRatio: "1/1" }}
+                >
+                  <img
+                    src={card.src}
+                    alt={card.alt}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {/* Label on hover */}
+                  <div
+                    className="absolute inset-0 flex items-end p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)" }}
+                  >
+                    <span className="text-sm font-semibold text-white">{card.label}</span>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-            <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={IMG.after} alt="After — album cover art" className="w-64 h-64 object-cover rounded-xl" loading="lazy" />
-              <span className="absolute top-3 left-3 text-xs font-semibold rounded px-2 py-1" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "rgba(255,255,255,0.8)" }}>After</span>
-            </div>
+
+            {/* CTA below gallery */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.5 }}
+              transition={{ duration: 0.5 }}
+              className="text-center mt-10"
+            >
+              <button
+                onClick={handleStart}
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold"
+                style={{ background: GOLD, color: "#0A0A0A" }}
+              >
+                Generate Your Cover Art <ChevronRight size={16} />
+              </button>
+            </motion.div>
           </div>
         </div>
       </section>
-    );
-  }
 
-  return (
-    <div ref={containerRef} className="relative" style={{ height: "300vh" }}>
-      {/* Sticky viewport */}
-      <div
-        className="sticky top-0 h-screen flex flex-col items-center justify-center overflow-hidden"
-        style={{ background: actBg(2), willChange: "transform" }}
-      >
-        <BlurBg src={IMG.smokeShadow} />
-
-        <div className="relative z-10 flex flex-col items-center text-center px-6 w-full max-w-lg">
-          {/* "See the transformation" label — fades out as scroll progresses */}
-          <motion.p
-            className="text-sm uppercase tracking-widest mb-3 absolute top-[-80px] left-1/2 -translate-x-1/2 whitespace-nowrap"
-            style={{ color: "#D4A843", opacity: beforeTextOpacity }}
+      {/* ── ACT 3: TRANSFORMATION ───────────────────────────────────────────── */}
+      <section style={{ padding: "80px 0", background: "#0D0D0D" }}>
+        <div className="max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+          {/* Slider */}
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           >
-            See the transformation
-          </motion.p>
+            <TransformationSlider />
+          </motion.div>
 
-          {/* Before headline */}
-          <motion.h2
-            className="text-3xl md:text-4xl font-bold text-white mb-8"
-            style={{ opacity: beforeTextOpacity }}
+          {/* Copy */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
           >
-            Your reference photo
-          </motion.h2>
-
-          {/* After headline (cross-fades in) */}
-          <motion.h2
-            className="text-3xl md:text-4xl font-bold text-white mb-8 absolute"
-            style={{ opacity: afterTextOpacity, top: "calc(50% - 180px)" }}
-          >
-            Your album cover
-          </motion.h2>
-
-          {/* Image comparison container */}
-          <div
-            className="relative rounded-xl overflow-hidden shadow-2xl"
-            style={{
-              width:     "min(384px, 85vw)",
-              height:    "min(384px, 85vw)",
-              willChange: "contents",
-            }}
-          >
-            {/* Before (always visible base) */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={IMG.before}
-              alt="Reference photo"
-              className="absolute inset-0 w-full h-full object-cover"
-              draggable={false}
-            />
-
-            {/* After (revealed by clip-path driven by scroll) */}
-            <motion.div
-              className="absolute inset-0"
-              style={{ clipPath }}
+            <div
+              className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-5"
+              style={{ background: "rgba(212,168,67,0.12)", color: GOLD, border: `1px solid rgba(212,168,67,0.25)` }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={IMG.after}
-                alt="Styled album cover"
-                className="w-full h-full object-cover"
-                draggable={false}
-              />
-            </motion.div>
-
-            {/* Divider line — tracks clip position */}
-            <motion.div
-              className="absolute top-0 bottom-0 z-10"
-              style={{
-                left:            dividerLeft,
-                width:           2,
-                backgroundColor: "rgba(255,255,255,0.7)",
-                willChange:      "left",
-              }}
-            >
-              {/* Handle */}
-              <div
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center rounded-full shadow-lg"
-                style={{
-                  width:           36,
-                  height:          36,
-                  backgroundColor: "rgba(255,255,255,0.92)",
-                  border:          "2px solid #D4A843",
-                }}
-              >
-                <span style={{ fontSize: 12, color: "#0A0A0A", fontWeight: 700 }}>↔</span>
-              </div>
-            </motion.div>
-
-            {/* Labels */}
-            <motion.span
-              className="absolute top-3 left-3 text-xs font-semibold rounded px-2 py-1"
-              style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.8)", opacity: beforeTextOpacity }}
-            >
-              Before
-            </motion.span>
-            <motion.span
-              className="absolute top-3 right-3 text-xs font-semibold rounded px-2 py-1"
-              style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.8)", opacity: afterTextOpacity }}
-            >
-              After
-            </motion.span>
-          </div>
-
-          {/* Hint */}
-          <motion.p
-            className="mt-6 text-sm"
-            style={{ color: "#555", opacity: hintOpacity }}
-          >
-            Keep scrolling to reveal the transformation
-          </motion.p>
+              BEFORE → AFTER
+            </div>
+            <h2 className="font-black text-4xl mb-5 leading-tight">
+              From selfie to
+              <br />
+              <span style={{ color: GOLD }}>album-ready</span>
+              <br />
+              in seconds.
+            </h2>
+            <p style={{ color: "#888", lineHeight: 1.7, marginBottom: 24 }}>
+              Upload a photo — or describe your vision. Our AI transforms it
+              into cinematic, professional album cover art that stands out
+              on every platform.
+            </p>
+            <ul className="space-y-3">
+              {[
+                "Upload any photo or describe your vibe",
+                "AI applies professional art direction",
+                "Download 3000×3000px, DSP-ready files",
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm" style={{ color: "#ccc" }}>
+                  <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(212,168,67,0.15)", color: GOLD }}>
+                    <Check size={11} />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
         </div>
-      </div>
-    </div>
-  );
-}
+      </section>
 
-// ─── Act 4: THE PALETTE (15 styles) ──────────────────────────────────────────
+      {/* ── ACT 4: HOW IT WORKS ─────────────────────────────────────────────── */}
+      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        <div className="max-w-5xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.4 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-14"
+          >
+            <h2 className="font-black text-4xl mb-3">How it works</h2>
+            <p style={{ color: "#888" }}>Three steps. No design skills needed.</p>
+          </motion.div>
 
-function Act4StylePalette({ reducedMotion }: { reducedMotion: boolean }) {
-  const [activeCategory, setActiveCategory] = useState<Category>("All");
-
-  const filtered = activeCategory === "All"
-    ? STYLE_ITEMS
-    : STYLE_ITEMS.filter(s => s.category === activeCategory);
-
-  return (
-    <section
-      className="relative overflow-hidden"
-      style={{ background: actBg(3, "30% 20%", "70% 80%") }}
-    >
-      <BlurBg src={IMG.psychedelic} />
-
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-20">
-        {/* Header */}
-        <motion.div
-          className="text-center mb-10"
-          initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-2">
-            15 styles. Infinite possibilities.
-          </h2>
-          <p className="text-sm" style={{ color: "#666" }}>
-            Every mood. Every genre. Every vision.
-          </p>
-        </motion.div>
-
-        {/* Filter pills */}
-        <div className="flex gap-2 justify-center flex-wrap mb-10">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
-              style={{
-                backgroundColor: activeCategory === cat ? "#D4A843" : "transparent",
-                color:           activeCategory === cat ? "#0A0A0A" : "#888",
-                border:          activeCategory === cat ? "none"    : "1px solid rgba(255,255,255,0.15)",
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-          <AnimatePresence mode="popLayout">
-            {filtered.map((style, i) => (
+          <div className="grid md:grid-cols-3 gap-8">
+            {HOW_STEPS.map((step, i) => (
               <motion.div
-                key={style.name}
-                layout
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-                transition={{ duration: 0.35, delay: reducedMotion ? 0 : i * 0.04 }}
-                className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
+                key={step.n}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: false, amount: 0.3 }}
+                transition={{ duration: 0.55, delay: i * 0.1 }}
+                className="relative rounded-2xl p-6"
+                style={{ background: "#111", border: "1px solid rgba(255,255,255,0.06)" }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={style.image}
-                  alt={style.name}
-                  loading="lazy"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-                />
-                {/* Hover gold ring */}
                 <div
-                  className="absolute inset-0 rounded-xl transition-all duration-300 opacity-0 group-hover:opacity-100"
-                  style={{ boxShadow: "inset 0 0 0 2px rgba(212,168,67,0.45)" }}
-                />
-                {/* Label */}
-                <div
-                  className="absolute bottom-0 left-0 right-0 p-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)" }}
+                  className="font-black text-5xl mb-4 leading-none"
+                  style={{ color: "rgba(212,168,67,0.2)" }}
                 >
-                  <p className="text-white text-xs font-medium">{style.name}</p>
+                  {step.n}
                 </div>
+                <h3 className="font-bold text-lg mb-3">{step.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "#888" }}>{step.body}</p>
               </motion.div>
             ))}
-          </AnimatePresence>
-        </div>
-      </div>
-    </section>
-  );
-}
+          </div>
 
-// ─── Act 5: HOW IT WORKS ──────────────────────────────────────────────────────
-
-function Act5HowItWorks({ reducedMotion }: { reducedMotion: boolean }) {
-  return (
-    <section
-      className="relative overflow-hidden"
-      style={{ background: actBg(4) }}
-    >
-      {/* Intentionally clean — no blur bg */}
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-24">
-        <motion.div
-          className="text-center mb-16"
-          initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-2">
-            Three steps to release-ready art
-          </h2>
-        </motion.div>
-
-        <div className="flex flex-col md:flex-row items-start justify-center gap-10 md:gap-16">
-          {STEPS.map((step, i) => (
-            <motion.div
-              key={step.number}
-              className="flex flex-col items-center text-center max-w-xs w-full"
-              initial={reducedMotion ? {} : { opacity: 0, y: 30 }}
-              whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: i * 0.2 }}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.5 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mt-12"
+          >
+            <button
+              onClick={handleStart}
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold"
+              style={{ background: GOLD, color: "#0A0A0A" }}
             >
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center mb-5"
-                style={{ border: "2px solid #D4A843" }}
-              >
-                <span className="text-xl font-bold" style={{ color: "#D4A843" }}>{step.number}</span>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">{step.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: "#666" }}>{step.desc}</p>
-
-              {/* Connector arrow — only between steps, not after last */}
-              {i < STEPS.length - 1 && (
-                <div className="hidden md:block absolute" style={{ marginLeft: "100%", marginTop: 28 }}>
-                  {/* pure CSS — rendered by flex gap */}
-                </div>
-              )}
-            </motion.div>
-          ))}
+              Start Creating <ChevronRight size={16} />
+            </button>
+          </motion.div>
         </div>
-      </div>
-    </section>
-  );
-}
+      </section>
 
-// ─── Act 6: THE INVESTMENT (Pricing) ─────────────────────────────────────────
+      {/* ── ACT 5: PRICING ──────────────────────────────────────────────────── */}
+      <section style={{ padding: "80px 0", background: "#0D0D0D" }}>
+        <div className="max-w-4xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.4 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-14"
+          >
+            <h2 className="font-black text-4xl mb-3">Simple pricing</h2>
+            <p style={{ color: "#888" }}>No subscription. No account required. Pay once, download instantly.</p>
+          </motion.div>
 
-function Act6Pricing({ reducedMotion }: { reducedMotion: boolean }) {
-  return (
-    <section
-      className="relative overflow-hidden"
-      style={{ background: actBg(5, "50% 30%", "20% 80%") }}
-    >
-      <BlurBg src={IMG.gothicPortrait} />
-
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-24">
-        <motion.div
-          className="text-center mb-12"
-          initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-2">
-            Choose your tier
-          </h2>
-          <p className="text-sm" style={{ color: "#666" }}>
-            One-time payment. No subscription.
-          </p>
-        </motion.div>
-
-        {/* Tier cards — Premium first on mobile via order */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-          {TIERS.map((tier, i) => (
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Guest tier */}
             <motion.div
-              key={tier.title}
-              initial={reducedMotion ? {} : { opacity: 0, scale: 0.93 }}
-              whileInView={reducedMotion ? {} : { opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.12 }}
-              className="rounded-2xl p-6 flex flex-col gap-4 relative"
-              style={{
-                border:          tier.popular ? "2px solid rgba(212,168,67,0.5)" : "1px solid rgba(255,255,255,0.08)",
-                backgroundColor: tier.popular ? "rgba(212,168,67,0.03)" : "rgba(255,255,255,0.02)",
-                // Premium card first on mobile
-                order:           tier.popular ? -1 : 0,
-              }}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.3 }}
+              transition={{ duration: 0.55 }}
+              className="rounded-2xl p-8"
+              style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
             >
-              {tier.popular && (
-                <div
-                  className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-black"
-                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-                >
-                  MOST POPULAR
-                </div>
-              )}
-              <div>
-                <p className="font-black text-white text-lg">{tier.title}</p>
-                <p className="text-3xl font-black text-white mt-1">{tier.price}</p>
-              </div>
-              <ul className="space-y-2 flex-1">
-                {tier.features.map(f => (
-                  <li key={f.text} className="flex items-center gap-2 text-sm" style={{ color: f.ok ? "#aaa" : "#3a3a3a" }}>
-                    {f.ok
-                      ? <Check size={12} style={{ color: "#D4A843", flexShrink: 0 }} />
-                      : <X size={12} style={{ color: "#333", flexShrink: 0 }} />
-                    }
-                    {f.text}
+              <div className="text-sm font-semibold mb-2" style={{ color: "#888" }}>PAY-PER-USE</div>
+              <div className="font-black text-4xl mb-1">$6.99</div>
+              <div className="text-sm mb-6" style={{ color: "#666" }}>per generation</div>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "4 cover art variations",
+                  "15 AI art styles",
+                  "3000×3000px download",
+                  "Instant delivery",
+                  "No account needed",
+                ].map((f, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm" style={{ color: "#ccc" }}>
+                    <Check size={14} style={{ color: GOLD }} />
+                    {f}
                   </li>
                 ))}
               </ul>
-              <a
-                href="/cover-art?start=1"
-                className="block w-full py-3 rounded-xl text-sm font-bold text-center transition-opacity hover:opacity-90"
-                style={{
-                  backgroundColor: tier.popular ? "#D4A843" : "rgba(255,255,255,0.06)",
-                  color:           tier.popular ? "#0A0A0A" : "#aaa",
-                  border:          tier.popular ? "none"    : "1px solid rgba(255,255,255,0.1)",
-                }}
+              <button
+                onClick={handleStart}
+                className="w-full py-3.5 rounded-xl font-bold"
+                style={{ background: GOLD, color: "#0A0A0A" }}
               >
-                Start for {tier.price}
-              </a>
+                Get Started — $6.99
+              </button>
             </motion.div>
-          ))}
-        </div>
 
-        {/* Subscriber upsell */}
-        <motion.div
-          className="mt-8 rounded-2xl p-6 md:p-8 text-center"
-          style={{ border: "1px solid rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.03)" }}
-          initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-        >
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#D4A843" }}>
-            Already on IndieThis?
-          </p>
-          <h3 className="text-xl font-black text-white mb-2">Subscribers get cover art from $3.99</h3>
-          <p className="text-sm mb-6" style={{ color: "#888" }}>
-            Plus music videos, lyric videos, mastering, merch store, and an artist page — all for $19/month.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="/pricing"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold no-underline"
-              style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#D4A843" }}
+            {/* Subscriber tier */}
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.3 }}
+              transition={{ duration: 0.55, delay: 0.1 }}
+              className="rounded-2xl p-8 relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #1a1500 0%, #111 60%)", border: `1px solid rgba(212,168,67,0.35)` }}
             >
-              View Plans <ChevronRight size={14} />
-            </a>
-            <a
-              href="/cover-art?start=1"
-              className="text-sm no-underline"
-              style={{ color: "#555" }}
-            >
-              Continue without account
-            </a>
+              <div
+                className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full text-xs font-bold"
+                style={{ background: GOLD, color: "#0A0A0A" }}
+              >
+                BEST VALUE
+              </div>
+              <div className="text-sm font-semibold mb-2" style={{ color: GOLD }}>SUBSCRIBER</div>
+              <div className="font-black text-4xl mb-1">Included</div>
+              <div className="text-sm mb-6" style={{ color: "#666" }}>with any IndieThis plan</div>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "8 cover art variations (2×)",
+                  "All 15 AI art styles",
+                  "3000×3000px download",
+                  "Unlimited generations",
+                  "Priority processing",
+                  "Music Video Studio + more",
+                ].map((f, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm" style={{ color: "#ddd" }}>
+                    <Check size={14} style={{ color: GOLD }} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => router.push("/pricing")}
+                className="w-full py-3.5 rounded-xl font-bold border"
+                style={{ borderColor: GOLD, color: GOLD, background: "transparent" }}
+              >
+                View Plans
+              </button>
+            </motion.div>
           </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
 
-// ─── Act 7: THE EXIT ──────────────────────────────────────────────────────────
+          {/* Subscriber already has access callout */}
+          {userId && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.5 }}
+              transition={{ duration: 0.5 }}
+              className="mt-6 p-4 rounded-xl text-sm text-center"
+              style={{ background: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.2)", color: "#ccc" }}
+            >
+              <Sparkles size={14} style={{ display: "inline", color: GOLD, marginRight: 6 }} />
+              You&apos;re logged in. Check your{" "}
+              <button
+                onClick={() => router.push("/dashboard/ai/cover-art")}
+                className="font-semibold underline"
+                style={{ color: GOLD }}
+              >
+                dashboard
+              </button>{" "}
+              for full access.
+            </motion.div>
+          )}
+        </div>
+      </section>
 
-function Act7Exit({ reducedMotion }: { reducedMotion: boolean }) {
-  const [morphIndex, setMorphIndex] = useState(0);
-  const [morphReady, setMorphReady] = useState(false);
-
-  // Preload morph images when Act 5 scrolls into view — preloaded via a trigger
-  // that fires before Act 7 is reached. Here we start after component mounts.
-  useEffect(() => {
-    const timer = setTimeout(() => setMorphReady(true), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!morphReady) return;
-    const id = setInterval(() => {
-      setMorphIndex(p => (p + 1) % MORPH_IMAGES.length);
-    }, 4000);
-    return () => clearInterval(id);
-  }, [morphReady]);
-
-  return (
-    <section
-      className="relative overflow-hidden min-h-screen flex items-center justify-center"
-      style={{ background: actBg(6, "50% 30%", "30% 70%") }}
-    >
-      {/* Morph crossfade background */}
-      {!reducedMotion && morphReady ? (
-        MORPH_IMAGES.map((src, i) => (
-          <div
-            key={src}
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage:    `url('${src}')`,
-              backgroundSize:     "cover",
-              backgroundPosition: "center",
-              filter:             "blur(50px)",
-              opacity:            i === morphIndex ? 0.18 : 0,
-              transform:          "scale(1.2)",
-              transition:         "opacity 2000ms ease-in-out",
-            }}
-          />
-        ))
-      ) : (
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage:    `url('${MORPH_IMAGES[0]}')`,
-            backgroundSize:     "cover",
-            backgroundPosition: "center",
-            filter:             "blur(50px)",
-            opacity:            0.12,
-            transform:          "scale(1.2)",
-          }}
-        />
-      )}
-
-      {/* Dark overlay — readability */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: "linear-gradient(135deg, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.5) 100%)" }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 text-center px-6 max-w-2xl mx-auto">
-        <motion.h2
-          className="font-black text-white mb-8 leading-tight"
-          style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)" }}
-          initial={reducedMotion ? {} : { opacity: 0, y: 24 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-        >
-          Your music deserves<br />to be seen.
-        </motion.h2>
-
-        <motion.div
-          initial={reducedMotion ? {} : { opacity: 0, y: 16 }}
-          whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
-        >
-          <a
-            href="/cover-art?start=1"
-            className="inline-flex items-center gap-2 px-10 py-4 rounded-2xl text-lg font-black transition-transform hover:scale-[1.03]"
-            style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+      {/* ── ACT 6: EXIT ─────────────────────────────────────────────────────── */}
+      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        <div className="max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+          {/* Morph loop */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           >
-            Create Your Cover Art →
-          </a>
-        </motion.div>
+            <MorphLoop />
+          </motion.div>
 
-        <motion.div
-          initial={reducedMotion ? {} : { opacity: 0 }}
-          whileInView={reducedMotion ? {} : { opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="mt-6"
-        >
-          <a href="/explore" className="text-sm no-underline" style={{ color: "#555" }}>
-            Explore IndieThis artists →
-          </a>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
+          {/* Final CTA */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: false, amount: 0.3 }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+          >
+            <h2 className="font-black leading-none mb-6" style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}>
+              Your next release
+              <br />
+              deserves art
+              <br />
+              <span style={{ color: GOLD }}>this good.</span>
+            </h2>
+            <p className="mb-8 text-lg" style={{ color: "#888", lineHeight: 1.6 }}>
+              Join thousands of independent artists generating
+              professional cover art without agencies, designers,
+              or big budgets.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleStart}
+                className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-base"
+                style={{ background: GOLD, color: "#0A0A0A" }}
+              >
+                <Play size={16} fill="#0A0A0A" />
+                Create Cover Art
+              </button>
+              <button
+                onClick={() => router.push("/pricing")}
+                className="px-6 py-4 rounded-xl font-semibold text-sm border"
+                style={{ borderColor: "rgba(255,255,255,0.15)", color: "#ccc" }}
+              >
+                View All Plans
+              </button>
+            </div>
 
-// ─── Root ─────────────────────────────────────────────────────────────────────
+            {/* Trust line */}
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: "#555" }}>
+              {["No account required", "Instant download", "3000×3000px resolution", "DSP-ready files"].map((t, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  <Check size={10} style={{ color: GOLD }} />
+                  {t}
+                </span>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
 
-interface Props {
-  userId:   string | null;
-  userTier: string | null;
-}
-
-export default function CoverArtLanding({ userId: _userId, userTier: _userTier }: Props) {
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  return (
-    <div className="relative overflow-x-hidden" style={{ backgroundColor: "#0a0a0a", color: "#F0F0F0" }}>
-      <StickyNav />
-      <Act1Hero       reducedMotion={reducedMotion} />
-      <Act2GalleryWalk reducedMotion={reducedMotion} />
-      <Act3Transformation reducedMotion={reducedMotion} />
-      <Act4StylePalette   reducedMotion={reducedMotion} />
-      <Act5HowItWorks     reducedMotion={reducedMotion} />
-      <Act6Pricing        reducedMotion={reducedMotion} />
-      <Act7Exit           reducedMotion={reducedMotion} />
-
-      {/* Footer */}
-      <footer className="border-t px-6 py-6 text-center" style={{ borderColor: "#1A1A1A", backgroundColor: "#0a0a0a" }}>
-        <p className="text-xs" style={{ color: "#444" }}>
-          &copy; {new Date().getFullYear()} IndieThis &nbsp;·&nbsp;{" "}
-          <a href="/privacy" style={{ color: "#444" }}>Privacy</a> &nbsp;·&nbsp;{" "}
-          <a href="/terms" style={{ color: "#444" }}>Terms</a>
-        </p>
-      </footer>
+      {/* Footer spacer */}
+      <div style={{ height: 60, background: "#0A0A0A" }} />
     </div>
   );
 }
