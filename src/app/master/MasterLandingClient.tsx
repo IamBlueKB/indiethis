@@ -215,7 +215,7 @@ export function MasterLandingClient({
                   key={i}
                   style={{
                     flex: 1,
-                    height: `${Math.min(100, h * (active ? 1 : 0.45))}%`,
+                    height: `${Math.min(100, h * (active ? 1 : 0.45)).toFixed(2)}%`,
                     borderRadius: 1,
                     backgroundColor: active
                       ? i % 3 === 0 ? "#D4A843" : i % 3 === 1 ? "#E85D4A" : "#c4943a"

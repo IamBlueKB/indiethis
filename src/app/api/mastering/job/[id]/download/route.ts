@@ -59,7 +59,6 @@ export async function GET(
         versions:        true,
         exports:         true,
         selectedVersion: true,
-        trackTitle:      true,
       },
     });
 
@@ -97,9 +96,8 @@ export async function GET(
     }
 
     // Construct a clean filename
-    const title    = (job.trackTitle ?? "master").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
     const ext      = FORMAT_EXT[effectiveFormat] ?? "wav";
-    const filename = `${title}_${targetVersion.toLowerCase()}_indiethis.${ext}`;
+    const filename = `master_${targetVersion.toLowerCase()}_${id.slice(-6)}_indiethis.${ext}`;
 
     // Redirect to the S3/R2 pre-signed URL with a content-disposition hint
     const redirect = new URL(url);
