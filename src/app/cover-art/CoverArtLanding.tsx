@@ -10,7 +10,7 @@
 import { useRouter }  from "next/navigation";
 import {
   Wand2, Download, ImageIcon, Sparkles, ChevronRight,
-  Check, Layers, RefreshCw, Printer, Film,
+  Check, Layers, Printer, Film,
 } from "lucide-react";
 
 // ─── Feature item ──────────────────────────────────────────────────────────────
@@ -30,18 +30,25 @@ function Feature({ icon: Icon, label, sub }: { icon: React.ElementType; label: s
   );
 }
 
-// ─── Example cover placeholder ──────────────────────────────────────────────────
+// ─── Example cover ────────────────────────────────────────────────────────────
 
-function ExampleCover({ style, gradient }: { style: string; gradient: string }) {
+function ExampleCover({ label, genre, image }: { label: string; genre: string; image: string }) {
   return (
-    <div className="relative aspect-square rounded-xl overflow-hidden flex items-end"
-      style={{ background: gradient }}>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <ImageIcon size={28} style={{ color: "rgba(255,255,255,0.08)" }} />
-      </div>
-      <div className="relative w-full px-3 py-2 text-center"
-        style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }}>
-        <p className="text-xs font-semibold text-white">{style}</p>
+    <div className="relative aspect-square rounded-xl overflow-hidden group cursor-pointer">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={image}
+        alt={genre}
+        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+      <div
+        className="absolute inset-0 flex flex-col justify-end p-3"
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%)" }}
+      >
+        <p className="text-[10px] font-black uppercase tracking-widest mb-0.5" style={{ color: "#D4A843" }}>
+          {label}
+        </p>
+        <p className="text-xs font-semibold text-white leading-tight">{genre}</p>
       </div>
     </div>
   );
@@ -107,12 +114,12 @@ interface Props {
 }
 
 const EXAMPLES = [
-  { style: "Cinematic Glow",   gradient: "linear-gradient(135deg, #1a0030, #3d0060, #000)" },
-  { style: "Neon Noir",        gradient: "linear-gradient(135deg, #001a1a, #003333, #00ffcc08)" },
-  { style: "Retro Grain",      gradient: "linear-gradient(135deg, #1a0a00, #3a1500, #5a2500)" },
-  { style: "Minimal",          gradient: "linear-gradient(135deg, #0a0a0a, #1a1a1a, #111)" },
-  { style: "Abstract Burst",   gradient: "linear-gradient(135deg, #0a001a, #1a003a, #ff006608)" },
-  { style: "Golden Hour",      gradient: "linear-gradient(135deg, #1a0800, #3a1500, #D4A84320)" },
+  { label: "Hip-Hop",    genre: "Hip-Hop / Trap",               image: "/images/cover-art-examples/hiphop-trap.png" },
+  { label: "R&B",        genre: "R&B / Soul",                   image: "/images/cover-art-examples/rnb-soul.png" },
+  { label: "Pop",        genre: "Pop",                          image: "/images/cover-art-examples/pop.png" },
+  { label: "Indie",      genre: "Indie / Alternative",          image: "/images/cover-art-examples/indie-alternative.png" },
+  { label: "Electronic", genre: "Electronic / EDM",             image: "/images/cover-art-examples/electronic-edm.png" },
+  { label: "Acoustic",   genre: "Acoustic / Singer-Songwriter", image: "/images/cover-art-examples/acoustic-singer-songwriter.png" },
 ];
 
 export default function CoverArtLanding({ userId, userTier }: Props) {
@@ -214,11 +221,11 @@ export default function CoverArtLanding({ userId, userTier }: Props) {
       <section id="examples" className="max-w-4xl mx-auto px-6 pb-16">
         <h2 className="text-2xl font-black text-white text-center mb-3">See what the AI creates</h2>
         <p className="text-sm text-center mb-8" style={{ color: "#666" }}>
-          6 distinct styles, each tuned for album artwork
+          6 genres. 6 moods. Find yours.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {EXAMPLES.map(ex => (
-            <ExampleCover key={ex.style} style={ex.style} gradient={ex.gradient} />
+            <ExampleCover key={ex.genre} label={ex.label} genre={ex.genre} image={ex.image} />
           ))}
         </div>
       </section>

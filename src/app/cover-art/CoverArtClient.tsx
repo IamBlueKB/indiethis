@@ -23,6 +23,7 @@ import { useUploadThing }    from "@/lib/uploadthing-client";
 import { PRICING_DEFAULTS }  from "@/lib/pricing";
 import { CATEGORY_LABELS }   from "@/lib/cover-art/styles-seed";
 import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
+import StylePlaceholder from "@/components/cover-art/StylePlaceholder";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -569,15 +570,18 @@ export default function CoverArtClient({ guestEmail, artistName, userId }: Props
                       className="relative rounded-xl overflow-hidden text-left transition-all"
                       style={{ outline: isSelected ? "2px solid #D4A843" : "2px solid transparent", aspectRatio: "1/1" }}
                     >
-                      <img
-                        src={s.previewUrl}
-                        alt={s.name}
-                        className="w-full h-full object-cover"
-                        style={{ backgroundColor: "#1A1A1A" }}
-                      />
+                      {s.previewUrl ? (
+                        <img
+                          src={s.previewUrl}
+                          alt={s.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <StylePlaceholder name={s.name} category={s.category} />
+                      )}
                       <div
                         className="absolute inset-0 flex flex-col justify-end p-2"
-                        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 50%, transparent)" }}
+                        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 40%, transparent)" }}
                       >
                         <p className="text-[10px] font-bold text-white leading-tight">{s.name}</p>
                       </div>
@@ -624,12 +628,13 @@ export default function CoverArtClient({ guestEmail, artistName, userId }: Props
             {/* Style reminder */}
             {selectedStyle && (
               <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "#2A2A2A" }}>
-                <img
-                  src={selectedStyle.previewUrl}
-                  alt={selectedStyle.name}
-                  className="w-10 h-10 rounded-lg object-cover shrink-0"
-                  style={{ backgroundColor: "#1A1A1A" }}
-                />
+                <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative">
+                  {selectedStyle.previewUrl ? (
+                    <img src={selectedStyle.previewUrl} alt={selectedStyle.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <StylePlaceholder name={selectedStyle.name} category={selectedStyle.category} />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white/50 font-semibold uppercase tracking-wide">Style</p>
                   <p className="text-sm font-bold text-white truncate">{selectedStyle.name}</p>

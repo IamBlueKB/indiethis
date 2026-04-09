@@ -18,12 +18,13 @@ import { useSearchParams, useRouter }                from "next/navigation";
 import {
   Sparkles, Download, Loader2, AlertCircle, RotateCcw,
   Check, X, ZoomIn, ChevronRight, ChevronLeft, Film,
-  Music2, Wand2, Star, Image as ImageIcon, Upload,
+  Music2, Wand2, Star, Upload,
   RefreshCw, Play, ExternalLink,
 } from "lucide-react";
 import { AIToolsNav } from "@/components/dashboard/AIToolsNav";
 import { PRICING_DEFAULTS } from "@/lib/pricing";
 import { CATEGORY_LABELS } from "@/lib/cover-art/styles-seed";
+import StylePlaceholder from "@/components/cover-art/StylePlaceholder";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -570,12 +571,7 @@ export default function CoverArtStudioPage() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div
-                        className="w-full h-full flex items-center justify-center"
-                        style={{ backgroundColor: "#1A1A1A" }}
-                      >
-                        <ImageIcon size={24} style={{ color: "#444" }} />
-                      </div>
+                      <StylePlaceholder name={style.name} category={style.category} className="absolute inset-0" />
                     )}
 
                     {/* Hover overlay with style name */}
