@@ -17,22 +17,23 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface VideoPreset {
-  id:             string;
-  name:           string;
-  genre:          string;
-  description:    string;
-  previewUrl?:    string | null;
-  styleName?:     string | null;
-  moodArc:        string;
-  cameraSequence: Record<string, string>;
-  briefTemplate:  {
+  id:              string;
+  name:            string;
+  genre:           string;
+  description:     string;
+  previewUrl?:     string | null;
+  styleName?:      string | null;
+  moodArc:         string;
+  defaultFilmLook?: string;
+  cameraSequence:  Record<string, string>;
+  briefTemplate:   {
     logline?:        string;
     tone?:           string;
     colorPalette?:   string[];
     visualThemes?:   string[];
     cinematography?: string;
   };
-  sortOrder:      number;
+  sortOrder:       number;
 }
 
 // ─── Genre display names ──────────────────────────────────────────────────────

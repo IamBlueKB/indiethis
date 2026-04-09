@@ -13,6 +13,8 @@ import { db }                from "@/lib/db";
 import {
   CAMERA_DIRECTION_MAP,
   type CameraDirectionKey,
+  FILM_LOOKS,
+  type FilmLookKey,
 } from "@/components/video-studio/CameraDirectionPicker";
 
 export async function PATCH(
@@ -48,17 +50,22 @@ export async function PATCH(
     }) : null;
     const stylePrompt = styleRecord?.promptBase ?? "";
 
-    // Rebuild prompts incorporating updated camera directions
+    // Rebuild prompts incorporating updated camera directions and film look
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedList = (body.shotList as any[]).map((scene) => {
-      const cameraDir    = (scene.cameraDirection as CameraDirectionKey) ?? "static_wide";
-      const cameraPrompt = CAMERA_DIRECTION_MAP[cameraDir]?.prompt ?? "";
-      const description  = (scene.description as string) ?? "";
-      const sceneType    = (scene.type as string) ?? "abstract";
-      const energy       = (scene.energyLevel as number) ?? 0.5;
-      const prompt       = `${stylePrompt}, ${description}, ${cameraPrompt}, ${sceneType} music video scene, energy ${Math.round(energy * 10)}/10`.slice(0, 600);
+      const cameraDir      = (scene.cameraDirection as CameraDirectionKey) ?? "static_wide";
+      const cameraPrompt   = CAMERA_DIRECTION_MAP[cameraDir]?.prompt ?? "";
+      const validFilmLooks = Object.keys(FILM_LOOKS) as FilmLookKey[];
+      const filmLook       = validFilmLooks.includes(scene.filmLook as FilmLookKey)
+        ? (scene.filmLook as FilmLookKey)
+        : "clean_digital";
+      const filmLookPrompt = FILM_LOOKS[filmLook]?.prompt ?? "";
+      const description    = (scene.description as string) ?? "";
+      const sceneType      = (scene.type as string) ?? "abstract";
+      const energy         = (scene.energyLevel as number) ?? 0.5;
+      const prompt         = `${stylePrompt}, ${description}, ${cameraPrompt}, ${filmLookPrompt}, ${sceneType} music video scene, energy ${Math.round(energy * 10)}/10`.slice(0, 600);
 
-      return { ...scene, prompt };
+      return { ...scene, filmLook, prompt };
     });
 
     await db.musicVideo.update({

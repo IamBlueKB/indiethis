@@ -49,10 +49,23 @@ interface VideoStyle {
   active:     boolean;
 }
 
+interface VideoPreset {
+  id:              string;
+  name:            string;
+  genre:           string;
+  description:     string;
+  styleName:       string | null;
+  moodArc:         string;
+  defaultFilmLook: string;
+  active:          boolean;
+  sortOrder:       number;
+}
+
 interface Props {
   metrics:    Metrics;
   videos:     VideoRow[];
   styles:     VideoStyle[];
+  presets:    VideoPreset[];
   videoTotal: number;
 }
 
@@ -97,14 +110,46 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function VideoAdminClient({ metrics, videos: initialVideos, styles: initialStyles, videoTotal }: Props) {
-  const [tab,         setTab]         = useState<"metrics" | "videos" | "styles">("metrics");
+const FILM_LOOK_OPTIONS = [
+  { value: "clean_digital", label: "Clean Digital" },
+  { value: "35mm_film",     label: "35mm Film" },
+  { value: "16mm_grain",    label: "16mm Grain" },
+  { value: "anamorphic",    label: "Anamorphic" },
+  { value: "vhs_retro",     label: "VHS Retro" },
+  { value: "noir",          label: "Noir" },
+];
+
+export default function VideoAdminClient({ metrics, videos: initialVideos, styles: initialStyles, presets: initialPresets, videoTotal }: Props) {
+  const [tab,         setTab]         = useState<"metrics" | "videos" | "styles" | "presets">("metrics");
   const [videos,      setVideos]      = useState(initialVideos);
   const [styles,      setStyles]      = useState(initialStyles);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [modeFilter,   setModeFilter]   = useState("ALL");
   const [subFilter,    setSubFilter]    = useState("ALL");
   const [expandedId,   setExpandedId]   = useState<string | null>(null);
+
+  // Preset state
+  const [presets,       setPresets]      = useState(initialPresets);
+  const [editPresetId,  setEditPresetId] = useState<string | null>(null);
+  const [presetDraft,   setPresetDraft]  = useState<Partial<VideoPreset>>({});
+  const [savingPreset,  setSavingPreset] = useState(false);
+
+  async function savePreset(id: string) {
+    setSavingPreset(true);
+    try {
+      const res = await fetch(`/api/admin/video-studio/presets/${id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(presetDraft),
+      });
+      if (res.ok) {
+        const { preset } = await res.json();
+        setPresets(prev => prev.map(p => p.id === id ? { ...p, ...preset } : p));
+        setEditPresetId(null);
+        setPresetDraft({});
+      }
+    } finally { setSavingPreset(false); }
+  }
 
   // Style editing state
   const [editingId,    setEditingId]    = useState<string | null>(null);
@@ -186,9 +231,10 @@ export default function VideoAdminClient({ metrics, videos: initialVideos, style
       {/* ── Tab bar ── */}
       <div className="flex gap-1 mb-6 border-b" style={{ borderColor: "#1E1E1E" }}>
         {([
-          { key: "metrics", label: "Metrics",   icon: BarChart3 },
-          { key: "videos",  label: "Videos",    icon: List      },
-          { key: "styles",  label: "Styles",    icon: Palette   },
+          { key: "metrics",  label: "Metrics",  icon: BarChart3 },
+          { key: "videos",   label: "Videos",   icon: List      },
+          { key: "styles",   label: "Styles",   icon: Palette   },
+          { key: "presets",  label: "Presets",  icon: Film      },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition -mb-px"
@@ -370,6 +416,91 @@ export default function VideoAdminClient({ metrics, videos: initialVideos, style
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ PRESETS TAB ════════ */}
+      {tab === "presets" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">{presets.length} presets</p>
+            <p className="text-xs" style={{ color: "#555" }}>Edit defaultFilmLook per preset</p>
+          </div>
+
+          <div className="space-y-2">
+            {presets.map(preset => (
+              <div key={preset.id} className="rounded-xl border p-4"
+                style={{ borderColor: "#1E1E1E", backgroundColor: "#0F0F0F" }}>
+                {editPresetId === preset.id ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white flex-1">{preset.name}</p>
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+                        {preset.genre}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>
+                        Default Film Look
+                      </label>
+                      <select
+                        defaultValue={preset.defaultFilmLook}
+                        onChange={e => setPresetDraft(p => ({ ...p, defaultFilmLook: e.target.value }))}
+                        className="w-full rounded-lg px-3 py-2 text-sm text-white border"
+                        style={{ borderColor: "#2A2A2A", backgroundColor: "#111" }}
+                      >
+                        {FILM_LOOK_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => savePreset(preset.id)} disabled={savingPreset}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold"
+                        style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                        {savingPreset ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Save
+                      </button>
+                      <button onClick={() => { setEditPresetId(null); setPresetDraft({}); }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold border"
+                        style={{ borderColor: "#2A2A2A", color: "#888" }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-white text-sm">{preset.name}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                          style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+                          {preset.genre}
+                        </span>
+                        {preset.styleName && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                            style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "#888" }}>
+                            {preset.styleName}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-xs" style={{ color: "#555" }}>{preset.description}</p>
+                        <span className="text-xs font-semibold shrink-0" style={{ color: "#666" }}>
+                          🎞 {FILM_LOOK_OPTIONS.find(o => o.value === preset.defaultFilmLook)?.label ?? preset.defaultFilmLook}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setEditPresetId(preset.id); setPresetDraft({}); }}
+                      className="text-xs px-2 py-1 rounded-lg border shrink-0"
+                      style={{ borderColor: "#2A2A2A", color: "#888" }}>
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

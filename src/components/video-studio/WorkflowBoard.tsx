@@ -17,6 +17,7 @@ import {
   Zap, AlertCircle, CornerDownRight,
 } from "lucide-react";
 import { CameraDirectionPicker, CAMERA_DIRECTION_MAP, type CameraDirectionKey } from "./CameraDirectionPicker";
+import { FilmLookPicker, FILM_LOOKS, type FilmLookKey } from "./FilmLookPicker";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ export interface WorkflowScene {
   title:           string;
   description:     string;
   cameraDirection?: string;
+  filmLook?:        string;
   type:            string;
   energyLevel:     number;
   startTime:       number;
@@ -74,9 +76,10 @@ interface WorkflowBoardProps {
   videoId?:       string;
 
   // Callbacks
-  onEditScene?:    (index: number, updates: Partial<WorkflowScene>) => void;
-  onRegenClip?:    (index: number) => void;
-  onManualReject?: (index: number, note: string) => void;
+  onEditScene?:              (index: number, updates: Partial<WorkflowScene>) => void;
+  onApplyFilmLookToAll?:     (filmLook: string) => void;
+  onRegenClip?:              (index: number) => void;
+  onManualReject?:           (index: number, note: string) => void;
 }
 
 // ─── Energy color ─────────────────────────────────────────────────────────────
@@ -657,17 +660,19 @@ function FinalNode({
 // ─── Scene Edit Panel ─────────────────────────────────────────────────────────
 
 function SceneEditPanel({
-  scene, onClose, onSave,
+  scene, onClose, onSave, onApplyFilmLookToAll,
 }: {
   scene: WorkflowScene;
   onClose: () => void;
   onSave: (updates: Partial<WorkflowScene>) => void;
+  onApplyFilmLookToAll?: (filmLook: string) => void;
 }) {
   const [description,      setDescription]      = useState(scene.description);
   const [cameraDirection,  setCameraDirection]  = useState<string>(scene.cameraDirection ?? "static_wide");
+  const [filmLook,         setFilmLook]         = useState<string>(scene.filmLook ?? "clean_digital");
 
   function handleSave() {
-    onSave({ description, cameraDirection });
+    onSave({ description, cameraDirection, filmLook });
     onClose();
   }
 
@@ -740,6 +745,18 @@ function SceneEditPanel({
             onChange={v => setCameraDirection(v)}
           />
         </div>
+
+        {/* Film Look */}
+        <div className="space-y-3">
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>
+            Film Look
+          </label>
+          <FilmLookPicker
+            value={filmLook as FilmLookKey}
+            onChange={v => setFilmLook(v)}
+            onApplyToAll={onApplyFilmLookToAll}
+          />
+        </div>
       </div>
 
       {/* Footer */}
@@ -764,7 +781,7 @@ export default function WorkflowBoard({
   brief, onEditBrief,
   shotList, clips = [],
   videoStatus, finalVideoUrl, thumbnailUrl, videoId,
-  onEditScene, onRegenClip, onManualReject,
+  onEditScene, onApplyFilmLookToAll, onRegenClip, onManualReject,
 }: WorkflowBoardProps) {
   const [selectedScene, setSelectedScene] = useState<number | null>(null);
 
@@ -961,6 +978,7 @@ export default function WorkflowBoard({
             scene={selectedSceneObj}
             onClose={() => setSelectedScene(null)}
             onSave={(updates) => handleSceneEdit(selectedScene, updates)}
+            onApplyFilmLookToAll={onApplyFilmLookToAll}
           />
         </>
       )}

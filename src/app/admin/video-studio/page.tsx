@@ -62,6 +62,7 @@ export default async function VideoStudioAdminPage() {
     recentVideos,
     videoTotal,
     styles,
+    presets,
     conversionData,
   ] = await Promise.all([
     // 1. Total videos ever
@@ -117,7 +118,17 @@ export default async function VideoStudioAdminPage() {
     // 8. All video styles
     db.videoStyle.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }] }),
 
-    // 9. Conversion rate data — guests who later subscribed
+    // 9. All video presets
+    db.videoPreset.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true, name: true, genre: true, description: true,
+        styleName: true, moodArc: true, defaultFilmLook: true,
+        active: true, sortOrder: true,
+      },
+    }),
+
+    // 10. Conversion rate data — guests who later subscribed
     db.musicVideo.findMany({
       where: {
         guestEmail:     { not: null },
@@ -231,6 +242,7 @@ export default async function VideoStudioAdminPage() {
         metrics={metrics}
         videos={videoRows}
         styles={styles}
+        presets={presets}
         videoTotal={videoTotal}
       />
     </div>

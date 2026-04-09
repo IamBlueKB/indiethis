@@ -20,6 +20,8 @@ import {
   detectCameraDirection,
   CAMERA_DIRECTION_MAP,
   type CameraDirectionKey,
+  FILM_LOOKS,
+  type FilmLookKey,
 } from "@/components/video-studio/CameraDirectionPicker";
 
 interface ShotListScene {
@@ -27,6 +29,7 @@ interface ShotListScene {
   title:           string;       // short scene title e.g. "Rooftop Opening"
   description:     string;       // visual description for the prompt
   cameraDirection: CameraDirectionKey; // detected from description or default
+  filmLook:        FilmLookKey;  // visual film aesthetic
   model:           string;
   modelDisplay:    string;
   modelReason:     string;
@@ -106,18 +109,21 @@ ${briefSummary}
 Song sections:
 ${JSON.stringify(sectionsForClaude, null, 2)}
 
+Film look options: clean_digital, 35mm_film, 16mm_grain, anamorphic, vhs_retro, noir
+
 For each section, write a JSON object with:
 - "index": number
 - "title": short punchy scene name (3-5 words)
 - "description": detailed visual description (2-3 sentences, cinematic language)
 - "hasLipSync": boolean (true only if section has lyrics AND it's a performance/singing moment)
+- "filmLook": one of the film look options — choose based on the genre, mood, and energy level
 
 Return ONLY a JSON array, no other text. Example:
-[{"index":0,"title":"Midnight Arrival","description":"...","hasLipSync":false}]`,
+[{"index":0,"title":"Midnight Arrival","description":"...","hasLipSync":false,"filmLook":"35mm_film"}]`,
       }],
     });
 
-    let sceneDescriptions: Array<{ index: number; title: string; description: string; hasLipSync: boolean }> = [];
+    let sceneDescriptions: Array<{ index: number; title: string; description: string; hasLipSync: boolean; filmLook?: string }> = [];
     try {
       const text = claudeRes.content[0].type === "text" ? claudeRes.content[0].text : "[]";
       sceneDescriptions = JSON.parse(text.trim());
@@ -128,6 +134,7 @@ Return ONLY a JSON array, no other text. Example:
         title:      `${s.type.charAt(0).toUpperCase() + s.type.slice(1)} Scene ${i + 1}`,
         description: `${s.type} section of the music video. ${brief.logline ?? ""}`,
         hasLipSync: !!s.lyrics,
+        filmLook:   "clean_digital",
       }));
     }
 
@@ -149,13 +156,19 @@ Return ONLY a JSON array, no other text. Example:
       const description      = desc?.description ?? `${section.type} section of the music video`;
       const cameraDirection  = detectCameraDirection(description);
       const cameraPrompt     = CAMERA_DIRECTION_MAP[cameraDirection]?.prompt ?? "";
-      const prompt           = `${stylePrompt}, ${description}, ${cameraPrompt}, ${sceneType} music video scene, energy ${Math.round(section.energy * 10)}/10`.slice(0, 600);
+      const validFilmLooks   = Object.keys(FILM_LOOKS) as FilmLookKey[];
+      const filmLook         = validFilmLooks.includes(desc?.filmLook as FilmLookKey)
+        ? (desc!.filmLook as FilmLookKey)
+        : "clean_digital";
+      const filmLookPrompt   = FILM_LOOKS[filmLook]?.prompt ?? "";
+      const prompt           = `${stylePrompt}, ${description}, ${cameraPrompt}, ${filmLookPrompt}, ${sceneType} music video scene, energy ${Math.round(section.energy * 10)}/10`.slice(0, 600);
 
       return {
         index:           idx,
         title:           desc?.title ?? `Scene ${idx + 1}`,
         description,
         cameraDirection,
+        filmLook,
         model:           modelConfig.model,
         modelDisplay:    modelConfig.displayName,
         modelReason:     modelConfig.reason,

@@ -2806,6 +2806,7 @@ model VideoPreset {
   moodArc        String            // intense_throughout | dark_to_bright | building_energy | emotional_journey
   cameraSequence Json              // { intro, verse, chorus, bridge, outro } → CameraDirectionKey
   briefTemplate  Json              // { logline, tone, colorPalette, visualThemes, cinematography }
+  defaultFilmLook String  @default("clean_digital") // FilmLookKey — pre-set for all scenes when preset is applied
   active         Boolean  @default(true)
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())

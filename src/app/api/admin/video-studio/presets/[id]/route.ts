@@ -30,7 +30,7 @@ export async function PATCH(
   const body    = await req.json() as Partial<{
     name: string; genre: string; description: string; previewUrl: string | null;
     styleName: string | null; moodArc: string; cameraSequence: object;
-    briefTemplate: object; sortOrder: number; active: boolean;
+    briefTemplate: object; defaultFilmLook: string; sortOrder: number; active: boolean;
   }>;
 
   const existing = await db.videoPreset.findUnique({ where: { id }, select: { id: true } });

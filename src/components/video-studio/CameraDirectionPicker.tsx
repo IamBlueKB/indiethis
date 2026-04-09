@@ -85,6 +85,57 @@ export const CAMERA_DIRECTION_MAP: Record<CameraDirectionKey, CameraDirectionInf
 
 export const CAMERA_DIRECTION_KEYS = Object.keys(CAMERA_DIRECTION_MAP) as CameraDirectionKey[];
 
+// ─── Film Look presets ────────────────────────────────────────────────────────
+
+export type FilmLookKey =
+  | "clean_digital"
+  | "35mm_film"
+  | "16mm_grain"
+  | "anamorphic"
+  | "vhs_retro"
+  | "noir";
+
+export interface FilmLookInfo {
+  label:       string;
+  description: string;
+  prompt:      string; // appended to scene prompt during generation
+}
+
+export const FILM_LOOKS: Record<FilmLookKey, FilmLookInfo> = {
+  clean_digital: {
+    label:       "Clean Digital",
+    description: "Crisp, neutral, modern",
+    prompt:      "clean digital cinematography, sharp and crisp, neutral color grading, professional broadcast quality",
+  },
+  "35mm_film": {
+    label:       "35mm Film",
+    description: "Warm grain, Kodak tones",
+    prompt:      "35mm film aesthetic, warm Kodak color tones, fine grain, natural halation around highlights, organic film texture",
+  },
+  "16mm_grain": {
+    label:       "16mm Grain",
+    description: "Heavy grain, raw indie",
+    prompt:      "16mm film look, heavy grain, slightly desaturated, raw independent film aesthetic, lifted shadows, gritty texture",
+  },
+  anamorphic: {
+    label:       "Anamorphic",
+    description: "Lens flares, oval bokeh",
+    prompt:      "anamorphic lens cinematography, horizontal lens flares, oval bokeh, wide cinematic aspect ratio feel, cinematic scope",
+  },
+  vhs_retro: {
+    label:       "VHS Retro",
+    description: "Scan lines, color bleed",
+    prompt:      "VHS retro aesthetic, scan lines, color bleed, chromatic aberration, 80s 90s video texture, analog warmth",
+  },
+  noir: {
+    label:       "Noir",
+    description: "High contrast B&W",
+    prompt:      "noir cinematography, high contrast black and white, deep crushing blacks, harsh dramatic shadows, expressionist lighting",
+  },
+};
+
+export const FILM_LOOK_KEYS = Object.keys(FILM_LOOKS) as FilmLookKey[];
+
 // ─── Auto-detect camera direction from a description string ──────────────────
 
 export function detectCameraDirection(description: string): CameraDirectionKey {

@@ -225,6 +225,24 @@ export default function DirectorClient({
     }
   }, [id, shotList]);
 
+  // ── Apply film look to all scenes ────────────────────────────────────────────
+  const handleApplyFilmLookToAll = useCallback(async (filmLook: string) => {
+    const updated = shotList.map(s => ({ ...s, filmLook }));
+    setShotList(updated);
+    setSavingScene(true);
+    try {
+      await fetch(`/api/video-studio/director/${id}/shot-list/update`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ shotList: updated }),
+      });
+    } catch {
+      // non-fatal
+    } finally {
+      setSavingScene(false);
+    }
+  }, [id, shotList]);
+
   // ── Approve and generate ──────────────────────────────────────────────────────
   async function handleApprove() {
     if (approving) return;
@@ -609,6 +627,7 @@ export default function DirectorClient({
               videoStatus="PLANNING"
               videoId={id}
               onEditScene={handleEditScene}
+              onApplyFilmLookToAll={handleApplyFilmLookToAll}
             />
 
             {/* Approve section */}
