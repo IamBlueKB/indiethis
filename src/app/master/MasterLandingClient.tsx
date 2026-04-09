@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import {
   Music, Wand2, Play, Pause, ChevronRight, Zap, Check,
-  Upload, Shield, Clock, Star,
+  Upload, Shield, Clock, Star, Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MasterGuestWizard } from "./MasterGuestWizard";
@@ -106,8 +106,16 @@ export function MasterLandingClient({
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A1A]">
-        <Link href="/">
-          <img src="/images/brand/indiethis-logo-dark-bg.svg" alt="IndieThis" style={{ height: 28 }} />
+        <Link href="/" className="flex items-center gap-2 no-underline">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: "rgba(212,168,67,0.15)" }}>
+            <Sliders size={14} style={{ color: "#D4A843" }} />
+          </div>
+          <span className="text-sm font-bold text-white">Mix &amp; Master Studio</span>
+          <span className="text-xs px-2 py-0.5 rounded-full font-semibold hidden sm:block"
+            style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+            by IndieThis
+          </span>
         </Link>
         <div className="flex items-center gap-4">
           <Link href="/login" className="text-sm text-[#777] hover:text-white transition-colors">Sign in</Link>
