@@ -1192,29 +1192,71 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             </p>
           </div>
 
-          {/* Platform downloads */}
-          <div className="space-y-2">
-            {result.exports.map((ex) => {
-              const platform = PLATFORMS.find((p) => p.id === ex.platform);
-              return (
-                <div key={ex.platform} className="flex items-center justify-between p-4 rounded-xl border border-[#2A2A2A]">
+          {/* Format downloads */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#D4A843" }}>Format Downloads</p>
+              <a
+                href={`/api/mastering/job/${jobId}/download?format=all&version=${selected}`}
+                className="text-xs font-semibold hover:opacity-80 transition-opacity flex items-center gap-1"
+                style={{ color: "#D4A843" }}
+              >
+                <Download size={11} /> Download All
+              </a>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "mp3_320",     label: "MP3 320kbps",         size: "~12 MB",   use: "Streaming & social" },
+                { id: "wav_16_44",   label: "WAV 16-bit 44.1kHz",  size: "~50 MB",   use: "CD quality" },
+                { id: "wav_24_44",   label: "WAV 24-bit 44.1kHz",  size: "~75 MB",   use: "Studio master" },
+                { id: "wav_24_48",   label: "WAV 24-bit 48kHz",    size: "~80 MB",   use: "Video / broadcast" },
+                { id: "flac_24_44",  label: "FLAC 24-bit 44.1kHz", size: "~35 MB",   use: "Lossless archive" },
+                { id: "aiff_24_44",  label: "AIFF 24-bit 44.1kHz", size: "~75 MB",   use: "Apple / Logic" },
+              ].map((fmt) => (
+                <div key={fmt.id} className="rounded-xl border border-[#2A2A2A] p-3 flex flex-col gap-2">
                   <div>
-                    <div className="text-sm font-semibold">{platform?.label ?? ex.platform}</div>
-                    <div className="text-[11px] mt-0.5" style={{ color: "#777" }}>
-                      {platform?.format ?? ex.format} · {ex.lufs.toFixed(1)} LUFS · {platform?.truePeak.toFixed(1) ?? "−1.0"} dBTP
-                    </div>
+                    <div className="text-xs font-bold">{fmt.label}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: "#777" }}>{fmt.use} · {fmt.size}</div>
                   </div>
                   <a
-                    href={ex.url}
+                    href={`/api/mastering/job/${jobId}/download?format=${fmt.id}&version=${selected}`}
                     download
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90"
-                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold hover:opacity-90 transition-all"
+                    style={{ backgroundColor: "#1A1A1A", border: "1px solid #2A2A2A", color: "#D4A843" }}
                   >
-                    <Download size={13} /> Download
+                    <Download size={11} /> Download
                   </a>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+
+          {/* Platform-targeted exports */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#777" }}>Platform Exports</p>
+            <div className="space-y-2">
+              {result.exports.map((ex) => {
+                const platform = PLATFORMS.find((p) => p.id === ex.platform);
+                return (
+                  <div key={ex.platform} className="flex items-center justify-between p-4 rounded-xl border border-[#2A2A2A]">
+                    <div>
+                      <div className="text-sm font-semibold">{platform?.label ?? ex.platform}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: "#777" }}>
+                        {platform?.format ?? ex.format} · {ex.lufs.toFixed(1)} LUFS · {platform?.truePeak.toFixed(1) ?? "−1.0"} dBTP
+                      </div>
+                    </div>
+                    <a
+                      href={ex.url}
+                      download
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90"
+                      style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                    >
+                      <Download size={13} /> Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Download all */}

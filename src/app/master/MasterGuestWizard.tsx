@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = "email" | "mode" | "upload" | "configure" | "preview" | "payment" | "processing" | "compare" | "export";
+type Step = "email" | "mode" | "upload" | "configure" | "payment" | "processing" | "compare" | "export";
 type Mode = "MIX_AND_MASTER" | "MASTER_ONLY";
 type Tier = "STANDARD" | "PREMIUM" | "PRO";
 type Mood = "CLEAN" | "WARM" | "PUNCH" | "LOUD";
@@ -99,10 +99,6 @@ export function MasterGuestWizard({
   const [stereoFile, setStereoFile] = useState<File | null>(null);
   const [stems,      setStems]      = useState<{ file: File; name: string; type?: string }[]>([]);
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [previewPlaying, setPreviewPlaying] = useState(false);
-
   const [jobId,      setJobId]      = useState<string | null>(null);
   const [jobStatus,  setJobStatus]  = useState("PENDING");
   const [result,     setResult]     = useState<JobResult | null>(null);
@@ -182,45 +178,6 @@ export function MasterGuestWizard({
     const { uploadUrl, fileUrl } = await res.json() as { uploadUrl: string; fileUrl: string };
     await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
     return fileUrl;
-  }
-
-  // ── 30-second free preview ─────────────────────────────────────────────────
-  async function generateFreePreview() {
-    if (!stereoFile && stems.length < 2) return;
-    setPreviewing(true);
-    setError(null);
-    try {
-      let inputFileUrl: string | undefined;
-      let uploadedStems: { url: string; filename: string }[] | undefined;
-
-      if (mode === "MASTER_ONLY" && stereoFile) {
-        inputFileUrl = await uploadFile(stereoFile);
-      } else {
-        uploadedStems = await Promise.all(
-          stems.map(async (s) => ({ url: await uploadFile(s.file), filename: s.name }))
-        );
-      }
-
-      const res = await fetch("/api/mastering/preview", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          mode,
-          inputType:   mode === "MASTER_ONLY" ? "STEREO" : "STEMS",
-          inputFileUrl,
-          stems:       uploadedStems,
-          mood,
-          guestEmail:  email,
-        }),
-      });
-      const { previewUrl: url } = await res.json() as { previewUrl: string };
-      setPreviewUrl(url);
-      setStep("preview");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Preview failed.");
-    } finally {
-      setPreviewing(false);
-    }
   }
 
   // ── Full job start (post-payment or included credit) ──────────────────────
@@ -582,72 +539,17 @@ export function MasterGuestWizard({
                 <ChevronLeft size={14} /> Back
               </button>
               <button
-                onClick={generateFreePreview}
-                disabled={previewing || (mode === "MASTER_ONLY" ? !stereoFile : stems.length < 2)}
+                onClick={handlePayment}
+                disabled={uploading || (mode === "MASTER_ONLY" ? !stereoFile : stems.length < 2)}
                 className="flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all"
                 style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
-                {previewing ? <><Loader2 size={15} className="animate-spin" /> Generating preview…</> : <><Play size={15} /> Hear free 30s preview</>}
+                {uploading
+                  ? <><Loader2 size={15} className="animate-spin" /> Processing…</>
+                  : <>Pay &amp; Master — {TIER_PRICES[tier][mode]} <ChevronRight size={16} /></>
+                }
               </button>
             </div>
-          </div>
-        )}
-
-        {/* ── STEP: Preview ────────────────────────────────────────────── */}
-        {step === "preview" && previewUrl && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-xl font-bold">Your free preview</h2>
-              <p className="text-sm mt-1" style={{ color: "#777" }}>30 seconds of your highest-energy section</p>
-            </div>
-
-            <div
-              className="rounded-2xl border border-[#D4A843]/40 p-6 text-center"
-              style={{ backgroundColor: "#111" }}
-            >
-              <button
-                onClick={() => {
-                  if (previewPlaying) {
-                    audioRef.current?.pause();
-                    setPreviewPlaying(false);
-                  } else {
-                    if (audioRef.current) audioRef.current.pause();
-                    audioRef.current = new Audio(previewUrl);
-                    audioRef.current.play();
-                    audioRef.current.onended = () => setPreviewPlaying(false);
-                    setPreviewPlaying(true);
-                  }
-                }}
-                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 transition-all hover:opacity-90"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-              >
-                {previewPlaying ? <Pause size={24} /> : <Play size={24} />}
-              </button>
-              <p className="text-sm font-semibold">
-                {previewPlaying ? "Playing preview…" : "Click to play your free preview"}
-              </p>
-              <p className="text-xs mt-1" style={{ color: "#777" }}>
-                Like what you hear? Pay to get the full master.
-              </p>
-            </div>
-
-            {error && <p className="text-sm text-red-400">{error}</p>}
-
-            <button
-              onClick={handlePayment}
-              disabled={uploading}
-              className="w-full py-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-60 transition-all"
-              style={{ backgroundColor: "#E85D4A", color: "#fff" }}
-            >
-              {uploading ? (
-                <><Loader2 size={15} className="animate-spin" /> Processing…</>
-              ) : (
-                <>Pay {TIER_PRICES[tier][mode]} &amp; get the full master <ChevronRight size={16} /></>
-              )}
-            </button>
-            <button onClick={() => setStep("upload")} className="w-full text-sm text-[#555] hover:text-white transition-colors">
-              Change settings
-            </button>
           </div>
         )}
 
@@ -747,20 +649,63 @@ export function MasterGuestWizard({
               <p className="text-xs mt-1" style={{ color: "#777" }}>Version: <span style={{ color: "#D4A843" }}>{selected}</span></p>
             </div>
 
-            {result.exports.map((ex) => {
-              const p = PLATFORMS.find((x) => x.id === ex.platform);
-              return (
-                <div key={ex.platform} className="flex items-center justify-between p-4 rounded-xl border border-[#2A2A2A]">
-                  <div>
-                    <div className="text-sm font-semibold">{p?.label ?? ex.platform}</div>
-                    <div className="text-[11px]" style={{ color: "#777" }}>{ex.format} · {ex.lufs.toFixed(1)} LUFS</div>
+            {/* Format downloads */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#D4A843" }}>Format Downloads</p>
+                <a
+                  href={`/api/mastering/job/${jobId}/download?format=all&version=${selected}`}
+                  className="text-xs font-semibold hover:opacity-80 transition-opacity flex items-center gap-1"
+                  style={{ color: "#D4A843" }}
+                >
+                  <Download size={11} /> Download All
+                </a>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "mp3_320",     label: "MP3 320kbps",         size: "~12 MB",   use: "Streaming & social" },
+                  { id: "wav_16_44",   label: "WAV 16-bit 44.1kHz",  size: "~50 MB",   use: "CD quality" },
+                  { id: "wav_24_44",   label: "WAV 24-bit 44.1kHz",  size: "~75 MB",   use: "Studio master" },
+                  { id: "wav_24_48",   label: "WAV 24-bit 48kHz",    size: "~80 MB",   use: "Video / broadcast" },
+                  { id: "flac_24_44",  label: "FLAC 24-bit 44.1kHz", size: "~35 MB",   use: "Lossless archive" },
+                  { id: "aiff_24_44",  label: "AIFF 24-bit 44.1kHz", size: "~75 MB",   use: "Apple / Logic" },
+                ].map((fmt) => (
+                  <div key={fmt.id} className="rounded-xl border border-[#2A2A2A] p-3 flex flex-col gap-2">
+                    <div>
+                      <div className="text-xs font-bold">{fmt.label}</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: "#777" }}>{fmt.use} · {fmt.size}</div>
+                    </div>
+                    <a
+                      href={`/api/mastering/job/${jobId}/download?format=${fmt.id}&version=${selected}`}
+                      download
+                      className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold hover:opacity-90 transition-all"
+                      style={{ backgroundColor: "#1A1A1A", border: "1px solid #2A2A2A", color: "#D4A843" }}
+                    >
+                      <Download size={11} /> Download
+                    </a>
                   </div>
-                  <a href={ex.url} download className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                    <Download size={12} /> Download
-                  </a>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </div>
+
+            {/* Platform-targeted exports */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#777" }}>Platform Exports</p>
+              {result.exports.map((ex) => {
+                const p = PLATFORMS.find((x) => x.id === ex.platform);
+                return (
+                  <div key={ex.platform} className="flex items-center justify-between p-4 rounded-xl border border-[#2A2A2A] mb-2">
+                    <div>
+                      <div className="text-sm font-semibold">{p?.label ?? ex.platform}</div>
+                      <div className="text-[11px]" style={{ color: "#777" }}>{ex.format} · {ex.lufs.toFixed(1)} LUFS</div>
+                    </div>
+                    <a href={ex.url} download className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                      <Download size={12} /> Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Post-delivery upsell */}
             <div className="rounded-2xl border border-[#D4A843]/30 p-5 text-center">
