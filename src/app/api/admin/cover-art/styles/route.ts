@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (action === "generate-previews") {
     // Fetch styles that need previews (empty or missing previewUrl)
     const styles = await db.coverArtStyle.findMany({
-      where:   { OR: [{ previewUrl: "" }, { previewUrl: null }] },
+      where:   { previewUrl: "" },
       orderBy: { sortOrder: "asc" },
     });
 
