@@ -22,26 +22,26 @@ const FEATURES = [
 const PRICING = [
   {
     name:        "Standard",
-    price:       "$11.99",
+    price:       "$7.99",
     mode:        "Stereo master",
-    features:    ["4 mastered versions", "1 platform export (Spotify)", "30-second free preview", "Mastering report"],
+    features:    ["4 mastered versions", "All platform exports", "All format downloads", "A/B spectral comparison", "Mastering report"],
     tier:        "STANDARD",
     modeValue:   "MASTER_ONLY" as Mode,
   },
   {
     name:        "Premium",
-    price:       "$17.99",
+    price:       "$14.99",
     mode:        "Stereo master or stem mix",
-    features:    ["4 mastered versions", "All platform exports", "Reference track matching", "30-second free preview", "Mastering report"],
+    features:    ["4 mastered versions", "All platform exports", "All format downloads", "Reference track matching", "Natural language prompts", "Stem upload mixing", "Mastering report"],
     tier:        "PREMIUM",
     modeValue:   "MASTER_ONLY" as Mode,
     highlight:   true,
   },
   {
     name:        "Pro",
-    price:       "$27.99",
+    price:       "$24.99",
     mode:        "Stereo master or stem mix",
-    features:    ["4 mastered versions", "All platform exports", "Reference track matching", "1 revision round", "30-second free preview", "Mastering report"],
+    features:    ["4 mastered versions", "All platform exports", "All format downloads", "Reference track matching", "Natural language prompts", "Stem upload mixing", "Album mastering", "1 revision round", "Mastering report"],
     tier:        "PRO",
     modeValue:   "MASTER_ONLY" as Mode,
   },
@@ -155,7 +155,7 @@ export function MasterLandingClient({
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all hover:opacity-90"
             style={{ backgroundColor: "#E85D4A", color: "#fff" }}
           >
-            Master a track — $17.99 <ChevronRight size={18} />
+            Master a track — $14.99 <ChevronRight size={18} />
           </button>
           <button
             onClick={() => startWizard("PREMIUM", "MIX_AND_MASTER")}

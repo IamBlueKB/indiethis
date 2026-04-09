@@ -22,17 +22,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02
 
 // Base prices in cents (non-subscriber)
 const BASE_PRICES: Record<string, Record<string, number>> = {
-  STANDARD: { MIX_AND_MASTER: 1799, MASTER_ONLY: 1199 },
-  PREMIUM:  { MIX_AND_MASTER: 1799, MASTER_ONLY: 1799 },
-  PRO:      { MIX_AND_MASTER: 2799, MASTER_ONLY: 2799 },
+  STANDARD: { MIX_AND_MASTER: 799,  MASTER_ONLY: 799  },
+  PREMIUM:  { MIX_AND_MASTER: 1499, MASTER_ONLY: 1499 },
+  PRO:      { MIX_AND_MASTER: 2499, MASTER_ONLY: 2499 },
 };
 
-// Subscriber discount factors per subscription plan
-const PLAN_FACTORS: Record<string, Record<string, number>> = {
-  // planId → { STANDARD, PREMIUM, PRO }
-  launch: { STANDARD: 0.83, PREMIUM: 0.75, PRO: 0.83 }, // $9.99 / $14.99 / $24.99
-  push:   { STANDARD: 0.67, PREMIUM: 0.72, PRO: 0.72 }, // $7.99 / $12.99 / $19.99
-  reign:  { STANDARD: 0.50, PREMIUM: 0.56, PRO: 0.53 }, // $5.99 / $9.99  / $14.99
+// Exact subscriber PPU prices in cents (after included credits are exhausted)
+const SUBSCRIBER_PRICES: Record<string, Record<string, number>> = {
+  launch: { STANDARD: 599,  PREMIUM: 1199, PRO: 1999 },
+  push:   { STANDARD: 499,  PREMIUM: 999,  PRO: 1499 },
+  reign:  { STANDARD: 399,  PREMIUM: 799,  PRO: 999  },
 };
 
 function getPlanKey(subTier: string): string | null {
@@ -59,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     let amountCents = BASE_PRICES[tier][mode];
 
-    // Apply subscriber discount
+    // Apply exact subscriber PPU pricing
     if (session?.user?.id) {
       const sub = await prisma.subscription.findUnique({
         where:  { userId: session.user.id },
@@ -68,8 +67,8 @@ export async function POST(req: NextRequest) {
 
       if (sub?.status === "ACTIVE" && sub.tier) {
         const planKey = getPlanKey(sub.tier);
-        if (planKey && PLAN_FACTORS[planKey]?.[tier]) {
-          amountCents = Math.round(amountCents * PLAN_FACTORS[planKey][tier]);
+        if (planKey && SUBSCRIBER_PRICES[planKey]?.[tier]) {
+          amountCents = SUBSCRIBER_PRICES[planKey][tier];
         }
       }
     }

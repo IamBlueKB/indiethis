@@ -48,9 +48,9 @@ interface JobResult {
 }
 
 const TIER_PRICES: Record<Tier, Record<Mode, string>> = {
-  STANDARD: { MASTER_ONLY: "$11.99", MIX_AND_MASTER: "$17.99" },
-  PREMIUM:  { MASTER_ONLY: "$17.99", MIX_AND_MASTER: "$17.99" },
-  PRO:      { MASTER_ONLY: "$27.99", MIX_AND_MASTER: "$27.99" },
+  STANDARD: { MASTER_ONLY: "$7.99",  MIX_AND_MASTER: "$7.99"  },
+  PREMIUM:  { MASTER_ONLY: "$14.99", MIX_AND_MASTER: "$14.99" },
+  PRO:      { MASTER_ONLY: "$24.99", MIX_AND_MASTER: "$24.99" },
 };
 
 const MOOD_OPTIONS: { value: Mood; label: string; description: string }[] = [
@@ -249,7 +249,7 @@ export function MasterGuestWizard({
           inputFileUrl,
           stems:                 uploadedStems,
           mood,
-          platforms:             tier === "STANDARD" ? ["spotify", "wav_master"] : platforms,
+          platforms,
           naturalLanguagePrompt: nlPrompt.trim() || undefined,
           stripePaymentId:       paymentIntentId,
           guestEmail:            email,
