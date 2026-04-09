@@ -36,26 +36,26 @@ const HERO_GRADIENT =
   "#0A0A0A";
 
 const GALLERY_GRADIENT =
-  "radial-gradient(ellipse at 30% 40%, rgba(20,100,100,0.05) 0%, transparent 60%), " +
-  "radial-gradient(ellipse at 75% 70%, rgba(20,40,110,0.08) 0%, transparent 55%), " +
-  "radial-gradient(ellipse at 80% 10%, rgba(10,20,80,0.06) 0%, transparent 50%), " +
+  "radial-gradient(ellipse at 30% 40%, rgba(0,128,128,0.07) 0%, transparent 60%), " +
+  "radial-gradient(ellipse at 75% 70%, rgba(20,40,100,0.08) 0%, transparent 55%), " +
+  "radial-gradient(ellipse at 80% 10%, rgba(10,20,80,0.07) 0%, transparent 50%), " +
   "#0A0A0A";
 
 const STATS_GRADIENT =
-  "radial-gradient(ellipse at 50% 50%, rgba(212,168,67,0.04) 0%, transparent 65%), " +
-  "radial-gradient(ellipse at 15% 80%, rgba(80,30,10,0.06) 0%, transparent 55%), " +
+  "radial-gradient(ellipse at 50% 50%, rgba(212,168,67,0.06) 0%, transparent 65%), " +
+  "radial-gradient(ellipse at 15% 80%, rgba(80,30,10,0.08) 0%, transparent 55%), " +
   "#0A0A0A";
 
 const PRICING_GRADIENT =
   "radial-gradient(ellipse at 50% 60%, rgba(30,25,15,0.10) 0%, transparent 70%), " +
   "radial-gradient(ellipse at 20% 20%, rgba(212,168,67,0.05) 0%, transparent 60%), " +
-  "radial-gradient(ellipse at 85% 80%, rgba(212,168,67,0.03) 0%, transparent 50%), " +
+  "radial-gradient(ellipse at 85% 80%, rgba(212,168,67,0.05) 0%, transparent 50%), " +
   "#0A0A0A";
 
 const FEATURES_GRADIENT =
-  "radial-gradient(ellipse at 60% 30%, rgba(80,20,160,0.06) 0%, transparent 55%), " +
-  "radial-gradient(ellipse at 20% 75%, rgba(40,10,80,0.07) 0%, transparent 60%), " +
-  "radial-gradient(ellipse at 90% 60%, rgba(60,15,120,0.05) 0%, transparent 50%), " +
+  "radial-gradient(ellipse at 60% 30%, rgba(80,20,120,0.06) 0%, transparent 55%), " +
+  "radial-gradient(ellipse at 20% 75%, rgba(40,10,80,0.08) 0%, transparent 60%), " +
+  "radial-gradient(ellipse at 90% 60%, rgba(60,15,120,0.06) 0%, transparent 50%), " +
   "#0A0A0A";
 
 const UPSELL_GRADIENT =
@@ -105,7 +105,7 @@ const EXAMPLES = [
     genre:          "Hip-Hop / Trap",
     image:          "/images/cover-art-examples/hiphop-trap.png",
     primaryStyle:   "Dark & Gritty",
-    altImage:       "/images/cover-art-examples/neon-futuristic.png",
+    altImage:       "/images/cover-art-examples/hiphop-alt.png",
     altStyle:       "Neon Futuristic",
   },
   {
@@ -113,7 +113,7 @@ const EXAMPLES = [
     genre:          "R&B / Soul",
     image:          "/images/cover-art-examples/rnb-soul.png",
     primaryStyle:   "Smoke & Shadow",
-    altImage:       "/images/cover-art-examples/watercolor-dreamy.png",
+    altImage:       "/images/cover-art-examples/rnb-alt.png",
     altStyle:       "Watercolor Dreamy",
   },
   {
@@ -121,7 +121,7 @@ const EXAMPLES = [
     genre:          "Pop",
     image:          "/images/cover-art-examples/pop.png",
     primaryStyle:   "Vibrant Illustrated",
-    altImage:       "/images/cover-art-examples/abstract-geometric.png",
+    altImage:       "/images/cover-art-examples/pop-alt.png",
     altStyle:       "Abstract Geometric",
   },
   {
@@ -129,7 +129,7 @@ const EXAMPLES = [
     genre:          "Indie / Alternative",
     image:          "/images/cover-art-examples/indie-alternative.png",
     primaryStyle:   "Vintage Vinyl",
-    altImage:       "/images/cover-art-examples/monochrome-film.png",
+    altImage:       "/images/cover-art-examples/indie-alt.png",
     altStyle:       "Monochrome Film",
   },
   {
@@ -137,7 +137,7 @@ const EXAMPLES = [
     genre:          "Electronic / EDM",
     image:          "/images/cover-art-examples/electronic-edm.png",
     primaryStyle:   "Neon Futuristic",
-    altImage:       "/images/cover-art-examples/psychedelic.png",
+    altImage:       "/images/cover-art-examples/electronic-alt.png",
     altStyle:       "Psychedelic",
   },
   {
@@ -145,7 +145,7 @@ const EXAMPLES = [
     genre:          "Acoustic / Singer-Songwriter",
     image:          "/images/cover-art-examples/acoustic-singer-songwriter.png",
     primaryStyle:   "Watercolor Dreamy",
-    altImage:       "/images/cover-art-examples/clean-gradient.png",
+    altImage:       "/images/cover-art-examples/acoustic-alt.png",
     altStyle:       "Clean Gradient",
   },
 ];
@@ -339,17 +339,20 @@ function GenreCard({
 
 // ─── Blur background layer ────────────────────────────────────────────────────
 // Heavily blurred, very low opacity cover art image used as atmospheric texture.
+// Sits BELOW the gradient mesh in z-order (z-index: 0). Content at z-index: 10.
 
-function BlurBg({ src, opacity = 0.06 }: { src: string; opacity?: number }) {
+function BlurBg({ src, opacity = 0.07 }: { src: string; opacity?: number }) {
   return (
     <div
-      className="absolute inset-0 scale-110 blur-[80px]"
+      className="absolute inset-0"
       style={{
-        backgroundImage:   `url('${src}')`,
-        backgroundSize:    "cover",
+        backgroundImage:    `url('${src}')`,
+        backgroundSize:     "cover",
         backgroundPosition: "center",
         opacity,
-        zIndex: 0,
+        filter:             "blur(70px)",
+        transform:          "scale(1.1)",
+        zIndex:             0,
       }}
     />
   );
@@ -408,8 +411,8 @@ function StyleComparisonSlider() {
       {/* "After" (styled) — full width base layer */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/images/cover-art-examples/smoke-shadow.png"
-        alt="After — styled"
+        src="/images/cover-art-comparison/after.png"
+        alt="After — styled album cover"
         className="absolute inset-0 w-full h-full object-cover"
         draggable={false}
       />
@@ -421,8 +424,8 @@ function StyleComparisonSlider() {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/cover-art-examples/photo-real-portrait.png"
-          alt="Before — reference"
+          src="/images/cover-art-comparison/before.png"
+          alt="Before — unprocessed reference photo"
           className="absolute inset-0 h-full object-cover"
           style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : "100%" }}
           draggable={false}
@@ -466,17 +469,18 @@ function StyleComparisonSlider() {
 }
 
 // ─── Floating 3-D album mockup ────────────────────────────────────────────────
+// Base transform: rotateY(-8deg) rotateX(3deg) per spec.
+// Scroll parallax shifts these values slightly (±3deg) for a living feel.
 
 function FloatingMockup() {
-  const ref                    = useRef<HTMLDivElement>(null);
-  const { scrollYProgress }    = useScroll();
-  const rotY                   = useTransform(scrollYProgress, [0, 1], [-8, 8]);
-  const rotX                   = useTransform(scrollYProgress, [0, 1], [5, -5]);
-  const translateY             = useTransform(scrollYProgress, [0, 1], [0, -30]);
+  const { scrollYProgress } = useScroll();
+  // Subtle scroll-driven parallax shift around the static base values
+  const rotY       = useTransform(scrollYProgress, [0, 1], [-8, -5]);
+  const rotX       = useTransform(scrollYProgress, [0, 1], [3,   0]);
+  const translateY = useTransform(scrollYProgress, [0, 1], [0,  -20]);
 
   return (
     <motion.div
-      ref={ref}
       className="relative hidden md:block shrink-0"
       style={{
         perspective: "1000px",
@@ -485,20 +489,34 @@ function FloatingMockup() {
         translateY,
       }}
     >
+      {/* Gold glow layer — sits behind the image */}
+      <div
+        style={{
+          position:     "absolute",
+          inset:        -20,
+          borderRadius: 24,
+          boxShadow:    "0 0 80px rgba(212,168,67,0.10)",
+          zIndex:       0,
+          pointerEvents: "none",
+        }}
+      />
+
       <motion.div
         style={{
-          rotateY:   rotY,
-          rotateX:   rotX,
-          width:     "100%",
-          height:    "100%",
+          rotateY:      rotY,
+          rotateX:      rotX,
+          position:     "relative",
+          zIndex:       1,
+          width:        "100%",
+          height:       "100%",
           borderRadius: 16,
-          overflow:  "hidden",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.55), 0 0 80px rgba(212,168,67,0.08)",
+          overflow:     "hidden",
+          boxShadow:    "0 25px 60px rgba(0,0,0,0.50)",
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/cover-art-examples/gothic-portrait.png"
+          src="/images/cover-art-examples/neon-futuristic.png"
           alt="Cover art mockup"
           className="w-full h-full object-cover"
           draggable={false}
@@ -507,22 +525,25 @@ function FloatingMockup() {
 
       {/* Reflection */}
       <div
-        className="absolute left-0 right-0"
         style={{
-          top:       "calc(100% + 6px)",
-          height:    80,
-          overflow:  "hidden",
-          transform: "scaleY(-1)",
-          opacity:   0.10,
-          filter:    "blur(4px)",
-          borderRadius: "0 0 16px 16px",
-          maskImage:    "linear-gradient(to bottom, black 0%, transparent 100%)",
+          position:        "absolute",
+          left:            0,
+          right:           0,
+          top:             "calc(100% + 8px)",
+          height:          70,
+          overflow:        "hidden",
+          transform:       "scaleY(-1)",
+          opacity:         0.10,
+          filter:          "blur(4px)",
+          borderRadius:    "0 0 16px 16px",
+          maskImage:       "linear-gradient(to bottom, black 0%, transparent 100%)",
           WebkitMaskImage: "linear-gradient(to bottom, black 0%, transparent 100%)",
+          zIndex:          0,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/cover-art-examples/gothic-portrait.png"
+          src="/images/cover-art-examples/neon-futuristic.png"
           alt=""
           aria-hidden
           className="w-full h-full object-cover"
@@ -681,7 +702,7 @@ export default function CoverArtLanding({ userId, userTier: _userTier }: Props) 
         className="relative overflow-hidden"
         style={{ background: HERO_GRADIENT }}
       >
-        {/* Step 3 — Morph background images */}
+        {/* Step 3 — Morph background images: crossfade every 4s, 2s transition */}
         {morphSet.map((src, i) => (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
@@ -689,13 +710,13 @@ export default function CoverArtLanding({ userId, userTier: _userTier }: Props) 
             src={src}
             alt=""
             aria-hidden
-            className="absolute inset-0 w-full h-full object-cover transition-opacity"
+            className="absolute inset-0 w-full h-full object-cover"
             style={{
-              opacity:          i === morphIndex ? 0.18 : 0,
-              filter:           "blur(40px)",
-              transform:        "scale(1.12)",
-              transitionDuration: "2000ms",
-              zIndex:           0,
+              opacity:            i === morphIndex ? 0.18 : 0,
+              filter:             "blur(40px)",
+              transform:          "scale(1.12)",
+              transition:         "opacity 2000ms ease-in-out",
+              zIndex:             0,
             }}
           />
         ))}
@@ -768,22 +789,30 @@ export default function CoverArtLanding({ userId, userTier: _userTier }: Props) 
             className="md:hidden mt-10 flex justify-center"
             style={{ perspective: "800px" }}
           >
-            <div
-              style={{
-                width:        220,
-                height:       220,
-                borderRadius: 12,
-                overflow:     "hidden",
-                transform:    "rotateY(-6deg) rotateX(3deg)",
-                boxShadow:    "0 20px 50px rgba(0,0,0,0.5), 0 0 60px rgba(212,168,67,0.07)",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/images/cover-art-examples/gothic-portrait.png"
-                alt="Cover art example"
-                className="w-full h-full object-cover"
-              />
+            <div style={{ position: "relative" }}>
+              {/* Gold glow behind */}
+              <div style={{
+                position:  "absolute", inset: -16, borderRadius: 20,
+                boxShadow: "0 0 60px rgba(212,168,67,0.10)", pointerEvents: "none",
+              }} />
+              <div
+                style={{
+                  position:     "relative",
+                  width:        220,
+                  height:       220,
+                  borderRadius: 12,
+                  overflow:     "hidden",
+                  transform:    "rotateY(-8deg) rotateX(3deg)",
+                  boxShadow:    "0 20px 50px rgba(0,0,0,0.50)",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/cover-art-examples/neon-futuristic.png"
+                  alt="Cover art example"
+                  className="w-full h-full object-cover"
+                />
+              </div>
             </div>
           </div>
         </div>
