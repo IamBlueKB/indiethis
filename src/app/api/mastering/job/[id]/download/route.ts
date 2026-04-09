@@ -80,7 +80,7 @@ export async function GET(
     // "all" — redirect to a zip endpoint (not yet implemented, redirect to wav master)
     const effectiveFormat = format === "all" ? "wav_24_48" : format;
     const key = `${effectiveFormat}_${targetVersion.toLowerCase()}`;
-    let url = exportsData[key] ?? exportsData[effectiveFormat] ?? null;
+    let url: string | null = exportsData[key] ?? exportsData[effectiveFormat] ?? null;
 
     // Fallback: find the wav_master platform export and redirect there
     if (!url) {
