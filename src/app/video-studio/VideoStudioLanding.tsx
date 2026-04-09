@@ -133,20 +133,9 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden">
-        {/* Background video loop */}
-        <div className="absolute inset-0 z-0" style={{ opacity: 0.18 }}>
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover"
-            style={{ filter: "blur(2px) saturate(1.4)" }}
-          >
-            {/* Replace src with your real example output reel URL */}
-            <source src="https://res.cloudinary.com/indiethis/video/upload/v1/video-studio/example-reel.mp4" type="video/mp4" />
-          </video>
-          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #0A0A0A 0%, transparent 30%, transparent 70%, #0A0A0A 100%)" }} />
+        {/* Background gradient (replace with a video src once demo reel is ready) */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(212,168,67,0.08) 0%, transparent 65%), linear-gradient(180deg, #0A0A0A 0%, #0D0D0D 50%, #0A0A0A 100%)" }} />
         </div>
 
         {/* Hero content */}
