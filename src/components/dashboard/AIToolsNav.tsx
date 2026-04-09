@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const tools = [
   { label: "AI Video",         href: "/dashboard/ai/video",            icon: Wand2     },
   { label: "Cover Art",        href: "/dashboard/ai/cover-art",        icon: Image     },
-  { label: "Mastering",        href: "/dashboard/ai/mastering",        icon: Music     },
+  { label: "Mix & Master",     href: "/dashboard/ai/master",           icon: Music     },
   { label: "Lyric Video",      href: "/dashboard/ai/lyric-video",      icon: Film      },
   { label: "A&R Report",       href: "/dashboard/ai/ar-report",        icon: BarChart3 },
   { label: "Press Kit",        href: "/dashboard/ai/press-kit",        icon: FileText  },
