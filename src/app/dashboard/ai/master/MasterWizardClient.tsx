@@ -409,16 +409,27 @@ export function MasterWizardClient({ userId }: { userId: string }) {
     setSetMasterLoading(false);
   }
 
-  // ── Download all ─────────────────────────────────────────────────────────────
+  // ── Download all — triggers all 6 format files + all platform exports ──────
   function downloadAll() {
-    if (!result) return;
-    result.exports.forEach((ex, i) => {
+    if (!result || !jobId) return;
+    const FORMAT_KEYS = ["mp3_320", "wav_16_44", "wav_24_44", "wav_24_48", "flac_24_44", "aiff_24_44"];
+    const allItems: { href: string }[] = [
+      // Format downloads via download route
+      ...FORMAT_KEYS.map((fmt) => ({
+        href: `/api/mastering/job/${jobId}/download?format=${fmt}&version=${selected ?? "Warm"}`,
+      })),
+      // Platform-targeted exports (direct storage URLs)
+      ...result.exports.map((ex) => ({ href: ex.url })),
+    ];
+    allItems.forEach(({ href }, i) => {
       setTimeout(() => {
         const a = document.createElement("a");
-        a.href = ex.url;
-        a.download = `${ex.platform}.${ex.format.toLowerCase().includes("flac") ? "flac" : ex.format.toLowerCase().includes("mp3") ? "mp3" : "wav"}`;
+        a.href = href;
+        a.download = "";
+        document.body.appendChild(a);
         a.click();
-      }, i * 300);
+        document.body.removeChild(a);
+      }, i * 700);
     });
   }
 
@@ -994,13 +1005,13 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#D4A843" }}>Format Downloads</p>
-              <a
-                href={`/api/mastering/job/${jobId}/download?format=all&version=${selected}`}
+              <button
+                onClick={downloadAll}
                 className="text-xs font-semibold hover:opacity-80 transition-opacity flex items-center gap-1"
                 style={{ color: "#D4A843" }}
               >
                 <Download size={11} /> Download All
-              </a>
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[

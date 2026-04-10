@@ -115,6 +115,28 @@ export function MasterGuestWizard({
   const inputRef    = useRef<HTMLInputElement | null>(null);
   const stemsRef    = useRef<HTMLInputElement | null>(null);
 
+  // ── Download all — triggers all 6 format files + all platform exports ──────
+  function downloadAllFiles() {
+    if (!result || !jobId) return;
+    const FORMAT_KEYS = ["mp3_320", "wav_16_44", "wav_24_44", "wav_24_48", "flac_24_44", "aiff_24_44"];
+    const allItems: { href: string }[] = [
+      ...FORMAT_KEYS.map((fmt) => ({
+        href: `/api/mastering/job/${jobId}/download?format=${fmt}&version=${selected ?? "Warm"}`,
+      })),
+      ...result.exports.map((ex) => ({ href: ex.url })),
+    ];
+    allItems.forEach(({ href }, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }, i * 700);
+    });
+  }
+
   // ── Auto-advance past email if user has a session ─────────────────────────
   useEffect(() => {
     if (session?.user?.email && step === "email") {
@@ -653,13 +675,13 @@ export function MasterGuestWizard({
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#D4A843" }}>Format Downloads</p>
-                <a
-                  href={`/api/mastering/job/${jobId}/download?format=all&version=${selected}`}
+                <button
+                  onClick={downloadAllFiles}
                   className="text-xs font-semibold hover:opacity-80 transition-opacity flex items-center gap-1"
                   style={{ color: "#D4A843" }}
                 >
                   <Download size={11} /> Download All
-                </a>
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
