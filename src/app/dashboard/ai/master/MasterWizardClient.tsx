@@ -616,9 +616,9 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             <p className="text-xs font-medium mb-3" style={{ color: "#777" }}>Choose your tier</p>
             <div className="grid grid-cols-3 gap-3">
               {([
-                { t: "STANDARD" as Tier, price: mode === "MIX_AND_MASTER" ? "$17.99" : "$11.99", perks: "4 versions + Spotify export" },
-                { t: "PREMIUM"  as Tier, price: mode === "MIX_AND_MASTER" ? "$17.99" : "$17.99", perks: "All platforms + reference matching" },
-                { t: "PRO"      as Tier, price: mode === "MIX_AND_MASTER" ? "$27.99" : "$27.99", perks: "Everything + 1 revision round" },
+                { t: "STANDARD" as Tier, price: "$7.99",  perks: "Stereo master, all exports" },
+                { t: "PREMIUM"  as Tier, price: "$14.99", perks: "All platforms + reference matching" },
+                { t: "PRO"      as Tier, price: "$24.99", perks: "Everything + 1 revision round" },
               ]).map(({ t, price, perks }) => (
                 <button
                   key={t}
@@ -754,7 +754,6 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>Export platforms</p>
             <div className="flex flex-wrap gap-2">
               {PLATFORMS
-                .filter((p) => tier !== "STANDARD" || ["spotify", "wav_master"].includes(p.id))
                 .map((p) => (
                   <button
                     key={p.id}
@@ -773,34 +772,31 @@ export function MasterWizardClient({ userId }: { userId: string }) {
                   </button>
                 ))}
             </div>
-            {tier === "STANDARD" && (
-              <p className="text-[11px] mt-2" style={{ color: "#555" }}>
-                Upgrade to Premium or Pro for all platform exports
-              </p>
-            )}
           </div>
 
-          {/* Natural language direction */}
-          <div>
-            <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>
-              Any specific direction? <span style={{ color: "#555" }}>(optional)</span>
-            </p>
-            <div className="rounded-xl border p-0.5 focus-within:border-[#D4A843] transition-colors" style={{ borderColor: "#2A2A2A" }}>
-              <div className="flex items-start gap-2 px-3 pt-3 pb-1">
-                <Zap size={14} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
-                <textarea
-                  placeholder="Make the vocals bright and forward, keep the bass tight…"
-                  value={nlPrompt}
-                  onChange={(e) => setNlPrompt(e.target.value)}
-                  rows={3}
-                  className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
-                />
-              </div>
-              <div className="px-3 pb-2 text-[10px]" style={{ color: "#555" }}>
-                Claude reads this and adjusts every processing decision accordingly
+          {/* Natural language direction — Premium/Pro only */}
+          {(tier === "PREMIUM" || tier === "PRO") && (
+            <div>
+              <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>
+                Any specific direction? <span style={{ color: "#555" }}>(optional)</span>
+              </p>
+              <div className="rounded-xl border p-0.5 focus-within:border-[#D4A843] transition-colors" style={{ borderColor: "#2A2A2A" }}>
+                <div className="flex items-start gap-2 px-3 pt-3 pb-1">
+                  <Zap size={14} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
+                  <textarea
+                    placeholder="Make the vocals bright and forward, keep the bass tight…"
+                    value={nlPrompt}
+                    onChange={(e) => setNlPrompt(e.target.value)}
+                    rows={3}
+                    className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
+                  />
+                </div>
+                <div className="px-3 pb-2 text-[10px]" style={{ color: "#555" }}>
+                  Claude reads this and adjusts every processing decision accordingly
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {error && (
             <p className="text-sm rounded-xl px-3 py-2.5 bg-red-400/10 border border-red-400/20 text-red-400">
