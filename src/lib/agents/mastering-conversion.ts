@@ -429,7 +429,7 @@ async function sendMasteringEmail2(job: {
         <tbody>
           <tr>
             <td style="color:#ccc;font-size:13px;padding:10px 0;border-bottom:1px solid #1a1a1a;">AI Mastering</td>
-            <td style="text-align:center;color:#ccc;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">$11.99/track</td>
+            <td style="text-align:center;color:#ccc;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;">From $7.99/track</td>
             <td style="text-align:center;color:#D4A843;font-size:13px;padding:10px 12px;border-bottom:1px solid #1a1a1a;font-weight:700;">Up to 50% off</td>
           </tr>
           <tr>
@@ -657,8 +657,8 @@ async function sendMasteringAbandonedCartEmail(job: {
         Your session is still here — pick up where you left off.
       </p>
       <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px;">
-        Upload your track, get a free 30-second AI preview, then decide if you want the full master.
-        Four versions ready in minutes. No account needed.
+        Upload your track and get four professionally mastered versions ready in minutes — Clean, Warm, Punch, and Loud.
+        Compare them all and pick your favorite. No account needed.
       </p>
       <p style="margin:0 0 24px;">
         <a href="${resumeUrl}" style="background:#E85D4A;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:15px;">
@@ -666,7 +666,7 @@ async function sendMasteringAbandonedCartEmail(job: {
         </a>
       </p>
       <p style="color:#555;font-size:12px;margin:0;">
-        Full masters from $11.99 · 4 versions · platform-ready exports · ready in minutes.
+        Full masters from $7.99 · 4 versions · all platform exports · ready in minutes.
       </p>
     `,
     context: "MASTERING_ABANDONED_CART",

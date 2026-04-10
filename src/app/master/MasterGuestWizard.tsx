@@ -7,7 +7,7 @@
  * - Captures guest email before processing (cookie + DB)
  * - Redirects subscribers who log in mid-flow
  * - Shows upgrade upsell after job completion
- * - Free 30-second preview before payment prompt
+ * - Pay first, then all 4 mastered versions generated for comparison
  */
 
 import { useState, useRef, useEffect } from "react";
