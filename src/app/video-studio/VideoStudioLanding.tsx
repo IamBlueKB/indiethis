@@ -216,11 +216,17 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
       {/* ── Hero ── */}
       <section ref={heroRef} className="relative overflow-hidden">
-        {/* Background gradient */}
+        {/* Background — DJ shot darkened */}
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(212,168,67,0.08) 0%, transparent 65%), linear-gradient(180deg, #0A0A0A 0%, #0D0D0D 50%, #0A0A0A 100%)" }} />
+          <img
+            src="/images/Demo Reel/Gemini_Generated_Image_479mpz479mpz479m.png"
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ opacity: 0.18 }}
+          />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.85) 60%, #0A0A0A 100%)" }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(212,168,67,0.06) 0%, transparent 65%)" }} />
         </div>
-        <SectionBg img="/images/video-studio/frame-intro.jpg" />
 
         {/* Hero content — two-column layout */}
         <div className="relative z-10 max-w-5xl mx-auto px-6 pt-20 pb-24">
