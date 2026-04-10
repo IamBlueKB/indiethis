@@ -7,22 +7,52 @@
  * "Get Started" navigates to ?start=1 which renders VideoStudioClient.
  */
 
-import { useState }               from "react";
-import { useRouter }              from "next/navigation";
+import { useState, useRef, useEffect }  from "react";
+import { useRouter }                    from "next/navigation";
+import { motion, AnimatePresence }       from "framer-motion";
 import {
   Film, Zap, Clapperboard, Download, ChevronRight,
   Check, Music2, Sparkles, Globe,
 } from "lucide-react";
-import DemoReel                   from "./DemoReel";
+import DemoReel                          from "./DemoReel";
+
+// ─── SectionBg ─────────────────────────────────────────────────────────────────
+
+/** Atmospheric blurred-image background for a page section */
+function SectionBg({ img }: { img: string }) {
+  return (
+    <div aria-hidden className="absolute inset-0 z-0 overflow-hidden" style={{ pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: "-40px",
+          backgroundImage: `url(${img})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: "blur(8px)",
+          opacity: 0.18,
+        }}
+      />
+      <div
+        className="absolute top-0 left-0 right-0 h-20"
+        style={{ background: "linear-gradient(to bottom, rgba(10,10,10,0.6) 0%, transparent 100%)", zIndex: 1 }}
+      />
+      <div
+        className="absolute bottom-0 left-0 right-0 h-20"
+        style={{ background: "linear-gradient(to top, rgba(10,10,10,0.6) 0%, transparent 100%)", zIndex: 1 }}
+      />
+    </div>
+  );
+}
 
 // ─── Feature row ───────────────────────────────────────────────────────────────
 
 function Feature({ icon: Icon, label, sub }: { icon: React.ElementType; label: string; sub: string }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
+    <div className="flex items-start gap-3 p-3 rounded-xl transition-colors hover:bg-white/[0.03]">
+      <div className="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center mt-0.5"
         style={{ backgroundColor: "rgba(212,168,67,0.12)" }}>
-        <Icon size={14} style={{ color: "#D4A843" }} />
+        <Icon size={16} style={{ color: "#D4A843" }} />
       </div>
       <div>
         <p className="text-sm font-semibold text-white">{label}</p>
@@ -35,7 +65,7 @@ function Feature({ icon: Icon, label, sub }: { icon: React.ElementType; label: s
 // ─── Mode card ─────────────────────────────────────────────────────────────────
 
 function ModeCard({
-  icon: Icon, title, description, price, features, accent, onStart,
+  icon: Icon, title, description, price, features, accent, onStart, cardStyle,
 }: {
   icon: React.ElementType;
   title:       string;
@@ -44,12 +74,13 @@ function ModeCard({
   features:    string[];
   accent:      string;
   onStart:     (mode: "QUICK" | "DIRECTOR") => void;
+  cardStyle?:  React.CSSProperties;
 }) {
   const mode = title.startsWith("Quick") ? "QUICK" : "DIRECTOR";
   return (
     <div
       className="rounded-2xl border p-6 flex flex-col gap-4 cursor-pointer transition-all hover:scale-[1.01]"
-      style={{ borderColor: "#222", backgroundColor: "#0F0F0F" }}
+      style={{ borderColor: "#222", backgroundColor: "#0F0F0F", ...cardStyle }}
     >
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -89,8 +120,21 @@ interface Props {
 }
 
 export default function VideoStudioLanding({ userId, userTier }: Props) {
-  const router       = useRouter();
+  const router = useRouter();
 
+  const [showStickyNav, setShowStickyNav] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setShowStickyNav(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    obs.observe(hero);
+    return () => obs.disconnect();
+  }, []);
 
   function handleStart(mode?: "QUICK" | "DIRECTOR") {
     const q = mode ? `?start=1&mode=${mode}` : "?start=1";
@@ -99,6 +143,44 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#F0F0F0" }}>
+
+      {/* ── Film grain overlay ── */}
+      <div
+        className="fixed inset-0 z-50 pointer-events-none opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+        }}
+      />
+
+      {/* ── Sticky nav (appears after hero scrolls out) ── */}
+      <AnimatePresence>
+        {showStickyNav && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-0 left-0 right-0 z-50 border-b px-6 h-14 flex items-center justify-between"
+            style={{ backgroundColor: "rgba(10,10,10,0.95)", borderColor: "#1A1A1A", backdropFilter: "blur(12px)" }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: "rgba(212,168,67,0.15)" }}>
+                <Film size={12} style={{ color: "#D4A843" }} />
+              </div>
+              <span className="text-sm font-bold text-white">Music Video Studio</span>
+            </div>
+            <button
+              onClick={() => handleStart()}
+              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl transition hover:opacity-90"
+              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+            >
+              Get Started <ChevronRight size={12} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 border-b px-6 h-16 flex items-center justify-between"
@@ -132,55 +214,96 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
       </header>
 
       {/* ── Hero ── */}
-      <section className="relative overflow-hidden">
-        {/* Background gradient (replace with a video src once demo reel is ready) */}
+      <section ref={heroRef} className="relative overflow-hidden">
+        {/* Background gradient */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(212,168,67,0.08) 0%, transparent 65%), linear-gradient(180deg, #0A0A0A 0%, #0D0D0D 50%, #0A0A0A 100%)" }} />
         </div>
+        <SectionBg img="/images/cover-art-examples/dark-gritty.png" />
 
-        {/* Hero content */}
-        <div className="relative z-10 max-w-4xl mx-auto px-6 pt-20 pb-24 text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-6"
-            style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}>
-            <Sparkles size={11} /> AI-Powered Music Video Creation
+        {/* Hero content — two-column layout */}
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pt-20 pb-24">
+          <div className="flex items-center gap-12">
+
+            {/* Left: text */}
+            <div className="flex-1 min-w-0">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-6"
+                style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843", border: "1px solid rgba(212,168,67,0.2)" }}>
+                <Sparkles size={11} /> AI-Powered Music Video Creation
+              </div>
+
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-5">
+                Turn Your Track Into a{" "}
+                <span style={{ color: "#D4A843" }}>Music Video</span>
+              </h1>
+
+              <p className="text-lg sm:text-xl mb-3" style={{ color: "#aaa", lineHeight: 1.6 }}>
+                Upload your song. Choose your style. Get a full cinematic music video — ready to post.
+              </p>
+
+              <p className="text-sm mb-4 font-semibold" style={{ color: "#D4A843" }}>
+                No account needed. Pay once. Download + keep forever.
+              </p>
+
+              {/* Stats row */}
+              <div className="flex items-center gap-6 py-2 mb-6">
+                {[
+                  { value: "12+",    label: "Visual Styles" },
+                  { value: "~15min", label: "Generation Time" },
+                  { value: "3",      label: "Aspect Ratios" },
+                  { value: "4–7",    label: "Scenes Per Video" },
+                ].map((s) => (
+                  <div key={s.label}>
+                    <div className="text-lg font-black" style={{ color: "#D4A843" }}>{s.value}</div>
+                    <div className="text-[10px]" style={{ color: "#666" }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-col sm:flex-row items-start gap-3">
+                <button
+                  onClick={() => handleStart("QUICK")}
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-black transition-all hover:scale-105"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  <Zap size={16} /> Start Quick Mode — from $14.99
+                </button>
+                <button
+                  onClick={() => handleStart("DIRECTOR")}
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-bold transition-all border"
+                  style={{ borderColor: "#333", color: "#ccc", backgroundColor: "rgba(255,255,255,0.04)" }}
+                >
+                  <Clapperboard size={16} /> Director Mode — from $24.99
+                </button>
+              </div>
+
+              {/* Trust line */}
+              <p className="text-xs mt-6" style={{ color: "#555" }}>
+                Results in ~15 minutes &nbsp;·&nbsp; Download MP4
+              </p>
+            </div>
+
+            {/* Right: staggered image grid */}
+            <div className="relative h-80 sm:h-96 hidden sm:block shrink-0 w-64 sm:w-80">
+              {[
+                { img: "/images/cover-art-examples/hiphop-trap.png",       rotate: "-rotate-3", top: "top-0 left-0",   z: "z-10" },
+                { img: "/images/cover-art-examples/electronic-edm.png",    rotate: "rotate-2",  top: "top-4 right-0",  z: "z-20" },
+                { img: "/images/cover-art-examples/rnb-soul.png",          rotate: "-rotate-1", top: "top-36 left-4",  z: "z-30" },
+                { img: "/images/cover-art-examples/indie-alternative.png", rotate: "rotate-3",  top: "top-40 right-4", z: "z-10" },
+              ].map((f, i) => (
+                <div
+                  key={i}
+                  className={`absolute w-32 h-32 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-white/10 ${f.rotate} ${f.top} ${f.z}`}
+                  style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
+                >
+                  <img src={f.img} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+
           </div>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-5">
-            Turn Your Track Into a{" "}
-            <span style={{ color: "#D4A843" }}>Music Video</span>
-          </h1>
-
-          <p className="text-lg sm:text-xl max-w-2xl mx-auto mb-3" style={{ color: "#aaa", lineHeight: 1.6 }}>
-            Upload your song. Choose your style. Get a full cinematic music video — ready to post.
-          </p>
-
-          <p className="text-sm mb-10 font-semibold" style={{ color: "#D4A843" }}>
-            No account needed. Pay once. Download + keep forever.
-          </p>
-
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => handleStart("QUICK")}
-              className="flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-black transition-all hover:scale-105"
-              style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
-            >
-              <Zap size={16} /> Start Quick Mode — from $14.99
-            </button>
-            <button
-              onClick={() => handleStart("DIRECTOR")}
-              className="flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-bold transition-all border"
-              style={{ borderColor: "#333", color: "#ccc", backgroundColor: "rgba(255,255,255,0.04)" }}
-            >
-              <Clapperboard size={16} /> Director Mode — from $24.99
-            </button>
-          </div>
-
-          {/* Trust line */}
-          <p className="text-xs mt-6" style={{ color: "#555" }}>
-            Results in ~15 minutes &nbsp;·&nbsp; Download MP4
-          </p>
         </div>
       </section>
 
@@ -190,45 +313,51 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
       </section>
 
       {/* ── Mode cards ── */}
-      <section className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-2xl font-black text-white text-center mb-8">Choose Your Mode</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <ModeCard
-            icon={Zap}
-            title="Quick Mode"
-            description="Upload your track and our AI analyzes the BPM, energy, and song structure to automatically generate a full music video in minutes."
-            price="$14.99"
-            accent="#D4A843"
-            features={[
-              "AI selects the best visual style",
-              "Beat-synced scene transitions",
-              "4–7 generated scenes",
-              "16:9, 9:16, or 1:1 format",
-              "Download MP4 instantly",
-            ]}
-            onStart={handleStart}
-          />
-          <ModeCard
-            icon={Clapperboard}
-            title="Director Mode"
-            description="Collaborate with our AI director in a creative conversation. Build a shot list, approve the creative brief, and get a bespoke video that tells your story."
-            price="$24.99"
-            accent="#E85D4A"
-            features={[
-              "AI creative brief from your vision",
-              "Custom shot list with scene prompts",
-              "Per-scene model selection",
-              "One free scene regeneration",
-              "Director notes preserved",
-            ]}
-            onStart={handleStart}
-          />
+      <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
+        <SectionBg img="/images/cover-art-examples/monochrome-film.png" />
+        <div className="relative z-10">
+          <h2 className="text-2xl font-black text-white text-center mb-8">Choose Your Mode</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <ModeCard
+              icon={Zap}
+              title="Quick Mode"
+              description="Upload your track and our AI analyzes the BPM, energy, and song structure to automatically generate a full music video in minutes."
+              price="$14.99"
+              accent="#D4A843"
+              cardStyle={{ background: "linear-gradient(135deg, #111 0%, #0D0D0D 100%)", border: "1px solid rgba(255,255,255,0.08)" }}
+              features={[
+                "AI selects the best visual style",
+                "Beat-synced scene transitions",
+                "4–7 generated scenes",
+                "16:9, 9:16, or 1:1 format",
+                "Download MP4 instantly",
+              ]}
+              onStart={handleStart}
+            />
+            <ModeCard
+              icon={Clapperboard}
+              title="Director Mode"
+              description="Collaborate with our AI director in a creative conversation. Build a shot list, approve the creative brief, and get a bespoke video that tells your story."
+              price="$24.99"
+              accent="#E85D4A"
+              cardStyle={{ background: "linear-gradient(135deg, #1a1500 0%, #0F0F0F 60%)", border: "1px solid rgba(212,168,67,0.3)" }}
+              features={[
+                "AI creative brief from your vision",
+                "Custom shot list with scene prompts",
+                "Per-scene model selection",
+                "One free scene regeneration",
+                "Director notes preserved",
+              ]}
+              onStart={handleStart}
+            />
+          </div>
         </div>
       </section>
 
       {/* ── Feature grid ── */}
-      <section className="max-w-4xl mx-auto px-6 pb-16">
-        <div className="rounded-2xl border p-8" style={{ borderColor: "#1E1E1E", backgroundColor: "#0F0F0F" }}>
+      <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
+        <SectionBg img="/images/cover-art-examples/neon-futuristic.png" />
+        <div className="relative z-10">
           <h2 className="text-xl font-black text-white mb-8 text-center">Everything you need, nothing you don&rsquo;t</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             <Feature icon={Music2}     label="Tracks any genre"         sub="Electronic, hip-hop, indie, pop — the AI adapts to your sound." />
@@ -242,34 +371,37 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
       </section>
 
       {/* ── Pricing callout ── */}
-      <section className="max-w-4xl mx-auto px-6 pb-16">
-        <div className="rounded-2xl border px-8 py-8 text-center"
-          style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.04)" }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#D4A843" }}>
-            Already on IndieThis?
-          </p>
-          <h2 className="text-xl font-black text-white mb-2">Launch subscribers get 1 video/month included</h2>
-          <p className="text-sm mb-6" style={{ color: "#888" }}>
-            Plus cover art, mastering, press kits, merch store, and an artist page — all for $19/month.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            {userId ? (
-              <button onClick={() => handleStart()} className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold"
-                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                Create Your Video <ChevronRight size={14} />
-              </button>
-            ) : (
-              <>
-                <a href="/pricing" className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold"
+      <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
+        <SectionBg img="/images/cover-art-examples/smoke-shadow.png" />
+        <div className="relative z-10">
+          <div className="rounded-2xl border px-8 py-8 text-center"
+            style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.04)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#D4A843" }}>
+              Already on IndieThis?
+            </p>
+            <h2 className="text-xl font-black text-white mb-2">Launch subscribers get 1 video/month included</h2>
+            <p className="text-sm mb-6" style={{ color: "#888" }}>
+              Plus cover art, mastering, press kits, merch store, and an artist page — all for $19/month.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {userId ? (
+                <button onClick={() => handleStart()} className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold"
                   style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                  View Plans <ChevronRight size={14} />
-                </a>
-                <button onClick={() => handleStart()} className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold border"
-                  style={{ borderColor: "#333", color: "#888" }}>
-                  Continue without account
+                  Create Your Video <ChevronRight size={14} />
                 </button>
-              </>
-            )}
+              ) : (
+                <>
+                  <a href="/pricing" className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold"
+                    style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
+                    View Plans <ChevronRight size={14} />
+                  </a>
+                  <button onClick={() => handleStart()} className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold border"
+                    style={{ borderColor: "#333", color: "#888" }}>
+                    Continue without account
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </section>
