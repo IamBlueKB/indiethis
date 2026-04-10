@@ -92,7 +92,7 @@ export default function DemoReel() {
       <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
         <video
           ref={videoRef}
-          src="/videos/video-studio-demo.mp4"
+          src={undefined}
           playsInline
           muted={muted}
           preload="metadata"

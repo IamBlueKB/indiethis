@@ -113,6 +113,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
   const [tracksLoading,   setTracksLoading] = useState(false);
   const [audioUploading,  setAudioUploading] = useState(false);
   const [uploadError,     setUploadError]   = useState<string | null>(null);
+  const [dragOver,        setDragOver]       = useState(false);
 
   // Step 2 — style + format
   const [styles,       setStyles]       = useState<VideoStyle[]>([]);
@@ -345,7 +346,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
             <div>
               <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>Director Mode</p>
               <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-                After uploading your track, Claude will collaborate with you to craft a custom vision — creative brief, shot list, scene-by-scene direction. The most cinematic result possible.
+                After uploading your track, our AI director will collaborate with you to craft a custom vision — creative brief, shot list, scene-by-scene direction. The most cinematic result possible.
               </p>
             </div>
           </div>
@@ -392,7 +393,10 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               ) : (
                 <label
                   className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-12 cursor-pointer transition-colors"
-                  style={{ borderColor: audioUploading ? "#D4A843" : "#2A2A2A" }}
+                  style={{ borderColor: (audioUploading || dragOver) ? "#D4A843" : "#2A2A2A", backgroundColor: dragOver ? "rgba(212,168,67,0.04)" : undefined }}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f && f.type.startsWith("audio/")) handleAudioFile(f); }}
                 >
                   {audioUploading ? (
                     <>

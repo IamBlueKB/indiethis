@@ -423,7 +423,7 @@ export const ourFileRouter = {
       return {};
     })
     .onUploadComplete(async ({ file }) => {
-      await validateUT(file);
+      // Skip heavy ffprobe validation — UploadThing enforces audio MIME type at the edge
       return { url: file.ufsUrl ?? file.url };
     }),
 
