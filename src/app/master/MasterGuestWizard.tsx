@@ -149,7 +149,7 @@ export function MasterGuestWizard({
   // ── Fetch trending tracks for post-delivery section ───────────────────────
   useEffect(() => {
     if (step !== "export") return;
-    fetch("/api/explore/tracks?limit=4")
+    fetch("/api/explore/trending?limit=4")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (Array.isArray(d?.tracks)) setTrendingTracks(d.tracks.slice(0, 4)); })
       .catch(() => {});
@@ -441,8 +441,8 @@ export function MasterGuestWizard({
 
               <a
                 href="/explore"
-                className="block text-center text-xs hover:text-white transition-colors"
-                style={{ color: "#555" }}
+                className="block text-center hover:text-white transition-colors"
+                style={{ color: "#888", fontSize: 13 }}
               >
                 Just want to listen? Explore music →
               </a>

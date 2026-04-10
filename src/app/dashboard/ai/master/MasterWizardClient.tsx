@@ -6,6 +6,7 @@ import {
   Upload, SlidersHorizontal, Activity, Loader2, ChevronRight, ChevronLeft,
   Check, Download, Play, Pause, RotateCcw, Info, Zap, Sun, Volume2,
   CheckCircle2, AlertTriangle, Sparkles, ChevronDown, X, Archive,
+  ExternalLink, Music,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumWizardClient } from "./AlbumWizardClient";
@@ -56,6 +57,14 @@ interface JobResult {
   previewUrl:      string;
   selectedVersion: string | null;
   analysisData?:   { bpm?: number; key?: string };
+}
+
+interface TrendingTrack {
+  id:         string;
+  title:      string;
+  artistName: string;
+  coverUrl:   string | null;
+  slug:       string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -170,6 +179,7 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   const [revNote,      setRevNote]     = useState("");
   const [revSubmitting, setRevSubmitting] = useState(false);
   const [setMasterLoading, setSetMasterLoading] = useState(false);
+  const [trendingTracks,   setTrendingTracks]   = useState<TrendingTrack[]>([]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -208,6 +218,16 @@ export function MasterWizardClient({ userId }: { userId: string }) {
 
   // ── Cleanup audio on unmount ────────────────────────────────────────────────
   useEffect(() => () => { audioRef.current?.pause(); }, []);
+
+  // ── Trending tracks (for export screen discover section) ────────────────────
+  useEffect(() => {
+    fetch("/api/explore/trending?limit=4")
+      .then((r) => r.json())
+      .then((d: { tracks?: TrendingTrack[] }) => {
+        if (Array.isArray(d?.tracks)) setTrendingTracks(d.tracks.slice(0, 4));
+      })
+      .catch(() => {/* non-critical */});
+  }, []);
 
   // ── Upload helper ───────────────────────────────────────────────────────────
   async function uploadFile(file: File): Promise<string> {
@@ -1138,6 +1158,52 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           >
             Master another track
           </button>
+
+          {/* Discover more music */}
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">Discover more music on IndieThis</p>
+              <a
+                href="/explore"
+                className="flex items-center gap-1 text-xs hover:text-white transition-colors"
+                style={{ color: "#D4A843" }}
+              >
+                Explore all <ExternalLink size={11} />
+              </a>
+            </div>
+            {trendingTracks.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+                {trendingTracks.map((t) => (
+                  <a
+                    key={t.id}
+                    href={`/${t.slug}`}
+                    className="shrink-0 w-36 rounded-xl border border-[#2A2A2A] overflow-hidden hover:border-[#444] transition-colors"
+                    style={{ backgroundColor: "#111" }}
+                  >
+                    <div className="w-full h-28 bg-[#1A1A1A] flex items-center justify-center overflow-hidden">
+                      {t.coverUrl ? (
+                        <img src={t.coverUrl} alt={t.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <Music size={20} style={{ color: "#333" }} />
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="text-xs font-semibold truncate">{t.title}</p>
+                      <p className="text-[10px] truncate mt-0.5" style={{ color: "#777" }}>{t.artistName}</p>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <a
+                href="/explore"
+                className="flex items-center justify-center gap-2 p-4 rounded-xl border border-[#2A2A2A] text-sm hover:border-[#444] transition-colors"
+                style={{ color: "#777" }}
+              >
+                <Music size={15} /> Browse independent artists →
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>
