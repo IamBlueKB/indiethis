@@ -15,6 +15,7 @@ import {
   Check, Music2, Sparkles, Globe,
 } from "lucide-react";
 import DemoReel                          from "./DemoReel";
+import HeroCanvas                        from "./HeroCanvas";
 
 // ─── SectionBg ─────────────────────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(212,168,67,0.08) 0%, transparent 65%), linear-gradient(180deg, #0A0A0A 0%, #0D0D0D 50%, #0A0A0A 100%)" }} />
         </div>
-        <SectionBg img="/images/cover-art-examples/dark-gritty.png" />
+        <SectionBg img="/images/video-studio/frame-intro.jpg" />
 
         {/* Hero content — two-column layout */}
         <div className="relative z-10 max-w-5xl mx-auto px-6 pt-20 pb-24">
@@ -285,23 +286,8 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
               </p>
             </div>
 
-            {/* Right: staggered image grid */}
-            <div className="relative h-80 sm:h-96 hidden sm:block shrink-0 w-64 sm:w-80">
-              {[
-                { img: "/images/cover-art-examples/hiphop-trap.png",       rotate: "-rotate-3", top: "top-0 left-0",   z: "z-10" },
-                { img: "/images/cover-art-examples/electronic-edm.png",    rotate: "rotate-2",  top: "top-4 right-0",  z: "z-20" },
-                { img: "/images/cover-art-examples/rnb-soul.png",          rotate: "-rotate-1", top: "top-36 left-4",  z: "z-30" },
-                { img: "/images/cover-art-examples/indie-alternative.png", rotate: "rotate-3",  top: "top-40 right-4", z: "z-10" },
-              ].map((f, i) => (
-                <div
-                  key={i}
-                  className={`absolute w-32 h-32 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-white/10 ${f.rotate} ${f.top} ${f.z}`}
-                  style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
-                >
-                  <img src={f.img} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
+            {/* Right: live canvas preview */}
+            <HeroCanvas />
 
           </div>
         </div>
@@ -314,7 +300,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
       {/* ── Mode cards ── */}
       <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
-        <SectionBg img="/images/cover-art-examples/monochrome-film.png" />
+        <SectionBg img="/images/video-studio/frame-verse.jpg" />
         <div className="relative z-10">
           <h2 className="text-2xl font-black text-white text-center mb-8">Choose Your Mode</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -356,7 +342,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
       {/* ── Feature grid ── */}
       <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
-        <SectionBg img="/images/cover-art-examples/neon-futuristic.png" />
+        <SectionBg img="/images/video-studio/frame-chorus.jpg" />
         <div className="relative z-10">
           <h2 className="text-xl font-black text-white mb-8 text-center">Everything you need, nothing you don&rsquo;t</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -372,7 +358,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
 
       {/* ── Pricing callout ── */}
       <section className="relative overflow-hidden max-w-4xl mx-auto px-6 pb-16">
-        <SectionBg img="/images/cover-art-examples/smoke-shadow.png" />
+        <SectionBg img="/images/video-studio/frame-outro.jpg" />
         <div className="relative z-10">
           <div className="rounded-2xl border px-8 py-8 text-center"
             style={{ borderColor: "rgba(212,168,67,0.2)", backgroundColor: "rgba(212,168,67,0.04)" }}>
