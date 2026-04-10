@@ -81,7 +81,7 @@ const HOW_STEPS = [
   {
     n: "02",
     title: "Choose Your Style",
-    body: "Pick from 15 AI art styles — Smoke & Shadow, Neon Futuristic, Watercolor Dreamy, Street Photography, and more. Preview every style before you pay.",
+    body: "Pick from 15 AI art styles — Smoke & Shadow, Neon Futuristic, Watercolor Dreamy, Street Photography, and more. Each style is crafted for a different sound and aesthetic.",
   },
   {
     n: "03",
@@ -244,6 +244,50 @@ function MorphLoop() {
   );
 }
 
+/** Atmospheric blur background for a section */
+function SectionBg({ img, gradients }: { img: string; gradients: [string, string] }) {
+  return (
+    <div aria-hidden className="absolute inset-0 z-0" style={{ pointerEvents: "none" }}>
+      {/* Background image — low blur keeps it faintly recognizable */}
+      <div
+        style={{
+          position: "absolute",
+          inset: "-40px",
+          backgroundImage: `url(${img})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: "blur(8px)",
+          opacity: 0.18,
+        }}
+      />
+      {/* Radial gradient mesh — reinforces the section's color identity */}
+      <div style={{ position: "absolute", inset: 0 }}>
+        <div style={{
+          position: "absolute", width: "70%", height: "70%",
+          top: "-15%", left: "-10%",
+          background: `radial-gradient(circle, ${gradients[0]} 0%, transparent 70%)`,
+          filter: "blur(50px)",
+        }} />
+        <div style={{
+          position: "absolute", width: "60%", height: "60%",
+          bottom: "-15%", right: "-10%",
+          background: `radial-gradient(circle, ${gradients[1]} 0%, transparent 70%)`,
+          filter: "blur(50px)",
+        }} />
+      </div>
+      {/* Section edge fades — dissolve cleanly into adjacent sections */}
+      <div
+        className="absolute top-0 left-0 right-0 h-40"
+        style={{ background: "linear-gradient(to bottom, rgba(10,10,10,1) 0%, rgba(10,10,10,0.5) 50%, transparent 100%)", zIndex: 1 }}
+      />
+      <div
+        className="absolute bottom-0 left-0 right-0 h-40"
+        style={{ background: "linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(10,10,10,0.5) 50%, transparent 100%)", zIndex: 1 }}
+      />
+    </div>
+  );
+}
+
 /** Sticky nav that appears after scrolling past hero */
 function StickyNav({ onStart }: { onStart: () => void }) {
   const [show, setShow] = useState(false);
@@ -301,6 +345,14 @@ export default function CoverArtLanding({
 
   return (
     <div className="min-h-screen" style={{ background: "#0A0A0A", color: "#fff" }}>
+      {/* Film grain overlay — fixed, above everything, pointer-events-none */}
+      <div
+        className="fixed inset-0 z-50 pointer-events-none opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+        }}
+      />
       <StickyNav onStart={handleStart} />
 
       {/* ── ACT 1: HERO ─────────────────────────────────────────────────────── */}
@@ -309,21 +361,7 @@ export default function CoverArtLanding({
         className="relative overflow-hidden"
         style={{ paddingTop: 80, paddingBottom: 80 }}
       >
-        {/* Gradient mesh background */}
-        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-          <div style={{
-            position: "absolute", width: "60%", height: "60%",
-            top: "-10%", left: "-10%",
-            background: "radial-gradient(circle, rgba(212,168,67,0.12) 0%, transparent 70%)",
-            filter: "blur(80px)",
-          }} />
-          <div style={{
-            position: "absolute", width: "50%", height: "50%",
-            bottom: "-5%", right: "-5%",
-            background: "radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)",
-            filter: "blur(80px)",
-          }} />
-        </div>
+        <SectionBg img={IMG.heroCinematic} gradients={["rgba(212,168,67,0.14)", "rgba(196,124,27,0.10)"]} />
 
         <div className="relative z-10 max-w-6xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
           {/* Left: headline */}
@@ -419,31 +457,9 @@ export default function CoverArtLanding({
       </section>
 
       {/* ── ACT 2: GALLERY ──────────────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
-        {/* Blur art texture backgrounds */}
-        <div className="relative">
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {[IMG.vibrant, IMG.psychedelic, IMG.smoke, IMG.gothic].map((src, i) => (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  width: 300,
-                  height: 300,
-                  top: i < 2 ? "-10%" : "60%",
-                  left: i % 2 === 0 ? "-5%" : "75%",
-                  backgroundImage: `url(${src})`,
-                  backgroundSize: "cover",
-                  opacity: 0.07,
-                  filter: "blur(70px)",
-                  transform: "scale(1.1)",
-                  borderRadius: "50%",
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="relative z-10 max-w-6xl mx-auto px-6">
+      <section className="relative overflow-hidden" style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        <SectionBg img={IMG.psychedelic} gradients={["rgba(124,58,237,0.13)", "rgba(13,148,136,0.11)"]} />
+        <div className="relative z-10 max-w-6xl mx-auto px-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -500,13 +516,13 @@ export default function CoverArtLanding({
                 Generate Your Cover Art <ChevronRight size={16} />
               </button>
             </motion.div>
-          </div>
         </div>
       </section>
 
       {/* ── ACT 3: TRANSFORMATION ───────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0", background: "#0D0D0D" }}>
-        <div className="max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+      <section className="relative overflow-hidden" style={{ padding: "80px 0" }}>
+        <SectionBg img={IMG.styled} gradients={["rgba(180,83,9,0.14)", "rgba(217,119,6,0.12)"]} />
+        <div className="relative z-10 max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
           {/* Slider */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
@@ -561,8 +577,9 @@ export default function CoverArtLanding({
       </section>
 
       {/* ── ACT 4: HOW IT WORKS ─────────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
-        <div className="max-w-5xl mx-auto px-6">
+      <section className="relative overflow-hidden" style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        <SectionBg img={IMG.gothic} gradients={["rgba(8,145,178,0.13)", "rgba(6,182,212,0.10)"]} />
+        <div className="relative z-10 max-w-5xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -583,7 +600,7 @@ export default function CoverArtLanding({
                 viewport={{ once: false, amount: 0.3 }}
                 transition={{ duration: 0.55, delay: i * 0.1 }}
                 className="relative rounded-2xl p-6"
-                style={{ background: "#111", border: "1px solid rgba(255,255,255,0.06)" }}
+                style={{ background: "#111", border: "1px solid rgba(255,255,255,0.10)" }}
               >
                 <div
                   className="font-black text-5xl mb-4 leading-none"
@@ -616,8 +633,9 @@ export default function CoverArtLanding({
       </section>
 
       {/* ── ACT 5: PRICING ──────────────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0", background: "#0D0D0D" }}>
-        <div className="max-w-4xl mx-auto px-6">
+      <section className="relative overflow-hidden" style={{ padding: "80px 0" }}>
+        <SectionBg img={IMG.heroChrome} gradients={["rgba(212,168,67,0.15)", "rgba(180,83,9,0.12)"]} />
+        <div className="relative z-10 max-w-4xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -774,8 +792,9 @@ export default function CoverArtLanding({
       </section>
 
       {/* ── ACT 6: EXIT ─────────────────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0", background: "#0A0A0A" }}>
-        <div className="max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+      <section className="relative overflow-hidden" style={{ padding: "80px 0", background: "#0A0A0A" }}>
+        <SectionBg img={IMG.watercolor} gradients={["rgba(224,123,110,0.13)", "rgba(124,58,237,0.12)"]} />
+        <div className="relative z-10 max-w-5xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
           {/* Morph loop */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -794,14 +813,12 @@ export default function CoverArtLanding({
             transition={{ duration: 0.7, delay: 0.15 }}
           >
             <h2 className="font-black leading-none mb-6" style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}>
-              Your next release
+              Your music deserves
               <br />
-              deserves art
-              <br />
-              <span style={{ color: GOLD }}>this good.</span>
+              <span style={{ color: GOLD }}>to be seen.</span>
             </h2>
             <p className="mb-8 text-lg" style={{ color: "#888", lineHeight: 1.6 }}>
-              Your music deserves to be seen. Professional cover art
+              Your next release deserves art this good. Professional cover art
               in minutes — no agencies, no designers, no big budgets.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -823,7 +840,7 @@ export default function CoverArtLanding({
             </div>
 
             {/* Trust line */}
-            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: "#555" }}>
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: "#a1a1aa" }}>
               {["No account required", "Instant download", "Album-ready format", "DSP-ready files"].map((t, i) => (
                 <span key={i} className="flex items-center gap-1.5">
                   <Check size={10} style={{ color: GOLD }} />
