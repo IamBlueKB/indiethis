@@ -96,14 +96,17 @@ export function MasterGuestWizard({
   const [platforms,  setPlatforms]  = useState(["spotify", "apple_music", "youtube", "wav_master"]);
   const [nlPrompt,   setNlPrompt]   = useState("");
 
-  const [stereoFile, setStereoFile] = useState<File | null>(null);
-  const [stems,      setStems]      = useState<{ file: File; name: string; type?: string }[]>([]);
+  const [stereoFile,    setStereoFile]    = useState<File | null>(null);
+  const [stems,         setStems]         = useState<{ file: File; name: string; type?: string }[]>([]);
+  const [uploadedRefUrl, setUploadedRefUrl] = useState<string | null>(null);
+  const [refFileName,   setRefFileName]   = useState<string | null>(null);
+  const [refUploading,  setRefUploading]  = useState(false);
 
   const [jobId,      setJobId]      = useState<string | null>(null);
   const [jobStatus,  setJobStatus]  = useState("PENDING");
   const [result,     setResult]     = useState<JobResult | null>(null);
   const [selected,   setSelected]   = useState<VersionName | null>(null);
-  const [playing,    setPlaying]    = useState<VersionName | null>(null);
+  const [playing,    setPlaying]    = useState<VersionName | "reference" | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [uploading,  setUploading]  = useState(false);
 
@@ -229,6 +232,8 @@ export function MasterGuestWizard({
           stems:                 uploadedStems,
           mood,
           platforms,
+          referenceTrackUrl:     uploadedRefUrl ?? undefined,
+          referenceFileName:     refFileName ?? undefined,
           naturalLanguagePrompt: nlPrompt.trim() || undefined,
           stripePaymentId:       paymentIntentId,
           creditsUsed:           creditsUsed ?? false,
@@ -554,6 +559,65 @@ export function MasterGuestWizard({
               </div>
             </div>
 
+            {/* Reference track — Premium/Pro only */}
+            {(tier === "PREMIUM" || tier === "PRO") && (
+              <div>
+                <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>
+                  Reference track <span style={{ color: "#555" }}>(optional — match loudness &amp; tone)</span>
+                </p>
+                {uploadedRefUrl ? (
+                  <div className="flex items-center justify-between rounded-xl border border-[#2A2A2A] px-4 py-3">
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>
+                        <Check size={12} className="inline mr-1.5" />
+                        {refFileName ?? "Reference uploaded"}
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>
+                        Matchering will align your master to this track
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setUploadedRefUrl(null); setRefFileName(null); }}
+                      className="text-[10px] px-2 py-1 rounded-lg border border-[#2A2A2A] hover:border-[#444] transition-colors"
+                      style={{ color: "#666" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label className={cn(
+                    "flex items-center gap-3 rounded-xl border border-[#2A2A2A] px-4 py-3 cursor-pointer",
+                    "hover:border-[#444] transition-colors",
+                    refUploading && "opacity-60 pointer-events-none"
+                  )}>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.flac,.aiff,.aif"
+                      className="sr-only"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setRefUploading(true);
+                        try {
+                          const url = await uploadFile(file);
+                          setUploadedRefUrl(url);
+                          setRefFileName(file.name);
+                        } catch {
+                          setError("Failed to upload reference track.");
+                        } finally {
+                          setRefUploading(false);
+                        }
+                      }}
+                    />
+                    {refUploading
+                      ? <><Loader2 size={14} className="animate-spin shrink-0" style={{ color: "#D4A843" }} /><span className="text-xs" style={{ color: "#777" }}>Uploading…</span></>
+                      : <><Upload size={14} className="shrink-0" style={{ color: "#555" }} /><span className="text-xs" style={{ color: "#777" }}>Drop a commercial reference track (WAV or MP3)</span></>
+                    }
+                  </label>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-3">
@@ -599,6 +663,39 @@ export function MasterGuestWizard({
                 AI recommends: <span style={{ color: "#D4A843" }}>{result.versions[0]?.name}</span>
               </p>
             </div>
+
+            {/* Compare to reference */}
+            {uploadedRefUrl && (
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-[#2A2A2A]">
+                <button
+                  onClick={() => {
+                    if (playing === "reference") {
+                      audioRef.current?.pause();
+                      setPlaying(null);
+                    } else {
+                      audioRef.current?.pause();
+                      audioRef.current = new Audio(uploadedRefUrl);
+                      audioRef.current.play();
+                      audioRef.current.onended = () => setPlaying(null);
+                      setPlaying("reference");
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: "#1A1A1A", border: "1px solid #333" }}
+                >
+                  {playing === "reference"
+                    ? <Pause size={12} style={{ color: "#D4A843" }} />
+                    : <Play  size={12} style={{ color: "#D4A843" }} />
+                  }
+                </button>
+                <div>
+                  <p className="text-xs font-semibold">Reference track</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "#777" }}>
+                    {refFileName ?? "Your reference"} — compare loudness &amp; tone
+                  </p>
+                </div>
+              </div>
+            )}
 
             {result.versions.map((v) => (
               <div

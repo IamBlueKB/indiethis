@@ -3023,6 +3023,8 @@ model MasteringJob {
   genre                   String?
   platforms               Json?     // target platform array
   referenceTrackUrl       String?
+  referenceFileName       String?
+  usedReference           Boolean   @default(false)
 
   // Processing
   status                  String    @default("PENDING")

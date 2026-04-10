@@ -14,6 +14,7 @@
  *   mood?          "CLEAN" | "WARM" | "PUNCH" | "LOUD"
  *   platforms?     string[]
  *   referenceTrackUrl?
+ *   referenceFileName?
  *   naturalLanguagePrompt?
  *   stripePaymentId
  *   guestEmail?    (non-subscribers)
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       mood?:                 string;
       platforms?:            string[];
       referenceTrackUrl?:    string;
+      referenceFileName?:    string;
       naturalLanguagePrompt?: string;
       stripePaymentId?:      string;
       creditsUsed?:          boolean;
@@ -69,6 +71,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Reference track is Premium/Pro only
+    if (body.referenceTrackUrl && body.tier === "STANDARD") {
+      return NextResponse.json(
+        { error: "Reference track matching requires Premium or Pro tier." },
+        { status: 400 },
+      );
+    }
+
     // Validate required fields per mode
     if (body.mode === "MASTER_ONLY" && !body.inputFileUrl) {
       return NextResponse.json({ error: "inputFileUrl required for MASTER_ONLY." }, { status: 400 });
@@ -95,6 +105,8 @@ export async function POST(req: NextRequest) {
         mood:                body.mood         ?? "CLEAN",
         platforms:           body.platforms    ?? ["spotify", "apple_music", "youtube", "wav_master"],
         referenceTrackUrl:   body.referenceTrackUrl ?? null,
+        referenceFileName:   body.referenceFileName ?? null,
+        usedReference:       !!body.referenceTrackUrl,
         mixParameters:       body.naturalLanguagePrompt
                                ? { naturalLanguagePrompt: body.naturalLanguagePrompt } as any
                                : undefined,

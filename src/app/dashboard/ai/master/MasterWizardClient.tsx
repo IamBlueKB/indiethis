@@ -161,7 +161,6 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   const [genre,        setGenre]       = useState<string>("");
   const [platforms,    setPlatforms]   = useState<string[]>(["spotify", "apple_music", "youtube", "wav_master"]);
   const [nlPrompt,     setNlPrompt]    = useState("");
-  const [referenceFile, setRefFile]   = useState<File | null>(null);
   const [stereoFile,   setStereoFile]  = useState<File | null>(null);
   const [stems,        setStems]       = useState<StemFile[]>([]);
 
@@ -169,7 +168,10 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   const [jobStatus,    setJobStatus]   = useState<string>("PENDING");
   const [result,       setResult]      = useState<JobResult | null>(null);
   const [selected,     setSelected]    = useState<VersionName | null>(null);
-  const [abMode,       setAbMode]      = useState<"original" | "mastered">("mastered");
+  const [abMode,       setAbMode]      = useState<"original" | "mastered" | "reference">("mastered");
+  const [uploadedRefUrl,  setUploadedRefUrl]  = useState<string | null>(null);
+  const [refFileName,     setRefFileName]     = useState<string | null>(null);
+  const [refUploading,    setRefUploading]    = useState(false);
   const [playing,      setPlaying]     = useState(false);
   const [nlChange,     setNlChange]    = useState("");
   const [nlChanging,   setNlChanging]  = useState(false);
@@ -257,8 +259,7 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           stems.map(async (s) => ({ url: await uploadFile(s.file), filename: s.name, stemType: s.type }))
         );
       }
-      let referenceUrl: string | undefined;
-      if (referenceFile) referenceUrl = await uploadFile(referenceFile);
+      const referenceUrl = uploadedRefUrl ?? undefined;
 
       const checkoutRes = await fetch("/api/mastering/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -300,6 +301,7 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           mood,
           platforms,
           referenceTrackUrl:     referenceUrl,
+          referenceFileName:     refFileName ?? undefined,
           naturalLanguagePrompt: nlPrompt.trim() || undefined,
           stripePaymentId,
           creditsUsed:           checkoutData.creditsUsed ?? false,
@@ -328,7 +330,8 @@ export function MasterWizardClient({ userId }: { userId: string }) {
   // ── Audio playback ───────────────────────────────────────────────────────────
   function getPlaybackUrl(): string | null {
     if (!result) return null;
-    if (abMode === "original") return result.previewUrl;
+    if (abMode === "original")   return result.previewUrl;
+    if (abMode === "reference")  return uploadedRefUrl;
     const v = result.versions.find((v) => v.name === selected) ?? result.versions[0];
     return v?.url ?? null;
   }
@@ -348,7 +351,7 @@ export function MasterWizardClient({ userId }: { userId: string }) {
     }
   }
 
-  function switchAbMode(m: "original" | "mastered") {
+  function switchAbMode(m: "original" | "mastered" | "reference") {
     audioRef.current?.pause();
     setPlaying(false);
     setAbMode(m);
@@ -606,15 +609,6 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             <StemsDropzone stems={stems} onStems={setStems} />
           )}
 
-          {(tier === "PREMIUM" || tier === "PRO") && (
-            <div>
-              <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>
-                Reference track <span style={{ color: "#555" }}>(optional)</span>
-              </p>
-              <StereoDropzone file={referenceFile} onFile={setRefFile} label="Drop a reference track to match" />
-            </div>
-          )}
-
           <div className="flex gap-3">
             <button
               onClick={() => setStep("mode")}
@@ -739,6 +733,65 @@ export function MasterWizardClient({ userId }: { userId: string }) {
             </div>
           )}
 
+          {/* Reference track — Premium/Pro only */}
+          {(tier === "PREMIUM" || tier === "PRO") && (
+            <div>
+              <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>
+                Reference track <span style={{ color: "#555" }}>(optional — match loudness &amp; tone)</span>
+              </p>
+              {uploadedRefUrl ? (
+                <div className="flex items-center justify-between rounded-xl border border-[#2A2A2A] px-4 py-3">
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>
+                      <CheckCircle2 size={12} className="inline mr-1.5" />
+                      {refFileName ?? "Reference uploaded"}
+                    </p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>
+                      Matchering will align your master to this track
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setUploadedRefUrl(null); setRefFileName(null); }}
+                    className="text-[10px] px-2 py-1 rounded-lg border border-[#2A2A2A] hover:border-[#444] transition-colors"
+                    style={{ color: "#666" }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className={cn(
+                  "flex items-center gap-3 rounded-xl border border-[#2A2A2A] px-4 py-3 cursor-pointer",
+                  "hover:border-[#444] transition-colors",
+                  refUploading && "opacity-60 pointer-events-none"
+                )}>
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.flac,.aiff,.aif"
+                    className="sr-only"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setRefUploading(true);
+                      try {
+                        const url = await uploadFile(file);
+                        setUploadedRefUrl(url);
+                        setRefFileName(file.name);
+                      } catch {
+                        setError("Failed to upload reference track.");
+                      } finally {
+                        setRefUploading(false);
+                      }
+                    }}
+                  />
+                  {refUploading
+                    ? <><Loader2 size={14} className="animate-spin shrink-0" style={{ color: "#D4A843" }} /><span className="text-xs" style={{ color: "#777" }}>Uploading…</span></>
+                    : <><Upload size={14} className="shrink-0" style={{ color: "#555" }} /><span className="text-xs" style={{ color: "#777" }}>Drop a commercial reference track (WAV or MP3)</span></>
+                  }
+                </label>
+              )}
+            </div>
+          )}
+
           {error && (
             <p className="text-sm rounded-xl px-3 py-2.5 bg-red-400/10 border border-red-400/20 text-red-400">
               {error}
@@ -845,6 +898,18 @@ export function MasterWizardClient({ userId }: { userId: string }) {
                 >
                   Mastered
                 </button>
+                {uploadedRefUrl && (
+                  <button
+                    onClick={() => switchAbMode("reference")}
+                    className="flex-1 py-1.5 text-xs font-semibold transition-all"
+                    style={abMode === "reference"
+                      ? { backgroundColor: "#D4A843", color: "#0A0A0A" }
+                      : { color: "#555" }
+                    }
+                  >
+                    Reference
+                  </button>
+                )}
               </div>
             </div>
           </div>
