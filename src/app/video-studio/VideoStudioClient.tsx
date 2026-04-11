@@ -265,7 +265,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
       window.location.href = checkoutData.url;
 
     } catch (err) {
-      setCreateError("Something went wrong. Please try again.");
+      setCreateError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setCreating(false);
     }
