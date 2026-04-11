@@ -18,11 +18,11 @@ import {
 import type { SongSection }    from "@/lib/video-studio/song-analyzer";
 import {
   detectCameraDirection,
-  CAMERA_DIRECTION_MAP,
+  CAMERA_DIRECTION_DATA as CAMERA_DIRECTION_MAP,
   type CameraDirectionKey,
-  FILM_LOOKS,
+  FILM_LOOK_DATA as FILM_LOOKS,
   type FilmLookKey,
-} from "@/components/video-studio/CameraDirectionPicker";
+} from "@/lib/video-studio/camera-constants";
 
 interface ShotListScene {
   index:           number;

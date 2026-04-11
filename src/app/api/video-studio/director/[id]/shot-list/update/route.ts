@@ -11,11 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth }              from "@/lib/auth";
 import { db }                from "@/lib/db";
 import {
-  CAMERA_DIRECTION_MAP,
+  CAMERA_DIRECTION_DATA as CAMERA_DIRECTION_MAP,
   type CameraDirectionKey,
-  FILM_LOOKS,
+  FILM_LOOK_DATA as FILM_LOOKS,
   type FilmLookKey,
-} from "@/components/video-studio/CameraDirectionPicker";
+} from "@/lib/video-studio/camera-constants";
 
 export async function PATCH(
   req: NextRequest,
