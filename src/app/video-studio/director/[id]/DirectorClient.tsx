@@ -89,7 +89,8 @@ export default function DirectorClient({
   const [inputMsg,    setInputMsg]    = useState("");
   const [sending,     setSending]     = useState(false);
   const [chatError,   setChatError]   = useState<string | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatEndRef  = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
 
   // Brief phase
   const [genShotList, setGenShotList] = useState(false);
@@ -180,6 +181,7 @@ export default function DirectorClient({
       setChatError("Connection error. Please try again.");
     } finally {
       setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }
 
@@ -446,6 +448,7 @@ export default function DirectorClient({
                 <ChevronLeft size={12} />
               </button>
               <input
+                ref={inputRef}
                 value={inputMsg}
                 onChange={e => setInputMsg(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}

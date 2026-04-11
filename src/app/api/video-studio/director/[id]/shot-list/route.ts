@@ -54,7 +54,7 @@ export async function POST(
       select: {
         id: true, trackTitle: true, mode: true, creativeBrief: true,
         songStructure: true, bpm: true, musicalKey: true, energy: true,
-        videoLength: true, style: true, aspectRatio: true,
+        videoLength: true, style: true, aspectRatio: true, trackDuration: true,
       },
     });
 
@@ -64,7 +64,25 @@ export async function POST(
     const brief       = video.creativeBrief as { narrative?: string; visualThemes?: string[]; cinematography?: string; tone?: string; logline?: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const analysis    = video.songStructure as any;
-    const sections: SongSection[] = analysis?.sections ?? [];
+    let sections: SongSection[] = analysis?.sections ?? [];
+
+    // Fallback: if audio analysis produced no sections (e.g. native packages unavailable on Vercel),
+    // synthesize evenly-spaced sections from the track duration so shot-list generation still works.
+    if (sections.length === 0 && video.trackDuration > 0) {
+      const sceneCount  = video.videoLength === "SHORT" ? 4 : video.videoLength === "EXTENDED" ? 10 : 7;
+      const sectionTypes = ["intro", "verse", "chorus", "verse", "chorus", "bridge", "chorus", "outro"];
+      const dur          = video.trackDuration;
+      const sceneDur     = dur / sceneCount;
+      sections = Array.from({ length: sceneCount }, (_, i) => ({
+        type:      sectionTypes[i % sectionTypes.length] as SongSection["type"],
+        startTime: i * sceneDur,
+        endTime:   (i + 1) * sceneDur,
+        duration:  sceneDur,
+        energy:    video.energy ?? 0.6,
+        lyrics:    null,
+        mood:      "atmospheric",
+      }));
+    }
 
     // Get style prompt
     const styleRecord = video.style ? await db.videoStyle.findFirst({
