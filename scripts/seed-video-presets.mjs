@@ -49,7 +49,7 @@ const presets = [
     briefTemplate: {
       logline:         "A raw street-level performance set against an urban landscape.",
       tone:            "Gritty, authentic, high-energy",
-      colorPalette: ["Muted grays", "concrete", "splashes of red and gold"],
+      colorPalette: ["#6B6B6B", "#8B7355", "#C0392B", "#D4A843"],
       visualThemes:    "City streets, alleyways, rooftops, performance energy",
       cinematography:  "Low-angle hero shots, handheld movement, heavy grain",
     },
@@ -73,7 +73,7 @@ const presets = [
     briefTemplate: {
       logline:         "A dark, story-driven trap video with cinematic weight.",
       tone:            "Moody, intense, cinematic",
-      colorPalette: ["Deep blacks", "cold blues", "harsh white light"],
+      colorPalette: ["#0A0A0A", "#1A2A4A", "#2C3E6B", "#F0F0F0"],
       visualThemes:    "Dimly lit rooms, shadows, dramatic reveals",
       cinematography:  "Slow dolly moves, high contrast noir lighting, anamorphic lens flares",
     },
@@ -97,7 +97,7 @@ const presets = [
     briefTemplate: {
       logline:         "A high-energy club performance dripping in neon and nostalgia.",
       tone:            "Hype, celebratory, chaotic",
-      colorPalette: ["Neon pink", "electric blue", "gold"],
+      colorPalette: ["#FF2D78", "#00BFFF", "#D4A843", "#1A0A2E"],
       visualThemes:    "Nightclub, dance floor, crowd energy, flashing lights",
       cinematography:  "Fast cuts on beat, handheld chaos, VHS scan lines",
     },
@@ -123,7 +123,7 @@ const presets = [
     briefTemplate: {
       logline:         "A deeply personal R&B performance bathed in warm candlelight.",
       tone:            "Vulnerable, warm, emotional",
-      colorPalette: ["Warm ambers", "honey gold", "soft shadows"],
+      colorPalette: ["#D4854A", "#C8963C", "#D4A843", "#2C1810"],
       visualThemes:    "Candlelit rooms, intimate spaces, soft textures",
       cinematography:  "Slow push-ins, shallow depth of field, 35mm warmth",
     },
@@ -147,7 +147,7 @@ const presets = [
     briefTemplate: {
       logline:         "A sultry, smoke-filled performance with dangerous energy.",
       tone:            "Seductive, tense, mysterious",
-      colorPalette: ["Deep crimson", "near-black shadows", "gold accents"],
+      colorPalette: ["#8B0000", "#1A0A0A", "#D4A843", "#3D0000"],
       visualThemes:    "Smoke, velvet, mirrors, low light, slow reveals",
       cinematography:  "Slow orbiting shots, smoke diffusion, extreme close-ups",
     },
@@ -171,7 +171,7 @@ const presets = [
     briefTemplate: {
       logline:         "An uplifting soul performance at golden hour with wide open skies.",
       tone:            "Hopeful, joyful, powerful",
-      colorPalette: ["Warm gold", "sky blue", "rich earth tones"],
+      colorPalette: ["#D4A843", "#87CEEB", "#8B6914", "#A0522D"],
       visualThemes:    "Open fields, sunset, community, joy",
       cinematography:  "Wide sweeping shots, golden backlight, handheld energy",
     },
@@ -197,7 +197,7 @@ const presets = [
     briefTemplate: {
       logline:         "A fun, colorful pop performance full of energy and movement.",
       tone:            "Upbeat, playful, confident",
-      colorPalette: ["Bright primary colors", "candy pastels", "white studio"],
+      colorPalette: ["#FF3B30", "#FFD60A", "#30D158", "#0A84FF", "#FFFFFF"],
       visualThemes:    "Studio sets, bold backdrops, choreography, fun props",
       cinematography:  "Quick cuts on beat, smooth tracking, clean bright lighting",
     },
@@ -221,7 +221,7 @@ const presets = [
     briefTemplate: {
       logline:         "A raw, emotional ballad performance — just an artist and their truth.",
       tone:            "Vulnerable, honest, moving",
-      colorPalette: ["Desaturated whites", "soft blues", "warm skin tones"],
+      colorPalette: ["#E8E8E8", "#B0C4D8", "#C4956A", "#F5F0EB"],
       visualThemes:    "Empty rooms, single spotlight, rain, letters, memory",
       cinematography:  "Slow push-ins, minimal cuts, natural light, intimate framing",
     },
@@ -245,7 +245,7 @@ const presets = [
     briefTemplate: {
       logline:         "A massive pop anthem with stadium scale and hero energy.",
       tone:            "Triumphant, epic, inspiring",
-      colorPalette: ["Bold primaries", "bright white light", "electric accents"],
+      colorPalette: ["#FF3B30", "#0A84FF", "#FFD60A", "#FFFFFF"],
       visualThemes:    "Stages, crowds, spotlights, grand landscapes",
       cinematography:  "Wide hero shots, aerial sweeps, slow-motion climax moments",
     },
@@ -271,7 +271,7 @@ const presets = [
     briefTemplate: {
       logline:         "A massive festival set with laser shows and a crowd going wild.",
       tone:            "Euphoric, explosive, massive",
-      colorPalette: ["Electric blue", "laser green", "hot pink", "deep purple"],
+      colorPalette: ["#0080FF", "#00FF41", "#FF0090", "#6A0DAD"],
       visualThemes:    "Festival stages, lasers, pyrotechnics, crowd energy, DJ booth",
       cinematography:  "Fast cuts on drops, aerial crowd shots, strobe effects",
     },
@@ -295,7 +295,7 @@ const presets = [
     briefTemplate: {
       logline:         "A lo-fi chill track video — rain, warm lights, and slow moments.",
       tone:            "Relaxed, nostalgic, introspective",
-      colorPalette: ["Muted greens", "warm amber", "soft grays"],
+      colorPalette: ["#5C7A5C", "#C8963C", "#9E9E9E", "#2C2C2C"],
       visualThemes:    "Bedroom studio, rooftop at dusk, coffee, rain on windows",
       cinematography:  "Static locked-off shots, minimal movement, soft grain",
     },
@@ -319,7 +319,7 @@ const presets = [
     briefTemplate: {
       logline:         "A dark, heavy bass video set in an industrial underground space.",
       tone:            "Menacing, raw, industrial",
-      colorPalette: ["Pure black", "harsh white strobes", "cold steel gray"],
+      colorPalette: ["#000000", "#FFFFFF", "#4A4A4A", "#1C1C1C"],
       visualThemes:    "Warehouse raves, fog machines, concrete, chain-link, darkness",
       cinematography:  "Slow reveals, strobe lighting effects, high contrast noir",
     },
@@ -345,7 +345,7 @@ const presets = [
     briefTemplate: {
       logline:         "A sun-drenched road trip video full of movement and open horizons.",
       tone:            "Free, adventurous, bittersweet",
-      colorPalette: ["Warm gold", "dusty orange", "faded blue sky"],
+      colorPalette: ["#D4A843", "#C17A3A", "#87AABF", "#D4956A"],
       visualThemes:    "Open highways, desert landscapes, car windows, small towns",
       cinematography:  "Handheld movement, window reflections, wide landscape shots",
     },
@@ -369,7 +369,7 @@ const presets = [
     briefTemplate: {
       logline:         "A cozy, intimate bedroom pop video shot like a personal diary.",
       tone:            "Warm, personal, dreamy",
-      colorPalette: ["Warm amber", "fairy light gold", "soft greens"],
+      colorPalette: ["#C8963C", "#D4A843", "#7A9E7A", "#F5E6C8"],
       visualThemes:    "Bedroom, string lights, plants, polaroids, journals",
       cinematography:  "Static shots with minimal movement, warm practical lighting",
     },
@@ -393,7 +393,7 @@ const presets = [
     briefTemplate: {
       logline:         "A cinematic indie music video that tells a story through images.",
       tone:            "Melancholic, cinematic, introspective",
-      colorPalette: ["Desaturated greens", "muted blues", "faded whites"],
+      colorPalette: ["#5A7A5A", "#5A7A9E", "#D8D8D0", "#3A4A3A"],
       visualThemes:    "Rural landscapes, empty towns, solitary figures, wide open spaces",
       cinematography:  "Anamorphic scope, letterbox feel, long takes, minimal dialogue",
     },
@@ -419,7 +419,7 @@ const presets = [
     briefTemplate: {
       logline:         "A vibrant Latin dance performance full of fire and rhythm.",
       tone:            "Passionate, energetic, celebratory",
-      colorPalette: ["Hot orange", "deep red", "tropical greens", "warm gold"],
+      colorPalette: ["#FF6B2B", "#C0392B", "#2ECC71", "#D4A843"],
       visualThemes:    "Outdoor plazas, rooftops, dance choreography, tropical settings",
       cinematography:  "Fast rhythmic cuts, low angles during dance, tracking movement",
     },
@@ -443,7 +443,7 @@ const presets = [
     briefTemplate: {
       logline:         "A late-night reggaeton video with neon glow and VHS nostalgia.",
       tone:            "Seductive, hype, nightlife",
-      colorPalette: ["Gold", "neon pink", "deep purple", "warm amber"],
+      colorPalette: ["#D4A843", "#FF2D78", "#6A0DAD", "#C8963C"],
       visualThemes:    "Rooftop parties, nightclub, city lights, cars, late nights",
       cinematography:  "Handheld energy, VHS grain, quick zoom-ins, wide night shots",
     },
@@ -469,7 +469,7 @@ const presets = [
     briefTemplate: {
       logline:         "A stripped-back acoustic performance shot with honesty and warmth.",
       tone:            "Honest, raw, intimate",
-      colorPalette: ["Warm wood tones", "soft natural light", "earthy greens"],
+      colorPalette: ["#8B6914", "#D4B896", "#6B8C6B", "#F5E6C8"],
       visualThemes:    "Front porches, living rooms, fields, guitar, natural settings",
       cinematography:  "Long takes, natural window light, minimal cuts, 35mm grain",
     },
@@ -493,7 +493,7 @@ const presets = [
     briefTemplate: {
       logline:         "An epic orchestral journey across sweeping cinematic landscapes.",
       tone:            "Epic, emotional, grand",
-      colorPalette: ["Cool blues", "dramatic grays", "golden light breaks"],
+      colorPalette: ["#4A7A9E", "#6E6E6E", "#D4A843", "#1A2A3A"],
       visualThemes:    "Mountains, oceans, forests, solitary figures in vast landscapes",
       cinematography:  "Sweeping aerials, slow push-ins, anamorphic flares, long takes",
     },
@@ -519,7 +519,7 @@ const presets = [
     briefTemplate: {
       logline:         "An abstract visual art film where emotion replaces narrative.",
       tone:            "Surreal, introspective, artistic",
-      colorPalette: ["Shifting color washes", "muted pastels", "unexpected hues"],
+      colorPalette: ["#B388C8", "#88B8C8", "#C8B888", "#C888A8"],
       visualThemes:    "Abstract textures, nature macro shots, dreamlike sequences, symbolism",
       cinematography:  "Experimental cuts, double exposures, slow motion, color grading extremes",
     },
