@@ -14,7 +14,7 @@ import { useEffect, useRef, useState }    from "react";
 import { useRouter }                      from "next/navigation";
 import {
   Film, Upload, Music2, Zap, ChevronRight, ChevronLeft,
-  Loader2, AlertCircle, Check, Play, X, Wand2, Clapperboard,
+  Loader2, AlertCircle, Check, X, Wand2, Clapperboard,
 } from "lucide-react";
 import { useUploadThing }  from "@/lib/uploadthing-client";
 import { DEFAULT_VIDEO_PRICES } from "@/lib/video-studio/model-router";
@@ -120,10 +120,8 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
   const [stylesLoading, setStylesLoading] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<string>("");
   const [activeCat,     setActiveCat]    = useState<typeof CATEGORIES[number]>("ALL");
-  const [hoveredStyle,  setHoveredStyle] = useState<string | null>(null);
   const [aspectRatio,   setAspectRatio]  = useState<AspectRatio>("16:9");
   const [videoLength,   setVideoLength]  = useState<VideoLength>("STANDARD");
-  const previewRefs = useRef<Record<string, HTMLVideoElement | null>>({});
 
   // Step 3 — confirm + pay
   const [guestEmail,  setGuestEmail]  = useState(initialGuestEmail ?? "");
@@ -166,19 +164,6 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
     },
   });
 
-  // ── Style hover preview ───────────────────────────────────────────────────────
-  function handleStyleHover(name: string, enter: boolean) {
-    setHoveredStyle(enter ? name : null);
-    const vid = previewRefs.current[name];
-    if (!vid) return;
-    if (enter) {
-      vid.currentTime = 0;
-      vid.play().catch(() => {});
-    } else {
-      vid.pause();
-      vid.currentTime = 0;
-    }
-  }
 
   // ── Step 1 validation ─────────────────────────────────────────────────────────
   const step1Valid = audioUrl.trim().length > 0 && trackTitle.trim().length > 0;
@@ -578,38 +563,30 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {filteredStyles.map(s => {
                   const isSelected = selectedStyle === s.name;
+                  const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                  const imgSrc = `/images/video-styles/${slug}.jpg`;
                   return (
                     <button
                       key={s.id}
                       onClick={() => setSelectedStyle(s.name)}
-                      onMouseEnter={() => handleStyleHover(s.name, true)}
-                      onMouseLeave={() => handleStyleHover(s.name, false)}
                       className="relative rounded-xl overflow-hidden transition-all text-left"
                       style={{
                         outline:     isSelected ? "2px solid #D4A843" : "2px solid transparent",
                         aspectRatio: "16/9",
                       }}
                     >
-                      {/* Preview video (hidden, plays on hover) */}
-                      <video
-                        ref={el => { previewRefs.current[s.name] = el; }}
-                        src={s.previewUrl}
-                        muted
-                        loop
-                        playsInline
-                        preload="none"
+                      {/* Preview image */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imgSrc}
+                        alt={s.name}
                         className="absolute inset-0 w-full h-full object-cover"
                       />
 
                       {/* Dark overlay + name */}
                       <div
                         className="absolute inset-0 flex flex-col justify-between p-2"
-                        style={{
-                          background: hoveredStyle === s.name
-                            ? "linear-gradient(to top, rgba(0,0,0,0.85) 40%, transparent)"
-                            : "linear-gradient(to top, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.2) 100%)",
-                          backgroundColor: hoveredStyle === s.name ? undefined : "#1A1A1A",
-                        }}
+                        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0.15) 100%)" }}
                       >
                         {isSelected && (
                           <div className="self-end">
@@ -625,15 +602,6 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
                           <p className="text-xs font-bold text-white leading-tight mt-0.5">{s.name}</p>
                         </div>
                       </div>
-
-                      {/* Play icon on hover */}
-                      {hoveredStyle === s.name && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-                            <Play size={16} className="text-white ml-0.5" />
-                          </div>
-                        </div>
-                      )}
                     </button>
                   );
                 })}
