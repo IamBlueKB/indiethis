@@ -42,7 +42,7 @@ export async function POST(
     // Determine billing (same logic as /create route)
     let tier: "GUEST" | "LAUNCH" | "PUSH" | "REIGN" = "GUEST";
     let amount = 0;
-    let isFree = false;
+    let isFree = true; // DEV: bypass payment for testing
 
     if (userId) {
       const sub = await db.subscription.findFirst({
