@@ -10,13 +10,12 @@
  *   3. Interval clustering → BPM scoring
  */
 
+// Lazy-loaded to avoid crashing Vercel serverless at module initialization
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { AudioContext } = require("node-web-audio-api") as typeof import("node-web-audio-api");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { Essentia, EssentiaWASM } = require("essentia.js") as {
-  Essentia: new (wasm: unknown) => EssentiaInstance;
-  EssentiaWASM: unknown;
-};
+function getAudioContext(): typeof import("node-web-audio-api")["AudioContext"] {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("node-web-audio-api").AudioContext;
+}
 
 // ── Direct BPM detection (no Web Worker) ─────────────────────────────────────
 
@@ -99,6 +98,11 @@ interface EssentiaInstance {
 let essentiaInstance: EssentiaInstance | null = null;
 function getEssentia(): EssentiaInstance {
   if (!essentiaInstance) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Essentia, EssentiaWASM } = require("essentia.js") as {
+      Essentia: new (wasm: unknown) => EssentiaInstance;
+      EssentiaWASM: unknown;
+    };
     essentiaInstance = new Essentia(EssentiaWASM);
   }
   return essentiaInstance;
@@ -119,6 +123,7 @@ export async function detectAudioFeaturesFromBuffer(buffer: ArrayBuffer): Promis
   const result: AudioFeatures = { bpm: null, musicalKey: null, energy: null };
 
   try {
+    const AudioContext = getAudioContext();
     const audioContext = new AudioContext();
     let audioBuffer: AudioBuffer;
     try {
@@ -188,6 +193,7 @@ export async function detectAudioFeatures(fileUrl: string): Promise<AudioFeature
     // ── 2. Decode ─────────────────────────────────────────────────────────────
     // node-web-audio-api's AudioContext accepts the same API as the browser's.
     // We create a new context per call so parallel invocations don't interfere.
+    const AudioContext = getAudioContext();
     const audioContext = new AudioContext();
     let audioBuffer: AudioBuffer;
     try {
