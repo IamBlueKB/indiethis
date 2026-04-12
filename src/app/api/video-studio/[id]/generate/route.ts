@@ -17,6 +17,8 @@ import { db }                    from "@/lib/db";
 import { startGeneration }       from "@/lib/video-studio/generate";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -45,10 +47,7 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Fire and forget — generation runs in background
-    void startGeneration(id).catch(err =>
-      console.error(`[generate-route] background generation failed for ${id}:`, err)
-    );
+    await startGeneration(id);
 
     return NextResponse.json({ started: true });
 

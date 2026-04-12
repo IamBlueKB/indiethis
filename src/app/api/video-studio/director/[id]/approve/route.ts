@@ -13,6 +13,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getVideoPrice }         from "@/lib/video-studio/model-router";
 import { startGeneration }       from "@/lib/video-studio/generate";
 
+export const maxDuration = 60;
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
 const INCLUDED_VIDEOS: Record<string, number> = { LAUNCH: 1, PUSH: 2, REIGN: 4 };
@@ -71,7 +73,7 @@ export async function POST(
     await db.musicVideo.update({ where: { id }, data: { amount } });
 
     if (isFree) {
-      void startGeneration(id).catch(e => console.error("[director/approve]", e));
+      await startGeneration(id);
       return NextResponse.json({ requiresPayment: false, amount: 0 });
     }
 

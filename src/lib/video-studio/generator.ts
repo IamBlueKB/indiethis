@@ -173,6 +173,8 @@ export async function generateSceneClip(
       webhookUrl,
     });
 
+    console.log(`[fal.queue.submit] scene ${scene.index} request_id: ${request_id}`);
+
     // Store lookup so the webhook can route the result back to this scene
     await db.falSceneJob.create({
       data: {
