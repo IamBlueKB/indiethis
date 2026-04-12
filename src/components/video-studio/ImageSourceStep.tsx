@@ -38,6 +38,7 @@ export default function ImageSourceStep({ userId, onBack, onConfirm }: Props) {
   const [uploadedImages, setUploadedImages]   = useState<string[]>([]);
   const [primaryImage,   setPrimaryImage]     = useState<string | null>(null);
   const [uploadError,    setUploadError]      = useState<string | null>(null);
+  const [dragOver,       setDragOver]         = useState(false);
   const uploadInputRef                        = useRef<HTMLInputElement>(null);
 
   const { startUpload, isUploading } = useUploadThing("videoStudioRef", {
@@ -60,6 +61,18 @@ export default function ImageSourceStep({ userId, onBack, onConfirm }: Props) {
     if (allowed.length === 0) return;
     startUpload(allowed);
     e.target.value = "";
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    if (isUploading) return;
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      ["image/jpeg", "image/png", "image/webp"].includes(f.type)
+    );
+    const allowed = files.slice(0, 3 - uploadedImages.length);
+    if (allowed.length === 0) return;
+    startUpload(allowed);
   }
 
   function removeImage(url: string) {
@@ -224,16 +237,20 @@ export default function ImageSourceStep({ userId, onBack, onConfirm }: Props) {
                 onClick={() => uploadInputRef.current?.click()}
                 disabled={isUploading}
                 className="w-full rounded-xl border-2 border-dashed px-6 py-8 flex flex-col items-center gap-2 transition-all"
-                style={{ borderColor: "#333" }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = "#D4A843")}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = "#333")}
+                style={{ borderColor: dragOver ? "#D4A843" : "#333", backgroundColor: dragOver ? "rgba(212,168,67,0.06)" : "transparent" }}
+                onMouseEnter={e => { if (!dragOver) e.currentTarget.style.borderColor = "#D4A843"; }}
+                onMouseLeave={e => { if (!dragOver) e.currentTarget.style.borderColor = "#333"; }}
+                onDragEnter={e => { e.preventDefault(); setDragOver(true); }}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={e => { e.preventDefault(); setDragOver(false); }}
+                onDrop={handleDrop}
               >
                 {isUploading
                   ? <Loader2 size={20} className="animate-spin" style={{ color: "#D4A843" }} />
                   : <Upload size={20} style={{ color: "#D4A843" }} />
                 }
                 <p className="text-sm font-semibold text-white">
-                  {isUploading ? "Uploading…" : "Click to upload"}
+                  {isUploading ? "Uploading…" : dragOver ? "Drop to upload" : "Drag & drop or click to upload"}
                 </p>
                 <p className="text-xs" style={{ color: "#666" }}>JPG, PNG, WEBP · Max 8MB · Up to {3 - uploadedImages.length} more</p>
               </button>
