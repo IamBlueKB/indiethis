@@ -12,6 +12,8 @@
  * Returns: { started: true }
  */
 
+export const maxDuration = 300;
+
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { startGeneration }       from "@/lib/video-studio/generate";

@@ -6,6 +6,8 @@
  * Returns: { requiresPayment, amount } | { url } (Stripe)
  */
 
+export const maxDuration = 300;
+
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { stripe }                from "@/lib/stripe";
