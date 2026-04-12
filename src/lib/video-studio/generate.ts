@@ -66,46 +66,32 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       throw new Error(`Cannot start generation for MusicVideo ${musicVideoId}: payment not confirmed.`);
     }
 
-    // ── Phase 1: Analyze song (skip in Director Mode — shot list already built) ─
-    const isDirector = (vid.mode as string) === "DIRECTOR";
-    const hasShotList = Array.isArray(vid.shotList) && (vid.shotList as unknown[]).length > 0;
+    // ── Phase 1: Analyze song ────────────────────────────────────────────────
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
+    });
 
-    let analysis: Awaited<ReturnType<typeof analyzeSong>>;
+    const analysis = await analyzeSong({
+      audioUrl:  vid.audioUrl,
+      trackId:   vid.trackId ?? undefined,
+      duration:  vid.trackDuration,
+    });
 
-    if (isDirector && hasShotList && vid.songStructure) {
-      // Reuse existing analysis — no need to re-analyze
-      analysis = vid.songStructure as Awaited<ReturnType<typeof analyzeSong>>;
-      await db.musicVideo.update({
-        where: { id: musicVideoId },
-        data:  { status: "GENERATING", progress: 20, currentStep: "Generating your scenes…" },
-      });
-    } else {
-      await db.musicVideo.update({
-        where: { id: musicVideoId },
-        data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
-      });
-
-      analysis = await analyzeSong({
-        audioUrl:  vid.audioUrl,
-        trackId:   vid.trackId ?? undefined,
-        duration:  vid.trackDuration,
-      });
-
-      await db.musicVideo.update({
-        where: { id: musicVideoId },
-        data:  {
-          status:          "PLANNING",
-          progress:        20,
-          currentStep:     "Planning your video…",
-          bpm:             Math.round(analysis.bpm),
-          musicalKey:      analysis.key,
-          energy:          analysis.energy,
-          lyrics:          analysis.lyrics ?? null,
-          lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
-          songStructure:   analysis as object,
-        },
-      });
-    }
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  {
+        status:          "PLANNING",
+        progress:        20,
+        currentStep:     "Planning your video…",
+        bpm:             Math.round(analysis.bpm),
+        musicalKey:      analysis.key,
+        energy:          analysis.energy,
+        lyrics:          analysis.lyrics ?? null,
+        lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
+        songStructure:   analysis as object,
+      },
+    });
 
     // ── Phase 2: Plan scenes ─────────────────────────────────────────────────
     const videoLength = vid.videoLength;
@@ -120,19 +106,14 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     });
     const stylePrompt = styleRecord?.promptBase ?? "";
 
-    // Director Mode: use existing shot list if available (skip re-planning)
-    type StoredScene = { index: number; description?: string; prompt?: string; model?: string; startTime: number; endTime: number; duration: number; energyLevel?: number; type?: string; hasLipSync?: boolean; referenceImageUrl?: string | null };
-    const storedShotList = mode === "DIRECTOR" && Array.isArray(vid.shotList) ? (vid.shotList as StoredScene[]) : [];
-
     // Map sections → planned scenes
     const sections    = analysis.sections ?? [];
     const plannedScenes: PlannedSceneInput[] = sections.slice(0, getSceneLimit(videoLength)).map((section, idx) => {
-      const stored    = storedShotList[idx];
       const hasLyrics = !!section.lyrics;
-      const sceneType = inferSceneType(stored?.type ?? section.type, section.energy, hasLyrics);
+      const sceneType = inferSceneType(section.type, section.energy, hasLyrics);
       const spec: SceneSpec = {
         type:                  sceneType,
-        hasLipSync:            stored?.hasLipSync ?? (hasLyrics && sceneType === "performance"),
+        hasLipSync:            hasLyrics && sceneType === "performance",
         hasFastMotion:         section.energy > 0.7,
         hasMultipleCharacters: false,
         characterRefs:         [],
@@ -141,21 +122,17 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       };
       const decision = routeScene(spec, mode);
       const lyricSnippet = section.lyrics ? ` "${(section.lyrics as string).slice(0, 60).trim()}"` : "";
-      // Use Director Mode description if available, otherwise build from analysis
-      const prompt = stored?.prompt ?? stored?.description
-        ? `${stylePrompt}, ${stored.description ?? stored.prompt}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`
-        : `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
+      const prompt = `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
 
       return {
-        index:              idx,
-        model:              stored?.model ?? decision.config.model,
-        prompt:             prompt.slice(0, 500),
-        startTime:          section.startTime,
-        endTime:            section.endTime,
-        duration:           spec.duration,
+        index:       idx,
+        model:       decision.config.model,
+        prompt:      prompt.slice(0, 500),
+        startTime:   section.startTime,
+        endTime:     section.endTime,
+        duration:    spec.duration,
         aspectRatio,
         spec,
-        referenceImageUrl:  stored?.referenceImageUrl ?? null,
       };
     });
 

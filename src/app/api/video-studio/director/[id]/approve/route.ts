@@ -6,8 +6,6 @@
  * Returns: { requiresPayment, amount } | { url } (Stripe)
  */
 
-export const maxDuration = 300;
-
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { stripe }                from "@/lib/stripe";
@@ -73,7 +71,7 @@ export async function POST(
     await db.musicVideo.update({ where: { id }, data: { amount } });
 
     if (isFree) {
-      await startGeneration(id);
+      void startGeneration(id).catch(e => console.error("[director/approve]", e));
       return NextResponse.json({ requiresPayment: false, amount: 0 });
     }
 

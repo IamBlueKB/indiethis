@@ -25,15 +25,14 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PlannedSceneInput {
-  index:              number;
-  model:              string;
-  prompt:             string;
-  startTime:          number;   // seconds into track
-  endTime:            number;
-  duration:           number;   // clip length in seconds
-  aspectRatio:        string;
-  spec:               SceneSpec;
-  referenceImageUrl?: string | null; // per-scene i2v starting frame (overrides global ref)
+  index:       number;
+  model:       string;
+  prompt:      string;
+  startTime:   number;   // seconds into track
+  endTime:     number;
+  duration:    number;   // clip length in seconds
+  aspectRatio: string;
+  spec:        SceneSpec;
 }
 
 export interface GeneratedSceneOutput {
@@ -312,13 +311,10 @@ const MODEL_FALLBACKS: Record<string, string[]> = {
  */
 async function generateSceneWithFallback(
   scene:              PlannedSceneInput,
-  globalRefImageUrl?: string,
+  referenceImageUrl?: string,
   audioUrl?:          string,
   nextSceneImageUrl?: string,
 ): Promise<GeneratedSceneOutput> {
-  // Per-scene ref takes priority over the global character portrait
-  const referenceImageUrl = scene.referenceImageUrl ?? globalRefImageUrl;
-
   const primaryModel   = scene.model;
   const fallbacks      = MODEL_FALLBACKS[primaryModel] ?? [];
   const modelsToTry    = [primaryModel, ...fallbacks];

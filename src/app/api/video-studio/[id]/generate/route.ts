@@ -12,8 +12,6 @@
  * Returns: { started: true }
  */
 
-export const maxDuration = 300;
-
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { startGeneration }       from "@/lib/video-studio/generate";
@@ -47,8 +45,10 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Await generation — maxDuration=300 keeps the function alive up to 5 min
-    await startGeneration(id);
+    // Fire and forget — generation runs in background
+    void startGeneration(id).catch(err =>
+      console.error(`[generate-route] background generation failed for ${id}:`, err)
+    );
 
     return NextResponse.json({ started: true });
 

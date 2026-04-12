@@ -617,7 +617,6 @@ export default function DirectorClient({
               bpm={bpm}
               musicalKey={musicalKey}
               audioUrl={audioUrl}
-              avatarUrl={avatarRefUrl}
               brief={brief ? {
                 title:          brief.title,
                 logline:        brief.logline,
