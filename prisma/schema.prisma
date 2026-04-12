@@ -2733,7 +2733,9 @@ model MusicVideo {
   // Director Mode
   creativeBrief   Json?    // Claude-generated brief object
   shotList        Json?    // Scene[]: { index, prompt, model, startTime, endTime, type, ... }
-  characterRefs   Json?    // String[] of reference image URLs
+  characterRefs     Json?    // String[] of reference image URLs
+  referenceImageUrl String?  // primary image URL for scene generation
+  imageSource       String?  // UPLOAD | AVATAR | AI_GENERATED
   conversationLog Json?    // ChatMessage[]: { role, content, createdAt }
 
   // Song analysis (populated by song-analyzer)

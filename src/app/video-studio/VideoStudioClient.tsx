@@ -14,11 +14,11 @@ import { useEffect, useRef, useState }    from "react";
 import { useRouter }                      from "next/navigation";
 import {
   Film, Upload, Music2, Zap, ChevronRight, ChevronLeft,
-  Loader2, AlertCircle, Check, X, Wand2, Clapperboard,
+  Loader2, AlertCircle, Check, X, Wand2, Clapperboard, Image as ImageIcon,
 } from "lucide-react";
 import { useUploadThing }  from "@/lib/uploadthing-client";
 import { DEFAULT_VIDEO_PRICES } from "@/lib/video-studio/model-router";
-import AvatarPicker, { type AvatarSelectPayload } from "@/components/avatar/AvatarPicker";
+import ImageSourceStep, { type ImageSource } from "@/components/video-studio/ImageSourceStep";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,6 +48,7 @@ interface Props {
   initialMode?:          "QUICK" | "DIRECTOR";
   initialGuestEmail?:    string;
   initialCoverArtUrl?:   string; // pre-seeded from cover art studio
+  userPhoto?:            string | null; // User.photo for avatar option
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -91,18 +92,19 @@ function fmtPrice(cents: number): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function VideoStudioClient({ userId, userTier, initialMode, initialGuestEmail, initialCoverArtUrl }: Props) {
+export default function VideoStudioClient({ userId, userTier, initialMode, initialGuestEmail, initialCoverArtUrl, userPhoto }: Props) {
   const router = useRouter();
 
   // Wizard state
   const [mode,    setMode]    = useState<WizardMode>(initialMode ?? "QUICK");
-  const [step,    setStep]    = useState<1 | 2 | 3>(1);
+  const [step,    setStep]    = useState<1 | 2 | 3 | 4>(1);
 
   // Cover art pre-seeded from cover art studio
   const [coverArtRefUrl, setCoverArtRefUrl] = useState<string | null>(initialCoverArtUrl ?? null);
 
-  // Avatar ref — selected from AvatarPicker (takes priority over cover art ref)
-  const [avatarRefUrl, setAvatarRefUrl] = useState<string | null>(null);
+  // Step 2 — image source
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
+  const [imageSource,       setImageSource]       = useState<ImageSource | null>(null);
 
   // Step 1 — track selection
   const [audioUrl,       setAudioUrl]       = useState("");
@@ -139,9 +141,9 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
       .finally(() => setTracksLoading(false));
   }, [userId]);
 
-  // ── Load styles on step 2 ────────────────────────────────────────────────────
+  // ── Load styles on step 3 ────────────────────────────────────────────────────
   useEffect(() => {
-    if (step !== 2 || styles.length > 0) return;
+    if (step !== 3 || styles.length > 0) return;
     setStylesLoading(true);
     fetch("/api/video-studio/styles")
       .then(r => r.ok ? r.json() : { styles: [] })
@@ -202,16 +204,18 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           audioUrl,
-          trackTitle:    trackTitle.trim(),
+          trackTitle:       trackTitle.trim(),
           trackDuration,
-          trackId:       selectedTrackId ?? undefined,
+          trackId:          selectedTrackId ?? undefined,
           mode,
           videoLength,
-          style:         selectedStyle,
+          style:            selectedStyle,
           aspectRatio,
-          guestEmail:    !userId ? guestEmail.trim() : undefined,
-          characterRefs: (() => {
-            const refs = [avatarRefUrl ?? coverArtRefUrl].filter((u): u is string => Boolean(u));
+          guestEmail:       !userId ? guestEmail.trim() : undefined,
+          referenceImageUrl: referenceImageUrl ?? coverArtRefUrl ?? undefined,
+          imageSource:       imageSource ?? (coverArtRefUrl ? "UPLOAD" : undefined),
+          characterRefs:    (() => {
+            const refs = [referenceImageUrl ?? coverArtRefUrl].filter((u): u is string => Boolean(u));
             return refs.length > 0 ? refs : undefined;
           })(),
         }),
@@ -275,7 +279,8 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
   const filteredStyles = activeCat === "ALL" ? styles : styles.filter(s => s.category === activeCat);
   const selectedStyleObj = styles.find(s => s.name === selectedStyle);
 
-  const price = getPrice(mode, videoLength, userTier);
+  const price    = getPrice(mode, videoLength, userTier);
+  const STEPS    = 4; // total wizard steps
 
   // ─── Render ─────────────────────────────────────────────────────────────────────
 
@@ -319,7 +324,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
       <div className="h-0.5 w-full" style={{ backgroundColor: "#1E1E1E" }}>
         <div
           className="h-full transition-all duration-500"
-          style={{ width: `${(step / 3) * 100}%`, backgroundColor: "#D4A843" }}
+          style={{ width: `${(step / STEPS) * 100}%`, backgroundColor: "#D4A843" }}
         />
       </div>
 
@@ -491,16 +496,32 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
-                Choose Style <ChevronRight size={16} />
+                <ImageIcon size={16} /> Add Visual <ChevronRight size={16} />
               </button>
             </div>
           </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
-            STEP 2 — Style + Format
+            STEP 2 — Image Source
             ══════════════════════════════════════════════════════════════════════ */}
         {step === 2 && (
+          <ImageSourceStep
+            userId={userId}
+            userPhoto={userPhoto}
+            onBack={() => setStep(1)}
+            onConfirm={(url, source) => {
+              setReferenceImageUrl(url);
+              setImageSource(source);
+              setStep(3);
+            }}
+          />
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════
+            STEP 3 — Style + Format
+            ══════════════════════════════════════════════════════════════════════ */}
+        {step === 3 && (
           <div className="space-y-7">
             <div>
               <h1 className="text-2xl font-bold text-white">Visual style</h1>
@@ -509,33 +530,22 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               </p>
             </div>
 
-            {/* Reference photo — avatar picker for logged-in users, cover art banner for guests */}
-            {userId ? (
-              <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: "#1E1E1E", backgroundColor: "#111" }}>
-                <p className="text-xs font-semibold text-white">Artist Reference</p>
-                <p className="text-[11px]" style={{ color: "#666" }}>
-                  Your avatar will be passed to the director as a character reference.
-                </p>
-                <AvatarPicker
-                  compact
-                  label="Artist Reference"
-                  selectedUrl={avatarRefUrl ?? undefined}
-                  onSelect={(p: AvatarSelectPayload) => setAvatarRefUrl(p.url)}
-                  onUploadUrl={(url: string) => setAvatarRefUrl(url)}
-                />
-              </div>
-            ) : coverArtRefUrl ? (
+            {/* Selected image preview */}
+            {referenceImageUrl && (
               <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "#2A2A2A", backgroundColor: "rgba(212,168,67,0.06)" }}>
-                <img src={coverArtRefUrl} alt="Cover art" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={referenceImageUrl} alt="Reference" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>Cover art added</p>
-                  <p className="text-[11px] mt-0.5 truncate" style={{ color: "#888" }}>Your cover art will be passed to the director as a visual reference</p>
+                  <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>Visual reference added</p>
+                  <p className="text-[11px] mt-0.5 truncate" style={{ color: "#888" }}>
+                    {imageSource === "UPLOAD" ? "Uploaded photo" : imageSource === "AVATAR" ? "Your avatar" : "AI generated image"}
+                  </p>
                 </div>
-                <button onClick={() => setCoverArtRefUrl(null)} className="shrink-0" style={{ color: "#666" }}>
+                <button onClick={() => { setReferenceImageUrl(null); setImageSource(null); setStep(2); }} className="shrink-0" style={{ color: "#666" }}>
                   <X size={14} />
                 </button>
               </div>
-            ) : null}
+            )}
 
             {/* Category tabs */}
             <div className="flex gap-2 flex-wrap">
@@ -653,11 +663,11 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
 
             {/* Navigation */}
             <div className="flex items-center justify-between">
-              <button onClick={() => setStep(1)} className="flex items-center gap-1.5 text-sm" style={{ color: "#888" }}>
+              <button onClick={() => setStep(2)} className="flex items-center gap-1.5 text-sm" style={{ color: "#888" }}>
                 <ChevronLeft size={16} /> Back
               </button>
               <button
-                onClick={() => setStep(3)}
+                onClick={() => setStep(4)}
                 disabled={!selectedStyle}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
                 style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
@@ -669,9 +679,9 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
-            STEP 3 — Confirm + Pay
+            STEP 4 — Confirm + Pay
             ══════════════════════════════════════════════════════════════════════ */}
-        {step === 3 && (
+        {step === 4 && (
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-bold text-white">Review your order</h1>
@@ -779,7 +789,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
 
             {/* CTA */}
             <div className="flex items-center justify-between">
-              <button onClick={() => setStep(2)} className="flex items-center gap-1.5 text-sm" style={{ color: "#888" }}>
+              <button onClick={() => setStep(3)} className="flex items-center gap-1.5 text-sm" style={{ color: "#888" }}>
                 <ChevronLeft size={16} /> Back
               </button>
               <button

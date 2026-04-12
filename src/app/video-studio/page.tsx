@@ -65,13 +65,21 @@ export default async function VideoStudioPage({
   const sp          = await searchParams;
   const startWizard = sp.start === "1";
 
-  let userTier: string | null = null;
+  let userTier:  string | null = null;
+  let userPhoto: string | null = null;
   if (userId) {
-    const sub = await db.subscription.findFirst({
-      where:  { userId, status: "ACTIVE" },
-      select: { tier: true },
-    });
-    userTier = sub?.tier ?? null;
+    const [sub, user] = await Promise.all([
+      db.subscription.findFirst({
+        where:  { userId, status: "ACTIVE" },
+        select: { tier: true },
+      }),
+      db.user.findUnique({
+        where:  { id: userId },
+        select: { photo: true },
+      }),
+    ]);
+    userTier  = sub?.tier ?? null;
+    userPhoto = user?.photo ?? null;
   }
 
   const initialMode     = sp.mode === "DIRECTOR" ? "DIRECTOR" : sp.mode === "QUICK" ? "QUICK" : undefined;
@@ -110,6 +118,7 @@ export default async function VideoStudioPage({
         initialMode={initialMode}
         initialGuestEmail={initialGuestEmail}
         initialCoverArtUrl={initialCoverArtUrl}
+        userPhoto={userPhoto}
       />
     );
   }
