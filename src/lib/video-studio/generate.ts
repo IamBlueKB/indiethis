@@ -158,20 +158,34 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       status: "GENERATING",
     });
 
-    // ── Phase 3: Character portrait (if reference image provided) ────────────
+    // ── Phase 3: Resolve reference image + character portrait ────────────────
     const falKey = process.env.FAL_KEY;
     if (!falKey) throw new Error("FAL_KEY not configured");
     fal.config({ credentials: falKey });
 
+    // Primary reference image: prefer the user-chosen referenceImageUrl, fall
+    // back to thumbnailUrl (cover art pre-seed or legacy path).
+    const primaryRefImage: string | undefined =
+      vid.referenceImageUrl ?? vid.thumbnailUrl ?? undefined;
+
+    if (!primaryRefImage) {
+      throw new Error(
+        "No reference image provided. Please go back and add a visual in the Image Source step.",
+      );
+    }
+
     let characterPortraitUrl: string | undefined;
-    if (vid.thumbnailUrl && plannedScenes.some(s => s.spec.characterRefs.length > 0 || s.spec.hasLipSync)) {
+    if (plannedScenes.some(s => s.spec.characterRefs.length > 0 || s.spec.hasLipSync)) {
       try {
-        characterPortraitUrl = await generateCharacterPortrait(vid.thumbnailUrl, stylePrompt);
+        characterPortraitUrl = await generateCharacterPortrait(primaryRefImage, stylePrompt);
         await setProgress(musicVideoId, 27, "Character portrait generated…");
       } catch (err) {
-        console.warn("[video-studio] Character portrait failed — continuing without:", err);
+        console.warn("[video-studio] Character portrait failed — using raw reference image:", err);
       }
     }
+
+    // Resolved image: portrait if generated, otherwise raw reference
+    const resolvedRefImage = characterPortraitUrl ?? primaryRefImage;
 
     // ── Phase 4a (PRODUCTION): Submit scenes via fal.queue.submit + webhook ──
     // fal.ai processes scenes externally; the webhook route handles stitching +
@@ -185,7 +199,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       // Submit all scenes; returns placeholders immediately (fal.queue.submit)
       const placeholders = await generateAllScenes(
         plannedScenes,
-        characterPortraitUrl ?? vid.thumbnailUrl ?? undefined,
+        resolvedRefImage,
         vid.audioUrl,
         undefined,     // no progress callback — webhook updates progress per scene
         webhookUrl,
@@ -217,7 +231,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     // ── Phase 4b (DEV): Polling mode — block until all scenes complete ────────
     const sceneResults: GeneratedSceneOutput[] = await generateAllScenes(
       plannedScenes,
-      characterPortraitUrl ?? vid.thumbnailUrl ?? undefined,
+      resolvedRefImage,
       vid.audioUrl,
       async (completed, total) => {
         const genProgress = 28 + Math.round((completed / total) * 45);
@@ -430,7 +444,7 @@ export async function regenerateScene(
 
   const [regenResult] = await generateAllScenes(
     [plannedScene],
-    video.thumbnailUrl ?? undefined,
+    video.referenceImageUrl ?? video.thumbnailUrl ?? undefined,
     video.audioUrl,
   );
 
