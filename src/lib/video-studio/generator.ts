@@ -19,6 +19,7 @@ import { fal }                      from "@fal-ai/client";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import type { SceneSpec }            from "@/lib/video-studio/model-router";
 import type { MusicVideoProps, SceneClip } from "../../../remotion/src/MusicVideoComposition";
+import { db }                        from "@/lib/db";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -113,6 +114,10 @@ export async function generateSceneClip(
   referenceImageUrl?:  string,
   audioUrl?:           string,
   nextSceneImageUrl?:  string,   // used by Seedance 1.5 Pro for keyframe transitions
+  // Webhook mode (production): submit job and return immediately; webhook delivers result
+  webhookUrl?:         string,   // if set → use fal.queue.submit instead of fal.subscribe
+  musicVideoId?:       string,   // required when webhookUrl is set; stored in FalSceneJob
+  sceneTotal?:         number,   // total scenes for this video; stored in FalSceneJob
 ): Promise<GeneratedSceneOutput> {
 
   const aspectRatioParam =
@@ -160,6 +165,51 @@ export async function generateSceneClip(
     // image_url is already set above if referenceImageUrl exists
   }
 
+  // ── PRODUCTION (webhook mode): submit job, store lookup record, return placeholder ──
+  if (webhookUrl && musicVideoId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { request_id } = await fal.queue.submit(scene.model as any, {
+      input,
+      webhookUrl,
+    });
+
+    // Store lookup so the webhook can route the result back to this scene
+    await db.falSceneJob.create({
+      data: {
+        requestId:    request_id,
+        musicVideoId,
+        sceneIndex:   scene.index,
+        sceneTotal:   sceneTotal ?? 1,
+      },
+    });
+
+    console.log(
+      `[generator] Scene ${scene.index} submitted to fal.ai — request_id: ${request_id}`,
+    );
+
+    // Return placeholder — the webhook fills in videoUrl/thumbnailUrl when complete
+    return {
+      sceneIndex:       scene.index,
+      videoUrl:         "",
+      thumbnailUrl:     null,
+      model:            scene.model,
+      prompt:           scene.prompt,
+      startTime:        scene.startTime,
+      endTime:          scene.endTime,
+      energyLevel:      scene.spec.energyLevel,
+      qaApproved:       null,
+      qaReason:         "Pending — awaiting webhook",
+      qaRetried:        false,
+      originalPrompt:   scene.prompt,
+      refinedPrompt:    null,
+      primaryModel:     scene.model,
+      actualModel:      scene.model,
+      fallbackUsed:     false,
+      fallbackAttempts: 0,
+    };
+  }
+
+  // ── DEV (polling mode): block until fal.ai completes ─────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await fal.subscribe(scene.model as any, {
     input,
@@ -314,6 +364,9 @@ async function generateSceneWithFallback(
   referenceImageUrl?: string,
   audioUrl?:          string,
   nextSceneImageUrl?: string,
+  webhookUrl?:        string,
+  musicVideoId?:      string,
+  sceneTotal?:        number,
 ): Promise<GeneratedSceneOutput> {
   const primaryModel   = scene.model;
   const fallbacks      = MODEL_FALLBACKS[primaryModel] ?? [];
@@ -330,6 +383,9 @@ async function generateSceneWithFallback(
         referenceImageUrl,
         audioUrl,
         nextSceneImageUrl,
+        webhookUrl,
+        musicVideoId,
+        sceneTotal,
       );
 
       if (i > 0) {
@@ -378,7 +434,8 @@ async function generateSceneWithFallback(
     if (!qaResult.approved) {
       console.log(`[generator] scene ${scene.index} QA rejected: ${qaResult.reason}`);
 
-      // Retry once with the refined prompt — use same model that succeeded
+      // Retry once with the refined prompt — always use polling for QA retry
+      // (webhook mode doesn't support synchronous QA retries)
       const retryPrompt = qaResult.refinedPrompt ?? scene.prompt;
       try {
         const retryClip = await generateSceneClip(
@@ -386,6 +443,7 @@ async function generateSceneWithFallback(
           referenceImageUrl,
           audioUrl,
           nextSceneImageUrl,
+          // No webhookUrl/musicVideoId — force polling mode for QA retry
         );
         // Preserve QA metadata, adopt retry's video/thumbnail
         clip.videoUrl      = retryClip.videoUrl;
@@ -420,9 +478,13 @@ export async function generateAllScenes(
   referenceImageUrl?:  string,
   audioUrl?:           string,
   onProgress?:         (completed: number, total: number) => void,
+  // Webhook mode params — when set, submission is fire-and-forget
+  webhookUrl?:         string,
+  musicVideoId?:       string,
 ): Promise<GeneratedSceneOutput[]> {
   const results:    GeneratedSceneOutput[] = [];
   const concurrency = 3;
+  const sceneTotal  = scenes.length;
 
   // Chunk into batches of 3
   const chunks: PlannedSceneInput[][] = [];
@@ -441,8 +503,12 @@ export async function generateAllScenes(
           ? referenceImageUrl
           : undefined;
 
-        // generateSceneWithFallback handles model fallback + Claude QA
-        return generateSceneWithFallback(scene, referenceImageUrl, audioUrl, nextRef);
+        // generateSceneWithFallback handles model fallback + Claude QA (polling)
+        // or fal.queue.submit (webhook mode — returns placeholder immediately)
+        return generateSceneWithFallback(
+          scene, referenceImageUrl, audioUrl, nextRef,
+          webhookUrl, musicVideoId, sceneTotal,
+        );
       })
     );
 
