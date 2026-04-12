@@ -2780,6 +2780,24 @@ model MusicVideo {
   @@index([createdAt])
 }
 
+// Lookup table: maps fal.ai request_id → MusicVideo scene
+// Created when a scene is submitted via fal.queue.submit(); resolved when webhook fires.
+model FalSceneJob {
+  id           String   @id @default(cuid())
+  requestId    String   @unique   // fal.ai request_id returned by fal.queue.submit()
+  musicVideoId String
+  sceneIndex   Int
+  sceneTotal   Int                // total number of scenes expected for this video
+  status       String   @default("PENDING")  // PENDING | COMPLETE | FAILED
+  videoUrl     String?
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([musicVideoId])
+  @@index([status])
+}
+
 model VideoStyle {
   id          String   @id @default(cuid())
   name        String   @unique
