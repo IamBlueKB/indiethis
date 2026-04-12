@@ -26,14 +26,15 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PlannedSceneInput {
-  index:       number;
-  model:       string;
-  prompt:      string;
-  startTime:   number;   // seconds into track
-  endTime:     number;
-  duration:    number;   // clip length in seconds
-  aspectRatio: string;
-  spec:        SceneSpec;
+  index:              number;
+  model:              string;
+  prompt:             string;
+  startTime:          number;   // seconds into track
+  endTime:            number;
+  duration:           number;   // clip length in seconds
+  aspectRatio:        string;
+  spec:               SceneSpec;
+  referenceImageUrl?: string;   // per-scene override (Director Mode); falls back to global ref
 }
 
 export interface GeneratedSceneOutput {
@@ -499,16 +500,20 @@ export async function generateAllScenes(
   for (const chunk of chunks) {
     const settled = await Promise.allSettled(
       chunk.map((scene) => {
+        // Per-scene override takes priority over the global reference image
+        const sceneRef = scene.referenceImageUrl ?? referenceImageUrl;
+
         // For Seedance 1.5 Pro transitions, pass next scene's reference if available
-        const nextScene = scenes[scene.index + 1];
-        const nextRef   = nextScene && scene.model === "fal-ai/bytedance/seedance/v1.5/pro/image-to-video"
-          ? referenceImageUrl
+        const nextScene    = scenes[scene.index + 1];
+        const nextSceneRef = nextScene?.referenceImageUrl ?? referenceImageUrl;
+        const nextRef      = nextScene && scene.model === "fal-ai/bytedance/seedance/v1.5/pro/image-to-video"
+          ? nextSceneRef
           : undefined;
 
         // generateSceneWithFallback handles model fallback + Claude QA (polling)
         // or fal.queue.submit (webhook mode — returns placeholder immediately)
         return generateSceneWithFallback(
-          scene, referenceImageUrl, audioUrl, nextRef,
+          scene, sceneRef, audioUrl, nextRef,
           webhookUrl, musicVideoId, sceneTotal,
         );
       })

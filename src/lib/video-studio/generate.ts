@@ -154,6 +154,26 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       });
     }
 
+    // ── Director Mode: apply per-scene image overrides from shot list ──────────
+    // When the user edited scenes in the WorkflowBoard and set scene-level
+    // referenceImageUrls, those are stored on the shot list JSON.  Apply them
+    // to the matching planned scenes so each clip uses the right image.
+    if (mode === "DIRECTOR" && Array.isArray(vid.shotList)) {
+      type ShotListItem = { index?: number; referenceImageUrl?: string };
+      const shotListMap = new Map<number, string>();
+      for (const shot of vid.shotList as ShotListItem[]) {
+        if (typeof shot.index === "number" && shot.referenceImageUrl) {
+          shotListMap.set(shot.index, shot.referenceImageUrl);
+        }
+      }
+      if (shotListMap.size > 0) {
+        for (const scene of plannedScenes) {
+          const override = shotListMap.get(scene.index);
+          if (override) scene.referenceImageUrl = override;
+        }
+      }
+    }
+
     await setProgress(musicVideoId, 25, `Generating ${plannedScenes.length} scenes…`, {
       status: "GENERATING",
     });

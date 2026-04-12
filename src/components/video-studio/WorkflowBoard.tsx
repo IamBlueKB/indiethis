@@ -14,25 +14,27 @@ import { useState, useRef, useEffect } from "react";
 import {
   Music2, Activity, Star, Film, Download, Check,
   X, Loader2, Play, ChevronRight, Edit2, Camera,
-  Zap, AlertCircle, CornerDownRight,
+  Zap, AlertCircle, CornerDownRight, Upload, Sparkles, RefreshCw, ImageOff,
 } from "lucide-react";
 import { CameraDirectionPicker, CAMERA_DIRECTION_MAP, type CameraDirectionKey } from "./CameraDirectionPicker";
 import { FilmLookPicker, FILM_LOOKS, type FilmLookKey } from "./FilmLookPicker";
+import { useUploadThing } from "@/lib/uploadthing-client";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WorkflowScene {
-  index:           number;
-  title:           string;
-  description:     string;
-  cameraDirection?: string;
-  filmLook?:        string;
-  type:            string;
-  energyLevel:     number;
-  startTime:       number;
-  endTime:         number;
-  hasLipSync:      boolean;
-  modelDisplay?:   string;
+  index:              number;
+  title:              string;
+  description:        string;
+  cameraDirection?:   string;
+  filmLook?:          string;
+  type:               string;
+  energyLevel:        number;
+  startTime:          number;
+  endTime:            number;
+  hasLipSync:         boolean;
+  modelDisplay?:      string;
+  referenceImageUrl?: string;  // null/undefined = use primary; set = per-scene override
 }
 
 export interface WorkflowClip {
@@ -671,8 +673,48 @@ function SceneEditPanel({
   const [cameraDirection,  setCameraDirection]  = useState<string>(scene.cameraDirection ?? "static_wide");
   const [filmLook,         setFilmLook]         = useState<string>(scene.filmLook ?? "clean_digital");
 
+  // ── Per-scene image override ──────────────────────────────────────────────────
+  const [sceneImageUrl,   setSceneImageUrl]   = useState<string | null>(scene.referenceImageUrl ?? null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
+
+  // Upload
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const { startUpload, isUploading } = useUploadThing("videoStudioRef", {
+    onClientUploadComplete: (res) => {
+      const url = res[0]?.url;
+      if (url) { setSceneImageUrl(url); setShowImagePicker(false); }
+    },
+  });
+  function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) startUpload([file]);
+    e.target.value = "";
+  }
+
+  // AI generate
+  const [aiPrompt,     setAiPrompt]     = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError,      setAiError]      = useState<string | null>(null);
+
+  async function handleAiGenerate() {
+    if (!aiPrompt.trim() || aiGenerating) return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const res  = await fetch("/api/video-studio/generate-ref-image", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ prompt: aiPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.imageUrl) { setAiError(data.error ?? "Generation failed"); }
+      else { setSceneImageUrl(data.imageUrl); setShowImagePicker(false); }
+    } catch { setAiError("Connection error. Please try again."); }
+    finally { setAiGenerating(false); }
+  }
+
   function handleSave() {
-    onSave({ description, cameraDirection, filmLook });
+    onSave({ description, cameraDirection, filmLook, referenceImageUrl: sceneImageUrl ?? undefined });
     onClose();
   }
 
@@ -756,6 +798,113 @@ function SceneEditPanel({
             onChange={v => setFilmLook(v)}
             onApplyToAll={onApplyFilmLookToAll}
           />
+        </div>
+
+        {/* ── Scene Image Override ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>
+              Scene Image
+            </label>
+            {sceneImageUrl && (
+              <button
+                type="button"
+                onClick={() => { setSceneImageUrl(null); setShowImagePicker(false); }}
+                className="text-[10px]"
+                style={{ color: "#888" }}
+              >
+                Reset to primary
+              </button>
+            )}
+          </div>
+
+          {/* Current image state */}
+          {sceneImageUrl ? (
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={sceneImageUrl} alt="Scene override" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white">Custom image set</p>
+                <button
+                  type="button"
+                  onClick={() => setShowImagePicker(v => !v)}
+                  className="text-[11px] mt-0.5"
+                  style={{ color: "#D4A843" }}
+                >
+                  Change image
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "#1A1A1A" }}>
+                <ImageOff size={18} style={{ color: "#444" }} />
+              </div>
+              <div>
+                <p className="text-xs" style={{ color: "#888" }}>Using primary image</p>
+                <button
+                  type="button"
+                  onClick={() => setShowImagePicker(v => !v)}
+                  className="text-[11px] mt-0.5"
+                  style={{ color: "#D4A843" }}
+                >
+                  Set different image for this scene
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mini image picker */}
+          {showImagePicker && (
+            <div className="rounded-xl border p-4 space-y-4" style={{ borderColor: "#2A2A2A", backgroundColor: "#0F0F0F" }}>
+
+              {/* Upload */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#555" }}>Upload photo</p>
+                <input ref={uploadInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageFile} />
+                <button
+                  type="button"
+                  onClick={() => uploadInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all disabled:opacity-50"
+                  style={{ borderColor: "#333", color: "#ccc" }}
+                >
+                  {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                  {isUploading ? "Uploading…" : "Choose file"}
+                </button>
+              </div>
+
+              <div style={{ borderTop: "1px solid #222" }} />
+
+              {/* AI Generate */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#555" }}>AI generate</p>
+                <input
+                  type="text"
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value.slice(0, 300))}
+                  placeholder="Describe the scene visual…"
+                  className="w-full rounded-lg border px-3 py-2 text-xs bg-transparent text-white outline-none"
+                  style={{ borderColor: "#333" }}
+                  onFocus={e => (e.target.style.borderColor = "#D4A843")}
+                  onBlur={e => (e.target.style.borderColor = "#333")}
+                />
+                <button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={aiGenerating || aiPrompt.trim().length < 3}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  {aiGenerating
+                    ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+                    : <><Sparkles size={12} /> Generate</>
+                  }
+                </button>
+                {aiError && <p className="text-[11px] text-red-400">{aiError}</p>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

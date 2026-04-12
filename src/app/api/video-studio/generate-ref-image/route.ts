@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import * as fal                      from "@fal-ai/serverless-client";
+import { fal }                       from "@fal-ai/client";
 
 export const maxDuration = 60;
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await fal.subscribe(MODEL as any, {
+    const result = await (fal as any).subscribe(MODEL, {
       input: {
         prompt,
         aspect_ratio:    "1:1",
