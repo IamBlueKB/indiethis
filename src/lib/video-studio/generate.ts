@@ -173,7 +173,48 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       }
     }
 
-    // ── Phase 4: Generate scenes in parallel (max 3 concurrent) ─────────────
+    // ── Phase 4a (PRODUCTION): Submit scenes via fal.queue.submit + webhook ──
+    // fal.ai processes scenes externally; the webhook route handles stitching +
+    // completion. startGeneration returns here — no blocking on Vercel.
+    const isWebhookMode = process.env.NODE_ENV === "production";
+    const appUrl        = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+
+    if (isWebhookMode) {
+      const webhookUrl = `${appUrl}/api/video-studio/webhook/fal`;
+
+      // Submit all scenes; returns placeholders immediately (fal.queue.submit)
+      const placeholders = await generateAllScenes(
+        plannedScenes,
+        characterPortraitUrl ?? vid.thumbnailUrl ?? undefined,
+        vid.audioUrl,
+        undefined,     // no progress callback — webhook updates progress per scene
+        webhookUrl,
+        musicVideoId,
+      );
+
+      // Write placeholders so the generating UI has scene-level metadata to display
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  {
+          scenes:      placeholders as object[],
+          status:      "GENERATING",
+          progress:    25,
+          currentStep: `Generating ${plannedScenes.length} scenes…`,
+        },
+      });
+
+      // Auto-link to Release Board (non-blocking)
+      if (vid.trackId) {
+        autoLinkToRelease(vid.trackId, "musicVideo", musicVideoId).catch(() => {});
+      }
+
+      console.log(
+        `[video-studio] ${plannedScenes.length} scenes submitted for ${musicVideoId} — webhook will stitch`,
+      );
+      return; // Webhook takes over from here
+    }
+
+    // ── Phase 4b (DEV): Polling mode — block until all scenes complete ────────
     const sceneResults: GeneratedSceneOutput[] = await generateAllScenes(
       plannedScenes,
       characterPortraitUrl ?? vid.thumbnailUrl ?? undefined,
@@ -226,7 +267,6 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     // ── Notification email ────────────────────────────────────────────────────
     try {
       // Look up the owner's email
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
       const previewUrl = `${appUrl}/video-studio/${musicVideoId}/preview`;
 
       if (vid.userId) {
