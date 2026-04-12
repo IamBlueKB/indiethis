@@ -188,9 +188,9 @@ export async function POST(req: NextRequest) {
       durationMs,
     );
 
-    const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
-    const thumbScene    = pickThumbnailScene(sceneResults);
-    const thumbnailUrl  = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
+    const finalVideoUrl    = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+    const thumbScene       = pickThumbnailScene(sceneResults);
+    const finalThumbnailUrl = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
 
     await db.musicVideo.update({
       where: { id: musicVideoId },
@@ -203,7 +203,7 @@ export async function POST(req: NextRequest) {
         finalVideoUrls: Object.keys(finalVideoUrls).length > 0
           ? (finalVideoUrls as object)
           : null,
-        thumbnailUrl:   thumbnailUrl ?? undefined,
+        thumbnailUrl:   finalThumbnailUrl ?? undefined,
       },
     });
 
