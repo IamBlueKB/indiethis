@@ -200,9 +200,7 @@ export async function POST(req: NextRequest) {
         currentStep:    "Complete!",
         scenes:         sceneResults as object[],
         finalVideoUrl:  finalVideoUrl  ?? undefined,
-        finalVideoUrls: Object.keys(finalVideoUrls).length > 0
-          ? (finalVideoUrls as object)
-          : null,
+        finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
         thumbnailUrl:   finalThumbnailUrl ?? undefined,
       },
     });
