@@ -66,32 +66,46 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       throw new Error(`Cannot start generation for MusicVideo ${musicVideoId}: payment not confirmed.`);
     }
 
-    // ── Phase 1: Analyze song ────────────────────────────────────────────────
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
-    });
+    // ── Phase 1: Analyze song (skip in Director Mode — shot list already built) ─
+    const isDirector = (vid.mode as string) === "DIRECTOR";
+    const hasShotList = Array.isArray(vid.shotList) && (vid.shotList as unknown[]).length > 0;
 
-    const analysis = await analyzeSong({
-      audioUrl:  vid.audioUrl,
-      trackId:   vid.trackId ?? undefined,
-      duration:  vid.trackDuration,
-    });
+    let analysis: Awaited<ReturnType<typeof analyzeSong>>;
 
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data:  {
-        status:          "PLANNING",
-        progress:        20,
-        currentStep:     "Planning your video…",
-        bpm:             Math.round(analysis.bpm),
-        musicalKey:      analysis.key,
-        energy:          analysis.energy,
-        lyrics:          analysis.lyrics ?? null,
-        lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
-        songStructure:   analysis as object,
-      },
-    });
+    if (isDirector && hasShotList && vid.songStructure) {
+      // Reuse existing analysis — no need to re-analyze
+      analysis = vid.songStructure as Awaited<ReturnType<typeof analyzeSong>>;
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  { status: "GENERATING", progress: 20, currentStep: "Generating your scenes…" },
+      });
+    } else {
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
+      });
+
+      analysis = await analyzeSong({
+        audioUrl:  vid.audioUrl,
+        trackId:   vid.trackId ?? undefined,
+        duration:  vid.trackDuration,
+      });
+
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  {
+          status:          "PLANNING",
+          progress:        20,
+          currentStep:     "Planning your video…",
+          bpm:             Math.round(analysis.bpm),
+          musicalKey:      analysis.key,
+          energy:          analysis.energy,
+          lyrics:          analysis.lyrics ?? null,
+          lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
+          songStructure:   analysis as object,
+        },
+      });
+    }
 
     // ── Phase 2: Plan scenes ─────────────────────────────────────────────────
     const videoLength = vid.videoLength;

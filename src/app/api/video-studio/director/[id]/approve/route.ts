@@ -73,7 +73,7 @@ export async function POST(
     await db.musicVideo.update({ where: { id }, data: { amount } });
 
     if (isFree) {
-      void startGeneration(id).catch(e => console.error("[director/approve]", e));
+      await startGeneration(id);
       return NextResponse.json({ requiresPayment: false, amount: 0 });
     }
 

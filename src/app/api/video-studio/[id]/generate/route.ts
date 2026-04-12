@@ -47,10 +47,8 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Fire and forget — generation runs in background
-    void startGeneration(id).catch(err =>
-      console.error(`[generate-route] background generation failed for ${id}:`, err)
-    );
+    // Await generation — maxDuration=300 keeps the function alive up to 5 min
+    await startGeneration(id);
 
     return NextResponse.json({ started: true });
 
