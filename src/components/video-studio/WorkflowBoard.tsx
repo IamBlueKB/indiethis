@@ -11,10 +11,11 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { uploadFiles } from "@/lib/uploadthing-client";
 import {
   Music2, Activity, Star, Film, Download, Check,
   X, Loader2, Play, ChevronRight, Edit2, Camera,
-  Zap, AlertCircle, CornerDownRight,
+  Zap, AlertCircle, CornerDownRight, Image as ImageIcon,
 } from "lucide-react";
 import { CameraDirectionPicker, CAMERA_DIRECTION_MAP, type CameraDirectionKey } from "./CameraDirectionPicker";
 import { FilmLookPicker, FILM_LOOKS, type FilmLookKey } from "./FilmLookPicker";
@@ -22,17 +23,18 @@ import { FilmLookPicker, FILM_LOOKS, type FilmLookKey } from "./FilmLookPicker";
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WorkflowScene {
-  index:           number;
-  title:           string;
-  description:     string;
-  cameraDirection?: string;
-  filmLook?:        string;
-  type:            string;
-  energyLevel:     number;
-  startTime:       number;
-  endTime:         number;
-  hasLipSync:      boolean;
-  modelDisplay?:   string;
+  index:              number;
+  title:              string;
+  description:        string;
+  cameraDirection?:   string;
+  filmLook?:          string;
+  type:               string;
+  energyLevel:        number;
+  startTime:          number;
+  endTime:            number;
+  hasLipSync:         boolean;
+  modelDisplay?:      string;
+  referenceImageUrl?: string | null; // optional i2v starting frame
 }
 
 export interface WorkflowClip {
@@ -76,6 +78,7 @@ interface WorkflowBoardProps {
   videoId?:       string;
 
   // Callbacks
+  avatarUrl?:                string | null;  // artist avatar for i2v reference
   onEditScene?:              (index: number, updates: Partial<WorkflowScene>) => void;
   onApplyFilmLookToAll?:     (filmLook: string) => void;
   onRegenClip?:              (index: number) => void;
@@ -660,19 +663,36 @@ function FinalNode({
 // ─── Scene Edit Panel ─────────────────────────────────────────────────────────
 
 function SceneEditPanel({
-  scene, onClose, onSave, onApplyFilmLookToAll,
+  scene, onClose, onSave, onApplyFilmLookToAll, avatarUrl,
 }: {
   scene: WorkflowScene;
   onClose: () => void;
   onSave: (updates: Partial<WorkflowScene>) => void;
   onApplyFilmLookToAll?: (filmLook: string) => void;
+  avatarUrl?: string | null;
 }) {
   const [description,      setDescription]      = useState(scene.description);
   const [cameraDirection,  setCameraDirection]  = useState<string>(scene.cameraDirection ?? "static_wide");
   const [filmLook,         setFilmLook]         = useState<string>(scene.filmLook ?? "clean_digital");
+  const [refImageUrl,      setRefImageUrl]      = useState<string | null>(scene.referenceImageUrl ?? null);
+  const [uploading,        setUploading]        = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Determine current ref image source for display
+  const isUsingAvatar = !!avatarUrl && refImageUrl === avatarUrl;
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    try {
+      const [result] = await uploadFiles("sceneRefImage", { files: [file] });
+      if (result?.ufsUrl ?? result?.url) setRefImageUrl(result.ufsUrl ?? result.url);
+    } catch { /* silent */ } finally {
+      setUploading(false);
+    }
+  }
 
   function handleSave() {
-    onSave({ description, cameraDirection, filmLook });
+    onSave({ description, cameraDirection, filmLook, referenceImageUrl: refImageUrl });
     onClose();
   }
 
@@ -757,6 +777,72 @@ function SceneEditPanel({
             onApplyToAll={onApplyFilmLookToAll}
           />
         </div>
+
+        {/* Reference Image (i2v) */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>
+              Starting Image <span className="normal-case font-normal" style={{ color: "#444" }}>(optional)</span>
+            </label>
+            <p className="text-[11px] mt-0.5" style={{ color: "#444" }}>
+              AI will animate from this image. Leave blank for text-to-video.
+            </p>
+          </div>
+
+          {/* Current selection */}
+          {refImageUrl ? (
+            <div className="flex items-center gap-3">
+              <img
+                src={refImageUrl}
+                alt="Reference"
+                className="w-16 h-16 rounded-xl object-cover border"
+                style={{ borderColor: "#D4A843" }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white truncate">
+                  {isUsingAvatar ? "Artist Avatar" : "Custom image"}
+                </p>
+                <button
+                  onClick={() => setRefImageUrl(null)}
+                  className="text-[11px] mt-0.5 transition-colors hover:opacity-80"
+                  style={{ color: "#E85D4A" }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 flex-wrap">
+              {avatarUrl && (
+                <button
+                  onClick={() => setRefImageUrl(avatarUrl)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all hover:opacity-80"
+                  style={{ borderColor: "#2A2A2A", color: "#CCC", backgroundColor: "#111" }}
+                >
+                  <img src={avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover" />
+                  Use Avatar
+                </button>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ borderColor: "#2A2A2A", color: "#CCC", backgroundColor: "#111" }}
+              >
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                {uploading ? "Uploading…" : "Upload Image"}
+              </button>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }}
+          />
+        </div>
       </div>
 
       {/* Footer */}
@@ -781,6 +867,7 @@ export default function WorkflowBoard({
   brief, onEditBrief,
   shotList, clips = [],
   videoStatus, finalVideoUrl, thumbnailUrl, videoId,
+  avatarUrl,
   onEditScene, onApplyFilmLookToAll, onRegenClip, onManualReject,
 }: WorkflowBoardProps) {
   const [selectedScene, setSelectedScene] = useState<number | null>(null);
@@ -979,6 +1066,7 @@ export default function WorkflowBoard({
             onClose={() => setSelectedScene(null)}
             onSave={(updates) => handleSceneEdit(selectedScene, updates)}
             onApplyFilmLookToAll={onApplyFilmLookToAll}
+            avatarUrl={avatarUrl}
           />
         </>
       )}

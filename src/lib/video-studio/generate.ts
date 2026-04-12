@@ -106,14 +106,19 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     });
     const stylePrompt = styleRecord?.promptBase ?? "";
 
+    // Director Mode: use existing shot list if available (skip re-planning)
+    type StoredScene = { index: number; description?: string; prompt?: string; model?: string; startTime: number; endTime: number; duration: number; energyLevel?: number; type?: string; hasLipSync?: boolean; referenceImageUrl?: string | null };
+    const storedShotList = mode === "DIRECTOR" && Array.isArray(vid.shotList) ? (vid.shotList as StoredScene[]) : [];
+
     // Map sections → planned scenes
     const sections    = analysis.sections ?? [];
     const plannedScenes: PlannedSceneInput[] = sections.slice(0, getSceneLimit(videoLength)).map((section, idx) => {
+      const stored    = storedShotList[idx];
       const hasLyrics = !!section.lyrics;
-      const sceneType = inferSceneType(section.type, section.energy, hasLyrics);
+      const sceneType = inferSceneType(stored?.type ?? section.type, section.energy, hasLyrics);
       const spec: SceneSpec = {
         type:                  sceneType,
-        hasLipSync:            hasLyrics && sceneType === "performance",
+        hasLipSync:            stored?.hasLipSync ?? (hasLyrics && sceneType === "performance"),
         hasFastMotion:         section.energy > 0.7,
         hasMultipleCharacters: false,
         characterRefs:         [],
@@ -122,17 +127,21 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       };
       const decision = routeScene(spec, mode);
       const lyricSnippet = section.lyrics ? ` "${(section.lyrics as string).slice(0, 60).trim()}"` : "";
-      const prompt = `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
+      // Use Director Mode description if available, otherwise build from analysis
+      const prompt = stored?.prompt ?? stored?.description
+        ? `${stylePrompt}, ${stored.description ?? stored.prompt}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`
+        : `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
 
       return {
-        index:       idx,
-        model:       decision.config.model,
-        prompt:      prompt.slice(0, 500),
-        startTime:   section.startTime,
-        endTime:     section.endTime,
-        duration:    spec.duration,
+        index:              idx,
+        model:              stored?.model ?? decision.config.model,
+        prompt:             prompt.slice(0, 500),
+        startTime:          section.startTime,
+        endTime:            section.endTime,
+        duration:           spec.duration,
         aspectRatio,
         spec,
+        referenceImageUrl:  stored?.referenceImageUrl ?? null,
       };
     });
 

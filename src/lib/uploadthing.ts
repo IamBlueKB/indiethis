@@ -486,6 +486,17 @@ export const ourFileRouter = {
       await validateUT(file);
       return { url: file.ufsUrl ?? file.url };
     }),
+
+  // Scene reference image for Director Mode i2v — any authenticated user
+  sceneRefImage: f({ image: { maxFileSize: "16MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error("Unauthorized");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl ?? file.url };
+    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
