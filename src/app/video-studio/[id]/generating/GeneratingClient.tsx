@@ -70,6 +70,101 @@ const STATUS_PROGRESS: Record<string, number> = {
   COMPLETE:   100,
 };
 
+// ─── Film Strip Progress ──────────────────────────────────────────────────────
+
+function FilmStripProgress({
+  progress,
+  status,
+  label,
+}: {
+  progress: number;
+  status:   string;
+  label:    string;
+}) {
+  const PERF_COUNT  = 14;
+  const filledCount = Math.round((progress / 100) * PERF_COUNT);
+  const isActive    = status === "GENERATING" || status === "ANALYZING" || status === "PLANNING" || status === "STITCHING";
+
+  return (
+    <div className="w-full">
+      {/* Top perforations */}
+      <div className="flex gap-[3px] mb-[3px]">
+        {Array.from({ length: PERF_COUNT }).map((_, i) => (
+          <div
+            key={i}
+            className="h-[8px] flex-1 rounded-[2px] transition-colors duration-700"
+            style={{ backgroundColor: i < filledCount ? "rgba(212,168,67,0.45)" : "#1A1A1A" }}
+          />
+        ))}
+      </div>
+
+      {/* Main film frame */}
+      <div
+        className="relative h-8 rounded overflow-hidden"
+        style={{ backgroundColor: "#0D0D0D", border: "1px solid #1E1E1E" }}
+      >
+        {/* Filled exposure */}
+        <div
+          className="absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-in-out"
+          style={{
+            width:      `${progress}%`,
+            background: "linear-gradient(90deg, rgba(212,168,67,0.06) 0%, rgba(212,168,67,0.18) 100%)",
+          }}
+        />
+
+        {/* Leading-edge glow bar */}
+        {progress > 0 && progress < 100 && (
+          <div
+            className="absolute top-0 bottom-0 transition-all duration-1000 ease-in-out"
+            style={{
+              left:            `${progress}%`,
+              width:           "2px",
+              transform:       "translateX(-50%)",
+              backgroundColor: "#D4A843",
+              boxShadow:       "0 0 6px #D4A843, 0 0 18px rgba(212,168,67,0.35)",
+            }}
+          />
+        )}
+
+        {/* Pulsing activity indicator */}
+        {isActive && (
+          <div
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: "#D4A843" }}
+          />
+        )}
+
+        {/* Monospace progress label */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span
+            className="text-[9px] font-mono tracking-[0.2em] select-none"
+            style={{ color: "#333" }}
+          >
+            {String(Math.round(progress)).padStart(3, "0")}% EXPOSED
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom perforations */}
+      <div className="flex gap-[3px] mt-[3px]">
+        {Array.from({ length: PERF_COUNT }).map((_, i) => (
+          <div
+            key={i}
+            className="h-[8px] flex-1 rounded-[2px] transition-colors duration-700"
+            style={{ backgroundColor: i < filledCount ? "rgba(212,168,67,0.45)" : "#1A1A1A" }}
+          />
+        ))}
+      </div>
+
+      {/* Step label below strip */}
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-[11px] font-medium" style={{ color: "#D4A843" }}>{label}</p>
+        <p className="text-[11px] font-mono" style={{ color: "#444" }}>{Math.round(progress)}%</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function GeneratingClient({ id }: { id: string }) {
@@ -197,13 +292,8 @@ export default function GeneratingClient({ id }: { id: string }) {
               </div>
             </div>
 
-            {/* Progress bar */}
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#1E1E1E" }}>
-              <div
-                className="h-full rounded-full transition-all duration-1000"
-                style={{ width: `${progress}%`, backgroundColor: "#D4A843" }}
-              />
-            </div>
+            {/* Film strip progress */}
+            <FilmStripProgress progress={progress} status={data.status} label={statusLabel} />
 
             {/* Workflow Board — live scene status */}
             <WorkflowBoard
@@ -240,22 +330,11 @@ export default function GeneratingClient({ id }: { id: string }) {
               <h1 className="text-xl font-bold text-white">{data.trackTitle}</h1>
             </div>
 
-            {/* Progress bar */}
-            <div className="space-y-3">
-              <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "#1E1E1E" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-1000"
-                  style={{ width: `${progress}%`, backgroundColor: "#D4A843" }}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs" style={{ color: "#D4A843" }}>{statusLabel}</p>
-                <p className="text-xs" style={{ color: "#666" }}>{Math.round(progress)}%</p>
-              </div>
-            </div>
+            {/* Film strip progress */}
+            <FilmStripProgress progress={progress} status={data.status} label={statusLabel} />
 
             {/* Time estimate */}
-            <div className="flex items-center justify-center gap-2 text-xs" style={{ color: "#666" }}>
+            <div className="flex items-center justify-center gap-2 text-xs" style={{ color: "#555" }}>
               <Clock size={12} />
               <span>{getTimeEstimate(progress)}</span>
             </div>
@@ -298,7 +377,7 @@ export default function GeneratingClient({ id }: { id: string }) {
                   <Wand2 size={14} style={{ color: "#D4A843" }} />
                   <p className="text-xs font-semibold text-white">{data.sceneCount} scene{data.sceneCount !== 1 ? "s" : ""} planned</p>
                 </div>
-                <p className="text-xs" style={{ color: "#666" }}>Generating in parallel</p>
+                <p className="text-xs" style={{ color: "#666" }}>Multi-shot Kling 3.0</p>
               </div>
             )}
 
@@ -326,7 +405,7 @@ export default function GeneratingClient({ id }: { id: string }) {
                     <p className="text-xs" style={{ color: isDone ? "#AAA" : isActive ? "#D4A843" : "#555" }}>
                       {s === "ANALYZING"  ? "Analyzing audio — BPM, key, structure, lyrics" :
                        s === "PLANNING"   ? "Planning scenes with AI model router" :
-                       s === "GENERATING" ? "Generating scene clips" :
+                       s === "GENERATING" ? "Generating multi-shot video segments" :
                                            "Stitching clips into final video"}
                     </p>
                   </div>
