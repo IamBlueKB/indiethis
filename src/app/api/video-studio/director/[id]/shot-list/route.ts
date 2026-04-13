@@ -114,10 +114,10 @@ export async function POST(
 
     const claudeRes = await claude.messages.create({
       model:      SONNET,
-      max_tokens: 1200,
+      max_tokens: 1800,
       messages: [{
         role:    "user",
-        content: `You are writing a shot list for a music video.
+        content: `You are writing a precise shot list for a music video. Your descriptions will be fed directly into an AI video generation model (Kling 3.0 text-to-video).
 
 Track: "${video.trackTitle}"${video.bpm ? ` (${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey})` : ")"}
 
@@ -127,32 +127,44 @@ ${briefSummary}
 Song sections:
 ${JSON.stringify(sectionsForClaude, null, 2)}
 
-Film look options: clean_digital, 35mm_film, 16mm_grain, anamorphic, vhs_retro, noir
+## Camera Direction Options
+static, handheld, steadicam, dolly_push, dolly_pull, truck, crane, whip_pan, orbit, low_angle, high_angle, dutch_angle, overhead, ecu, close_up, medium, wide, extreme_wide
+
+## Film Look Options
+clean_digital, 35mm_film, 16mm_grain, anamorphic, vhs_retro, noir
+
+## @Element1 Rule
+When the artist appears in a scene (performance, singing, narrative), prefix the description with "@Element1" so the AI model binds the artist's reference photo to that character. Example: "@Element1 stands on a rain-soaked rooftop, close-up on face, neon reflections in the water below."
+Skip @Element1 for pure abstract/establishing shots with no characters.
 
 For each section, write a JSON object with:
 - "index": number
 - "title": short punchy scene name (3-5 words)
-- "description": detailed visual description (2-3 sentences, cinematic language)
-- "hasLipSync": boolean (true only if section has lyrics AND it's a performance/singing moment)
-- "filmLook": one of the film look options — choose based on the genre, mood, and energy level
+- "description": 2-3 sentences of detailed cinematic visual description (include @Element1 if artist is present)
+- "hasLipSync": boolean — true ONLY if section has lyrics AND it is a singing/performance moment
+- "filmLook": one of the film look options — choose based on mood and energy
+- "cameraDirection": one camera direction from the options above — choose what best fits the moment
 
 Return ONLY a JSON array, no other text. Example:
-[{"index":0,"title":"Midnight Arrival","description":"...","hasLipSync":false,"filmLook":"35mm_film"}]`,
+[{"index":0,"title":"Midnight Arrival","description":"@Element1 steps out of a black car onto rain-slicked streets, steadicam following at shoulder height. Neon signs bleed color into puddles below. Low angle looking up as they face the city.","hasLipSync":false,"filmLook":"35mm_film","cameraDirection":"steadicam"}]`,
       }],
     });
 
-    let sceneDescriptions: Array<{ index: number; title: string; description: string; hasLipSync: boolean; filmLook?: string }> = [];
+    let sceneDescriptions: Array<{ index: number; title: string; description: string; hasLipSync: boolean; filmLook?: string; cameraDirection?: string }> = [];
     try {
       const text = claudeRes.content[0].type === "text" ? claudeRes.content[0].text : "[]";
-      sceneDescriptions = JSON.parse(text.trim());
+      // Strip any markdown code fences Claude might add
+      const cleaned = text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+      sceneDescriptions = JSON.parse(cleaned);
     } catch {
       // Fallback: generate basic descriptions
       sceneDescriptions = sections.slice(0, sceneLimit).map((s, i) => ({
-        index:      i,
-        title:      `${s.type.charAt(0).toUpperCase() + s.type.slice(1)} Scene ${i + 1}`,
-        description: `${s.type} section of the music video. ${brief.logline ?? ""}`,
-        hasLipSync: !!s.lyrics,
-        filmLook:   "clean_digital",
+        index:          i,
+        title:          `${s.type.charAt(0).toUpperCase() + s.type.slice(1)} Scene ${i + 1}`,
+        description:    `@Element1 ${s.type} section of the music video. ${brief.logline ?? ""}`,
+        hasLipSync:     !!s.lyrics,
+        filmLook:       "clean_digital",
+        cameraDirection: "medium",
       }));
     }
 
@@ -170,10 +182,17 @@ Return ONLY a JSON array, no other text. Example:
         energyLevel:           section.energy,
         duration:              Math.min(section.duration, 8),
       };
-      const modelConfig      = selectModel(spec);
-      const description      = desc?.description ?? `${section.type} section of the music video`;
-      const cameraDirection  = detectCameraDirection(description);
+      const modelConfig = selectModel(spec);
+      const description = desc?.description ?? `@Element1 ${section.type} section of the music video`;
+
+      // Use Claude's explicit cameraDirection if valid, otherwise detect from description text
+      const validCameraKeys   = Object.keys(CAMERA_DIRECTION_MAP) as CameraDirectionKey[];
+      const claudeCameraKey   = desc?.cameraDirection as CameraDirectionKey | undefined;
+      const cameraDirection   = (claudeCameraKey && validCameraKeys.includes(claudeCameraKey))
+        ? claudeCameraKey
+        : detectCameraDirection(description);
       const cameraPrompt     = CAMERA_DIRECTION_MAP[cameraDirection]?.prompt ?? "";
+
       const validFilmLooks   = Object.keys(FILM_LOOKS) as FilmLookKey[];
       const filmLook         = validFilmLooks.includes(desc?.filmLook as FilmLookKey)
         ? (desc!.filmLook as FilmLookKey)
