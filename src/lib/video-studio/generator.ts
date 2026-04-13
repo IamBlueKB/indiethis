@@ -18,8 +18,10 @@ import Anthropic                     from "@anthropic-ai/sdk";
 import { fal }                      from "@fal-ai/client";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import type { SceneSpec }            from "@/lib/video-studio/model-router";
+import { VIDEO_MODELS, MULTISHOT_FALLBACK_CHAIN, type VideoModelKey } from "@/lib/video-studio/models";
 import type { MusicVideoProps, SceneClip } from "../../../remotion/src/MusicVideoComposition";
 import { db }                        from "@/lib/db";
+import { optimizeVideoPrompt }       from "@/lib/wavespeed";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -60,6 +62,235 @@ export interface GeneratedSceneOutput {
   // Manual rejection tracking (Reject & Redirect)
   manualRejected?:     boolean;
   manualRedirectNote?: string;
+}
+
+// ─── V2 Multi-shot generation (Kling 3.0 text-to-video) ─────────────────────────
+
+/**
+ * Input for a single shot within a multi-shot segment.
+ */
+interface MultiShotInput {
+  prompt:   string;
+  duration: number; // seconds, 3-15 per Kling limit
+}
+
+/**
+ * Split an array of shots into batches of at most maxPerSegment.
+ * Kling 3.0 supports max 6 shots per API call.
+ */
+function chunkShots(shots: MultiShotInput[], maxPerSegment: number): MultiShotInput[][] {
+  const chunks: MultiShotInput[][] = [];
+  for (let i = 0; i < shots.length; i += maxPerSegment) {
+    chunks.push(shots.slice(i, i + maxPerSegment));
+  }
+  return chunks;
+}
+
+/**
+ * Ensures every prompt references the artist as @Element1.
+ * Kling's element referencing requires @Element1 in the prompt text
+ * for the uploaded reference image to be applied to that character.
+ */
+function ensureElementReference(prompt: string): string {
+  if (prompt.includes("@Element1")) return prompt;
+  // Prepend @Element1 to the prompt so Kling binds the artist reference
+  return `@Element1 ${prompt}`;
+}
+
+/**
+ * V2 core generation function — submits all scenes as multi-shot Kling 3.0 calls.
+ *
+ * Flow:
+ *   1. Optimize each scene prompt through WaveSpeed
+ *   2. Inject @Element1 reference into every prompt
+ *   3. Chunk into segments of ≤6 shots (Kling's per-call limit)
+ *   4. Submit each segment as one fal.queue.submit / fal.subscribe call
+ *   5. Create a FalSceneJob record per segment (webhook routes results back)
+ *
+ * In production: fire-and-forget — webhook handles completion and stitching.
+ * In dev:        polling — blocks until each segment completes.
+ *
+ * @param jobId          MusicVideo record ID
+ * @param scenes         Planned scenes (from shot list or auto-generated)
+ * @param artistImageUrl User's uploaded reference photo (used as elements[0])
+ * @param audioUrl       Artist's audio track URL
+ * @param aspectRatio    "16:9" | "9:16" | "1:1"
+ * @param hasVocals      When true, prompts include singing/performing context for lip-sync
+ * @param webhookUrl     Production webhook URL; undefined → dev polling mode
+ * @param modelKey       Model to use; defaults to DEFAULT_QUICK_MODEL (kling-3-pro)
+ */
+export async function generateMultiShotVideo(
+  jobId:          string,
+  scenes:         PlannedSceneInput[],
+  artistImageUrl: string,
+  audioUrl:       string,
+  aspectRatio:    string,
+  hasVocals:      boolean = false,
+  webhookUrl?:    string,
+  modelKey:       VideoModelKey = "kling-3-pro",
+): Promise<void> {
+
+  // ── 1. Resolve model — fall back through chain if key is invalid ─────────────
+  let activeModelKey = modelKey;
+  if (!VIDEO_MODELS[activeModelKey]) {
+    activeModelKey = "kling-3-pro";
+  }
+  const modelId = VIDEO_MODELS[activeModelKey].id;
+
+  // ── 2. Optimize prompts + inject @Element1 ───────────────────────────────────
+  const optimizedShots: MultiShotInput[] = [];
+
+  for (const scene of scenes) {
+    let prompt = scene.prompt;
+
+    // Inject element reference if missing
+    prompt = ensureElementReference(prompt);
+
+    // WaveSpeed prompt optimization (no-op if WAVESPEED_API_KEY not set)
+    prompt = await optimizeVideoPrompt(prompt, "kling");
+
+    optimizedShots.push({
+      prompt,
+      duration: Math.min(scene.duration || 5, 15),
+    });
+  }
+
+  // ── 3. Chunk into segments of ≤6 shots ──────────────────────────────────────
+  const segments = chunkShots(optimizedShots, VIDEO_MODELS[activeModelKey].maxShots);
+
+  console.log(
+    `[generateMultiShotVideo] ${scenes.length} shots → ${segments.length} segment(s) via ${modelId}`,
+  );
+
+  // ── 4. Submit each segment ──────────────────────────────────────────────────
+  const validRatio = (aspectRatio === "9:16" || aspectRatio === "1:1") ? aspectRatio : "16:9";
+
+  for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+    const segment = segments[segIdx];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const input: Record<string, any> = {
+      multi_prompt: segment.map(s => ({
+        prompt:   s.prompt,
+        duration: String(s.duration), // fal.ai expects string
+      })),
+      multi_prompt_type: "customize",
+      elements: [{
+        frontal_image_url: artistImageUrl,
+      }],
+      aspect_ratio:   validRatio,
+      generate_audio: false, // artist's audio track is overlaid separately
+    };
+
+    // Lip-sync: pass audio so Kling can sync mouth movement on @Element1
+    // Only for segments that have vocal/performance shots
+    if (hasVocals) {
+      input.sound_url = audioUrl;
+    }
+
+    if (webhookUrl) {
+      // ── PRODUCTION: fire-and-forget via webhook ────────────────────────────
+      let requestId: string;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const submitted = await (fal.queue as any).submit(modelId, { input, webhookUrl });
+        requestId = submitted.request_id;
+      } catch (primaryErr) {
+        console.error(`[generateMultiShotVideo] Primary model ${modelId} failed for segment ${segIdx}:`, primaryErr);
+
+        // Try fallback chain
+        let submitted: { request_id: string } | null = null;
+        for (const fallbackKey of MULTISHOT_FALLBACK_CHAIN) {
+          const fallbackId = VIDEO_MODELS[fallbackKey].id;
+          if (fallbackId === modelId) continue; // skip same model
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            submitted = await (fal.queue as any).submit(fallbackId, { input, webhookUrl });
+            console.log(`[generateMultiShotVideo] Segment ${segIdx} fell back to ${fallbackId}`);
+            break;
+          } catch (fbErr) {
+            console.error(`[generateMultiShotVideo] Fallback ${fallbackId} also failed:`, fbErr);
+          }
+        }
+
+        if (!submitted) {
+          // All models failed — mark this segment failed in DB
+          await db.falSceneJob.create({
+            data: {
+              requestId:    `failed-${jobId}-seg${segIdx}-${Date.now()}`,
+              musicVideoId: jobId,
+              sceneIndex:   segIdx,
+              sceneTotal:   segments.length,
+              status:       "FAILED",
+              model:        modelId,
+            },
+          });
+          console.error(`[generateMultiShotVideo] Segment ${segIdx} failed all fallbacks — marked FAILED`);
+          continue;
+        }
+
+        requestId = submitted.request_id;
+      }
+
+      console.log(`[fal.queue.submit] segment ${segIdx}/${segments.length - 1} request_id: ${requestId}`);
+
+      await db.falSceneJob.create({
+        data: {
+          requestId:    requestId,
+          musicVideoId: jobId,
+          sceneIndex:   segIdx,
+          sceneTotal:   segments.length,
+          status:       "PENDING",
+          model:        modelId,
+        },
+      });
+
+    } else {
+      // ── DEV: blocking polling ───────────────────────────────────────────────
+      console.log(`[generateMultiShotVideo] Dev polling — segment ${segIdx}/${segments.length - 1}`);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (fal as any).subscribe(modelId, {
+          input,
+          pollInterval: 5000,
+          logs:         false,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const output   = (result as any).data ?? result;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const videoUrl = (output as any)?.video?.url ?? (output as any)?.url ?? "";
+
+        await db.falSceneJob.create({
+          data: {
+            requestId:    `dev-${jobId}-seg${segIdx}-${Date.now()}`,
+            musicVideoId: jobId,
+            sceneIndex:   segIdx,
+            sceneTotal:   segments.length,
+            status:       videoUrl ? "COMPLETE" : "FAILED",
+            videoUrl:     videoUrl || null,
+            model:        modelId,
+          },
+        });
+
+        console.log(`[generateMultiShotVideo] Segment ${segIdx} complete — ${videoUrl ? "✓" : "FAILED"}`);
+      } catch (err) {
+        console.error(`[generateMultiShotVideo] Dev polling failed for segment ${segIdx}:`, err);
+        await db.falSceneJob.create({
+          data: {
+            requestId:    `dev-failed-${jobId}-seg${segIdx}-${Date.now()}`,
+            musicVideoId: jobId,
+            sceneIndex:   segIdx,
+            sceneTotal:   segments.length,
+            status:       "FAILED",
+            model:        modelId,
+          },
+        });
+      }
+    }
+  }
 }
 
 // ─── 6a: Character portrait via FLUX Kontext Pro ────────────────────────────────
@@ -183,6 +414,7 @@ export async function generateSceneClip(
         musicVideoId,
         sceneIndex:   scene.index,
         sceneTotal:   sceneTotal ?? 1,
+        model:        scene.model,
       },
     });
 

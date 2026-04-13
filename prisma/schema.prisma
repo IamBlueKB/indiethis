@@ -2790,6 +2790,7 @@ model FalSceneJob {
   musicVideoId String
   sceneIndex   Int
   sceneTotal   Int                // total number of scenes expected for this video
+  model        String?            // fal.ai model ID used for this submission
   status       String   @default("PENDING")  // PENDING | COMPLETE | FAILED
   videoUrl     String?
   thumbnailUrl String?
