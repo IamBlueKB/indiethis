@@ -162,6 +162,51 @@ export async function generateMultiShotVideo(
     `[generateMultiShotVideo] ${scenes.length} shots → ${segments.length} segment(s) via ${modelId}`,
   );
 
+  // ── 3b. Write segment placeholders to DB (production webhook mode only) ─────
+  // The webhook reads video.scenes to get timing / prompt metadata per segment.
+  // One placeholder per segment; indices match FalSceneJob.sceneIndex.
+  // The webhook replaces these with final results (video URLs) on completion.
+  if (webhookUrl) {
+    const maxShots         = VIDEO_MODELS[activeModelKey].maxShots;
+    const segPlaceholders: GeneratedSceneOutput[] = segments.map((seg, segIdx) => {
+      const offset    = segIdx * maxShots;
+      const segScenes = scenes.slice(offset, offset + seg.length);
+      const startTime = segScenes[0]?.startTime ?? 0;
+      const endTime   = segScenes[segScenes.length - 1]?.endTime ?? 0;
+      const energy    = segScenes.reduce((s, sc) => s + (sc.spec?.energyLevel ?? 0.5), 0)
+                        / Math.max(segScenes.length, 1);
+
+      return {
+        sceneIndex:      segIdx,
+        videoUrl:        "",
+        thumbnailUrl:    null,
+        model:           modelId,
+        prompt:          seg.map(s => s.prompt).join(" · "),
+        startTime,
+        endTime,
+        energyLevel:     Math.round(energy * 100) / 100,
+        qaApproved:      null,
+        qaReason:        "Pending — awaiting segment webhook",
+        qaRetried:       false,
+        originalPrompt:  seg.map(s => s.prompt).join(" · "),
+        refinedPrompt:   null,
+        primaryModel:    modelId,
+        actualModel:     modelId,
+        fallbackUsed:    false,
+        fallbackAttempts: 0,
+      };
+    });
+
+    await db.musicVideo.update({
+      where: { id: jobId },
+      data:  {
+        scenes:      segPlaceholders as object[],
+        progress:    25,
+        currentStep: `Generating ${segments.length} segment${segments.length !== 1 ? "s" : ""}…`,
+      },
+    });
+  }
+
   // ── 4. Submit each segment ──────────────────────────────────────────────────
   const validRatio = (aspectRatio === "9:16" || aspectRatio === "1:1") ? aspectRatio : "16:9";
 

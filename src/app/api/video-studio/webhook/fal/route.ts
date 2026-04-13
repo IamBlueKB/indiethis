@@ -22,6 +22,7 @@ import {
   pickThumbnailScene,
   type GeneratedSceneOutput,
 }                                       from "@/lib/video-studio/generator";
+import { VIDEO_MODELS }                 from "@/lib/video-studio/models";
 import { sendMusicVideoCompleteEmail }  from "@/lib/brevo/email";
 import { sendVideoConversionEmail1 }    from "@/lib/agents/video-conversion";
 
@@ -46,6 +47,18 @@ export async function POST(req: NextRequest) {
     }
 
     const { musicVideoId, sceneIndex, sceneTotal } = job;
+
+    // Detect whether this is a V2 multi-shot (text-to-video) segment job
+    // or a legacy V1 single-scene (image-to-video) job.
+    // Multi-shot: sceneIndex = segment index; video.scenes holds one placeholder per segment.
+    // Legacy i2v: sceneIndex = scene index; video.scenes holds one placeholder per scene.
+    const isMultiShot = job.model != null &&
+      Object.values(VIDEO_MODELS).some(m => m.id === job.model && m.type === "text-to-video");
+
+    console.log(
+      `[fal webhook] ${isMultiShot ? "multi-shot segment" : "single-scene i2v"} ` +
+      `— scene/seg ${sceneIndex}/${sceneTotal - 1} — model: ${job.model ?? "unknown"}`,
+    );
 
     // Guard: if video already failed or completed (e.g. a late retry), skip
     const videoCheck = await db.musicVideo.findUnique({
@@ -84,13 +97,14 @@ export async function POST(req: NextRequest) {
 
     const doneCount = doneJobs.length;
 
-    // Update progress (scene gen = 25–75% of overall progress)
+    // Update progress (scene/segment gen = 25–75% of overall progress)
     const genProgress = 25 + Math.round((doneCount / sceneTotal) * 50);
+    const unitLabel   = isMultiShot ? "segments" : "scenes";
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data:  {
         progress:    genProgress,
-        currentStep: `Generated ${doneCount}/${sceneTotal} scenes…`,
+        currentStep: `Generated ${doneCount}/${sceneTotal} ${unitLabel}…`,
       },
     });
 
