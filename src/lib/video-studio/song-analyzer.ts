@@ -48,6 +48,15 @@ export interface SongAnalysis {
   sections:        SongSection[];
   beats:           number[]; // timestamps of every beat
   dropPoints:      number[]; // timestamps of energy spikes
+
+  // Essentia ML analysis — null if track was not yet analyzed or has no trackId
+  genres:      { label: string; score: number }[] | null;
+  moods:       { label: string; score: number }[] | null;
+  instruments: { label: string; score: number }[] | null;
+  danceability: number | null;
+  vocalType:   "vocal" | "instrumental" | null;
+  voiceGender: "male" | "female" | null;
+  timbre:      "bright" | "dark" | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,19 +111,37 @@ interface ExistingTrackData {
   energy:          number | null;
   lyrics:          string | null;
   lyricTimestamps: LyricWord[] | null;
+  // Essentia ML fields
+  essentiaGenres:       { label: string; score: number }[] | null;
+  essentiaMoods:        { label: string; score: number }[] | null;
+  essentiaInstruments:  { label: string; score: number }[] | null;
+  essentiaDanceability: number | null;
+  essentiaVoice:        string | null;
+  essentiaVoiceGender:  string | null;
+  essentiaTimbre:       string | null;
 }
 
 async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
   const result: ExistingTrackData = {
     bpm: null, key: null, energy: null, lyrics: null, lyricTimestamps: null,
+    essentiaGenres: null, essentiaMoods: null, essentiaInstruments: null,
+    essentiaDanceability: null, essentiaVoice: null, essentiaVoiceGender: null,
+    essentiaTimbre: null,
   };
 
   const [track, lyricJob] = await Promise.all([
     db.track.findUnique({
       where:  { id: trackId },
       select: {
-        bpm:          true,
-        musicalKey:   true,
+        bpm:                  true,
+        musicalKey:           true,
+        essentiaGenres:       true,
+        essentiaMoods:        true,
+        essentiaInstruments:  true,
+        essentiaDanceability: true,
+        essentiaVoice:        true,
+        essentiaVoiceGender:  true,
+        essentiaTimbre:       true,
         audioFeatures: {
           select: { energy: true },
         },
@@ -133,9 +160,21 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
   ]);
 
   if (track) {
-    if (track.bpm)                         result.bpm    = track.bpm;
-    if (track.musicalKey)                  result.key    = track.musicalKey;
+    if (track.bpm)                           result.bpm    = track.bpm;
+    if (track.musicalKey)                    result.key    = track.musicalKey;
     if (track.audioFeatures?.energy != null) result.energy = track.audioFeatures.energy;
+    // Essentia ML fields
+    if (track.essentiaGenres)
+      result.essentiaGenres = track.essentiaGenres as { label: string; score: number }[];
+    if (track.essentiaMoods)
+      result.essentiaMoods = track.essentiaMoods as { label: string; score: number }[];
+    if (track.essentiaInstruments)
+      result.essentiaInstruments = track.essentiaInstruments as { label: string; score: number }[];
+    if (track.essentiaDanceability != null)
+      result.essentiaDanceability = track.essentiaDanceability;
+    if (track.essentiaVoice)        result.essentiaVoice       = track.essentiaVoice;
+    if (track.essentiaVoiceGender)  result.essentiaVoiceGender = track.essentiaVoiceGender;
+    if (track.essentiaTimbre)       result.essentiaTimbre      = track.essentiaTimbre;
   }
 
   if (lyricJob?.outputData) {
@@ -313,6 +352,15 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   let lyrics:          string        | null = opts.existingLyrics     ?? null;
   let lyricTimestamps: LyricWord[]   | null = opts.existingTimestamps ?? null;
 
+  // Essentia ML fields — populated from DB if a linked Track exists
+  let essentiaGenres:       { label: string; score: number }[] | null = null;
+  let essentiaMoods:        { label: string; score: number }[] | null = null;
+  let essentiaInstruments:  { label: string; score: number }[] | null = null;
+  let essentiaDanceability: number | null = null;
+  let essentiaVoice:        string | null = null;
+  let essentiaVoiceGender:  string | null = null;
+  let essentiaTimbre:       string | null = null;
+
   // Pull from DB if we have a linked Track
   if (trackId && (bpm === null || energy === null)) {
     try {
@@ -324,6 +372,14 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
       if (lyricTimestamps === null && dbData.lyricTimestamps !== null) {
         lyricTimestamps = dbData.lyricTimestamps;
       }
+      // Essentia ML data
+      essentiaGenres       = dbData.essentiaGenres;
+      essentiaMoods        = dbData.essentiaMoods;
+      essentiaInstruments  = dbData.essentiaInstruments;
+      essentiaDanceability = dbData.essentiaDanceability;
+      essentiaVoice        = dbData.essentiaVoice;
+      essentiaVoiceGender  = dbData.essentiaVoiceGender;
+      essentiaTimbre       = dbData.essentiaTimbre;
     } catch (err) {
       console.warn("[song-analyzer] DB lookup failed:", err);
     }
@@ -397,6 +453,14 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     sections,
     beats,
     dropPoints,
+    // Essentia ML data — null for guest uploads or tracks not yet analyzed
+    genres:       essentiaGenres,
+    moods:        essentiaMoods,
+    instruments:  essentiaInstruments,
+    danceability: essentiaDanceability,
+    vocalType:    essentiaVoice as "vocal" | "instrumental" | null,
+    voiceGender:  essentiaVoiceGender as "male" | "female" | null,
+    timbre:       essentiaTimbre as "bright" | "dark" | null,
   };
 }
 
