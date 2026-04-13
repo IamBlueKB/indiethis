@@ -55,6 +55,7 @@ interface Props {
   bpm:                 number | null;
   musicalKey:          string | null;
   energy:              number | null;
+  analysisReady:       boolean;
   initialConversation: ChatMessage[];
   initialBrief:        object | null;
   initialShotList:     object[] | null;
@@ -65,11 +66,42 @@ interface Props {
 
 export default function DirectorClient({
   id, trackTitle, trackDuration, videoLength, aspectRatio, audioUrl,
-  bpm, musicalKey, energy,
+  bpm, musicalKey, energy, analysisReady,
   initialConversation, initialBrief, initialShotList,
   userId,
 }: Props) {
   const router = useRouter();
+
+  // ── Analysis gate — poll until songStructure is populated ───────────────────
+  const [isAnalysisReady, setIsAnalysisReady] = useState(analysisReady);
+  const [analysisElapsed, setAnalysisElapsed] = useState(0);
+
+  useEffect(() => {
+    if (isAnalysisReady) return;
+
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setAnalysisElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/video-studio/${id}/status`);
+        if (!res.ok) return;
+        const d = await res.json() as { analysisReady?: boolean };
+        if (d.analysisReady) {
+          setIsAnalysisReady(true);
+          clearInterval(poll);
+          clearInterval(timer);
+        }
+      } catch {
+        // silent retry
+      }
+    }, 3000);
+
+    return () => { clearInterval(poll); clearInterval(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Phase — determine from initial state
   const getInitialPhase = (): Phase => {
@@ -294,6 +326,77 @@ export default function DirectorClient({
   }
 
   const lengthLabel = videoLength === "SHORT" ? "Short" : videoLength === "EXTENDED" ? "Extended" : "Standard";
+
+  // ─── Analysis loading gate ────────────────────────────────────────────────────
+  if (!isAnalysisReady) {
+    const BAR_COUNT = 12;
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#0A0A0A", color: "#F0F0F0" }}>
+        <header className="border-b px-6 h-16 flex items-center gap-3" style={{ borderColor: "#1E1E1E" }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(212,168,67,0.15)" }}>
+            <Film size={16} style={{ color: "#D4A843" }} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white leading-none">Music Video Studio</p>
+            <p className="text-[10px] leading-none mt-0.5" style={{ color: "#888" }}>Director Mode</p>
+          </div>
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-16 max-w-md mx-auto w-full text-center space-y-8">
+          {/* Pulsing music icon */}
+          <div className="relative">
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center animate-pulse"
+              style={{ backgroundColor: "rgba(212,168,67,0.12)", border: "1px solid rgba(212,168,67,0.25)" }}
+            >
+              <Music2 size={32} style={{ color: "#D4A843" }} />
+            </div>
+            <div
+              className="absolute inset-0 rounded-full animate-ping opacity-20"
+              style={{ backgroundColor: "rgba(212,168,67,0.3)" }}
+            />
+          </div>
+
+          {/* Label */}
+          <div className="space-y-2">
+            <p className="text-lg font-bold text-white">Analyzing your track…</p>
+            <p className="text-sm" style={{ color: "#666" }}>
+              Building a full picture of your song — BPM, key, structure, lyrics, mood, and genre.
+            </p>
+          </div>
+
+          {/* Animated waveform bars */}
+          <div className="flex items-end gap-1 h-10">
+            {Array.from({ length: BAR_COUNT }).map((_, i) => (
+              <div
+                key={i}
+                className="w-2 rounded-full"
+                style={{
+                  backgroundColor: "#D4A843",
+                  height:    `${30 + Math.sin(i * 0.8) * 20}%`,
+                  opacity:   0.3 + (i % 3) * 0.2,
+                  animation: `pulse ${0.8 + (i % 4) * 0.15}s ease-in-out infinite alternate`,
+                  animationDelay: `${i * 0.07}s`,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Track name + elapsed */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold" style={{ color: "#D4A843" }}>{trackTitle}</p>
+            <p className="text-xs font-mono" style={{ color: "#444" }}>
+              {String(Math.floor(analysisElapsed / 60)).padStart(2, "0")}:{String(analysisElapsed % 60).padStart(2, "0")} elapsed
+            </p>
+          </div>
+
+          <p className="text-xs" style={{ color: "#444" }}>
+            This typically takes 30–90 seconds. Don't close this tab.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 

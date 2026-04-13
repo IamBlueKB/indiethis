@@ -84,6 +84,7 @@ export async function GET(
     clips,
     songSections,
     brief:          video.creativeBrief ?? null,
+    analysisReady:  !!video.songStructure,
     errorMessage:   video.errorMessage,
     amount:         video.amount,
     createdAt:      video.createdAt.toISOString(),

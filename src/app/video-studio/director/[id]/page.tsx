@@ -34,6 +34,7 @@ export default async function DirectorPage({
       bpm:             true,
       musicalKey:      true,
       energy:          true,
+      songStructure:   true,
       conversationLog: true,
       creativeBrief:   true,
       shotList:        true,
@@ -63,6 +64,7 @@ export default async function DirectorPage({
       bpm={video.bpm}
       musicalKey={video.musicalKey}
       energy={video.energy}
+      analysisReady={!!video.songStructure}
       initialConversation={((video.conversationLog ?? []) as unknown as { role: "user" | "assistant"; content: string; createdAt: string }[])}
       initialBrief={(video.creativeBrief as object | null) ?? null}
       initialShotList={(video.shotList as object[] | null) ?? null}
