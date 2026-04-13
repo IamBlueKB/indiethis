@@ -42,6 +42,29 @@ interface ShotListScene {
   hasLipSync:      boolean;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildEssentiaContext(analysis: any): string {
+  const parts: string[] = [];
+  if (analysis?.genres?.length) {
+    const genreStr = analysis.genres.slice(0, 3).map((g: { label: string; score: number }) => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ");
+    parts.push(`Genre: ${genreStr}`);
+  }
+  if (analysis?.moods?.length) {
+    const moodStr = analysis.moods.slice(0, 3).map((m: { label: string; score: number }) => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ");
+    parts.push(`Mood: ${moodStr}`);
+  }
+  if (analysis?.instruments?.length) {
+    const instrStr = analysis.instruments.slice(0, 5).map((i: { label: string; score: number }) => `${i.label} (${Math.round(i.score * 100)}%)`).join(", ");
+    parts.push(`Instruments: ${instrStr}`);
+  }
+  if (analysis?.danceability != null) parts.push(`Danceability: ${analysis.danceability.toFixed(2)}`);
+  if (analysis?.vocalType) parts.push(`Vocals: ${analysis.vocalType}${analysis.voiceGender ? ` (${analysis.voiceGender})` : ""}`);
+  if (analysis?.timbre) parts.push(`Timbre: ${analysis.timbre}`);
+  return parts.join("\n");
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -112,6 +135,9 @@ export async function POST(
       brief.visualThemes?.length && `Themes: ${brief.visualThemes.join(", ")}`,
     ].filter(Boolean).join("\n");
 
+    // Build Essentia audio intelligence context if available in songStructure
+    const essentiaContext = buildEssentiaContext(analysis);
+
     const claudeRes = await claude.messages.create({
       model:      SONNET,
       max_tokens: 1800,
@@ -119,7 +145,7 @@ export async function POST(
         role:    "user",
         content: `You are writing a precise shot list for a music video. Your descriptions will be fed directly into an AI video generation model (Kling 3.0 text-to-video).
 
-Track: "${video.trackTitle}"${video.bpm ? ` (${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey})` : ")"}
+Track: "${video.trackTitle}"${video.bpm ? ` (${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey})` : ")"}${essentiaContext ? `\n\nAudio Intelligence:\n${essentiaContext}` : ""}
 
 Creative Brief:
 ${briefSummary}

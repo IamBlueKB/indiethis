@@ -18,6 +18,29 @@ import { db }                  from "@/lib/db";
 import { claude, SONNET }      from "@/lib/claude";
 import { NextRequest, NextResponse } from "next/server";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildEssentiaContext(analysis: any): string {
+  const parts: string[] = [];
+  if (analysis?.genres?.length) {
+    const genreStr = analysis.genres.slice(0, 3).map((g: { label: string; score: number }) => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ");
+    parts.push(`Genre: ${genreStr}`);
+  }
+  if (analysis?.moods?.length) {
+    const moodStr = analysis.moods.slice(0, 3).map((m: { label: string; score: number }) => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ");
+    parts.push(`Mood: ${moodStr}`);
+  }
+  if (analysis?.instruments?.length) {
+    const instrStr = analysis.instruments.slice(0, 5).map((i: { label: string; score: number }) => `${i.label} (${Math.round(i.score * 100)}%)`).join(", ");
+    parts.push(`Instruments: ${instrStr}`);
+  }
+  if (analysis?.danceability != null) parts.push(`Danceability: ${analysis.danceability.toFixed(2)}`);
+  if (analysis?.vocalType) parts.push(`Vocals: ${analysis.vocalType}${analysis.voiceGender ? ` (${analysis.voiceGender})` : ""}`);
+  if (analysis?.timbre) parts.push(`Timbre: ${analysis.timbre}`);
+  return parts.join("\n");
+}
+
 // ─── Director Mode system prompt ────────────────────────────────────────────────
 
 const DIRECTOR_SYSTEM_PROMPT = `You are the IndieThis Director — an acclaimed music video director collaborating with an artist to develop their visual vision, then translating it into a production-ready brief that drives AI video generation.
@@ -100,7 +123,7 @@ export async function POST(
       select: {
         id: true, trackTitle: true, mode: true, status: true,
         conversationLog: true, bpm: true, musicalKey: true, energy: true,
-        videoLength: true, style: true,
+        videoLength: true, style: true, songStructure: true,
       },
     });
 
@@ -127,7 +150,13 @@ export async function POST(
     }));
 
     // Context hint for Claude
-    const contextHint = `The artist's track is "${video.trackTitle}"${video.bpm ? ` at ${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey}` : ""}${video.energy != null ? `, energy ${Math.round(video.energy * 10)}/10` : ""}.`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const analysis       = video.songStructure as any;
+    const essentiaCtx   = buildEssentiaContext(analysis);
+    const contextHint   = [
+      `The artist's track is "${video.trackTitle}"${video.bpm ? ` at ${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey}` : ""}${video.energy != null ? `, energy ${Math.round(video.energy * 10)}/10` : ""}.`,
+      essentiaCtx ? `Audio Intelligence:\n${essentiaCtx}` : "",
+    ].filter(Boolean).join("\n\n");
 
     const response = await claude.messages.create({
       model:      SONNET,
