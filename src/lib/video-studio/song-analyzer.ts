@@ -19,6 +19,7 @@
 import { db }         from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { detectAudioFeatures } from "@/lib/audio-analysis";
+import { extractLocalFeatures, type LocalAudioFeatures } from "@/lib/audio/essentia-local";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,8 +207,15 @@ interface ClaudeSection {
 }
 
 interface ClaudeAnalysisResponse {
-  sections:   ClaudeSection[];
-  dropPoints: number[];
+  sections:    ClaudeSection[];
+  dropPoints:  number[];
+  // Inferred from local WASM features + musical context when Essentia DB fields are null
+  genres:      { label: string; score: number }[] | null;
+  moods:       { label: string; score: number }[] | null;
+  danceability: number | null;
+  vocalType:   "vocal" | "instrumental" | null;
+  voiceGender: "male" | "female" | null;
+  timbre:      "bright" | "dark" | null;
 }
 
 async function analyzeStructureWithClaude(
@@ -216,7 +224,10 @@ async function analyzeStructureWithClaude(
   energy:   number,
   duration: number,
   lyricsDescription: string,
+  localFeatures?: LocalAudioFeatures | null,
 ): Promise<ClaudeAnalysisResponse | null> {
+
+  const hasLocalFeatures = !!localFeatures;
 
   const schema = JSON.stringify({
     sections: [
@@ -228,10 +239,27 @@ async function analyzeStructureWithClaude(
         mood:      "string — one of: atmospheric, intense, melancholic, euphoric, aggressive, dreamy, triumphant",
       },
     ],
-    dropPoints: ["number (seconds) — timestamps where energy spikes dramatically"],
+    dropPoints:  ["number (seconds) — timestamps where energy spikes dramatically"],
+    genres:      [{ label: "string — e.g. hip-hop, pop, r&b, electronic, rock, jazz, classical, country, reggae, trap, drill, afrobeats, lo-fi", score: "number 0-1" }],
+    moods:       [{ label: "string — e.g. aggressive, happy, sad, relaxed, party, acoustic, electronic, dark, euphoric, melancholic, triumphant, tense", score: "number 0-1" }],
+    danceability: "number 0-1 (0=not danceable, 1=highly danceable)",
+    vocalType:   "string — 'vocal' if song has vocals, 'instrumental' if purely instrumental",
+    voiceGender: "string or null — 'male', 'female', or null (if instrumental or unclear)",
+    timbre:      "string — 'bright' (high spectral centroid, airy, crisp) or 'dark' (bass-heavy, warm, low centroid)",
   });
 
-  const prompt = `Analyze this song and break it into structural sections.
+  // Build local features context block when WASM data is available
+  const localCtx = hasLocalFeatures ? `
+Audio Signal Measurements (Essentia WASM — use to inform genre, mood, timbre, and voice inferences):
+- Spectral Centroid: ${localFeatures!.spectralCentroid.toFixed(0)}Hz  (music range: 300Hz = bass-heavy/dark → 4000Hz = bright/crisp/airy)
+- Zero Crossing Rate: ${localFeatures!.zeroCrossingRate.toFixed(4)}  (0.01 = smooth/bass-dominant; 0.05+ = vocal/consonant presence; 0.15+ = noisy/high-energy)
+- RMS Energy: ${localFeatures!.rms.toFixed(4)}  (raw amplitude; higher = louder mix)
+- Dynamic Complexity: ${localFeatures!.dynamicComplexity.toFixed(2)}  (0–2 = flat dynamics; 5+ = wide loudness variation)
+- Loudness: ${localFeatures!.loudness.toFixed(1)} dB
+- Derived Timbre: ${localFeatures!.timbre}  (from spectral centroid threshold at 1500Hz)
+` : "";
+
+  const prompt = `Analyze this song and break it into structural sections. Also infer musical attributes from the available data.
 
 Song data:
 - BPM: ${bpm}
@@ -239,23 +267,29 @@ Song data:
 - Overall Energy: ${energy.toFixed(2)} (0=quiet, 1=very energetic)
 - Duration: ${duration} seconds (${Math.floor(duration / 60)}:${String(Math.round(duration % 60)).padStart(2, "0")})
 - ${lyricsDescription}
-
+${localCtx}
 Instructions:
-1. Divide the song into its natural sections based on the BPM, energy level, and lyric cues.
+1. Divide the song into its natural sections based on BPM, energy, and lyric cues.
 2. Assign a type to each section: intro, verse, chorus, bridge, outro, drop, breakdown.
-3. Assign an energy level 0-1 to each section (intros/verses usually lower than choruses/drops).
+3. Assign an energy level 0-1 to each section (intros/verses lower than choruses/drops).
 4. Assign a mood to each section.
-5. Identify drop points — moments where energy jumps up dramatically (usually chorus entries and drops).
+5. Identify drop points — moments where energy jumps up dramatically.
 6. Sections must be contiguous and cover the full duration from 0 to ${duration.toFixed(1)}.
 7. Aim for ${Math.max(4, Math.round(duration / 30))}–${Math.max(6, Math.round(duration / 20))} sections.
+8. Infer genres (top 3, score 0-1) from BPM, key, mode, spectral features, and lyrics content.
+9. Infer moods (top 3, score 0-1) from energy, key mode, dynamic complexity, and lyrics.
+10. Estimate danceability (0-1) from tempo, rhythm energy, and genre.
+11. Determine vocalType from lyrics availability and zero crossing rate${hasLocalFeatures ? ` (ZCR=${localFeatures!.zeroCrossingRate.toFixed(4)})` : ""}.
+12. Estimate voiceGender from lyrics if vocal; null otherwise.
+13. Classify timbre as "bright" or "dark" from spectral centroid${hasLocalFeatures ? ` (${localFeatures!.spectralCentroid.toFixed(0)}Hz)` : ""}.
 
-Return ONLY this JSON structure:
+Return ONLY this JSON structure (all fields required):
 ${schema}`;
 
   try {
     const response = await claude.messages.create({
       model:      SONNET,
-      max_tokens: 1200,
+      max_tokens: 1800,
       system:     SECTION_ANALYSIS_SYSTEM,
       messages:   [{ role: "user", content: prompt }],
     });
@@ -268,6 +302,14 @@ ${schema}`;
 
     // Validate structure
     if (!Array.isArray(parsed.sections) || parsed.sections.length === 0) return null;
+
+    // Normalize optional inference fields — Claude may omit or null them
+    parsed.genres      = Array.isArray(parsed.genres)  && parsed.genres.length  ? parsed.genres  : null;
+    parsed.moods       = Array.isArray(parsed.moods)   && parsed.moods.length   ? parsed.moods   : null;
+    parsed.danceability = typeof parsed.danceability === "number" ? Math.max(0, Math.min(1, parsed.danceability)) : null;
+    parsed.vocalType   = parsed.vocalType === "vocal" || parsed.vocalType === "instrumental" ? parsed.vocalType : null;
+    parsed.voiceGender = parsed.voiceGender === "male" || parsed.voiceGender === "female" ? parsed.voiceGender : null;
+    parsed.timbre      = parsed.timbre === "bright" || parsed.timbre === "dark" ? parsed.timbre : null;
 
     return parsed;
   } catch (err) {
@@ -324,7 +366,11 @@ function buildFallbackStructure(duration: number, energy: number): ClaudeAnalysi
     .filter(s => s.type === "chorus" || s.type === "drop")
     .map(s => s.startTime);
 
-  return { sections, dropPoints };
+  return {
+    sections, dropPoints,
+    genres: null, moods: null, danceability: null,
+    vocalType: null, voiceGender: null, timbre: null,
+  };
 }
 
 // ─── Main exported function ───────────────────────────────────────────────────
@@ -403,14 +449,36 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   const finalKey    = key    ?? "C major";
   const finalEnergy = energy ?? 0.65;
 
+  // ── 1.5. Run local Essentia WASM features if ML fields are still null ─────
+  // Fires when the DB has no pre-computed Essentia ML data (Replicate not run).
+  // Extracts signal-level features (spectral centroid, ZCR, RMS, dynamics) that
+  // are passed to Claude to infer genre, mood, danceability, voice type, timbre.
+
+  const needsLocalAnalysis = essentiaGenres === null && essentiaMoods === null;
+  let localFeatures: LocalAudioFeatures | null = null;
+
+  if (needsLocalAnalysis) {
+    try {
+      console.log("[song-analyzer] Running local Essentia WASM analysis…");
+      localFeatures = await extractLocalFeatures(audioUrl);
+      // Pre-fill timbre from WASM spectral centroid (Claude may override)
+      if (localFeatures && !essentiaTimbre) {
+        essentiaTimbre = localFeatures.timbre;
+      }
+    } catch (err) {
+      console.warn("[song-analyzer] Local Essentia WASM analysis failed:", err);
+    }
+  }
+
   // ── 2. Build lyric context for Claude ─────────────────────────────────────
 
   const lyricsDescription = formatLyricsForPrompt(lyrics, lyricTimestamps, duration);
 
-  // ── 3. Get section structure from Claude ──────────────────────────────────
+  // ── 3. Get section structure + genre/mood inferences from Claude ──────────
 
   let structureResult = await analyzeStructureWithClaude(
     finalBpm, finalKey, finalEnergy, duration, lyricsDescription,
+    needsLocalAnalysis ? localFeatures : null,
   );
 
   // Fall back to rule-based if Claude fails
@@ -443,6 +511,28 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     .filter(t => typeof t === "number" && t >= 0 && t < duration)
     .sort((a, b) => a - b);
 
+  // ── 7. Merge Claude genre/mood inferences into Essentia-equivalent fields ─
+  // When local WASM analysis ran, Claude returns inferred genre/mood/etc.
+  // These augment (don't replace) any pre-existing DB Essentia fields.
+
+  if (needsLocalAnalysis && structureResult) {
+    if (!essentiaGenres  && structureResult.genres?.length)  essentiaGenres       = structureResult.genres;
+    if (!essentiaMoods   && structureResult.moods?.length)   essentiaMoods        = structureResult.moods;
+    if (essentiaDanceability === null && structureResult.danceability != null)
+      essentiaDanceability = structureResult.danceability;
+    if (!essentiaVoice       && structureResult.vocalType)   essentiaVoice        = structureResult.vocalType;
+    if (!essentiaVoiceGender && structureResult.voiceGender) essentiaVoiceGender  = structureResult.voiceGender;
+    if (!essentiaTimbre      && structureResult.timbre)      essentiaTimbre       = structureResult.timbre;
+
+    if (essentiaGenres || essentiaMoods) {
+      console.log(
+        "[song-analyzer] Claude inferred genre:", essentiaGenres?.slice(0, 2).map(g => g.label).join(", "),
+        "| mood:", essentiaMoods?.slice(0, 2).map(m => m.label).join(", "),
+        "| voice:", essentiaVoice, "| timbre:", essentiaTimbre,
+      );
+    }
+  }
+
   return {
     bpm:             finalBpm,
     key:             finalKey,
@@ -453,7 +543,7 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     sections,
     beats,
     dropPoints,
-    // Essentia ML data — null for guest uploads or tracks not yet analyzed
+    // Essentia ML data — from DB (Replicate) or inferred by Claude from WASM features
     genres:       essentiaGenres,
     moods:        essentiaMoods,
     instruments:  essentiaInstruments,
