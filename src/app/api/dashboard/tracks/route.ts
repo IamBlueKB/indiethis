@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 import { moderateContent } from "@/lib/agents/content-moderation";
+import { analyzeWithEssentia } from "@/lib/audio/essentia-analysis";
 
 export async function GET() {
   const session = await auth();
@@ -71,6 +72,29 @@ export async function POST(req: NextRequest) {
     create: { userId: session.user.id },
     update: {},
   }).catch(() => { /* silent — non-critical */ });
+
+  // Essentia ML analysis via Replicate — runs in parallel with other background
+  // tasks, never blocks track creation. Stores results on the Track record.
+  // Falls back silently if Replicate is unavailable or account has no credit.
+  if (track.fileUrl) {
+    void analyzeWithEssentia(track.fileUrl).then(async (essentia) => {
+      if (!essentia) return;
+      await db.track.update({
+        where: { id: track.id },
+        data: {
+          essentiaGenres:       essentia.genres,
+          essentiaMoods:        essentia.moods,
+          essentiaInstruments:  essentia.instruments,
+          essentiaDanceability: essentia.danceability,
+          essentiaVoice:        essentia.voice,
+          essentiaVoiceGender:  essentia.voiceGender,
+          essentiaTimbre:       essentia.timbre,
+          essentiaAutoTags:     essentia.autoTags,
+          essentiaAnalyzedAt:   new Date(),
+        },
+      });
+    }).catch(() => { /* silent — non-critical */ });
+  }
 
   return NextResponse.json({ track }, { status: 201 });
 }
