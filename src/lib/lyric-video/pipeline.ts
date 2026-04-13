@@ -19,7 +19,7 @@ import { fal }                  from "@fal-ai/client";
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import { db }                   from "@/lib/db";
 import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
-import { generateBackgrounds }  from "@/lib/lyric-video/background-generator";
+import { generateBackgrounds, buildEssentiaVisualContext } from "@/lib/lyric-video/background-generator";
 import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
 import { sendBrandedEmail }     from "@/lib/brevo/email";
 import type { LyricVideo }      from "@prisma/client";
@@ -238,6 +238,22 @@ export async function startLyricVideoGeneration(lyricVideoId: string): Promise<v
 
     await setProgress(lyricVideoId, 18, "Track analyzed — building backgrounds…");
 
+    // ── Essentia ML context (from linked Track record, if any) ─────────────
+    let essentiaVisualContext: string | null = null;
+    if (j.trackId) {
+      const track = await db.track.findUnique({
+        where:  { id: j.trackId },
+        select: { essentiaGenres: true, essentiaMoods: true, essentiaTimbre: true },
+      });
+      if (track) {
+        essentiaVisualContext = buildEssentiaVisualContext({
+          genres:  track.essentiaGenres as { label: string; score: number }[] | null,
+          moods:   track.essentiaMoods  as { label: string; score: number }[] | null,
+          timbre:  track.essentiaTimbre,
+        });
+      }
+    }
+
     // ── Phase 2a: Color extraction ─────────────────────────────────────────
     let colorPalette = (j.colorPalette as ColorPalette | null);
     if (!colorPalette && j.coverArtUrl) {
@@ -286,11 +302,12 @@ export async function startLyricVideoGeneration(lyricVideoId: string): Promise<v
     const visionPrompt = (j.visionPrompt as string | null) ?? null;
 
     const backgroundScenes = await generateBackgrounds({
-      sections:     sectionsForGen,
-      coverArtUrl:  j.coverArtUrl ?? null,
-      colorPalette: colorPalette ?? null,
+      sections:        sectionsForGen,
+      coverArtUrl:     j.coverArtUrl ?? null,
+      colorPalette:    colorPalette ?? null,
       visionPrompt,
       aspectRatio,
+      essentiaContext: essentiaVisualContext,
       onProgress: async (completed, total) => {
         const p = 22 + Math.round((completed / total) * 45);
         await setProgress(lyricVideoId, p, `Generated ${completed}/${total} scenes…`);

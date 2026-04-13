@@ -33,12 +33,13 @@ export interface BackgroundScene {
 }
 
 interface GenerateOptions {
-  sections:       SongSection[];
-  coverArtUrl?:   string | null;      // image seed for color consistency
-  colorPalette?:  { primary: string; secondary: string; accent: string } | null;
-  visionPrompt?:  string | null;      // free-text direction from artist
-  aspectRatio?:   "16:9" | "9:16" | "1:1";
-  onProgress?:    (completed: number, total: number) => void;
+  sections:        SongSection[];
+  coverArtUrl?:    string | null;      // image seed for color consistency
+  colorPalette?:   { primary: string; secondary: string; accent: string } | null;
+  visionPrompt?:   string | null;      // free-text direction from artist
+  aspectRatio?:    "16:9" | "9:16" | "1:1";
+  onProgress?:     (completed: number, total: number) => void;
+  essentiaContext?: string | null;     // ML-derived genre/mood visual style hint
 }
 
 // ─── Mood → visual prompt mappings ───────────────────────────────────────────
@@ -63,12 +64,57 @@ const SECTION_VISUALS: Record<string, string> = {
   breakdown:    "stripped back minimal environment, slow motion details, intimate close-up texture",
 };
 
+// ─── Essentia genre → visual style mapper ─────────────────────────────────────
+
+/**
+ * Converts Essentia genre/mood/timbre into a visual style hint for the prompt.
+ * Returns null if no Essentia data is available.
+ */
+export function buildEssentiaVisualContext(opts: {
+  genres:  { label: string; score: number }[] | null;
+  moods:   { label: string; score: number }[] | null;
+  timbre:  string | null;
+}): string | null {
+  const parts: string[] = [];
+
+  if (opts.genres?.length) {
+    const topGenre = opts.genres[0].label.toLowerCase();
+    if (topGenre.includes("hip") || topGenre.includes("trap") || topGenre.includes("rap")) {
+      parts.push("urban gritty concrete textures, bold geometric shadows, low-angle street-level aesthetics");
+    } else if (topGenre.includes("electronic") || topGenre.includes("edm") || topGenre.includes("techno") || topGenre.includes("house")) {
+      parts.push("futuristic neon grid, digital glitch art, holographic light beams, cyberpunk aesthetic");
+    } else if (topGenre.includes("pop")) {
+      parts.push("clean modern light, bright pastel gradients, minimal elegant environment");
+    } else if (topGenre.includes("acoustic") || topGenre.includes("folk") || topGenre.includes("country")) {
+      parts.push("warm organic textures, natural wood grain, soft golden hour light, earthy tones");
+    } else if (topGenre.includes("jazz") || topGenre.includes("soul") || topGenre.includes("blues")) {
+      parts.push("warm amber club lighting, vintage film grain, deep moody shadows, rich brass tones");
+    } else if (topGenre.includes("rnb") || topGenre.includes("r&b") || topGenre.includes("neo soul")) {
+      parts.push("silky smooth gradients, warm candlelight glow, intimate ambient lighting, velvet textures");
+    } else if (topGenre.includes("rock") || topGenre.includes("metal") || topGenre.includes("punk")) {
+      parts.push("high-contrast industrial textures, dramatic lightning, raw concrete aesthetic, intense shadows");
+    } else if (topGenre.includes("classical") || topGenre.includes("orchestral")) {
+      parts.push("grand architectural spaces, elegant marble textures, soft diffuse light, timeless aesthetic");
+    }
+  }
+
+  if (opts.timbre === "dark") {
+    parts.push("dark brooding atmosphere, deep shadows, low-key moody lighting");
+  } else if (opts.timbre === "bright") {
+    parts.push("bright airy atmosphere, clean light, open spacious feel");
+  }
+
+  if (!parts.length) return null;
+  return parts.join(", ");
+}
+
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
 function buildPrompt(
-  section:       SongSection,
-  visionPrompt?: string | null,
-  colorPalette?: { primary: string; secondary: string; accent: string } | null,
+  section:         SongSection,
+  visionPrompt?:   string | null,
+  colorPalette?:   { primary: string; secondary: string; accent: string } | null,
+  essentiaContext?: string | null,
 ): string {
   const moodBase    = MOOD_VISUALS[section.mood]    ?? MOOD_VISUALS.atmospheric;
   const sectionBase = SECTION_VISUALS[section.type] ?? SECTION_VISUALS.verse;
@@ -86,7 +132,10 @@ function buildPrompt(
   // Artist's free-text direction (prepended if provided)
   const visionHint = visionPrompt ? `${visionPrompt}, ` : "";
 
-  const base = `${visionHint}${colorHint}${sectionBase}, ${moodBase}, ${energyMod}, abstract cinematic background, 4K quality, smooth motion, atmospheric depth`;
+  // Essentia ML-derived genre/timbre visual style (injected after vision direction)
+  const essentiaHint = essentiaContext ? `${essentiaContext}, ` : "";
+
+  const base = `${visionHint}${essentiaHint}${colorHint}${sectionBase}, ${moodBase}, ${energyMod}, abstract cinematic background, 4K quality, smooth motion, atmospheric depth`;
 
   return base + SAFETY_SUFFIX;
 }
@@ -94,14 +143,15 @@ function buildPrompt(
 // ─── Single clip generator ────────────────────────────────────────────────────
 
 async function generateOneClip(
-  section:      SongSection,
-  index:        number,
-  coverArtUrl?: string | null,
-  visionPrompt?: string | null,
-  colorPalette?: { primary: string; secondary: string; accent: string } | null,
-  aspectRatio:  "16:9" | "9:16" | "1:1" = "16:9",
+  section:         SongSection,
+  index:           number,
+  coverArtUrl?:    string | null,
+  visionPrompt?:   string | null,
+  colorPalette?:   { primary: string; secondary: string; accent: string } | null,
+  aspectRatio:     "16:9" | "9:16" | "1:1" = "16:9",
+  essentiaContext?: string | null,
 ): Promise<BackgroundScene> {
-  const prompt   = buildPrompt(section, visionPrompt, colorPalette);
+  const prompt   = buildPrompt(section, visionPrompt, colorPalette, essentiaContext);
   const duration = Math.max(5, Math.min(10, Math.round(section.duration)));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,6 +213,7 @@ export async function generateBackgrounds(opts: GenerateOptions): Promise<Backgr
     visionPrompt,
     aspectRatio = "16:9",
     onProgress,
+    essentiaContext,
   } = opts;
 
   const results: BackgroundScene[] = [];
@@ -174,7 +225,7 @@ export async function generateBackgrounds(opts: GenerateOptions): Promise<Backgr
 
     const batchResults = await Promise.all(
       batch.map((section, batchIdx) =>
-        generateOneClip(section, i + batchIdx, coverArtUrl, visionPrompt, colorPalette, aspectRatio),
+        generateOneClip(section, i + batchIdx, coverArtUrl, visionPrompt, colorPalette, aspectRatio, essentiaContext),
       ),
     );
 
