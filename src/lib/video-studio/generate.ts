@@ -18,7 +18,8 @@
 
 import { db }                   from "@/lib/db";
 import { fal }                  from "@fal-ai/client";
-import { analyzeSong }          from "@/lib/video-studio/song-analyzer";
+import { analyzeSong, type SongAnalysis } from "@/lib/video-studio/song-analyzer";
+import { claude, SONNET }       from "@/lib/claude";
 import { sendMusicVideoCompleteEmail } from "@/lib/brevo/email";
 import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
 import { sendVideoConversionEmail1 }  from "@/lib/agents/video-conversion";
@@ -466,8 +467,104 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
       },
     });
 
+    // Generate the Director's opening message as a specific creative proposal
+    try {
+      const greeting = await generateInitialGreeting(video.trackTitle, analysis);
+      if (greeting) {
+        const greetingMsg = { role: "assistant", content: greeting, createdAt: new Date().toISOString() };
+        await db.musicVideo.update({
+          where: { id: musicVideoId },
+          data:  { conversationLog: [greetingMsg] },
+        });
+      }
+    } catch (err) {
+      console.warn("[video-studio] initial greeting failed — Director will open fresh:", err);
+    }
+
   } catch (err) {
     console.error(`[video-studio] analysis-only failed for ${musicVideoId}:`, err);
+  }
+}
+
+// ─── Director Mode — server-side opening greeting ───────────────────────────────
+
+/**
+ * After analysis completes, generate the Director's first message: a specific
+ * creative proposal based on the audio analysis. Stored in conversationLog so
+ * the DirectorClient loads it directly rather than triggering a static fallback.
+ */
+async function generateInitialGreeting(
+  trackTitle: string,
+  analysis:   SongAnalysis,
+): Promise<string | null> {
+  // Build audio intelligence context
+  const lines: string[] = [`Track: "${trackTitle}"`];
+
+  if (analysis.bpm)             lines.push(`BPM: ${Math.round(analysis.bpm)}`);
+  if (analysis.key)             lines.push(`Key: ${analysis.key}`);
+  if (analysis.energy)          lines.push(`Energy: ${Math.round(analysis.energy * 10)}/10`);
+
+  if (analysis.genres?.length)  lines.push(`Genres: ${analysis.genres.slice(0, 3).map(g => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ")}`);
+  if (analysis.moods?.length)   lines.push(`Moods: ${analysis.moods.slice(0, 3).map(m => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ")}`);
+  if (analysis.danceability != null) lines.push(`Danceability: ${analysis.danceability.toFixed(2)}`);
+  if (analysis.timbre)          lines.push(`Timbre: ${analysis.timbre}`);
+  if (analysis.vocalType)       lines.push(`Vocals: ${analysis.vocalType}`);
+
+  // Sections summary
+  if (analysis.sections?.length) {
+    const sectionNames = analysis.sections.map(s => s.type).join(" → ");
+    lines.push(`Structure: ${sectionNames}`);
+  }
+
+  // Lyrics excerpt (first 120 chars)
+  if (analysis.lyrics) {
+    const excerpt = analysis.lyrics.replace(/\n/g, " ").trim().slice(0, 120);
+    if (excerpt) lines.push(`Lyrics excerpt: "${excerpt}…"`);
+  }
+
+  const context = lines.join("\n");
+
+  const systemPrompt = `You are the IndieThis Director — a world-class music video director. You've just finished analyzing the artist's track using audio ML classifiers. You know exactly what it sounds like.
+
+## Your Opening Message Rules
+- Lead with what you HEAR: genre, mood, energy, tempo character — stated as YOUR direct knowledge
+- NEVER say "based on the data", "I was told", "according to the analysis"
+- Immediately translate the sound into a SPECIFIC visual direction: lighting, camera movement, color grade, pacing
+- Use concrete cinematography language: Dutch angle, dolly push-in, Rembrandt lighting, chiaroscuro, anamorphic, etc.
+- End with ONE question letting the artist react — do they run with your direction or redirect?
+- Keep it to 3–5 sentences. No bullet lists. Conversational but expert.
+
+## Camera vocabulary
+MOVEMENTS: static locked-off, handheld, steadicam, dolly push-in/pull-out, truck, crane, whip pan, orbit
+ANGLES: eye-level, low angle, high angle, Dutch angle, bird's-eye, worm's-eye
+FRAMING: ECU, CU, MCU, MS, MWS, WS, EWS
+LIGHTING: Rembrandt, high-key, low-key, rim/backlight, silhouette, chiaroscuro, neon/practical, golden hour, blue hour
+MODIFIERS: cinematic grain, 35mm analog warmth, anamorphic lens flares, crushed shadows, bleach bypass, neon noir
+
+## Example opening
+"Your track is dark, aggressive trap — 140 BPM, heavy 808s, that Am key makes it cinematic not party. I'm thinking noir warehouse, hard cuts synced to every drop, slow dolly push-ins during the verses with Rembrandt side lighting and crushed shadows. Want to run with that, or are you taking this somewhere different?"`;
+
+  try {
+    const response = await claude.messages.create({
+      model:      SONNET,
+      max_tokens: 300,
+      system:     systemPrompt,
+      messages:   [
+        {
+          role:    "user",
+          content: `Here is the audio intelligence for the track:\n\n${context}\n\nGive me your opening director's pitch.`,
+        },
+      ],
+    });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
+    if (!text) return null;
+
+    console.log(`[video-studio] Initial greeting generated for ${trackTitle} (${text.length} chars)`);
+    return text;
+  } catch (err) {
+    console.warn("[video-studio] generateInitialGreeting Claude call failed:", err);
+    return null;
   }
 }
 
