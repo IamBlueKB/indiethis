@@ -303,20 +303,20 @@ export default function PreviewClient({
 
         {/* Guest CTA */}
         {isGuest && (
-          <div className="rounded-2xl border px-6 py-6 space-y-3" style={{ borderColor: "#2A2A2A", backgroundColor: "#0F0F0F" }}>
+          <div className="rounded-2xl border px-6 py-6 space-y-3" style={{ borderColor: "#2A1F00", backgroundColor: "rgba(212,168,67,0.04)" }}>
             <div>
-              <p className="text-base font-bold text-white">Save your videos. Get included credits.</p>
+              <p className="text-base font-bold text-white">Keep your video. Unlock your library.</p>
               <p className="text-sm mt-1" style={{ color: "#888" }}>
-                Create a free IndieThis account to keep your videos, unlock your library, and get monthly included videos with a subscription.
+                Join IndieThis to save your videos, access your full library, and get music videos included with your plan every month.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <a
                 href="/signup"
                 className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold"
-                style={{ backgroundColor: "#E85D4A", color: "#fff" }}
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
               >
-                Create Free Account <ChevronRight size={14} />
+                Join IndieThis <ChevronRight size={14} />
               </a>
               <a
                 href="/pricing"
