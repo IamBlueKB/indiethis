@@ -24,16 +24,29 @@ export interface PromptEnhanceInput {
   energy:            number | null;
   trackTitle:        string;
   artistName:        string;
+  // Essentia ML data — richer than math-based genre/mood
+  essentiaGenres:    { label: string; score: number }[] | null;
+  essentiaMoods:     { label: string; score: number }[] | null;
+  essentiaTimbre:    string | null;
 }
 
 // ─── Initial enhancement ──────────────────────────────────────────────────────
 
 export async function enhanceCoverArtPrompt(input: PromptEnhanceInput): Promise<string> {
+  // Prefer Essentia ML classifications over math-based heuristics
+  const genreStr = input.essentiaGenres?.length
+    ? input.essentiaGenres.slice(0, 2).map(g => g.label).join(", ")
+    : input.genre;
+  const moodStr = input.essentiaMoods?.length
+    ? input.essentiaMoods.slice(0, 3).map(m => m.label).join(", ")
+    : input.mood;
+
   const trackContext = [
-    input.genre   ? `Genre: ${input.genre}`         : null,
-    input.bpm     ? `BPM: ${input.bpm}`             : null,
-    input.energy  ? `Energy level: ${Math.round(input.energy * 10)}/10` : null,
-    input.mood    ? `Mood: ${input.mood}`            : null,
+    genreStr              ? `Genre: ${genreStr}`                          : null,
+    input.bpm             ? `BPM: ${input.bpm}`                          : null,
+    input.energy          ? `Energy level: ${Math.round(input.energy * 10)}/10` : null,
+    moodStr               ? `Mood: ${moodStr}`                           : null,
+    input.essentiaTimbre  ? `Timbre: ${input.essentiaTimbre}`            : null,
   ].filter(Boolean).join("\n");
 
   const response = await claude.messages.create({

@@ -46,6 +46,10 @@ interface CoverArtGenerateInput {
   energy:            number | null;
   trackTitle:        string;
   artistName:        string;
+  // Essentia ML data — preferred over math-based genre/mood
+  essentiaGenres:    { label: string; score: number }[] | null;
+  essentiaMoods:     { label: string; score: number }[] | null;
+  essentiaTimbre:    string | null;
 }
 
 interface RefinementInput {
@@ -130,6 +134,9 @@ export async function generateCoverArtJob(input: CoverArtGenerateInput): Promise
       energy:            input.energy,
       trackTitle:        input.trackTitle,
       artistName:        input.artistName,
+      essentiaGenres:    input.essentiaGenres,
+      essentiaMoods:     input.essentiaMoods,
+      essentiaTimbre:    input.essentiaTimbre,
     };
 
     let enhancedPrompt: string;

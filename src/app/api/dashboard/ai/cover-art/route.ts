@@ -148,8 +148,11 @@ export async function POST(req: NextRequest) {
       ? await db.track.findUnique({
           where:  { id: existingJob.trackId },
           select: {
-            title:          true,
-            audioFeatures:  { select: { genre: true, mood: true, energy: true, valence: true } },
+            title:                true,
+            audioFeatures:        { select: { genre: true, mood: true, energy: true, valence: true } },
+            essentiaGenres:       true,
+            essentiaMoods:        true,
+            essentiaTimbre:       true,
           },
         })
       : null;
@@ -171,6 +174,9 @@ export async function POST(req: NextRequest) {
       energy:          trackData?.audioFeatures?.energy ?? null,
       trackTitle:      trackData?.title ?? "Untitled",
       artistName:      user?.artistName ?? user?.name ?? "Artist",
+      essentiaGenres:  (trackData?.essentiaGenres as { label: string; score: number }[] | null) ?? null,
+      essentiaMoods:   (trackData?.essentiaMoods  as { label: string; score: number }[] | null) ?? null,
+      essentiaTimbre:  (trackData?.essentiaTimbre  as string | null) ?? null,
     }).catch(console.error);
 
     return NextResponse.json({ jobId: existingJob.id });
@@ -200,8 +206,11 @@ export async function POST(req: NextRequest) {
     ? await db.track.findUnique({
         where:  { id: body.trackId },
         select: {
-          title:         true,
-          audioFeatures: { select: { genre: true, mood: true, energy: true, valence: true } },
+          title:          true,
+          audioFeatures:  { select: { genre: true, mood: true, energy: true, valence: true } },
+          essentiaGenres: true,
+          essentiaMoods:  true,
+          essentiaTimbre: true,
         },
       })
     : null;
@@ -261,6 +270,9 @@ export async function POST(req: NextRequest) {
         energy:          trackData?.audioFeatures?.energy ?? null,
         trackTitle:      trackData?.title ?? "Untitled",
         artistName:      user.artistName ?? user.name ?? "Artist",
+        essentiaGenres:  (trackData?.essentiaGenres as { label: string; score: number }[] | null) ?? null,
+        essentiaMoods:   (trackData?.essentiaMoods  as { label: string; score: number }[] | null) ?? null,
+        essentiaTimbre:  (trackData?.essentiaTimbre  as string | null) ?? null,
       }).catch(console.error);
 
       return NextResponse.json({ jobId: job.id });

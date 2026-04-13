@@ -1098,7 +1098,13 @@ export async function POST(req: NextRequest) {
                 const trackData = job.trackId
                   ? await db.track.findUnique({
                       where:  { id: job.trackId },
-                      select: { title: true, audioFeatures: { select: { genre: true, mood: true, energy: true } } },
+                      select: {
+                        title:          true,
+                        audioFeatures:  { select: { genre: true, mood: true, energy: true } },
+                        essentiaGenres: true,
+                        essentiaMoods:  true,
+                        essentiaTimbre: true,
+                      },
                     })
                   : null;
 
@@ -1118,6 +1124,9 @@ export async function POST(req: NextRequest) {
                   energy:          trackData?.audioFeatures?.energy ?? null,
                   trackTitle:      trackData?.title ?? "Untitled",
                   artistName:      user?.artistName ?? user?.name ?? "Artist",
+                  essentiaGenres:  (trackData?.essentiaGenres as { label: string; score: number }[] | null) ?? null,
+                  essentiaMoods:   (trackData?.essentiaMoods  as { label: string; score: number }[] | null) ?? null,
+                  essentiaTimbre:  (trackData?.essentiaTimbre  as string | null) ?? null,
                 });
               } catch (err) {
                 console.error("[webhook] COVER_ART generation error:", err);
