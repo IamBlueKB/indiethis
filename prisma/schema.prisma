@@ -2775,11 +2775,37 @@ model MusicVideo {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user            User?    @relation(fields: [userId], references: [id])
+  user            User?          @relation(fields: [userId], references: [id])
+  feedbacks       VideoFeedback[]
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// Artist feedback on a generated music video (used for prompt learning)
+model VideoFeedback {
+  id           String     @id @default(cuid())
+  musicVideoId String
+  sceneIndex   Int        @default(-1)  // -1 = overall video; >=0 = specific scene index
+  rating       Int?       // 1–5 star rating
+  liked        Boolean?   // thumbs up (true) / thumbs down (false)
+  notes        String?    // optional artist comment
+  promptUsed   String?    // the generation prompt for this scene
+  modelUsed    String?    // the fal.ai model ID used
+  createdAt    DateTime   @default(now())
+
+  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+
+  @@index([musicVideoId])
+  @@index([createdAt])
+}
+
+// Generic key-value config store — used by learning agents to persist insights
+model SystemConfig {
+  key       String   @id
+  value     String   // JSON-encoded value
+  updatedAt DateTime @updatedAt
 }
 
 // Lookup table: maps fal.ai request_id → MusicVideo scene

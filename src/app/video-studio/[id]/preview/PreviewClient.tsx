@@ -9,6 +9,7 @@ import { useState }                        from "react";
 import {
   Film, Download, Music2, Activity, Zap, ChevronRight,
   Share2, Check, RefreshCw, Loader2, Clapperboard,
+  ThumbsUp, ThumbsDown,
 } from "lucide-react";
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -62,6 +63,12 @@ export default function PreviewClient({
   const [regenError,   setRegenError]   = useState<string | null>(null);
   const [regenDone,    setRegenDone]    = useState(false);
 
+  // Feedback state
+  const [feedbackLiked,     setFeedbackLiked]     = useState<boolean | null>(null);
+  const [feedbackNote,      setFeedbackNote]      = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackLoading,   setFeedbackLoading]   = useState(false);
+
   const isDirector = mode === "DIRECTOR";
 
   async function handleRegen(sceneIndex: number) {
@@ -84,6 +91,24 @@ export default function PreviewClient({
       setRegenError("Connection error. Please try again.");
     } finally {
       setRegenLoading(false);
+    }
+  }
+
+  async function handleFeedback(liked: boolean) {
+    if (feedbackLoading || feedbackSubmitted) return;
+    setFeedbackLiked(liked);
+    setFeedbackLoading(true);
+    try {
+      await fetch(`/api/video-studio/${id}/feedback`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ liked, notes: feedbackNote || undefined }),
+      });
+      setFeedbackSubmitted(true);
+    } catch {
+      // Silent — feedback is best-effort
+    } finally {
+      setFeedbackLoading(false);
     }
   }
 
@@ -336,6 +361,71 @@ export default function PreviewClient({
             >
               <Music2 size={12} /> Explore &rarr;
             </a>
+          </div>
+
+          {/* Feedback panel */}
+          <div
+            className="rounded-2xl p-5"
+            style={{ backgroundColor: "#0D0D0D", border: "1px solid #1A1A1A" }}
+          >
+            {feedbackSubmitted ? (
+              <div className="flex items-center gap-3 py-1">
+                <Check size={18} style={{ color: "#D4A843" }} />
+                <p className="text-sm" style={{ color: "#aaa" }}>
+                  Thanks for the feedback — it helps us improve!
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-medium mb-3" style={{ color: "#ccc" }}>
+                  How did it turn out?
+                </p>
+                <div className="flex items-center gap-3 mb-3">
+                  <button
+                    onClick={() => handleFeedback(true)}
+                    disabled={feedbackLoading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                    style={{
+                      backgroundColor: feedbackLiked === true ? "#D4A843" : "#1A1A1A",
+                      color:           feedbackLiked === true ? "#0A0A0A" : "#888",
+                      border:          "1px solid #2A2A2A",
+                    }}
+                  >
+                    <ThumbsUp size={15} />
+                    Love it
+                  </button>
+                  <button
+                    onClick={() => handleFeedback(false)}
+                    disabled={feedbackLoading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                    style={{
+                      backgroundColor: feedbackLiked === false ? "#2A1A1A" : "#1A1A1A",
+                      color:           feedbackLiked === false ? "#E05050" : "#888",
+                      border:          "1px solid #2A2A2A",
+                    }}
+                  >
+                    <ThumbsDown size={15} />
+                    Not quite
+                  </button>
+                </div>
+                {feedbackLiked !== null && !feedbackSubmitted && (
+                  <textarea
+                    value={feedbackNote}
+                    onChange={e => setFeedbackNote(e.target.value)}
+                    placeholder="Any notes? (optional)"
+                    rows={2}
+                    maxLength={500}
+                    className="w-full text-sm rounded-lg px-3 py-2 resize-none"
+                    style={{
+                      backgroundColor: "#111",
+                      border:          "1px solid #222",
+                      color:           "#ccc",
+                      outline:         "none",
+                    }}
+                  />
+                )}
+              </>
+            )}
           </div>
 
           {/* Trending track cards — horizontal row */}
