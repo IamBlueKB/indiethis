@@ -2767,6 +2767,10 @@ model MusicVideo {
   conversionAnyOpened Boolean  @default(false) // true once a link in any email was clicked
   abandonedCartSent   Boolean  @default(false)  // true once abandoned-cart recovery email sent
 
+  // Quality gate (Claude Vision post-generation check)
+  qaApproved      Boolean? // null = not checked; true = passed; false = low quality warning
+  qaReport        String?  // JSON: { reason, recommendation, checkedAt }
+
   // Progress tracking
   progress        Int      @default(0)  // 0-100
   currentStep     String?  // human-readable step description

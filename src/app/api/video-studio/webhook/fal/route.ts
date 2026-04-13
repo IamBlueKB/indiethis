@@ -22,9 +22,10 @@ import {
   pickThumbnailScene,
   type GeneratedSceneOutput,
 }                                       from "@/lib/video-studio/generator";
-import { VIDEO_MODELS }                 from "@/lib/video-studio/models";
-import { sendMusicVideoCompleteEmail }  from "@/lib/brevo/email";
-import { sendVideoConversionEmail1 }    from "@/lib/agents/video-conversion";
+import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
+import { runVideoQualityGateAsync }        from "@/lib/video-studio/quality-gate";
+import { sendMusicVideoCompleteEmail }     from "@/lib/brevo/email";
+import { sendVideoConversionEmail1 }       from "@/lib/agents/video-conversion";
 
 export const maxDuration = 300;
 
@@ -122,16 +123,17 @@ export async function POST(req: NextRequest) {
     const video = await db.musicVideo.findUnique({
       where:  { id: musicVideoId },
       select: {
-        audioUrl:     true,
-        aspectRatio:  true,
-        trackDuration:true,
-        thumbnailUrl: true,
-        userId:       true,
-        guestEmail:   true,
-        trackTitle:   true,
-        amount:       true,
-        mode:         true,
-        scenes:       true,   // placeholder scenes written during submission
+        audioUrl:      true,
+        aspectRatio:   true,
+        trackDuration: true,
+        thumbnailUrl:  true,
+        userId:        true,
+        guestEmail:    true,
+        trackTitle:    true,
+        amount:        true,
+        mode:          true,
+        scenes:        true,   // placeholder scenes written during submission
+        creativeBrief: true,   // for quality gate context
       },
     });
 
@@ -220,6 +222,15 @@ export async function POST(req: NextRequest) {
     });
 
     console.log(`[fal webhook] ${musicVideoId} complete — ${completedScenes.length}/${sceneTotal} scenes`);
+
+    // ── 6. Quality gate — Claude Vision frame check (fire-and-forget) ─────────
+    // Runs asynchronously after response; result stored in MusicVideo.qaApproved/qaReport.
+    if (finalThumbnailUrl) {
+      const briefSummary = video.creativeBrief
+        ? JSON.stringify(video.creativeBrief).slice(0, 300)
+        : undefined;
+      runVideoQualityGateAsync(musicVideoId, finalThumbnailUrl, briefSummary);
+    }
 
     // ── 6. Notification email ─────────────────────────────────────────────────
     try {
