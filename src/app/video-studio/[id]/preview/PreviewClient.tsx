@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 
 const FORMAT_LABELS: Record<string, string> = {
-  "16:9": "YouTube",
-  "9:16": "TikTok / Reels",
-  "1:1":  "Instagram Feed",
+  "16:9":            "YouTube",
+  "9:16":            "TikTok / Reels",
+  "1:1":             "Instagram Feed",
+  "spotify-canvas":  "Spotify Canvas",
 };
 
 interface SceneRef {

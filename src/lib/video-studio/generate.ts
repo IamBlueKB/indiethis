@@ -336,7 +336,8 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     await setProgress(musicVideoId, 75, "Stitching your video…", { status: "STITCHING" });
 
     const durationMs       = Math.round(vid.trackDuration * 1000);
-    const targetAspectRatios = [aspectRatio]; // extend to ["16:9","9:16","1:1"] for multi-format
+    // Generate primary ratio + 9:16 (TikTok/Reels) + Spotify Canvas
+    const targetAspectRatios = Array.from(new Set([aspectRatio, "9:16"]));
 
     const finalVideoUrls = await generateMultiFormatVideos(
       musicVideoId,
@@ -344,6 +345,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       vid.audioUrl,
       targetAspectRatios,
       durationMs,
+      true, // includeSpotifyCanvas
     );
 
     const finalVideoUrl = finalVideoUrls[aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;

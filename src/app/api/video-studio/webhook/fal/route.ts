@@ -195,13 +195,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const durationMs    = Math.round(video.trackDuration * 1000);
+    const durationMs     = Math.round(video.trackDuration * 1000);
+    // Generate primary ratio + 9:16 (for TikTok/Reels), then Spotify Canvas
+    const targetRatios   = Array.from(new Set([video.aspectRatio, "9:16"]));
     const finalVideoUrls = await generateMultiFormatVideos(
       musicVideoId,
       sceneResults,
       video.audioUrl,
-      [video.aspectRatio],
+      targetRatios,
       durationMs,
+      true,  // includeSpotifyCanvas
     );
 
     const finalVideoUrl    = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;

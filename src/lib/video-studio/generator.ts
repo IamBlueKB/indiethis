@@ -941,21 +941,53 @@ export async function stitchWithRemotion(
 }
 
 /**
- * Render one video per requested aspect ratio in sequence.
+ * Render one video per requested aspect ratio in sequence, plus an optional
+ * Spotify Canvas short-form clip (9:16, max 30 seconds).
+ *
  * Returns a Record<string, string> mapping ratio → final video URL.
+ * The Spotify Canvas URL (if generated) is stored under the key "spotify-canvas".
+ *
+ * @param includeSpotifyCanvas  When true, also renders a 9:16 clip capped at 30s
+ *                               for use as a Spotify Canvas or Instagram Reel preview.
  */
 export async function generateMultiFormatVideos(
-  videoId:      string,
-  scenes:       GeneratedSceneOutput[],
-  audioUrl:     string,
-  aspectRatios: string[],
-  durationMs:   number,
+  videoId:              string,
+  scenes:               GeneratedSceneOutput[],
+  audioUrl:             string,
+  aspectRatios:         string[],
+  durationMs:           number,
+  includeSpotifyCanvas: boolean = false,
 ): Promise<Record<string, string>> {
+  // Deduplicate ratios
+  const ratios = Array.from(new Set(aspectRatios));
   const output: Record<string, string> = {};
 
-  for (const ratio of aspectRatios) {
+  for (const ratio of ratios) {
     const url = await stitchWithRemotion(videoId, scenes, audioUrl, ratio, durationMs);
     if (url) output[ratio] = url;
+  }
+
+  // Spotify Canvas: 9:16 portrait, max 30 seconds
+  // Reuses the 9:16 render if it was already generated within the time limit;
+  // otherwise renders a dedicated short clip.
+  if (includeSpotifyCanvas) {
+    const CANVAS_MAX_MS = 30_000;
+
+    if (output["9:16"] && durationMs <= CANVAS_MAX_MS) {
+      // Full 9:16 video is short enough — reuse it directly
+      output["spotify-canvas"] = output["9:16"];
+    } else {
+      // Render a dedicated 9:16 Spotify Canvas (capped at 30s)
+      const canvasDuration = Math.min(durationMs, CANVAS_MAX_MS);
+      const canvasUrl      = await stitchWithRemotion(
+        `${videoId}-canvas`,
+        scenes,
+        audioUrl,
+        "9:16",
+        canvasDuration,
+      );
+      if (canvasUrl) output["spotify-canvas"] = canvasUrl;
+    }
   }
 
   return output;
