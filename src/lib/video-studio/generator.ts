@@ -210,8 +210,19 @@ export async function generateMultiShotVideo(
   // ── 4. Submit each segment ──────────────────────────────────────────────────
   const validRatio = (aspectRatio === "9:16" || aspectRatio === "1:1") ? aspectRatio : "16:9";
 
+  const maxShotsPerSeg = VIDEO_MODELS[activeModelKey].maxShots;
+
   for (let segIdx = 0; segIdx < segments.length; segIdx++) {
     const segment = segments[segIdx];
+
+    // Identify original scenes for this segment to get timing + lip-sync flags
+    const segOffset  = segIdx * maxShotsPerSeg;
+    const segScenes  = scenes.slice(segOffset, segOffset + segment.length);
+
+    // Per-segment lip-sync: only enable if any shot in this segment needs it
+    const segHasLipSync = hasVocals && segScenes.some(s => s.spec?.hasLipSync);
+    const segStartTime  = segScenes[0]?.startTime ?? 0;
+    const segEndTime    = segScenes[segScenes.length - 1]?.endTime ?? segStartTime;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const input: Record<string, any> = {
@@ -224,13 +235,19 @@ export async function generateMultiShotVideo(
         frontal_image_url: artistImageUrl,
       }],
       aspect_ratio:   validRatio,
-      generate_audio: false, // artist's audio track is overlaid separately
+      generate_audio: false, // artist's audio is overlaid separately by Remotion
     };
 
-    // Lip-sync: pass audio so Kling can sync mouth movement on @Element1
-    // Only for segments that have vocal/performance shots
-    if (hasVocals) {
-      input.sound_url = audioUrl;
+    // Lip-sync: pass audio + per-segment time range so Kling syncs the correct
+    // portion of the track to @Element1's mouth movement in this segment.
+    if (segHasLipSync && audioUrl) {
+      input.sound_url        = audioUrl;
+      input.sound_start_time = segStartTime;
+      input.sound_end_time   = segEndTime;
+      console.log(
+        `[generateMultiShotVideo] Segment ${segIdx}: lip-sync ON ` +
+        `(${segStartTime.toFixed(1)}s → ${segEndTime.toFixed(1)}s)`,
+      );
     }
 
     if (webhookUrl) {
