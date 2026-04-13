@@ -363,6 +363,17 @@ model Track {
   featuredArtists      String?
   qualityScore         Int       @default(0)
   lyrics               String?
+
+  // ── Essentia ML Analysis (populated by Replicate mtg/music-classifiers) ──
+  essentiaGenres        Json?     // e.g. [{ "label": "electronic", "score": 0.87 }, { "label": "hip-hop", "score": 0.65 }]
+  essentiaMoods         Json?     // e.g. [{ "label": "aggressive", "score": 0.92 }, { "label": "dark", "score": 0.78 }]
+  essentiaInstruments   Json?     // e.g. [{ "label": "synthesizer", "score": 0.95 }, { "label": "drums", "score": 0.91 }]
+  essentiaDanceability  Float?    // 0-1
+  essentiaVoice         String?   // "vocal" | "instrumental"
+  essentiaVoiceGender   String?   // "male" | "female" | null
+  essentiaTimbre        String?   // "bright" | "dark" | null
+  essentiaAutoTags      Json?     // top 50 MSD tags with scores
+  essentiaAnalyzedAt    DateTime? // when the analysis was performed
 }
 
 model AudioFingerprint {
