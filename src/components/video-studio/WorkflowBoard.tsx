@@ -19,6 +19,18 @@ import {
 import { CameraDirectionPicker, CAMERA_DIRECTION_MAP, type CameraDirectionKey } from "./CameraDirectionPicker";
 import { FilmLookPicker, FILM_LOOKS, type FilmLookKey } from "./FilmLookPicker";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { VIDEO_MODELS, type VideoModelKey } from "@/lib/video-studio/models";
+
+// Director Mode scene model options (curated subset — multi-shot + best i2v models)
+const SCENE_MODEL_OPTIONS: { key: VideoModelKey; label: string; badge: string; description: string }[] = [
+  { key: "kling-3-pro",       label: "Kling 3.0 Pro",          badge: "Multi-shot · Best",    description: "Multi-shot text-to-video with @Element1 character ref" },
+  { key: "kling-3-standard",  label: "Kling 3.0 Standard",     badge: "Multi-shot · Faster",  description: "Same model as Pro but faster render at slightly lower quality" },
+  { key: "kling-o3-pro",      label: "Kling O3 Pro",           badge: "Multi-shot",           description: "Alternative multi-shot model — different motion style" },
+  { key: "kling-3-pro-i2v",   label: "Kling 3.0 Pro (Image)",  badge: "Image-to-video",       description: "Single-scene i2v with your reference photo as the frame" },
+  { key: "kling-2.6-pro-i2v", label: "Kling 2.6 Pro",         badge: "Elements",             description: "Character elements referencing for strong face consistency" },
+  { key: "veo-3.1",           label: "Veo 3.1",                badge: "Google · Premium",     description: "Google's highest-quality model — cinematic and realistic" },
+  { key: "seedance-2",        label: "Seedance 2.0",           badge: "Fast · Budget",        description: "ByteDance fast model — great for abstract / B-roll scenes" },
+];
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,8 +45,9 @@ export interface WorkflowScene {
   startTime:          number;
   endTime:            number;
   hasLipSync:         boolean;
-  modelDisplay?:      string;
-  referenceImageUrl?: string;  // null/undefined = use primary; set = per-scene override
+  model?:             string;        // fal.ai model ID override for this scene
+  modelDisplay?:      string;        // human-readable model name
+  referenceImageUrl?: string;        // null/undefined = use primary; set = per-scene override
 }
 
 export interface WorkflowClip {
@@ -672,6 +685,7 @@ function SceneEditPanel({
   const [description,      setDescription]      = useState(scene.description);
   const [cameraDirection,  setCameraDirection]  = useState<string>(scene.cameraDirection ?? "static_wide");
   const [filmLook,         setFilmLook]         = useState<string>(scene.filmLook ?? "clean_digital");
+  const [sceneModel,       setSceneModel]       = useState<string>(scene.model ?? "");
 
   // ── Per-scene image override ──────────────────────────────────────────────────
   const [sceneImageUrl,   setSceneImageUrl]   = useState<string | null>(scene.referenceImageUrl ?? null);
@@ -714,7 +728,15 @@ function SceneEditPanel({
   }
 
   function handleSave() {
-    onSave({ description, cameraDirection, filmLook, referenceImageUrl: sceneImageUrl ?? undefined });
+    const selectedModelOpt = SCENE_MODEL_OPTIONS.find(m => VIDEO_MODELS[m.key].id === sceneModel);
+    onSave({
+      description,
+      cameraDirection,
+      filmLook,
+      referenceImageUrl: sceneImageUrl ?? undefined,
+      model:             sceneModel || undefined,
+      modelDisplay:      selectedModelOpt?.label ?? undefined,
+    });
     onClose();
   }
 
@@ -798,6 +820,60 @@ function SceneEditPanel({
             onChange={v => setFilmLook(v)}
             onApplyToAll={onApplyFilmLookToAll}
           />
+        </div>
+
+        {/* ── Per-Scene Model Override ── */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#555" }}>
+              Generation Model
+            </label>
+            {sceneModel && (
+              <button
+                type="button"
+                onClick={() => setSceneModel("")}
+                className="text-[10px]"
+                style={{ color: "#888" }}
+              >
+                Use default
+              </button>
+            )}
+          </div>
+
+          <select
+            value={sceneModel}
+            onChange={e => setSceneModel(e.target.value)}
+            className="w-full rounded-lg text-sm px-3 py-2"
+            style={{
+              backgroundColor: "#111",
+              border:          "1px solid #2A2A2A",
+              color:           sceneModel ? "#fff" : "#666",
+              outline:         "none",
+            }}
+          >
+            <option value="">Auto (pipeline default)</option>
+            <optgroup label="Multi-shot (recommended)">
+              {SCENE_MODEL_OPTIONS.filter(m => VIDEO_MODELS[m.key].type === "text-to-video").map(m => (
+                <option key={m.key} value={VIDEO_MODELS[m.key].id}>
+                  {m.label} — {m.badge}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Image-to-video">
+              {SCENE_MODEL_OPTIONS.filter(m => VIDEO_MODELS[m.key].type === "image-to-video").map(m => (
+                <option key={m.key} value={VIDEO_MODELS[m.key].id}>
+                  {m.label} — {m.badge}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+
+          {sceneModel && (() => {
+            const opt = SCENE_MODEL_OPTIONS.find(m => VIDEO_MODELS[m.key].id === sceneModel);
+            return opt ? (
+              <p className="text-[11px]" style={{ color: "#666" }}>{opt.description}</p>
+            ) : null;
+          })()}
         </div>
 
         {/* ── Scene Image Override ── */}
