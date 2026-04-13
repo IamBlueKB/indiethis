@@ -30,12 +30,14 @@ import {
 } from "@/lib/video-studio/model-router";
 import {
   generateAllScenes,
+  generateMultiShotVideo,
   generateCharacterPortrait,
   generateMultiFormatVideos,
   pickThumbnailScene,
   type PlannedSceneInput,
   type GeneratedSceneOutput,
 } from "@/lib/video-studio/generator";
+import { VIDEO_MODELS, DEFAULT_QUICK_MODEL } from "@/lib/video-studio/models";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,26 +218,44 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     if (isWebhookMode) {
       const webhookUrl = `${appUrl}/api/video-studio/webhook/fal`;
 
-      // Submit all scenes; returns placeholders immediately (fal.queue.submit)
-      const placeholders = await generateAllScenes(
-        plannedScenes,
-        resolvedRefImage,
-        vid.audioUrl,
-        undefined,     // no progress callback — webhook updates progress per scene
-        webhookUrl,
-        musicVideoId,
-      );
+      if (mode === "QUICK") {
+        // ── Quick Mode V2: Kling 3.0 multi-shot text-to-video ────────────────
+        // generateMultiShotVideo writes segment placeholders + submits to fal.queue.
+        // The webhook handles assembly and stitching when all segments complete.
+        const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
+        await generateMultiShotVideo(
+          musicVideoId,
+          plannedScenes,
+          resolvedRefImage,
+          vid.audioUrl,
+          aspectRatio,
+          hasVocals,
+          webhookUrl,
+          DEFAULT_QUICK_MODEL,
+        );
+      } else {
+        // ── Director Mode: per-scene i2v with model overrides ────────────────
+        // Each scene uses the model assigned by the model router / Director config.
+        const placeholders = await generateAllScenes(
+          plannedScenes,
+          resolvedRefImage,
+          vid.audioUrl,
+          undefined,   // no progress callback — webhook updates per scene
+          webhookUrl,
+          musicVideoId,
+        );
 
-      // Write placeholders so the generating UI has scene-level metadata to display
-      await db.musicVideo.update({
-        where: { id: musicVideoId },
-        data:  {
-          scenes:      placeholders as object[],
-          status:      "GENERATING",
-          progress:    25,
-          currentStep: `Generating ${plannedScenes.length} scenes…`,
-        },
-      });
+        // Write placeholders so the generating UI has scene-level metadata
+        await db.musicVideo.update({
+          where: { id: musicVideoId },
+          data:  {
+            scenes:      placeholders as object[],
+            status:      "GENERATING",
+            progress:    25,
+            currentStep: `Generating ${plannedScenes.length} scenes…`,
+          },
+        });
+      }
 
       // Auto-link to Release Board (non-blocking)
       if (vid.trackId) {
@@ -243,22 +263,74 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       }
 
       console.log(
-        `[video-studio] ${plannedScenes.length} scenes submitted for ${musicVideoId} — webhook will stitch`,
+        `[video-studio] ${mode} — ${plannedScenes.length} scenes submitted for ${musicVideoId} — webhook will stitch`,
       );
       return; // Webhook takes over from here
     }
 
     // ── Phase 4b (DEV): Polling mode — block until all scenes complete ────────
-    const sceneResults: GeneratedSceneOutput[] = await generateAllScenes(
-      plannedScenes,
-      resolvedRefImage,
-      vid.audioUrl,
-      async (completed, total) => {
-        const genProgress = 28 + Math.round((completed / total) * 45);
-        await setProgress(musicVideoId, genProgress,
-          `Generated ${completed}/${total} scenes…`);
-      },
-    );
+    let sceneResults: GeneratedSceneOutput[];
+
+    if (mode === "QUICK") {
+      // Quick Mode dev: use multi-shot polling
+      const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
+      await generateMultiShotVideo(
+        musicVideoId,
+        plannedScenes,
+        resolvedRefImage,
+        vid.audioUrl,
+        aspectRatio,
+        hasVocals,
+        undefined,             // no webhook → dev polling mode
+        DEFAULT_QUICK_MODEL,
+      );
+
+      // Assemble sceneResults from completed FalSceneJob records
+      const completedJobs = await db.falSceneJob.findMany({
+        where:   { musicVideoId },
+        orderBy: { sceneIndex: "asc" },
+      });
+      const maxShots = VIDEO_MODELS[DEFAULT_QUICK_MODEL].maxShots;
+      sceneResults = completedJobs.map((job, i) => {
+        const offset    = i * maxShots;
+        const segScenes = plannedScenes.slice(offset, offset + maxShots);
+        const startTime = segScenes[0]?.startTime ?? 0;
+        const endTime   = segScenes[segScenes.length - 1]?.endTime ?? 0;
+        const energy    = segScenes.reduce((s, sc) => s + sc.spec.energyLevel, 0)
+                          / Math.max(segScenes.length, 1);
+        return {
+          sceneIndex:      job.sceneIndex,
+          videoUrl:        job.videoUrl  ?? "",
+          thumbnailUrl:    job.thumbnailUrl ?? null,
+          model:           job.model     ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
+          prompt:          segScenes.map(s => s.prompt).join(" · "),
+          startTime,
+          endTime,
+          energyLevel:     Math.round(energy * 100) / 100,
+          qaApproved:      null,
+          qaReason:        job.status === "FAILED" ? "Generation failed" : null,
+          qaRetried:       false,
+          originalPrompt:  segScenes.map(s => s.prompt).join(" · "),
+          refinedPrompt:   null,
+          primaryModel:    job.model ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
+          actualModel:     job.model ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
+          fallbackUsed:    false,
+          fallbackAttempts: 0,
+        };
+      });
+    } else {
+      // Director Mode dev: existing per-scene i2v path
+      sceneResults = await generateAllScenes(
+        plannedScenes,
+        resolvedRefImage,
+        vid.audioUrl,
+        async (completed, total) => {
+          const genProgress = 28 + Math.round((completed / total) * 45);
+          await setProgress(musicVideoId, genProgress,
+            `Generated ${completed}/${total} scenes…`);
+        },
+      );
+    }
 
     // ── Phase 5: Stitch via Remotion Lambda ───────────────────────────────────
     await setProgress(musicVideoId, 75, "Stitching your video…", { status: "STITCHING" });
