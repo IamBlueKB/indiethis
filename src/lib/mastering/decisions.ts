@@ -60,6 +60,46 @@ export const PLATFORM_TARGETS = {
   wav_master:    { lufs: -14, truePeak: -0.3, format: "WAV_24"  },
 };
 
+// ─── Essentia hint types ─────────────────────────────────────────────────────
+
+export interface EssentiaHints {
+  hasBass808:  boolean;
+  hasAcoustic: boolean;
+  hasSynth:    boolean;
+  hasVocals:   boolean;
+  isDark:      boolean;
+  isBright:    boolean;
+}
+
+/** Build Essentia hints from raw Track fields. Returns null if no Essentia data. */
+export function buildEssentiaHints(
+  instruments: { label: string; score: number }[] | null,
+  voice:       string | null,
+  timbre:      string | null,
+): EssentiaHints | null {
+  if (!instruments && !voice && !timbre) return null;
+  const labels = instruments?.map(i => i.label.toLowerCase()) ?? [];
+  return {
+    hasBass808:  labels.some(l => l.includes("bass") || l.includes("808")),
+    hasAcoustic: labels.some(l => l.includes("acoustic")),
+    hasSynth:    labels.some(l => l.includes("synth")),
+    hasVocals:   voice === "vocal",
+    isDark:      timbre === "dark",
+    isBright:    timbre === "bright",
+  };
+}
+
+function formatEssentiaHints(hints: EssentiaHints): string {
+  const lines: string[] = [];
+  if (hints.hasVocals)   lines.push("- Track has vocals — prioritize vocal clarity in high-mids");
+  if (hints.hasBass808)  lines.push("- Heavy bass/808s detected — reinforce sub-bass clarity and mono compatibility");
+  if (hints.hasSynth)    lines.push("- Synthesizers present — balance high-freq air without harsh resonances");
+  if (hints.hasAcoustic) lines.push("- Acoustic elements present — preserve natural transients and warmth");
+  if (hints.isDark)      lines.push("- Dark timbre — avoid over-brightening; preserve low-mid weight");
+  if (hints.isBright)    lines.push("- Bright timbre — manage high-freq harshness; ensure balanced top end");
+  return lines.join("\n");
+}
+
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
 function buildMixPrompt(
@@ -70,6 +110,7 @@ function buildMixPrompt(
   presetProfile:  Record<string, unknown> | null,
   naturalLanguagePrompt: string | null,
   referenceUrl:   string | null,
+  essentiaHints:  EssentiaHints | null,
 ): string {
   return `You are a professional mix engineer with deep expertise in ${genre} production.
 
@@ -92,6 +133,7 @@ ${stems.map(s => `- ${s.detectedType.toUpperCase()} (${s.url.split("/").pop()})
   Freq balance: ${s.analysis.frequencyBalance.map(b => `${b.band}:${b.energy.toFixed(2)}`).join(", ")}`).join("\n\n")}
 
 TARGET MOOD: ${mood}
+${essentiaHints ? `AUDIO INTELLIGENCE (from ML analysis):\n${formatEssentiaHints(essentiaHints)}` : ""}
 ${presetProfile ? `GENRE PRESET DEFAULTS:\n${JSON.stringify(presetProfile, null, 2)}` : ""}
 ${naturalLanguagePrompt ? `ARTIST DIRECTION: "${naturalLanguagePrompt}"` : ""}
 ${referenceUrl ? `REFERENCE TRACK: provided (Matchering will handle spectral matching after your chain)` : ""}
@@ -137,6 +179,7 @@ function buildMasterPrompt(
   mood:      string,
   presetProfile: Record<string, unknown> | null,
   naturalLanguagePrompt: string | null,
+  essentiaHints: EssentiaHints | null,
 ): string {
   return `You are a mastering engineer specializing in ${genre}.
 
@@ -149,6 +192,7 @@ MIX ANALYSIS (post-mixdown):
 - Freq balance: ${analysis.frequencyBalance.map(b => `${b.band}:${b.energy.toFixed(2)}`).join(", ")}
 
 TARGET MOOD: ${mood}
+${essentiaHints ? `AUDIO INTELLIGENCE (from ML analysis):\n${formatEssentiaHints(essentiaHints)}` : ""}
 ${presetProfile ? `GENRE PRESET MASTERING DEFAULTS:\n${JSON.stringify(presetProfile, null, 2)}` : ""}
 ${naturalLanguagePrompt ? `ARTIST DIRECTION: "${naturalLanguagePrompt}"` : ""}
 
@@ -248,8 +292,9 @@ export async function decideMixParameters(opts: {
   naturalLanguagePrompt: string | null;
   referenceUrl:          string | null;
   presetName?:           string;
+  essentiaHints?:        EssentiaHints | null;
 }): Promise<MixDecisionResult> {
-  const { stems, analysis, genre, mood, naturalLanguagePrompt, referenceUrl, presetName } = opts;
+  const { stems, analysis, genre, mood, naturalLanguagePrompt, referenceUrl, presetName, essentiaHints = null } = opts;
 
   // Load genre preset profile if available
   let presetProfile: Record<string, unknown> | null = null;
@@ -258,7 +303,7 @@ export async function decideMixParameters(opts: {
     presetProfile = (preset?.mixProfile as Record<string, unknown>) ?? null;
   }
 
-  const prompt = buildMixPrompt(stems, analysis, genre, mood, presetProfile, naturalLanguagePrompt, referenceUrl);
+  const prompt = buildMixPrompt(stems, analysis, genre, mood, presetProfile, naturalLanguagePrompt, referenceUrl, essentiaHints);
 
   const response = await anthropic.messages.create({
     model:      "claude-sonnet-4-5",
@@ -289,8 +334,9 @@ export async function decideMasterParameters(opts: {
   mood:                  string;
   naturalLanguagePrompt: string | null;
   presetName?:           string;
+  essentiaHints?:        EssentiaHints | null;
 }): Promise<MasterDecisionResult> {
-  const { analysis, genre, mood, naturalLanguagePrompt, presetName } = opts;
+  const { analysis, genre, mood, naturalLanguagePrompt, presetName, essentiaHints = null } = opts;
 
   let presetProfile: Record<string, unknown> | null = null;
   if (presetName) {
@@ -298,7 +344,7 @@ export async function decideMasterParameters(opts: {
     presetProfile = (preset?.masterProfile as Record<string, unknown>) ?? null;
   }
 
-  const prompt = buildMasterPrompt(analysis, genre, mood, presetProfile, naturalLanguagePrompt);
+  const prompt = buildMasterPrompt(analysis, genre, mood, presetProfile, naturalLanguagePrompt, essentiaHints);
 
   const response = await anthropic.messages.create({
     model:      "claude-sonnet-4-5",

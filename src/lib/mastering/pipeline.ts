@@ -20,6 +20,8 @@ import {
   decideMasterParameters,
   detectGenre,
   getVersionTargets,
+  buildEssentiaHints,
+  type EssentiaHints,
 } from "./decisions";
 import { validateUpload } from "@/lib/upload/validateUpload";
 import { sendMasteringCompleteEmail } from "@/lib/email/mastering";
@@ -64,6 +66,22 @@ export async function validateMasteringUpload(file: UploadedFile): Promise<void>
 
 export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
   const job = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+
+  // Load Essentia hints from linked Track record (if any)
+  let essentiaHints: EssentiaHints | null = null;
+  if (job.trackId) {
+    const track = await prisma.track.findUnique({
+      where:  { id: job.trackId },
+      select: { essentiaInstruments: true, essentiaVoice: true, essentiaTimbre: true },
+    });
+    if (track) {
+      essentiaHints = buildEssentiaHints(
+        track.essentiaInstruments as { label: string; score: number }[] | null,
+        track.essentiaVoice,
+        track.essentiaTimbre,
+      );
+    }
+  }
 
   try {
     // ── 1. Analyze + classify stems ──────────────────────────────────────────
@@ -117,6 +135,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       naturalLanguagePrompt: nlPrompt,
       referenceUrl,
       presetName,
+      essentiaHints,
     });
 
     await prisma.masteringJob.update({
@@ -150,6 +169,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       mood,
       naturalLanguagePrompt: nlPrompt,
       presetName,
+      essentiaHints,
     });
 
     const versionTargets = getVersionTargets(genre);
@@ -220,6 +240,22 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
 export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
   const job = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
 
+  // Load Essentia hints from linked Track record (if any)
+  let essentiaHints: EssentiaHints | null = null;
+  if (job.trackId) {
+    const track = await prisma.track.findUnique({
+      where:  { id: job.trackId },
+      select: { essentiaInstruments: true, essentiaVoice: true, essentiaTimbre: true },
+    });
+    if (track) {
+      essentiaHints = buildEssentiaHints(
+        track.essentiaInstruments as { label: string; score: number }[] | null,
+        track.essentiaVoice,
+        track.essentiaTimbre,
+      );
+    }
+  }
+
   try {
     // ── 1. Analyze the stereo mix ──────────────────────────────────────────────
     await setStatus(jobId, "ANALYZING");
@@ -257,6 +293,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       naturalLanguagePrompt: nlPrompt,
       referenceUrl:          job.referenceTrackUrl ?? null,
       presetName,
+      essentiaHints,
     });
 
     await prisma.masteringJob.update({
@@ -284,6 +321,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       mood,
       naturalLanguagePrompt: nlPrompt,
       presetName,
+      essentiaHints,
     });
 
     const versionTargets = getVersionTargets(genre);
