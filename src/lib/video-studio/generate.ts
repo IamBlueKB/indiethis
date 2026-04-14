@@ -452,6 +452,8 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
       duration: video.trackDuration,
     });
 
+    console.log("[analyzeSong] songStructure saved:", JSON.stringify(analysis));
+
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data:  {

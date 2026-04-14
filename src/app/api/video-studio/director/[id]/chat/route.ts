@@ -135,6 +135,8 @@ export async function POST(
     if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (video.mode !== "DIRECTOR") return NextResponse.json({ error: "Not Director Mode" }, { status: 400 });
 
+    console.log("[chat] songStructure from DB:", JSON.stringify(video.songStructure));
+
     // Load existing conversation
     const log: ChatMessage[] = Array.isArray(video.conversationLog)
       ? (video.conversationLog as unknown as ChatMessage[])
