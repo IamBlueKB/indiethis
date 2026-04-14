@@ -13,6 +13,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 300; // 5 minutes — analysis polling can take up to 4 min
+
 export async function POST(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
