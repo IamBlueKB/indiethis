@@ -1,19 +1,19 @@
 /**
  * src/lib/audio/replicate-analysis.ts
  *
- * Calls the indiethis audio analysis model on Replicate.
- * Replaces node-web-audio-api + essentia.js which cannot run on Vercel
- * (requires libasound.so.2 — Linux ALSA — not available in serverless).
+ * Full audio analysis via the existing Replicate essentia integration.
+ * Uses the already-deployed mtg/music-classifiers model (no custom Cog needed).
  *
- * Env vars required:
- *   REPLICATE_API_TOKEN  — Replicate API key
- *   REPLICATE_MODEL_VERSION — model version ID (e.g. "abc123...")
+ * BPM and musical key are NOT available from this model — those fields
+ * return null and callers should preserve any existing DB values.
  */
 
+import { analyzeWithEssentia } from "@/lib/audio/essentia-analysis";
+
 export interface AudioAnalysisResult {
-  bpm:          number;
-  musicalKey:   string;
-  energy:       number;
+  bpm:          number | null;   // null = not detected by this model
+  musicalKey:   string | null;   // null = not detected by this model
+  energy:       number;          // approximated from danceability score
   genres:       { label: string; score: number }[];
   moods:        { label: string; score: number }[];
   instruments:  { label: string; score: number }[];
@@ -23,88 +23,35 @@ export interface AudioAnalysisResult {
 }
 
 /**
- * Run full audio analysis on Replicate.
+ * Run audio analysis via Replicate (mtg/music-classifiers).
  * Returns null on failure — callers must handle gracefully.
- * Blocks until the prediction completes (synchronous polling).
- * Typical latency: 15-45s cold, 5-15s warm.
  */
 export async function analyzeAudioOnReplicate(
   audioUrl: string,
 ): Promise<AudioAnalysisResult | null> {
-  const token   = process.env.REPLICATE_API_TOKEN;
-  const version = process.env.REPLICATE_MODEL_VERSION;
+  console.log("[replicate-analysis] Starting essentia analysis for:", audioUrl.slice(0, 80));
 
-  if (!token || !version) {
-    console.error("[replicate] Missing REPLICATE_API_TOKEN or REPLICATE_MODEL_VERSION");
+  const result = await analyzeWithEssentia(audioUrl);
+  if (!result) {
+    console.error("[replicate-analysis] analyzeWithEssentia returned null");
     return null;
   }
 
-  const headers = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type":  "application/json",
+  console.log(
+    "[replicate-analysis] Done —",
+    `genre=${result.genres[0]?.label ?? "?"} mood=${result.moods[0]?.label ?? "?"}`,
+    `dance=${result.danceability.toFixed(2)} voice=${result.voice}`,
+  );
+
+  return {
+    bpm:          null,              // not available from this model
+    musicalKey:   null,             // not available from this model
+    energy:       result.danceability, // approximation
+    genres:       result.genres,
+    moods:        result.moods,
+    instruments:  result.instruments,
+    danceability: result.danceability,
+    isVocal:      result.voice === "vocal",
+    isTonal:      result.timbre === "bright",
   };
-
-  // ── 1. Create prediction ───────────────────────────────────────────────────
-  let predictionId: string;
-  try {
-    const createRes = await fetch("https://api.replicate.com/v1/predictions", {
-      method:  "POST",
-      headers,
-      body: JSON.stringify({
-        version: version,
-        input:   { audio_url: audioUrl },
-      }),
-    });
-
-    if (!createRes.ok) {
-      const body = await createRes.text();
-      console.error(`[replicate] Create prediction failed ${createRes.status}:`, body);
-      return null;
-    }
-
-    const prediction = await createRes.json() as { id: string; status: string };
-    predictionId = prediction.id;
-    console.log(`[replicate] Prediction created: ${predictionId}`);
-  } catch (err) {
-    console.error("[replicate] Create prediction threw:", err);
-    return null;
-  }
-
-  // ── 2. Poll until complete ─────────────────────────────────────────────────
-  const pollUrl = `https://api.replicate.com/v1/predictions/${predictionId}`;
-  const maxWait = 240_000; // 4 minutes
-  const pollInterval = 3_000;
-  const start = Date.now();
-
-  while (Date.now() - start < maxWait) {
-    await new Promise((r) => setTimeout(r, pollInterval));
-
-    try {
-      const pollRes = await fetch(pollUrl, { headers });
-      if (!pollRes.ok) continue;
-
-      const data = await pollRes.json() as {
-        status: string;
-        output?: AudioAnalysisResult;
-        error?: string;
-      };
-
-      if (data.status === "succeeded") {
-        console.log(`[replicate] Prediction ${predictionId} succeeded in ${Date.now() - start}ms`);
-        return data.output ?? null;
-      }
-
-      if (data.status === "failed" || data.status === "canceled") {
-        console.error(`[replicate] Prediction ${predictionId} ${data.status}:`, data.error);
-        return null;
-      }
-
-      // still processing — continue polling
-    } catch (err) {
-      console.error("[replicate] Poll threw:", err);
-    }
-  }
-
-  console.error(`[replicate] Prediction ${predictionId} timed out after ${maxWait}ms`);
-  return null;
 }

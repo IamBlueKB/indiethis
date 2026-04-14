@@ -51,12 +51,12 @@ async function runFullAnalysis(trackId: string, audioUrl: string): Promise<void>
     const findMood = (label: string) =>
       result.moods.find((m) => m.label === label)?.score ?? null;
 
-    // Write all results to DB
+    // Write all results to DB (skip BPM/key if not returned by model)
     await db.track.update({
       where: { id: trackId },
       data: {
-        bpm:                  result.bpm,
-        musicalKey:           result.musicalKey,
+        ...(result.bpm        !== null && { bpm:        result.bpm }),
+        ...(result.musicalKey !== null && { musicalKey: result.musicalKey }),
         analysisStatus:       "completed",
         analyzedAt:           new Date(),
         effnetGenre:          result.genres,
@@ -87,7 +87,7 @@ async function runFullAnalysis(trackId: string, audioUrl: string): Promise<void>
 
     console.log(
       `[trigger/audio-features] Done for track ${trackId}:`,
-      `BPM=${result.bpm} key=${result.musicalKey} energy=${result.energy.toFixed(2)}`,
+      `BPM=${result.bpm ?? "n/a"} key=${result.musicalKey ?? "n/a"} energy=${result.energy.toFixed(2)}`,
       `genre=${result.genres[0]?.label ?? "?"} mood=${result.moods[0]?.label ?? "?"}`,
     );
   } catch (err) {

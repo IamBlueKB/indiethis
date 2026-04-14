@@ -437,8 +437,8 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
       const detected = await analyzeAudioOnReplicate(audioUrl);
       if (detected) {
         console.log("[song-analyzer] Replicate result — bpm:", detected.bpm, "key:", detected.musicalKey, "energy:", detected.energy);
-        if (bpm    === null) bpm    = detected.bpm;
-        if (key    === null) key    = detected.musicalKey;
+        if (bpm    === null && detected.bpm        !== null) bpm    = detected.bpm;
+        if (key    === null && detected.musicalKey !== null) key    = detected.musicalKey;
         if (energy === null) energy = detected.energy;
         // Also populate EffNet data if we got it
         if (!essentiaGenres      && detected.genres.length)      essentiaGenres      = detected.genres;
