@@ -78,24 +78,29 @@ class Predictor(BasePredictor):
             tmp_path = tmp.name
 
         try:
-            # ── 2. Load audio at 16kHz mono (essentia handles all formats) ────
-            loader = es.MonoLoader(filename=tmp_path, sampleRate=SAMPLE_RATE)
-            audio = loader()  # Float32 numpy array at 16kHz mono
-            print(f"[predict] Loaded {len(audio) / SAMPLE_RATE:.1f}s at {SAMPLE_RATE}Hz mono")
+            # ── 2. Load audio at 44100Hz for BPM/key (essentia expects 44100) ─
+            SR_ANALYSIS = 44100
+            loader_hq = es.MonoLoader(filename=tmp_path, sampleRate=SR_ANALYSIS)
+            audio_hq = loader_hq()
+            print(f"[predict] Loaded {len(audio_hq) / SR_ANALYSIS:.1f}s at {SR_ANALYSIS}Hz mono")
 
-            # ── 3. BPM detection ──────────────────────────────────────────────
-            rhythm_extractor = es.RhythmExtractor2013(sampleRate=SAMPLE_RATE)
-            bpm_raw, _, _, _, _ = rhythm_extractor(audio)
+            # ── 3. BPM detection (requires 44100 Hz) ─────────────────────────
+            rhythm_extractor = es.RhythmExtractor2013()
+            bpm_raw, _, _, _, _ = rhythm_extractor(audio_hq)
             bpm = int(round(float(bpm_raw)))
             print(f"[predict] BPM: {bpm}")
 
-            # ── 4. Key detection ──────────────────────────────────────────────
-            key_extractor = es.KeyExtractor(sampleRate=SAMPLE_RATE)
-            key, scale, _ = key_extractor(audio)
+            # ── 4. Key detection (requires 44100 Hz) ──────────────────────────
+            key_extractor = es.KeyExtractor()
+            key, scale, _ = key_extractor(audio_hq)
             musical_key = f"{key} {scale}"
             print(f"[predict] Key: {musical_key}")
 
-            # ── 5. Energy (RMS) ───────────────────────────────────────────────
+            # ── 5. Resample to 16kHz for EffNet + Energy ──────────────────────
+            loader_16k = es.MonoLoader(filename=tmp_path, sampleRate=SAMPLE_RATE)
+            audio = loader_16k()
+
+            # ── 5b. Energy (RMS) ──────────────────────────────────────────────
             rms = float(np.sqrt(np.mean(audio ** 2)))
             energy = float(min(rms / 0.25, 1.0))
             print(f"[predict] Energy: {energy:.3f}")
