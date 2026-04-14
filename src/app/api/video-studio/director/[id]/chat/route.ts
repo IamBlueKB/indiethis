@@ -164,12 +164,20 @@ export async function POST(
     if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (video.mode !== "DIRECTOR") return NextResponse.json({ error: "Not Director Mode" }, { status: 400 });
 
-    console.log("[chat] songStructure from DB:", JSON.stringify(video.songStructure));
-
     // Load existing conversation
     const log: ChatMessage[] = Array.isArray(video.conversationLog)
       ? (video.conversationLog as unknown as ChatMessage[])
       : [];
+
+    // Look up film look preset from selected style
+    let filmLook: string | null = null;
+    if (video.style) {
+      const preset = await db.videoStyle.findFirst({
+        where:  { name: video.style },
+        select: { defaultFilmLook: true },
+      }).catch(() => null);
+      filmLook = preset?.defaultFilmLook ?? null;
+    }
 
     // Add user message
     const newUserMsg: ChatMessage = {
@@ -187,10 +195,14 @@ export async function POST(
 
     // Context hint for Claude
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const analysis       = video.songStructure as any;
-    const essentiaCtx   = buildEssentiaContext(analysis);
-    const contextHint   = [
-      `The artist's track is "${video.trackTitle}"${video.bpm ? ` at ${video.bpm} BPM` : ""}${video.musicalKey ? `, key of ${video.musicalKey}` : ""}${video.energy != null ? `, energy ${Math.round(video.energy * 10)}/10` : ""}.`,
+    const analysis     = video.songStructure as any;
+    const essentiaCtx = buildEssentiaContext(analysis);
+    const styleLine    = video.style
+      ? `The artist selected visual style: "${video.style}"${filmLook ? ` with film look preset: "${filmLook}"` : ""}. This is their chosen starting point — honor it, do not override it.`
+      : "The artist chose to start from scratch with no preset style.";
+    const contextHint  = [
+      `Track: "${video.trackTitle}"${video.bpm ? ` | ${video.bpm} BPM` : ""}${video.musicalKey ? ` | ${video.musicalKey}` : ""}${video.energy != null ? ` | energy ${Math.round(video.energy * 10)}/10` : ""}.`,
+      styleLine,
       essentiaCtx ? `Audio Intelligence:\n${essentiaCtx}` : "",
     ].filter(Boolean).join("\n\n");
 

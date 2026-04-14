@@ -476,7 +476,17 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
 
     // Generate the Director's opening message as a specific creative proposal
     try {
-      const greeting = await generateInitialGreeting(video.trackTitle, analysis);
+      // Look up film look from the VideoStyle preset if a style was selected
+      let filmLook: string | undefined;
+      if (video.style) {
+        const preset = await db.videoStyle.findFirst({
+          where:  { name: video.style },
+          select: { defaultFilmLook: true },
+        }).catch(() => null);
+        filmLook = preset?.defaultFilmLook ?? undefined;
+      }
+
+      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, filmLook);
       if (greeting) {
         const greetingMsg = { role: "assistant", content: greeting, createdAt: new Date().toISOString() };
         await db.musicVideo.update({
@@ -503,66 +513,72 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
 async function generateInitialGreeting(
   trackTitle: string,
   analysis:   SongAnalysis,
+  style?:     string,
+  filmLook?:  string,
 ): Promise<string | null> {
-  // Build audio intelligence context
+  // Build full audio intelligence context
   const lines: string[] = [`Track: "${trackTitle}"`];
 
-  if (analysis.bpm)             lines.push(`BPM: ${Math.round(analysis.bpm)}`);
-  if (analysis.key)             lines.push(`Key: ${analysis.key}`);
-  if (analysis.energy)          lines.push(`Energy: ${Math.round(analysis.energy * 10)}/10`);
+  if (analysis.bpm)    lines.push(`BPM: ${Math.round(analysis.bpm)}`);
+  if (analysis.key)    lines.push(`Key: ${analysis.key}`);
+  if (analysis.energy) lines.push(`Energy: ${Math.round(analysis.energy * 10)}/10`);
 
-  if (analysis.genres?.length)  lines.push(`Genres: ${analysis.genres.slice(0, 3).map(g => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ")}`);
-  if (analysis.moods?.length)   lines.push(`Moods: ${analysis.moods.slice(0, 3).map(m => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ")}`);
-  if (analysis.danceability != null) lines.push(`Danceability: ${analysis.danceability.toFixed(2)}`);
-  if (analysis.timbre)          lines.push(`Timbre: ${analysis.timbre}`);
-  if (analysis.vocalType)       lines.push(`Vocals: ${analysis.vocalType}`);
-
-  // Sections summary
-  if (analysis.sections?.length) {
-    const sectionNames = analysis.sections.map(s => s.type).join(" → ");
-    lines.push(`Structure: ${sectionNames}`);
-  }
-
-  // Lyrics excerpt (first 120 chars)
+  if (analysis.genres?.length)
+    lines.push(`Genres: ${analysis.genres.slice(0, 5).map(g => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ")}`);
+  if (analysis.moods?.length)
+    lines.push(`Moods: ${analysis.moods.map(m => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ")}`);
+  if (analysis.instruments?.length)
+    lines.push(`Instruments: ${analysis.instruments.slice(0, 6).map(i => i.label).join(", ")}`);
+  if (analysis.danceability != null)
+    lines.push(`Danceability: ${Math.round(analysis.danceability * 100)}%`);
+  if (analysis.vocalType)
+    lines.push(`Vocals: ${analysis.vocalType}${analysis.voiceGender ? ` (${analysis.voiceGender})` : ""}`);
+  if (analysis.isTonal != null)
+    lines.push(`Tonality: ${analysis.isTonal ? "tonal" : "atonal"}`);
+  if (analysis.sections?.length)
+    lines.push(`Structure: ${analysis.sections.map(s => s.type).join(" → ")}`);
   if (analysis.lyrics) {
     const excerpt = analysis.lyrics.replace(/\n/g, " ").trim().slice(0, 120);
     if (excerpt) lines.push(`Lyrics excerpt: "${excerpt}…"`);
   }
 
-  const context = lines.join("\n");
+  const audioContext = lines.join("\n");
 
-  const systemPrompt = `You are the IndieThis Director — a world-class music video director. You've just finished analyzing the artist's track using audio ML classifiers. You know exactly what it sounds like.
+  const styleContext = style
+    ? `The artist selected visual style: "${style}".${filmLook ? ` Film look preset: "${filmLook}".` : ""} Build your direction around this — it is their chosen starting point.`
+    : `The artist chose to start from scratch with no preset style.`;
 
-## Your Opening Message Rules
-- Lead with what you HEAR: genre, mood, energy, tempo character — stated as YOUR direct knowledge
+  const systemPrompt = `You are the IndieThis Director — a world-class music video director. You've just analyzed the artist's track using audio ML classifiers and you know exactly what it sounds like. You also know the visual style they selected.
+
+## Your Opening Message Structure
+1. Acknowledge the visual style they selected and the film look preset (if any) — state it directly: "You're working in [style] with a [film look] grade."
+2. Present what you hear from the track — genre, BPM, key, mood, instruments, energy, vocal type, tonality. Be specific, cite the actual numbers and labels.
+3. Connect the audio data to the visual style: how does this track's energy/mood/genre inform how you'll execute that style?
+4. End with the FIRST shot list question: who is in this video — artist performance, a narrative character, or purely abstract/no people?
+
+## Rules
 - NEVER say "based on the data", "I was told", "according to the analysis"
-- Immediately translate the sound into a SPECIFIC visual direction: lighting, camera movement, color grade, pacing
-- Use concrete cinematography language: Dutch angle, dolly push-in, Rembrandt lighting, chiaroscuro, anamorphic, etc.
-- End with ONE question letting the artist react — do they run with your direction or redirect?
-- Keep it to 3–5 sentences. No bullet lists. Conversational but expert.
+- Speak in first person about what you hear: "I'm hearing", "this track is", "the F minor key tells me"
+- Be specific — cite actual BPM, key, genre names, mood percentages, instrument names from the data
+- The style and film look the artist selected are NON-NEGOTIABLE starting points — work within them
+- Keep it conversational but expert — no bullet lists, 4–6 sentences max
+- End with exactly ONE question: who is in this video?
 
 ## Camera vocabulary
 MOVEMENTS: static locked-off, handheld, steadicam, dolly push-in/pull-out, truck, crane, whip pan, orbit
 ANGLES: eye-level, low angle, high angle, Dutch angle, bird's-eye, worm's-eye
-FRAMING: ECU, CU, MCU, MS, MWS, WS, EWS
 LIGHTING: Rembrandt, high-key, low-key, rim/backlight, silhouette, chiaroscuro, neon/practical, golden hour, blue hour
-MODIFIERS: cinematic grain, 35mm analog warmth, anamorphic lens flares, crushed shadows, bleach bypass, neon noir
-
-## Example opening
-"Your track is dark, aggressive trap — 140 BPM, heavy 808s, that Am key makes it cinematic not party. I'm thinking noir warehouse, hard cuts synced to every drop, slow dolly push-ins during the verses with Rembrandt side lighting and crushed shadows. Want to run with that, or are you taking this somewhere different?"
-
-## Critical rule
-NEVER say "I can see you're going for" or "you chose" or "you selected" — you are reading the AUDIO, not any user preference. Say "I'm hearing", "this track is", "the data tells me".`;
+MODIFIERS: cinematic grain, 35mm analog warmth, anamorphic lens flares, crushed shadows, bleach bypass, neon noir`;
 
   try {
     const response = await claude.messages.create({
       model:      SONNET,
-      max_tokens: 300,
+      max_tokens: 400,
       system:     systemPrompt,
       messages:   [
         {
           role:    "user",
-          content: `Here is the audio intelligence for the track:\n\n${context}\n\nGive me your opening director's pitch.`,
+          content: `${styleContext}\n\nAudio intelligence:\n${audioContext}\n\nGive me your opening director's message.`,
         },
       ],
     });
