@@ -39,9 +39,9 @@ const nextConfig: NextConfig = {
       "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
   },
-  // Explicit exclusions so nft never bundles heavy ML/media deps into the
-  // Stripe webhook even if a future import chain accidentally reaches them.
+  // Explicit exclusions to keep individual function bundles under 250 MB.
   outputFileTracingExcludes: {
+    // Stripe webhook must never bundle heavy ML/media deps.
     "/api/stripe/webhook": [
       "./node_modules/onnxruntime-web/**",
       "./node_modules/onnxruntime-node/**",
@@ -51,6 +51,17 @@ const nextConfig: NextConfig = {
       "./node_modules/node-web-audio-api/**",
       "./node_modules/essentia.js/**",
       "./models/**",
+    ],
+    // lyric trigger sits at ~250 MB because node-web-audio-api ships binaries for
+    // 7 platforms (~40 MB total). Vercel runs linux-x64-gnu only — exclude the
+    // other 6 platform binaries to save ~34 MB and stay under the limit.
+    "/api/internal/trigger/lyric": [
+      "./node_modules/node-web-audio-api/node-web-audio-api.win32-x64-msvc.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.darwin-x64.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.win32-arm64-msvc.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.linux-arm64-gnu.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.linux-arm-gnueabihf.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.darwin-arm64.node",
     ],
   },
 };
