@@ -486,7 +486,8 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
         filmLook = preset?.defaultFilmLook ?? undefined;
       }
 
-      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, filmLook);
+      const hasCharRef = Array.isArray(video.characterRefs) && video.characterRefs.length > 0;
+      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, filmLook, hasCharRef);
       if (greeting) {
         const greetingMsg = { role: "assistant", content: greeting, createdAt: new Date().toISOString() };
         await db.musicVideo.update({
@@ -511,10 +512,11 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
  * the DirectorClient loads it directly rather than triggering a static fallback.
  */
 async function generateInitialGreeting(
-  trackTitle: string,
-  analysis:   SongAnalysis,
-  style?:     string,
-  filmLook?:  string,
+  trackTitle:   string,
+  analysis:     SongAnalysis,
+  style?:       string,
+  filmLook?:    string,
+  hasCharRef?:  boolean,
 ): Promise<string | null> {
   // Build full audio intelligence context
   const lines: string[] = [`Track: "${trackTitle}"`];
@@ -548,6 +550,10 @@ async function generateInitialGreeting(
     ? `The artist selected visual style: "${style}".${filmLook ? ` Film look preset: "${filmLook}".` : ""} Build your direction around this — it is their chosen starting point.`
     : `The artist chose to start from scratch with no preset style.`;
 
+  const charRefContext = hasCharRef
+    ? `The artist uploaded a character reference photo (@Element1). You already know who is in this video — do NOT ask. Ask about location/setting instead.`
+    : `No character reference was uploaded. Ask whether this is artist performance, a narrative character, or purely abstract.`;
+
   const systemPrompt = `You are the IndieThis Director — a world-class music video director. You've just analyzed the artist's track using audio ML classifiers and you know exactly what it sounds like. You also know the visual style they selected.
 
 ## Your Opening Message Structure
@@ -562,7 +568,9 @@ async function generateInitialGreeting(
 - Be specific — cite actual BPM, key, genre names, mood percentages, instrument names from the data
 - The style and film look the artist selected are NON-NEGOTIABLE starting points — work within them
 - Keep it conversational but expert — no bullet lists, 4–6 sentences max
-- End with exactly ONE question: who is in this video?
+- If character reference photos were uploaded (@Element1 exists), skip asking who is in the video — you already know. Ask about location/setting instead.
+- If NO character reference was uploaded, ask: is this artist performance, a narrative character, or purely abstract/no people?
+- End with exactly ONE question.
 
 ## Camera vocabulary
 MOVEMENTS: static locked-off, handheld, steadicam, dolly push-in/pull-out, truck, crane, whip pan, orbit
@@ -578,7 +586,7 @@ MODIFIERS: cinematic grain, 35mm analog warmth, anamorphic lens flares, crushed 
       messages:   [
         {
           role:    "user",
-          content: `${styleContext}\n\nAudio intelligence:\n${audioContext}\n\nGive me your opening director's message.`,
+          content: `${styleContext}\n\n${charRefContext}\n\nAudio intelligence:\n${audioContext}\n\nGive me your opening director's message.`,
         },
       ],
     });
