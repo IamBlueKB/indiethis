@@ -28,6 +28,20 @@ const nextConfig: NextConfig = {
       "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
   },
+  // Explicit exclusions so nft never bundles heavy ML/media deps into the
+  // Stripe webhook even if a future import chain accidentally reaches them.
+  outputFileTracingExcludes: {
+    "/api/stripe/webhook": [
+      "./node_modules/onnxruntime-web/**",
+      "./node_modules/onnxruntime-node/**",
+      "./node_modules/sharp/**",
+      "./node_modules/@ffmpeg-installer/**",
+      "./node_modules/fluent-ffmpeg/**",
+      "./node_modules/node-web-audio-api/**",
+      "./node_modules/essentia.js/**",
+      "./models/**",
+    ],
+  },
 };
 
 export default nextConfig;

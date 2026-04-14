@@ -36,6 +36,22 @@ import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
 import { generateBookingReport }        from "@/lib/agents/booking-agent";
 
+// ─── Internal trigger helper ──────────────────────────────────────────────────
+// Fires a POST to /api/internal/trigger and immediately returns — the heavy
+// module (video pipeline, AI job processor, etc.) runs in that function's
+// bundle, keeping this webhook function lean (Prisma + Stripe only).
+function fireAndForgetTrigger(body: Record<string, unknown>): void {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
+  void fetch(`${baseUrl}/api/internal/trigger`, {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/json",
+      authorization:  `Bearer ${process.env.CRON_SECRET}`,
+    },
+    body: JSON.stringify(body),
+  }).catch((err) => console.error("[webhook] fireAndForgetTrigger failed:", err));
+}
+
 type TierCredits = {
   aiVideoCreditsLimit: number;
   aiArtCreditsLimit: number;
@@ -818,13 +834,9 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            // Fire generation in background — dynamic import keeps generate.ts
-            // (remotion/lambda, fal, video pipeline) out of the webhook bundle.
-            void import("@/lib/video-studio/generate").then(m =>
-              m.startGeneration(musicVideoId)
-            ).catch(err =>
-              console.error("[webhook/music-video] generation failed:", err)
-            );
+            // Delegate to internal trigger — generate.ts (remotion, fal, ML stack)
+            // lives in that bundle, not here.
+            fireAndForgetTrigger({ type: "start-video-generation", musicVideoId });
           }
         }
         break;
@@ -967,7 +979,6 @@ export async function POST(req: NextRequest) {
                 if (!track) return;
 
                 const { createAIJob } = await import("@/lib/ai-jobs");
-                const { processAIJob } = await import("@/lib/ai-job-processor");
 
                 // Build a basic prompt from audio features — processor will optimize via Sonnet
                 const af = track.audioFeatures;
@@ -996,7 +1007,7 @@ export async function POST(req: NextRequest) {
                   chargedAmount:       4.99,
                 });
                 if (coverArtResult.success && coverArtResult.jobId) {
-                  void processAIJob(coverArtResult.jobId).catch(() => {});
+                  fireAndForgetTrigger({ type: "process-ai-job", jobId: coverArtResult.jobId });
                 }
 
                 // 2. Queue lyric video (Whisper transcription + LyricVideo composition)
@@ -1017,7 +1028,7 @@ export async function POST(req: NextRequest) {
                   chargedAmount:       14.99,
                 });
                 if (lyricResult.success && lyricResult.jobId) {
-                  void processAIJob(lyricResult.jobId).catch(() => {});
+                  fireAndForgetTrigger({ type: "process-ai-job", jobId: lyricResult.jobId });
                 }
 
                 // Notify artist
@@ -1073,20 +1084,10 @@ export async function POST(req: NextRequest) {
           if (jobId) {
             void (async () => {
               try {
-                const { generateCoverArtJob } = await import("@/lib/cover-art/generator");
+                // Guard against duplicate webhook deliveries
                 const job = await db.coverArtJob.findUnique({
                   where:  { id: jobId },
-                  select: {
-                    id:               true,
-                    tier:             true,
-                    status:           true,
-                    prompt:           true,
-                    referenceImageUrl:true,
-                    trackId:          true,
-                    style:            { select: { promptBase: true } },
-                    userId:           true,
-                    guestEmail:       true,
-                  },
+                  select: { id: true, status: true },
                 });
                 if (!job || job.status !== "PENDING") return;
 
@@ -1100,41 +1101,11 @@ export async function POST(req: NextRequest) {
                   data:  { stripePaymentId },
                 });
 
-                const trackData = job.trackId
-                  ? await db.track.findUnique({
-                      where:  { id: job.trackId },
-                      select: {
-                        title:          true,
-                        audioFeatures:  { select: { genre: true, mood: true, energy: true } },
-                        essentiaGenres: true,
-                        essentiaMoods:  true,
-                        essentiaTimbre: true,
-                      },
-                    })
-                  : null;
-
-                const user = job.userId
-                  ? await db.user.findUnique({ where: { id: job.userId }, select: { name: true, artistName: true } })
-                  : null;
-
-                await generateCoverArtJob({
-                  jobId:           job.id,
-                  tier:            job.tier as "STANDARD" | "PREMIUM" | "PRO",
-                  prompt:          job.prompt,
-                  stylePromptBase: job.style?.promptBase ?? "",
-                  referenceImageUrl: job.referenceImageUrl,
-                  genre:           trackData?.audioFeatures?.genre ?? null,
-                  mood:            trackData?.audioFeatures?.mood  ?? null,
-                  bpm:             null,
-                  energy:          trackData?.audioFeatures?.energy ?? null,
-                  trackTitle:      trackData?.title ?? "Untitled",
-                  artistName:      user?.artistName ?? user?.name ?? "Artist",
-                  essentiaGenres:  (trackData?.essentiaGenres as { label: string; score: number }[] | null) ?? null,
-                  essentiaMoods:   (trackData?.essentiaMoods  as { label: string; score: number }[] | null) ?? null,
-                  essentiaTimbre:  (trackData?.essentiaTimbre  as string | null) ?? null,
-                });
+                // Delegate to internal trigger — generator.ts (fal.ai, Claude prompt
+                // enhancement, UploadThing) lives in that bundle, not here.
+                fireAndForgetTrigger({ type: "generate-cover-art", jobId });
               } catch (err) {
-                console.error("[webhook] COVER_ART generation error:", err);
+                console.error("[webhook] COVER_ART trigger error:", err);
               }
             })();
           }
@@ -1157,10 +1128,11 @@ export async function POST(req: NextRequest) {
                   data:  { stripePaymentId },
                 });
 
-                const { startLyricVideoGeneration } = await import("@/lib/lyric-video/pipeline");
-                await startLyricVideoGeneration(jobId);
+                // Delegate to internal trigger — lyric-video/pipeline (Remotion,
+                // fal.ai, ffmpeg) lives in that bundle, not here.
+                fireAndForgetTrigger({ type: "start-lyric-video", jobId });
               } catch (err) {
-                console.error("[webhook] LYRIC_VIDEO generation error:", err);
+                console.error("[webhook] LYRIC_VIDEO trigger error:", err);
               }
             })();
           }

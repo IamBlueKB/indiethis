@@ -285,5 +285,63 @@ export async function refineCoverArtJob(input: RefinementInput): Promise<void> {
   }
 }
 
+// ─── ID-only wrapper for the internal trigger endpoint ───────────────────────
+// The Stripe webhook fires this by jobId only — all DB lookups happen here so
+// the webhook never needs to import this heavy module at all.
+
+export async function generateCoverArtJobById(jobId: string): Promise<void> {
+  const job = await db.coverArtJob.findUnique({
+    where:  { id: jobId },
+    select: {
+      id:               true,
+      tier:             true,
+      prompt:           true,
+      referenceImageUrl:true,
+      trackId:          true,
+      style:            { select: { promptBase: true } },
+      userId:           true,
+    },
+  });
+
+  if (!job) throw new Error(`CoverArtJob ${jobId} not found`);
+
+  const trackData = job.trackId
+    ? await db.track.findUnique({
+        where:  { id: job.trackId },
+        select: {
+          title:          true,
+          audioFeatures:  { select: { genre: true, mood: true, energy: true } },
+          essentiaGenres: true,
+          essentiaMoods:  true,
+          essentiaTimbre: true,
+        },
+      })
+    : null;
+
+  const user = job.userId
+    ? await db.user.findUnique({
+        where:  { id: job.userId },
+        select: { name: true, artistName: true },
+      })
+    : null;
+
+  await generateCoverArtJob({
+    jobId:             job.id,
+    tier:              job.tier as "STANDARD" | "PREMIUM" | "PRO",
+    prompt:            job.prompt,
+    stylePromptBase:   job.style?.promptBase ?? "",
+    referenceImageUrl: job.referenceImageUrl,
+    genre:             trackData?.audioFeatures?.genre   ?? null,
+    mood:              trackData?.audioFeatures?.mood    ?? null,
+    bpm:               null,
+    energy:            trackData?.audioFeatures?.energy  ?? null,
+    trackTitle:        trackData?.title ?? "Untitled",
+    artistName:        user?.artistName ?? user?.name   ?? "Artist",
+    essentiaGenres:    (trackData?.essentiaGenres as { label: string; score: number }[] | null) ?? null,
+    essentiaMoods:     (trackData?.essentiaMoods  as { label: string; score: number }[] | null) ?? null,
+    essentiaTimbre:    (trackData?.essentiaTimbre  as string | null) ?? null,
+  });
+}
+
 // ─── Re-export mood helper for convenience ────────────────────────────────────
 export { deriveMood };
