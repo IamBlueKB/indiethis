@@ -84,13 +84,13 @@ class Predictor(BasePredictor):
             print(f"[predict] Loaded {len(audio) / SAMPLE_RATE:.1f}s at {SAMPLE_RATE}Hz mono")
 
             # ── 3. BPM detection ──────────────────────────────────────────────
-            rhythm_extractor = es.RhythmExtractor2013()
+            rhythm_extractor = es.RhythmExtractor2013(sampleRate=SAMPLE_RATE)
             bpm_raw, _, _, _, _ = rhythm_extractor(audio)
             bpm = int(round(float(bpm_raw)))
             print(f"[predict] BPM: {bpm}")
 
             # ── 4. Key detection ──────────────────────────────────────────────
-            key_extractor = es.KeyExtractor()
+            key_extractor = es.KeyExtractor(sampleRate=SAMPLE_RATE)
             key, scale, _ = key_extractor(audio)
             musical_key = f"{key} {scale}"
             print(f"[predict] Key: {musical_key}")
