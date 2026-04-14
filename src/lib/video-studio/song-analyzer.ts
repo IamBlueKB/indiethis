@@ -19,8 +19,7 @@
 import { db }         from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { detectAudioFeatures } from "@/lib/audio-analysis";
-import { extractLocalFeatures } from "@/lib/audio/essentia-local";
-import { analyzeWithVGGish }   from "@/lib/audio/essentia-vggish";
+import { analyzeUrlWithEffnet } from "@/lib/audio/effnet-discogs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +50,7 @@ export interface SongAnalysis {
   beats:           number[]; // timestamps of every beat
   dropPoints:      number[]; // timestamps of energy spikes
 
-  // Essentia ML analysis — null if track was not yet analyzed or has no trackId
+  // EffNet-Discogs ML analysis — null if track was not yet analyzed or has no trackId
   genres:      { label: string; score: number }[] | null;
   moods:       { label: string; score: number }[] | null;
   instruments: { label: string; score: number }[] | null;
@@ -59,6 +58,7 @@ export interface SongAnalysis {
   vocalType:   "vocal" | "instrumental" | null;
   voiceGender: "male" | "female" | null;
   timbre:      "bright" | "dark" | null;
+  isTonal:     boolean | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,6 +178,8 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
     if (track.essentiaVoiceGender)  result.essentiaVoiceGender = track.essentiaVoiceGender;
     if (track.essentiaTimbre)       result.essentiaTimbre      = track.essentiaTimbre;
   }
+  // Note: essentiaTonal is stored in songStructure JSON (not a separate DB column)
+  // It will be carried over when songStructure is set on a new analysis
 
   if (lyricJob?.outputData) {
     const output = lyricJob.outputData as Record<string, unknown>;
@@ -362,6 +364,7 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   let essentiaVoice:        string | null = null;
   let essentiaVoiceGender:  string | null = null;
   let essentiaTimbre:       string | null = null;
+  let essentiaTonal:        boolean | null = null;
 
   // Pull from DB if we have a linked Track
   if (trackId && (bpm === null || energy === null)) {
@@ -405,40 +408,32 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   const finalKey    = key    ?? "C major";
   const finalEnergy = energy ?? 0.65;
 
-  // ── 1.5. Run ML classification if Essentia DB fields are still null ─────────
-  // Fires when the track has no pre-computed Essentia data (Replicate not run).
-  // Primary: VGGish ML classifiers (real genre/mood/voice/timbre predictions).
-  // Fallback: WASM-only DSP features for at least timbre if VGGish fails.
+  // ── 1.5. Run EffNet-Discogs ML classification if no pre-computed data ────────
+  // Fires when the track has no pre-computed Essentia data in the DB.
+  // EffNet-Discogs: 400 Discogs style genres + mood + instrument detection.
 
-  const needsLocalAnalysis = essentiaGenres === null && essentiaMoods === null;
+  const needsEffnetAnalysis = essentiaGenres === null && essentiaMoods === null;
 
-  if (needsLocalAnalysis) {
-    // Primary: VGGish ML classifiers
+  if (needsEffnetAnalysis) {
     try {
-      console.log("[song-analyzer] Running VGGish ML classification…");
-      const vggishResult = await analyzeWithVGGish(audioUrl);
-      if (vggishResult) {
-        if (!essentiaGenres       && vggishResult.genres.length)     essentiaGenres       = vggishResult.genres;
-        if (!essentiaMoods        && vggishResult.moods.length)      essentiaMoods        = vggishResult.moods;
-        if (essentiaDanceability  === null)                          essentiaDanceability = vggishResult.danceability;
-        if (!essentiaVoice)                                          essentiaVoice        = vggishResult.voice;
-        if (!essentiaTimbre       && vggishResult.timbre)            essentiaTimbre       = vggishResult.timbre;
+      console.log("[song-analyzer] Running EffNet-Discogs ML classification…");
+      const effnetResult = await analyzeUrlWithEffnet(audioUrl);
+      if (effnetResult) {
+        if (!essentiaGenres      && effnetResult.genres.length)      essentiaGenres       = effnetResult.genres;
+        if (!essentiaMoods       && effnetResult.moods.length)       essentiaMoods        = effnetResult.moods;
+        if (!essentiaInstruments && effnetResult.instruments.length) essentiaInstruments  = effnetResult.instruments;
+        if (essentiaDanceability === null)                           essentiaDanceability = effnetResult.danceability;
+        if (!essentiaVoice)                                          essentiaVoice        = effnetResult.isVocal ? "vocal" : "instrumental";
+        if (essentiaTonal === null)                                   essentiaTonal        = effnetResult.isTonal;
         console.log(
-          "[song-analyzer] VGGish — genre:", essentiaGenres?.slice(0, 2).map(g => g.label).join(", "),
+          "[song-analyzer] EffNet — genre:", essentiaGenres?.slice(0, 2).map(g => g.label).join(", "),
           "| mood:", essentiaMoods?.slice(0, 2).map(m => m.label).join(", "),
-          "| voice:", essentiaVoice, "| timbre:", essentiaTimbre,
+          "| voice:", essentiaVoice,
+          "| danceability:", essentiaDanceability?.toFixed(2),
         );
       }
     } catch (err) {
-      console.warn("[song-analyzer] VGGish analysis failed:", err);
-    }
-
-    // Fallback: WASM-only DSP for timbre if VGGish didn't provide it
-    if (!essentiaTimbre) {
-      try {
-        const wasmFeatures = await extractLocalFeatures(audioUrl);
-        if (wasmFeatures) essentiaTimbre = wasmFeatures.timbre;
-      } catch { /* silent */ }
+      console.warn("[song-analyzer] EffNet analysis failed, continuing without ML data:", err);
     }
   }
 
@@ -492,7 +487,7 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     sections,
     beats,
     dropPoints,
-    // Essentia ML data — from DB (Replicate) or inferred by Claude from WASM features
+    // EffNet-Discogs ML data — from DB or fresh analysis
     genres:       essentiaGenres,
     moods:        essentiaMoods,
     instruments:  essentiaInstruments,
@@ -500,6 +495,7 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     vocalType:    essentiaVoice as "vocal" | "instrumental" | null,
     voiceGender:  essentiaVoiceGender as "male" | "female" | null,
     timbre:       essentiaTimbre as "bright" | "dark" | null,
+    isTonal:      essentiaTonal,
   };
 }
 

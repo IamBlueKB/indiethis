@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 import { moderateContent } from "@/lib/agents/content-moderation";
-import { analyzeWithEssentia } from "@/lib/audio/essentia-analysis";
+import { analyzeUrlWithEffnet } from "@/lib/audio/effnet-discogs";
 
 export async function GET() {
   const session = await auth();
@@ -73,27 +73,31 @@ export async function POST(req: NextRequest) {
     update: {},
   }).catch(() => { /* silent — non-critical */ });
 
-  // Essentia ML analysis via Replicate — runs in parallel with other background
-  // tasks, never blocks track creation. Stores results on the Track record.
-  // Falls back silently if Replicate is unavailable or account has no credit.
+  // EffNet-Discogs ML analysis — runs in background after track creation.
+  // Local ONNX inference — no Replicate API calls, no external dependencies.
+  // Falls back silently on any failure.
   if (track.fileUrl) {
-    void analyzeWithEssentia(track.fileUrl).then(async (essentia) => {
-      if (!essentia) return;
+    void analyzeUrlWithEffnet(track.fileUrl).then(async (effnet) => {
+      if (!effnet) return;
       await db.track.update({
         where: { id: track.id },
         data: {
-          essentiaGenres:       essentia.genres,
-          essentiaMoods:        essentia.moods,
-          essentiaInstruments:  essentia.instruments,
-          essentiaDanceability: essentia.danceability,
-          essentiaVoice:        essentia.voice,
-          essentiaVoiceGender:  essentia.voiceGender,
-          essentiaTimbre:       essentia.timbre,
-          essentiaAutoTags:     essentia.autoTags,
+          essentiaGenres:       effnet.genres,
+          essentiaMoods:        effnet.moods,
+          essentiaInstruments:  effnet.instruments,
+          essentiaDanceability: effnet.danceability,
+          essentiaVoice:        effnet.isVocal ? "vocal" : "instrumental",
           essentiaAnalyzedAt:   new Date(),
         },
       });
-    }).catch(() => { /* silent — non-critical */ });
+      console.log(`[tracks] EffNet analysis complete for track ${track.id}:`, {
+        topGenre: effnet.genres[0]?.label,
+        topMood:  effnet.moods[0]?.label,
+        danceability: effnet.danceability.toFixed(2),
+      });
+    }).catch((err) => {
+      console.warn("[tracks] EffNet analysis failed for track:", track.id, err?.message);
+    });
   }
 
   return NextResponse.json({ track }, { status: 201 });

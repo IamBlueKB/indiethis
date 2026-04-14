@@ -23,21 +23,50 @@ import { NextRequest, NextResponse } from "next/server";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildEssentiaContext(analysis: any): string {
   const parts: string[] = [];
+
   if (analysis?.genres?.length) {
-    const genreStr = analysis.genres.slice(0, 3).map((g: { label: string; score: number }) => `${g.label} (${Math.round(g.score * 100)}%)`).join(", ");
+    const genreStr = (analysis.genres as { label: string; score: number }[])
+      .slice(0, 5)
+      .map((g) => `${g.label} (${Math.round(g.score * 100)}%)`)
+      .join(", ");
     parts.push(`Genre: ${genreStr}`);
   }
+
   if (analysis?.moods?.length) {
-    const moodStr = analysis.moods.slice(0, 3).map((m: { label: string; score: number }) => `${m.label} (${Math.round(m.score * 100)}%)`).join(", ");
+    const moodStr = (analysis.moods as { label: string; score: number }[])
+      .slice(0, 5)
+      .map((m) => `${m.label} (${Math.round(m.score * 100)}%)`)
+      .join(", ");
     parts.push(`Mood: ${moodStr}`);
   }
+
   if (analysis?.instruments?.length) {
-    const instrStr = analysis.instruments.slice(0, 5).map((i: { label: string; score: number }) => `${i.label} (${Math.round(i.score * 100)}%)`).join(", ");
+    const instrStr = (analysis.instruments as { label: string; score: number }[])
+      .slice(0, 8)
+      .map((i) => i.label)
+      .join(", ");
     parts.push(`Instruments: ${instrStr}`);
   }
-  if (analysis?.danceability != null) parts.push(`Danceability: ${analysis.danceability.toFixed(2)}`);
-  if (analysis?.vocalType) parts.push(`Vocals: ${analysis.vocalType}${analysis.voiceGender ? ` (${analysis.voiceGender})` : ""}`);
-  if (analysis?.timbre) parts.push(`Timbre: ${analysis.timbre}`);
+
+  if (analysis?.danceability != null) {
+    parts.push(`Danceability: ${Math.round(analysis.danceability * 100)}%`);
+  }
+
+  if (analysis?.vocalType) {
+    const vocalStr = analysis.voiceGender
+      ? `${analysis.vocalType} (${analysis.voiceGender})`
+      : analysis.vocalType;
+    parts.push(`Vocals: ${vocalStr}`);
+  }
+
+  if (analysis?.timbre) {
+    parts.push(`Timbre: ${analysis.timbre}`);
+  }
+
+  if (analysis?.isTonal != null) {
+    parts.push(`Tonality: ${analysis.isTonal ? "tonal" : "atonal"}`);
+  }
+
   return parts.join("\n");
 }
 
