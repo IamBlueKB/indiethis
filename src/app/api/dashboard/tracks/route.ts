@@ -3,8 +3,6 @@ import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 import { moderateContent } from "@/lib/agents/content-moderation";
-import { waitUntil } from "@vercel/functions";
-import { runEffNetBackground } from "@/lib/audio/effnet-background";
 
 export async function GET() {
   const session = await auth();
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Fingerprint the track (handles remote S3/Supabase URLs and local paths) — fire and forget
+  // Fingerprint the track — fire and forget
   if (track.fileUrl) {
     fingerprintTrack(track.id, track.fileUrl).catch(() => {});
   }
@@ -74,12 +72,19 @@ export async function POST(req: NextRequest) {
     update: {},
   }).catch(() => { /* silent — non-critical */ });
 
-  // EffNet-Discogs ML analysis — background, guarded by ENABLE_EFFNET_ANALYSIS flag.
-  // waitUntil keeps the Vercel function alive after the response is sent so the
-  // ~50-60 second analysis completes without blocking the 201 response.
-  // Set ENABLE_EFFNET_ANALYSIS=true in Vercel env vars to activate.
-  if (track.fileUrl && process.env.ENABLE_EFFNET_ANALYSIS === "true") {
-    waitUntil(runEffNetBackground(track.id, track.fileUrl));
+  // Full audio analysis (BPM/key/energy + EffNet genre/mood) — routed through
+  // isolated trigger so node-web-audio-api and onnxruntime-web are bundled only
+  // in that function, not here. Fire and forget.
+  if (track.fileUrl) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
+    void fetch(`${baseUrl}/api/internal/trigger/audio-features`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "authorization": `Bearer ${process.env.CRON_SECRET}`,
+      },
+      body: JSON.stringify({ trackId: track.id, audioUrl: track.fileUrl }),
+    }).catch((err) => console.error("[tracks] audio-features trigger failed:", err));
   }
 
   return NextResponse.json({ track }, { status: 201 });

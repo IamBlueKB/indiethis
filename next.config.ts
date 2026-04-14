@@ -38,6 +38,11 @@ const nextConfig: NextConfig = {
       "./models/effnet-discogs/**",
       "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
+    // audio-features: detectAudioFeatures (node-web-audio-api + essentia) + EffNet
+    "/api/internal/trigger/audio-features": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
+    ],
   },
   // Explicit exclusions to keep individual function bundles under 250 MB.
   outputFileTracingExcludes: {
@@ -51,6 +56,15 @@ const nextConfig: NextConfig = {
       "./node_modules/node-web-audio-api/**",
       "./node_modules/essentia.js/**",
       "./models/**",
+    ],
+    // audio-features trigger: same binary exclusion as lyric trigger
+    "/api/internal/trigger/audio-features": [
+      "./node_modules/node-web-audio-api/node-web-audio-api.win32-x64-msvc.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.darwin-x64.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.win32-arm64-msvc.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.linux-arm64-gnu.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.linux-arm-gnueabihf.node",
+      "./node_modules/node-web-audio-api/node-web-audio-api.darwin-arm64.node",
     ],
     // lyric trigger sits at ~250 MB because node-web-audio-api ships binaries for
     // 7 platforms (~40 MB total). Vercel runs linux-x64-gnu only — exclude the
