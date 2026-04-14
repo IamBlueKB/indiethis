@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (!trackId || !audioUrl)
     return NextResponse.json({ error: "trackId and audioUrl required" }, { status: 400 });
 
-  void runFullAnalysis(trackId, audioUrl).catch((err) =>
+  await runFullAnalysis(trackId, audioUrl).catch((err) =>
     console.error("[trigger/audio-features] Unhandled error:", err),
   );
 
