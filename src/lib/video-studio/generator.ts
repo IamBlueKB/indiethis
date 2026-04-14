@@ -78,11 +78,30 @@ interface MultiShotInput {
  * Split an array of shots into batches of at most maxPerSegment.
  * Kling 3.0 supports max 6 shots per API call.
  */
-function chunkShots(shots: MultiShotInput[], maxPerSegment: number): MultiShotInput[][] {
+function chunkShots(
+  shots:           MultiShotInput[],
+  maxPerSegment:   number,
+  maxTotalSeconds: number = Infinity,
+): MultiShotInput[][] {
   const chunks: MultiShotInput[][] = [];
-  for (let i = 0; i < shots.length; i += maxPerSegment) {
-    chunks.push(shots.slice(i, i + maxPerSegment));
+  let current: MultiShotInput[]   = [];
+  let currentDuration              = 0;
+
+  for (const shot of shots) {
+    const wouldExceedCount    = current.length >= maxPerSegment;
+    const wouldExceedDuration = current.length > 0 && (currentDuration + shot.duration) > maxTotalSeconds;
+
+    if (wouldExceedCount || wouldExceedDuration) {
+      chunks.push(current);
+      current         = [];
+      currentDuration = 0;
+    }
+
+    current.push(shot);
+    currentDuration += shot.duration;
   }
+
+  if (current.length > 0) chunks.push(current);
   return chunks;
 }
 
@@ -155,8 +174,12 @@ export async function generateMultiShotVideo(
     });
   }
 
-  // ── 3. Chunk into segments of ≤6 shots ──────────────────────────────────────
-  const segments = chunkShots(optimizedShots, VIDEO_MODELS[activeModelKey].maxShots);
+  // ── 3. Chunk into segments respecting maxShots AND maxDuration ──────────────
+  const segments = chunkShots(
+    optimizedShots,
+    VIDEO_MODELS[activeModelKey].maxShots,
+    VIDEO_MODELS[activeModelKey].maxDuration,
+  );
 
   console.log(
     `[generateMultiShotVideo] ${scenes.length} shots → ${segments.length} segment(s) via ${modelId}`,
