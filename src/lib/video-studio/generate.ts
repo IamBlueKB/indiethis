@@ -549,7 +549,10 @@ LIGHTING: Rembrandt, high-key, low-key, rim/backlight, silhouette, chiaroscuro, 
 MODIFIERS: cinematic grain, 35mm analog warmth, anamorphic lens flares, crushed shadows, bleach bypass, neon noir
 
 ## Example opening
-"Your track is dark, aggressive trap — 140 BPM, heavy 808s, that Am key makes it cinematic not party. I'm thinking noir warehouse, hard cuts synced to every drop, slow dolly push-ins during the verses with Rembrandt side lighting and crushed shadows. Want to run with that, or are you taking this somewhere different?"`;
+"Your track is dark, aggressive trap — 140 BPM, heavy 808s, that Am key makes it cinematic not party. I'm thinking noir warehouse, hard cuts synced to every drop, slow dolly push-ins during the verses with Rembrandt side lighting and crushed shadows. Want to run with that, or are you taking this somewhere different?"
+
+## Critical rule
+NEVER say "I can see you're going for" or "you chose" or "you selected" — you are reading the AUDIO, not any user preference. Say "I'm hearing", "this track is", "the data tells me".`;
 
   try {
     const response = await claude.messages.create({
