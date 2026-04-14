@@ -1,18 +1,18 @@
 /**
  * POST /api/internal/trigger/audio-features
  *
- * Isolated trigger for full audio analysis on track upload:
- *   1. BPM / key / energy  — via detectAudioFeatures (node-web-audio-api + essentia.js)
- *   2. EffNet-Discogs ML   — genre / mood / instruments / danceability / voice
+ * Full audio analysis via Replicate:
+ *   - BPM, musical key, energy
+ *   - EffNet genre, mood, instruments, danceability, voice, tonal
  *
- * Kept in its own route so Vercel nft bundles node-web-audio-api, essentia.js,
- * onnxruntime-web, and the ONNX model files only here — not in the webhook or
- * tracks upload function.
+ * Replaces node-web-audio-api + essentia.js which require libasound.so.2
+ * (Linux ALSA) — not available in Vercel serverless functions.
  *
  * Protected by CRON_SECRET. Caller fires and forgets.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { analyzeAudioOnReplicate } from "@/lib/audio/replicate-analysis";
 
 export async function POST(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`)
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
   if (!trackId || !audioUrl)
     return NextResponse.json({ error: "trackId and audioUrl required" }, { status: 400 });
 
-  // Fire and forget — caller doesn't wait for this
   void runFullAnalysis(trackId, audioUrl).catch((err) =>
     console.error("[trigger/audio-features] Unhandled error:", err),
   );
@@ -31,56 +30,33 @@ export async function POST(req: NextRequest) {
 }
 
 async function runFullAnalysis(trackId: string, audioUrl: string): Promise<void> {
-  console.log(`[trigger/audio-features] Starting full analysis for track ${trackId}`);
+  console.log(`[trigger/audio-features] Starting Replicate analysis for track ${trackId}`);
 
-  // ── 1. BPM / key / energy ─────────────────────────────────────────────────
-  try {
-    const { detectAudioFeatures } = await import("@/lib/audio-analysis");
-    const features = await detectAudioFeatures(audioUrl);
-
-    console.log(`[trigger/audio-features] BPM=${features.bpm} key=${features.musicalKey} energy=${features.energy}`);
-
-    if (features.bpm !== null || features.musicalKey !== null || features.energy !== null) {
-      // Write bpm + musicalKey to Track
-      await db.track.update({
-        where: { id: trackId },
-        data: {
-          ...(features.bpm        !== null ? { bpm:        features.bpm }        : {}),
-          ...(features.musicalKey !== null ? { musicalKey: features.musicalKey } : {}),
-        },
-      });
-
-      // Write energy to AudioFeatures (upsert — may not exist yet)
-      if (features.energy !== null) {
-        await db.audioFeatures.upsert({
-          where:  { trackId },
-          create: { trackId, energy: features.energy },
-          update: { energy: features.energy },
-        });
-      }
-    }
-  } catch (err) {
-    console.error(`[trigger/audio-features] BPM/key/energy failed for ${trackId}:`, err);
-  }
-
-  // ── 2. EffNet-Discogs ML ──────────────────────────────────────────────────
   try {
     await db.track.update({
       where: { id: trackId },
       data:  { analysisStatus: "analyzing" },
     });
 
-    const { analyzeUrlWithEffnet } = await import("@/lib/audio/effnet-discogs");
-    const result = await analyzeUrlWithEffnet(audioUrl);
+    const result = await analyzeAudioOnReplicate(audioUrl);
 
-    if (!result) throw new Error("EffNet returned null");
+    if (!result) {
+      await db.track.update({
+        where: { id: trackId },
+        data:  { analysisStatus: "failed", analysisError: "Replicate analysis returned null" },
+      }).catch(() => {});
+      return;
+    }
 
-    const findMood = (label: string): number | null =>
-      result.moods.find(m => m.label === label)?.score ?? null;
+    const findMood = (label: string) =>
+      result.moods.find((m) => m.label === label)?.score ?? null;
 
+    // Write all results to DB
     await db.track.update({
       where: { id: trackId },
       data: {
+        bpm:                  result.bpm,
+        musicalKey:           result.musicalKey,
         analysisStatus:       "completed",
         analyzedAt:           new Date(),
         effnetGenre:          result.genres,
@@ -102,14 +78,21 @@ async function runFullAnalysis(trackId: string, audioUrl: string): Promise<void>
       },
     });
 
+    // Energy goes to the AudioFeatures relation
+    await db.audioFeatures.upsert({
+      where:  { trackId },
+      create: { trackId, energy: result.energy },
+      update: { energy: result.energy },
+    });
+
     console.log(
-      `[trigger/audio-features] EffNet done for ${trackId}:`,
-      `genre=${result.genres[0]?.label ?? "?"}`,
-      `mood=${result.moods[0]?.label ?? "?"}`,
+      `[trigger/audio-features] Done for track ${trackId}:`,
+      `BPM=${result.bpm} key=${result.musicalKey} energy=${result.energy.toFixed(2)}`,
+      `genre=${result.genres[0]?.label ?? "?"} mood=${result.moods[0]?.label ?? "?"}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[trigger/audio-features] EffNet failed for ${trackId}:`, msg);
+    console.error(`[trigger/audio-features] Failed for track ${trackId}:`, msg);
     await db.track.update({
       where: { id: trackId },
       data:  { analysisStatus: "failed", analysisError: msg },

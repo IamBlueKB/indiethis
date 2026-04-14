@@ -425,20 +425,33 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
     }
   }
 
-  // Run live audio analysis if still missing BPM/energy (fresh uploads)
+  // Run live audio analysis via Replicate if still missing BPM/energy
+  // (node-web-audio-api cannot run on Vercel — requires libasound.so.2)
   if (bpm === null || energy === null) {
     console.log(
       "[song-analyzer] Live analysis needed — bpm:", bpm, "energy:", energy,
       "| url:", audioUrl.slice(0, 80),
     );
     try {
-      const detected = await detectAudioFeatures(audioUrl);
-      console.log("[song-analyzer] Live analysis result — bpm:", detected.bpm, "key:", detected.musicalKey, "energy:", detected.energy);
-      if (bpm    === null && detected.bpm    !== null) bpm    = detected.bpm;
-      if (key    === null && detected.musicalKey !== null) key = detected.musicalKey;
-      if (energy === null && detected.energy !== null) energy = detected.energy;
+      const { analyzeAudioOnReplicate } = await import("@/lib/audio/replicate-analysis");
+      const detected = await analyzeAudioOnReplicate(audioUrl);
+      if (detected) {
+        console.log("[song-analyzer] Replicate result — bpm:", detected.bpm, "key:", detected.musicalKey, "energy:", detected.energy);
+        if (bpm    === null) bpm    = detected.bpm;
+        if (key    === null) key    = detected.musicalKey;
+        if (energy === null) energy = detected.energy;
+        // Also populate EffNet data if we got it
+        if (!essentiaGenres      && detected.genres.length)      essentiaGenres      = detected.genres;
+        if (!essentiaMoods       && detected.moods.length)       essentiaMoods       = detected.moods;
+        if (!essentiaInstruments && detected.instruments.length) essentiaInstruments = detected.instruments;
+        if (!essentiaDanceability)                                essentiaDanceability = detected.danceability;
+        if (!essentiaVoice)                                       essentiaVoice        = detected.isVocal ? "vocal" : "instrumental";
+        if (essentiaTonal === null)                               essentiaTonal        = detected.isTonal;
+      } else {
+        console.warn("[song-analyzer] Replicate analysis returned null");
+      }
     } catch (err) {
-      console.error("[song-analyzer] Live audio analysis threw (unexpected — detectAudioFeatures should not throw):", err);
+      console.error("[song-analyzer] Replicate analysis threw:", err);
     }
   } else {
     console.log("[song-analyzer] Using DB values — bpm:", bpm, "key:", key, "energy:", energy);
