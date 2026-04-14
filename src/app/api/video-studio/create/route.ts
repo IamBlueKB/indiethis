@@ -24,7 +24,6 @@ import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoPrice }         from "@/lib/video-studio/model-router";
-import { startGeneration, startAnalysisOnly } from "@/lib/video-studio/generate";
 
 // Included credits per tier per month
 const INCLUDED_VIDEOS: Record<string, number> = {
@@ -123,20 +122,50 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ── Director Mode: start analysis immediately (feeds Director chat) ──────
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
+
+    // ── Director Mode: route analysis through isolated trigger (has ML stack bundled) ──
     if (mode === "DIRECTOR") {
-      // Only analyze — don't generate yet (generation triggered after shot list approval)
-      void startAnalysisOnly(video.id).catch(err =>
-        console.error("[video-studio/create] director analysis error:", err)
-      );
+      // Save track to library if logged in and not already linked to a Track record
+      if (userId && !trackId) {
+        void db.track.create({
+          data: {
+            artistId:   userId,
+            title:      trackTitle,
+            fileUrl:    audioUrl,
+            status:     "DRAFT",
+          },
+        }).then((track) => {
+          // Link the MusicVideo to the new Track and fire audio analysis
+          void db.musicVideo.update({
+            where: { id: video.id },
+            data:  { trackId: track.id },
+          }).catch(() => {});
+          void fetch(`${baseUrl}/api/internal/trigger/audio-features`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", authorization: `Bearer ${process.env.CRON_SECRET}` },
+            body:    JSON.stringify({ trackId: track.id, audioUrl }),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
+
+      // Route song analysis through video trigger (node-web-audio-api + essentia bundled there)
+      void fetch(`${baseUrl}/api/internal/trigger/video`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", authorization: `Bearer ${process.env.CRON_SECRET}` },
+        body:    JSON.stringify({ musicVideoId: video.id, analysisOnly: true }),
+      }).catch(err => console.error("[video-studio/create] director trigger failed:", err));
+
       return NextResponse.json({ id: video.id, requiresPayment: false, amount: 0 });
     }
 
     // ── Quick Mode: Start immediately if free ─────────────────────────────────
     if (isFree) {
-      void startGeneration(video.id).catch(err =>
-        console.error("[video-studio/create] generation error:", err)
-      );
+      void fetch(`${baseUrl}/api/internal/trigger/video`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", authorization: `Bearer ${process.env.CRON_SECRET}` },
+        body:    JSON.stringify({ musicVideoId: video.id }),
+      }).catch(err => console.error("[video-studio/create] generation trigger failed:", err));
     }
 
     return NextResponse.json({
