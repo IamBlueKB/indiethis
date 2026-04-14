@@ -47,6 +47,10 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // Clear any stale FalSceneJobs from previous failed attempts so
+    // the webhook scene-count check isn't corrupted by old records.
+    await db.falSceneJob.deleteMany({ where: { musicVideoId: id } });
+
     await startGeneration(id);
 
     return NextResponse.json({ started: true });
