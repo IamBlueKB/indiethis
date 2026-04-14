@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
 function isPublicPath(pathname: string): boolean {
   // Allow public static paths and API auth routes
   if (pathname.startsWith("/api/auth")) return true;
+  // Internal trigger endpoints — protected by CRON_SECRET, not session auth
+  if (pathname.startsWith("/api/internal")) return true;
   // Admin panel — protected by admin cookie auth (getAdminSession), not NextAuth
   if (pathname.startsWith("/admin")) return true;
   if (pathname.startsWith("/api/admin")) return true;
