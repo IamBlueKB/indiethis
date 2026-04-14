@@ -45,7 +45,7 @@ export async function runEffNetBackground(trackId: string, audioUrl: string): Pr
         effnetMood:           result.moods,
         effnetInstruments:    result.instruments,
         effnetDanceability:   result.danceability,
-        effnetVoice:          { isVocal: result.isVocal, gender: result.voiceGender ?? null },
+        effnetVoice:          { isVocal: result.isVocal, gender: null },
         effnetMoodAggressive: findMood("aggressive"),
         effnetMoodHappy:      findMood("happy"),
         effnetMoodSad:        findMood("sad"),
