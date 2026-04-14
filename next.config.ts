@@ -9,11 +9,17 @@ const nextConfig: NextConfig = {
     "pdf-parse",
     "pdfjs-dist",
   ],
-  // Include EffNet-Discogs model files and onnxruntime-web WASM in the Vercel
-  // serverless function bundle. Without this, Next.js file tracing won't include
-  // static assets since they're not imported via require()/import.
+  // Include EffNet-Discogs model files and onnxruntime-web WASM only in the
+  // specific routes that actually run ML inference. Using "/api/**" was adding
+  // ~105MB (79MB WASM + 26MB models) to EVERY API route including stripe/webhook.
   outputFileTracingIncludes: {
-    "/api/**": [
+    // tracks route: fires EffNet analysis on upload (dynamic import chain)
+    "/api/dashboard/tracks": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
+    ],
+    // video-studio routes: song-analyzer → effnet-discogs (via dynamic imports)
+    "/api/video-studio/**": [
       "./models/effnet-discogs/**",
       "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
