@@ -477,7 +477,22 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
     // Generate the Director's opening message as a specific creative proposal
     try {
       const hasCharRef = Array.isArray(video.characterRefs) && video.characterRefs.length > 0;
-      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, undefined, hasCharRef);
+
+      // Load style promptBase so Director knows the visual language of the preset
+      let stylePromptBase: string | undefined;
+      if (video.style) {
+        const styleRecord = await db.videoStyle.findFirst({
+          where:  { name: video.style },
+          select: { promptBase: true },
+        }).catch(() => null);
+        stylePromptBase = styleRecord?.promptBase ?? undefined;
+      }
+
+      const greeting = await generateInitialGreeting(
+        video.trackTitle, analysis,
+        video.style ?? undefined, undefined, hasCharRef,
+        stylePromptBase, video.videoLength ?? undefined, video.aspectRatio ?? undefined,
+      );
       if (greeting) {
         const greetingMsg = { role: "assistant", content: greeting, createdAt: new Date().toISOString() };
         await db.musicVideo.update({
@@ -502,11 +517,14 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
  * the DirectorClient loads it directly rather than triggering a static fallback.
  */
 async function generateInitialGreeting(
-  trackTitle:   string,
-  analysis:     SongAnalysis,
-  style?:       string,
-  filmLook?:    string,
-  hasCharRef?:  boolean,
+  trackTitle:     string,
+  analysis:       SongAnalysis,
+  style?:         string,
+  filmLook?:      string,
+  hasCharRef?:    boolean,
+  stylePromptBase?: string,
+  videoLength?:   string,
+  aspectRatio?:   string,
 ): Promise<string | null> {
   // Build full audio intelligence context
   const lines: string[] = [`Track: "${trackTitle}"`];
@@ -537,8 +555,11 @@ async function generateInitialGreeting(
   const audioContext = lines.join("\n");
 
   const styleContext = style
-    ? `The artist selected visual style: "${style}".${filmLook ? ` Film look preset: "${filmLook}".` : ""} Build your direction around this — it is their chosen starting point.`
-    : `The artist chose to start from scratch with no preset style.`;
+    ? [
+        `Visual style selected: "${style}"${aspectRatio ? ` | Format: ${aspectRatio}` : ""}${videoLength ? ` | Length: ${videoLength}` : ""}.`,
+        stylePromptBase ? `Style visual language: ${stylePromptBase}` : "",
+      ].filter(Boolean).join(" ")
+    : `No preset style selected. Format: ${aspectRatio ?? "16:9"} | Length: ${videoLength ?? "STANDARD"}.`;
 
   const charRefContext = hasCharRef
     ? `The artist uploaded a character reference photo (@Element1). You already know who is in this video — do NOT ask. Ask about location/setting instead.`

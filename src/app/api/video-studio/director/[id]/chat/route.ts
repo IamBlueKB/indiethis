@@ -157,12 +157,23 @@ export async function POST(
       select: {
         id: true, trackTitle: true, mode: true, status: true,
         conversationLog: true, bpm: true, musicalKey: true, energy: true,
-        videoLength: true, style: true, songStructure: true, characterRefs: true,
+        videoLength: true, aspectRatio: true, style: true,
+        songStructure: true, characterRefs: true,
       },
     });
 
     if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (video.mode !== "DIRECTOR") return NextResponse.json({ error: "Not Director Mode" }, { status: 400 });
+
+    // Load style preset details (promptBase describes the visual language)
+    let stylePromptBase: string | null = null;
+    if (video.style) {
+      const styleRecord = await db.videoStyle.findFirst({
+        where:  { name: video.style },
+        select: { promptBase: true },
+      }).catch(() => null);
+      stylePromptBase = styleRecord?.promptBase ?? null;
+    }
 
     // Load existing conversation
     const log: ChatMessage[] = Array.isArray(video.conversationLog)
@@ -189,11 +200,14 @@ export async function POST(
     const essentiaCtx = buildEssentiaContext(analysis);
     const hasCharRef   = Array.isArray(video.characterRefs) && (video.characterRefs as string[]).length > 0;
     const styleLine    = video.style
-      ? `The artist selected visual style: "${video.style}". This is their chosen starting point — honor it, do not override it.`
-      : "The artist chose to start from scratch with no preset style.";
+      ? [
+          `Visual style: "${video.style}"${video.aspectRatio ? ` | Format: ${video.aspectRatio}` : ""}${video.videoLength ? ` | Length: ${video.videoLength}` : ""}.`,
+          stylePromptBase ? `Style description: ${stylePromptBase}` : "",
+        ].filter(Boolean).join(" ")
+      : `No preset style selected. Format: ${video.aspectRatio ?? "16:9"} | Length: ${video.videoLength ?? "STANDARD"}.`;
     const charRefLine  = hasCharRef
-      ? `The artist uploaded a character reference photo (@Element1 is set). Do NOT ask who is in the video — you already know. Always use @Element1 for any scene featuring the artist.`
-      : `No character reference uploaded. If you haven't asked yet, ask whether this is artist performance, narrative character, or abstract.`;
+      ? `Character reference uploaded (@Element1 is set). Do NOT ask who is in the video. Always use @Element1 for scenes featuring the artist.`
+      : `No character reference uploaded. Ask whether this is artist performance, narrative character, or abstract.`;
     const contextHint  = [
       `Track: "${video.trackTitle}"${video.bpm ? ` | ${video.bpm} BPM` : ""}${video.musicalKey ? ` | ${video.musicalKey}` : ""}${video.energy != null ? ` | energy ${Math.round(video.energy * 10)}/10` : ""}.`,
       styleLine,
