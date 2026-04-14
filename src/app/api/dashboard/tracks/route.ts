@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 import { moderateContent } from "@/lib/agents/content-moderation";
-import { analyzeUrlWithEffnet } from "@/lib/audio/effnet-discogs";
+// NOTE: analyzeUrlWithEffnet imported dynamically below to prevent onnxruntime-node
+// load failures from crashing this module on envs without libonnxruntime.so.
 
 export async function GET() {
   const session = await auth();
@@ -77,27 +78,32 @@ export async function POST(req: NextRequest) {
   // Local ONNX inference — no Replicate API calls, no external dependencies.
   // Falls back silently on any failure.
   if (track.fileUrl) {
-    void analyzeUrlWithEffnet(track.fileUrl).then(async (effnet) => {
-      if (!effnet) return;
-      await db.track.update({
-        where: { id: track.id },
-        data: {
-          essentiaGenres:       effnet.genres,
-          essentiaMoods:        effnet.moods,
-          essentiaInstruments:  effnet.instruments,
-          essentiaDanceability: effnet.danceability,
-          essentiaVoice:        effnet.isVocal ? "vocal" : "instrumental",
-          essentiaAnalyzedAt:   new Date(),
-        },
-      });
-      console.log(`[tracks] EffNet analysis complete for track ${track.id}:`, {
-        topGenre: effnet.genres[0]?.label,
-        topMood:  effnet.moods[0]?.label,
-        danceability: effnet.danceability.toFixed(2),
-      });
-    }).catch((err) => {
-      console.warn("[tracks] EffNet analysis failed for track:", track.id, err?.message);
-    });
+    void (async () => {
+      try {
+        const { analyzeUrlWithEffnet } = await import("@/lib/audio/effnet-discogs");
+        const effnet = await analyzeUrlWithEffnet(track.fileUrl!);
+        if (!effnet) return;
+        await db.track.update({
+          where: { id: track.id },
+          data: {
+            essentiaGenres:       effnet.genres,
+            essentiaMoods:        effnet.moods,
+            essentiaInstruments:  effnet.instruments,
+            essentiaDanceability: effnet.danceability,
+            essentiaVoice:        effnet.isVocal ? "vocal" : "instrumental",
+            essentiaAnalyzedAt:   new Date(),
+          },
+        });
+        console.log(`[tracks] EffNet analysis complete for track ${track.id}:`, {
+          topGenre: effnet.genres[0]?.label,
+          topMood:  effnet.moods[0]?.label,
+          danceability: effnet.danceability.toFixed(2),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[tracks] EffNet analysis failed for track:", track.id, msg);
+      }
+    })();
   }
 
   return NextResponse.json({ track }, { status: 201 });

@@ -14,8 +14,14 @@ const nextConfig: NextConfig = {
   // Without this, Next.js file tracing won't include static model files
   // since they're not imported via require()/import.
   outputFileTracingIncludes: {
-    "/api/**": ["./models/effnet-discogs/**"],
-    "/video-studio/**": ["./models/effnet-discogs/**"],
+    "/api/**": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-node/bin/**",
+    ],
+    "/video-studio/**": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-node/bin/**",
+    ],
   },
 };
 

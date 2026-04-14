@@ -19,7 +19,8 @@
 import { db }         from "@/lib/db";
 import { claude, SONNET } from "@/lib/claude";
 import { detectAudioFeatures } from "@/lib/audio-analysis";
-import { analyzeUrlWithEffnet } from "@/lib/audio/effnet-discogs";
+// NOTE: analyzeUrlWithEffnet is imported dynamically below to prevent onnxruntime-node
+// load failures (missing libonnxruntime.so on some envs) from crashing the entire module.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -417,6 +418,7 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   if (needsEffnetAnalysis) {
     try {
       console.log("[song-analyzer] Running EffNet-Discogs ML classification…");
+      const { analyzeUrlWithEffnet } = await import("@/lib/audio/effnet-discogs");
       const effnetResult = await analyzeUrlWithEffnet(audioUrl);
       if (effnetResult) {
         if (!essentiaGenres      && effnetResult.genres.length)      essentiaGenres       = effnetResult.genres;
