@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import cog
+from cog import BasePredictor, Input
 import essentia.standard as es
 import numpy as np
 import onnxruntime as ort
@@ -30,7 +30,7 @@ MAX_PATCHES  = 200
 SAMPLE_RATE  = 16000
 
 
-class Predictor(cog.BasePredictor):
+class Predictor(BasePredictor):
     def setup(self) -> None:
         """Load models once at startup — cached for all predictions."""
         print("[setup] Loading EffNet ONNX models...")
@@ -65,8 +65,7 @@ class Predictor(cog.BasePredictor):
               f"Genres: {len(self.genre_labels)}, Moods: {len(self.mood_theme_labels)}, "
               f"Instruments: {len(self.instrument_labels)}")
 
-    @cog.input("audio_url", type=str, description="Publicly accessible audio file URL")
-    def predict(self, audio_url: str) -> Any:
+    def predict(self, audio_url: str = Input(description="Publicly accessible audio file URL")) -> Any:
         print(f"[predict] Downloading: {audio_url[:80]}")
 
         # ── 1. Download audio to temp file ────────────────────────────────────
