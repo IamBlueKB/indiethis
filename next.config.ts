@@ -8,19 +8,18 @@ const nextConfig: NextConfig = {
     "essentia.js",
     "pdf-parse",
     "pdfjs-dist",
-    "onnxruntime-node",
   ],
-  // Include EffNet-Discogs model files in the Vercel serverless function bundle.
-  // Without this, Next.js file tracing won't include static model files
-  // since they're not imported via require()/import.
+  // Include EffNet-Discogs model files and onnxruntime-web WASM in the Vercel
+  // serverless function bundle. Without this, Next.js file tracing won't include
+  // static assets since they're not imported via require()/import.
   outputFileTracingIncludes: {
     "/api/**": [
       "./models/effnet-discogs/**",
-      "./node_modules/onnxruntime-node/bin/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
     "/video-studio/**": [
       "./models/effnet-discogs/**",
-      "./node_modules/onnxruntime-node/bin/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
   },
 };

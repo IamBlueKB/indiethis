@@ -46,7 +46,7 @@
     "next-themes": "^0.4.6",
     "node-id3": "^0.2.9",
     "node-web-audio-api": "^1.0.8",
-    "onnxruntime-node": "^1.24.3",
+    "onnxruntime-web": "^1.24.3",
     "pdf-parse": "^2.4.5",
     "posthog-js": "^1.364.7",
     "posthog-node": "^5.28.11",

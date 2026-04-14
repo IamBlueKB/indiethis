@@ -1,7 +1,9 @@
 /**
  * src/lib/audio/effnet-discogs.ts
  *
- * EffNet-Discogs ML analysis using ONNX Runtime Node.js.
+ * EffNet-Discogs ML analysis using ONNX Runtime Web (WASM backend).
+ * Uses onnxruntime-web instead of onnxruntime-node to avoid native binary
+ * bloat (512MB) that exceeds Vercel's 300MB serverless function size limit.
  *
  * Architecture:
  *   1. Audio → 16kHz mono Float32Array
@@ -18,7 +20,7 @@
  *   - classifiers: input 'embeddings' [N, 1280] → output 'activations' [N, num_classes]
  */
 
-import * as ort from "onnxruntime-node";
+import * as ort from "onnxruntime-web";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -70,6 +72,13 @@ async function initialize(): Promise<void> {
 
   const t0 = Date.now();
   console.log("[effnet] Loading models...");
+
+  // Configure WASM backend for serverless:
+  // - numThreads = 1: no SharedArrayBuffer in serverless, single-threaded only
+  // - wasmPaths: explicit path to WASM files so ORT can locate them at runtime
+  ort.env.wasm.numThreads = 1;
+  const wasmDir = path.join(process.cwd(), "node_modules", "onnxruntime-web", "dist");
+  ort.env.wasm.wasmPaths = wasmDir + "/";
 
   // Load class labels from JSON metadata files
   const genreMeta = JSON.parse(
