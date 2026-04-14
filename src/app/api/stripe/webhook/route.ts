@@ -37,19 +37,31 @@ import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match
 import { generateBookingReport }        from "@/lib/agents/booking-agent";
 
 // ─── Internal trigger helper ──────────────────────────────────────────────────
-// Fires a POST to /api/internal/trigger and immediately returns — the heavy
-// module (video pipeline, AI job processor, etc.) runs in that function's
-// bundle, keeping this webhook function lean (Prisma + Stripe only).
+// Each type routes to its own isolated API endpoint so Vercel bundles each
+// heavy dependency tree (ML stack, ffmpeg, etc.) into a separate function —
+// keeping this webhook bundle lean (Prisma + Stripe only).
+const TRIGGER_PATHS: Record<string, string> = {
+  "start-video-generation": "/api/internal/trigger/video",
+  "start-lyric-video":      "/api/internal/trigger/lyric",
+  "generate-cover-art":     "/api/internal/trigger/cover-art",
+  "process-ai-job":         "/api/internal/trigger/ai-job",
+};
+
 function fireAndForgetTrigger(body: Record<string, unknown>): void {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
-  void fetch(`${baseUrl}/api/internal/trigger`, {
+  const baseUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
+  const triggerPath = TRIGGER_PATHS[body.type as string];
+  if (!triggerPath) {
+    console.error("[webhook] unknown trigger type:", body.type);
+    return;
+  }
+  void fetch(`${baseUrl}${triggerPath}`, {
     method:  "POST",
     headers: {
       "Content-Type": "application/json",
       authorization:  `Bearer ${process.env.CRON_SECRET}`,
     },
     body: JSON.stringify(body),
-  }).catch((err) => console.error("[webhook] fireAndForgetTrigger failed:", err));
+  }).catch((err) => console.error(`[webhook] trigger ${body.type} failed:`, err));
 }
 
 type TierCredits = {

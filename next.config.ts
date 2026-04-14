@@ -27,6 +27,17 @@ const nextConfig: NextConfig = {
       "./models/effnet-discogs/**",
       "./node_modules/onnxruntime-web/dist/*.wasm",
     ],
+    // Internal trigger sub-routes: each isolated function needs its own ML assets.
+    // video: generate.ts → song-analyzer → effnet-discogs (dynamic import)
+    "/api/internal/trigger/video": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
+    ],
+    // lyric: pipeline.ts → song-analyzer → effnet-discogs (static import)
+    "/api/internal/trigger/lyric": [
+      "./models/effnet-discogs/**",
+      "./node_modules/onnxruntime-web/dist/*.wasm",
+    ],
   },
   // Explicit exclusions so nft never bundles heavy ML/media deps into the
   // Stripe webhook even if a future import chain accidentally reaches them.
