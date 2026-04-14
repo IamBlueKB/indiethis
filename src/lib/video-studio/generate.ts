@@ -168,7 +168,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
 
           return {
             index:              idx,
-            model:              VIDEO_MODELS["kling-3-pro"].id, // multi-shot t2v default
+            model:              VIDEO_MODELS["kling-3-pro-i2v"].id, // i2v — animates ref photo with shot prompt
             prompt:             parts.filter(Boolean).join(", ").slice(0, 500),
             startTime:          shot.startTime ?? (sections[idx]?.startTime ?? idx * 8),
             endTime:            shot.endTime   ?? (sections[idx]?.endTime   ?? (idx + 1) * 8),
@@ -214,7 +214,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       };
       plannedScenes.push({
         index:       0,
-        model:       VIDEO_MODELS["kling-3-pro"].id,
+        model:       mode === "DIRECTOR" ? VIDEO_MODELS["kling-3-pro-i2v"].id : VIDEO_MODELS["kling-3-pro"].id,
         prompt:      `${stylePrompt}, music video, cinematic motion, high quality`,
         startTime:   0,
         endTime:     vid.trackDuration,
@@ -282,21 +282,27 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
           DEFAULT_QUICK_MODEL,
         );
       } else {
-        // ── Director Mode: multi-shot text-to-video (same engine as Quick Mode) ─
-        // Uses the Director's shot list prompts.  The uploaded artist photo becomes
-        // elements[0] for character consistency — NOT the source frame for animation.
-        const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
-        await generateMultiShotVideo(
-          musicVideoId,
+        // ── Director Mode: per-scene i2v using Director shot list prompts ───────
+        // Kling t2v elements param is unreliable; i2v animates the reference photo
+        // driven by the rich shot list prompts from the Director chat.
+        const placeholders = await generateAllScenes(
           plannedScenes,
           resolvedRefImage,
           vid.audioUrl,
-          aspectRatio,
-          hasVocals,
+          undefined,
           webhookUrl,
-          DEFAULT_DIRECTOR_MODEL,
+          musicVideoId,
         );
 
+        await db.musicVideo.update({
+          where: { id: musicVideoId },
+          data:  {
+            scenes:      placeholders as object[],
+            status:      "GENERATING",
+            progress:    25,
+            currentStep: `Generating ${plannedScenes.length} scenes…`,
+          },
+        });
       }
 
       // Auto-link to Release Board (non-blocking)
@@ -361,52 +367,16 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         };
       });
     } else {
-      // Director Mode dev: same multi-shot path as Quick Mode
-      const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
-      await generateMultiShotVideo(
-        musicVideoId,
+      // Director Mode dev: per-scene i2v with shot list prompts
+      sceneResults = await generateAllScenes(
         plannedScenes,
         resolvedRefImage,
         vid.audioUrl,
-        aspectRatio,
-        hasVocals,
-        undefined,             // no webhook → dev polling mode
-        DEFAULT_DIRECTOR_MODEL,
+        async (completed, total) => {
+          const genProgress = 28 + Math.round((completed / total) * 45);
+          await setProgress(musicVideoId, genProgress, `Generated ${completed}/${total} scenes…`);
+        },
       );
-
-      // Assemble sceneResults from completed FalSceneJob records
-      const completedJobs = await db.falSceneJob.findMany({
-        where:   { musicVideoId },
-        orderBy: { sceneIndex: "asc" },
-      });
-      const maxShots = VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].maxShots;
-      sceneResults = completedJobs.map((job, i) => {
-        const offset    = i * maxShots;
-        const segScenes = plannedScenes.slice(offset, offset + maxShots);
-        const startTime = segScenes[0]?.startTime ?? 0;
-        const endTime   = segScenes[segScenes.length - 1]?.endTime ?? 0;
-        const energy    = segScenes.reduce((s, sc) => s + sc.spec.energyLevel, 0)
-                          / Math.max(segScenes.length, 1);
-        return {
-          sceneIndex:      job.sceneIndex,
-          videoUrl:        job.videoUrl  ?? "",
-          thumbnailUrl:    job.thumbnailUrl ?? null,
-          model:           job.model     ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
-          prompt:          segScenes.map(s => s.prompt).join(" · "),
-          startTime,
-          endTime,
-          energyLevel:     Math.round(energy * 100) / 100,
-          qaApproved:      null,
-          qaReason:        job.status === "FAILED" ? "Generation failed" : null,
-          qaRetried:       false,
-          originalPrompt:  segScenes.map(s => s.prompt).join(" · "),
-          refinedPrompt:   null,
-          primaryModel:    job.model ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
-          actualModel:     job.model ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
-          fallbackUsed:    false,
-          fallbackAttempts: 0,
-        };
-      });
     }
 
     // ── Phase 5: Stitch via Remotion Lambda ───────────────────────────────────
