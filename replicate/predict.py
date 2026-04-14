@@ -101,10 +101,31 @@ class Predictor(BasePredictor):
             print(f"[predict] Energy: {energy:.3f}")
 
             # ── 6. Mel-spectrogram patches for EffNet ─────────────────────────
-            # Use essentia's exact musicnn extractor for accurate model input
-            tf_extractor = es.TensorflowInputMusicCnn()
-            patches = tf_extractor(audio)  # [N, PATCH_FRAMES, MEL_BANDS]
-            patches = patches[:MAX_PATCHES]
+            # Compute mel-spectrogram matching musicnn input format using librosa
+            # (TensorflowInputMusicCnn not available in pip essentia builds)
+            import librosa
+            mel = librosa.feature.melspectrogram(
+                y=audio.astype(np.float32),
+                sr=SAMPLE_RATE,
+                n_fft=FRAME_SIZE,
+                hop_length=HOP_SIZE,
+                n_mels=MEL_BANDS,
+                fmin=0.0,
+                fmax=8000.0,
+                power=1.0,
+            )
+            # Convert to log scale and normalize to [0, 1]
+            mel_db = librosa.amplitude_to_db(mel, ref=np.max)  # shape (96, T)
+            mel_norm = np.clip((mel_db + 80.0) / 80.0, 0.0, 1.0).T  # shape (T, 96)
+            # Slice into PATCH_FRAMES patches with 50% hop
+            hop = PATCH_FRAMES // 2
+            patches_list = [
+                mel_norm[i : i + PATCH_FRAMES]
+                for i in range(0, len(mel_norm) - PATCH_FRAMES + 1, hop)
+            ]
+            if not patches_list:
+                return _result(bpm, musical_key, energy)
+            patches = np.array(patches_list[:MAX_PATCHES], dtype=np.float32)
             num_patches = patches.shape[0]
             print(f"[predict] Extracted {num_patches} mel patches")
 
