@@ -114,7 +114,7 @@ interface ExistingTrackData {
   energy:          number | null;
   lyrics:          string | null;
   lyricTimestamps: LyricWord[] | null;
-  // Essentia ML fields
+  // Essentia ML fields (legacy — kept for backward compat)
   essentiaGenres:       { label: string; score: number }[] | null;
   essentiaMoods:        { label: string; score: number }[] | null;
   essentiaInstruments:  { label: string; score: number }[] | null;
@@ -122,6 +122,14 @@ interface ExistingTrackData {
   essentiaVoice:        string | null;
   essentiaVoiceGender:  string | null;
   essentiaTimbre:       string | null;
+  // EffNet background analysis fields (preferred — populated by waitUntil on upload)
+  analysisStatus:       string | null;
+  effnetGenre:          { label: string; score: number }[] | null;
+  effnetMood:           { label: string; score: number }[] | null;
+  effnetInstruments:    { label: string; score: number }[] | null;
+  effnetDanceability:   number | null;
+  effnetVoice:          { isVocal: boolean; gender: string | null } | null;
+  effnetTonal:          boolean | null;
 }
 
 async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
@@ -130,6 +138,9 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
     essentiaGenres: null, essentiaMoods: null, essentiaInstruments: null,
     essentiaDanceability: null, essentiaVoice: null, essentiaVoiceGender: null,
     essentiaTimbre: null,
+    analysisStatus: null,
+    effnetGenre: null, effnetMood: null, effnetInstruments: null,
+    effnetDanceability: null, effnetVoice: null, effnetTonal: null,
   };
 
   const [track, lyricJob] = await Promise.all([
@@ -145,6 +156,14 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
         essentiaVoice:        true,
         essentiaVoiceGender:  true,
         essentiaTimbre:       true,
+        // EffNet background analysis results
+        analysisStatus:       true,
+        effnetGenre:          true,
+        effnetMood:           true,
+        effnetInstruments:    true,
+        effnetDanceability:   true,
+        effnetVoice:          true,
+        effnetTonal:          true,
         audioFeatures: {
           select: { energy: true },
         },
@@ -166,7 +185,7 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
     if (track.bpm)                           result.bpm    = track.bpm;
     if (track.musicalKey)                    result.key    = track.musicalKey;
     if (track.audioFeatures?.energy != null) result.energy = track.audioFeatures.energy;
-    // Essentia ML fields
+    // Essentia ML fields (legacy — keep for backward compat)
     if (track.essentiaGenres)
       result.essentiaGenres = track.essentiaGenres as { label: string; score: number }[];
     if (track.essentiaMoods)
@@ -178,6 +197,14 @@ async function fetchTrackData(trackId: string): Promise<ExistingTrackData> {
     if (track.essentiaVoice)        result.essentiaVoice       = track.essentiaVoice;
     if (track.essentiaVoiceGender)  result.essentiaVoiceGender = track.essentiaVoiceGender;
     if (track.essentiaTimbre)       result.essentiaTimbre      = track.essentiaTimbre;
+    // EffNet background analysis results (preferred — populated by waitUntil on upload)
+    if (track.analysisStatus)  result.analysisStatus = track.analysisStatus;
+    if (track.effnetGenre)     result.effnetGenre     = track.effnetGenre     as { label: string; score: number }[];
+    if (track.effnetMood)      result.effnetMood      = track.effnetMood      as { label: string; score: number }[];
+    if (track.effnetInstruments) result.effnetInstruments = track.effnetInstruments as { label: string; score: number }[];
+    if (track.effnetDanceability != null) result.effnetDanceability = track.effnetDanceability;
+    if (track.effnetVoice)     result.effnetVoice     = track.effnetVoice     as { isVocal: boolean; gender: string | null };
+    if (track.effnetTonal     != null) result.effnetTonal     = track.effnetTonal;
   }
   // Note: essentiaTonal is stored in songStructure JSON (not a separate DB column)
   // It will be carried over when songStructure is set on a new analysis
@@ -378,14 +405,21 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
       if (lyricTimestamps === null && dbData.lyricTimestamps !== null) {
         lyricTimestamps = dbData.lyricTimestamps;
       }
-      // Essentia ML data
-      essentiaGenres       = dbData.essentiaGenres;
-      essentiaMoods        = dbData.essentiaMoods;
-      essentiaInstruments  = dbData.essentiaInstruments;
-      essentiaDanceability = dbData.essentiaDanceability;
-      essentiaVoice        = dbData.essentiaVoice;
-      essentiaVoiceGender  = dbData.essentiaVoiceGender;
+      // Prefer EffNet background results (new columns); fall back to legacy essentia columns
+      essentiaGenres       = dbData.effnetGenre       ?? dbData.essentiaGenres;
+      essentiaMoods        = dbData.effnetMood        ?? dbData.essentiaMoods;
+      essentiaInstruments  = dbData.effnetInstruments ?? dbData.essentiaInstruments;
+      essentiaDanceability = dbData.effnetDanceability ?? dbData.essentiaDanceability;
+      // effnetVoice stores { isVocal, gender }; map to legacy string shape
+      if (dbData.effnetVoice) {
+        essentiaVoice       = dbData.effnetVoice.isVocal ? "vocal" : "instrumental";
+        essentiaVoiceGender = dbData.effnetVoice.gender ?? null;
+      } else {
+        essentiaVoice       = dbData.essentiaVoice;
+        essentiaVoiceGender = dbData.essentiaVoiceGender;
+      }
       essentiaTimbre       = dbData.essentiaTimbre;
+      essentiaTonal        = dbData.effnetTonal ?? null;
     } catch (err) {
       console.warn("[song-analyzer] DB lookup failed:", err);
     }
@@ -409,34 +443,22 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
   const finalKey    = key    ?? "C major";
   const finalEnergy = energy ?? 0.65;
 
-  // ── 1.5. Run EffNet-Discogs ML classification if no pre-computed data ────────
-  // Fires when the track has no pre-computed Essentia data in the DB.
-  // EffNet-Discogs: 400 Discogs style genres + mood + instrument detection.
-
-  const needsEffnetAnalysis = essentiaGenres === null && essentiaMoods === null;
-
-  if (needsEffnetAnalysis) {
-    try {
-      console.log("[song-analyzer] Running EffNet-Discogs ML classification…");
-      const { analyzeUrlWithEffnet } = await import("@/lib/audio/effnet-discogs");
-      const effnetResult = await analyzeUrlWithEffnet(audioUrl);
-      if (effnetResult) {
-        if (!essentiaGenres      && effnetResult.genres.length)      essentiaGenres       = effnetResult.genres;
-        if (!essentiaMoods       && effnetResult.moods.length)       essentiaMoods        = effnetResult.moods;
-        if (!essentiaInstruments && effnetResult.instruments.length) essentiaInstruments  = effnetResult.instruments;
-        if (essentiaDanceability === null)                           essentiaDanceability = effnetResult.danceability;
-        if (!essentiaVoice)                                          essentiaVoice        = effnetResult.isVocal ? "vocal" : "instrumental";
-        if (essentiaTonal === null)                                   essentiaTonal        = effnetResult.isTonal;
-        console.log(
-          "[song-analyzer] EffNet — genre:", essentiaGenres?.slice(0, 2).map(g => g.label).join(", "),
-          "| mood:", essentiaMoods?.slice(0, 2).map(m => m.label).join(", "),
-          "| voice:", essentiaVoice,
-          "| danceability:", essentiaDanceability?.toFixed(2),
-        );
-      }
-    } catch (err) {
-      console.warn("[song-analyzer] EffNet analysis failed, continuing without ML data:", err);
-    }
+  // ── 1.5. EffNet data — read from DB only (no live inference here) ────────────
+  // EffNet classification now runs in the background via waitUntil() on track
+  // upload (see src/lib/audio/effnet-background.ts). Results land in effnetGenre,
+  // effnetMood, etc. on the Track model and are already loaded above.
+  //
+  // If the background job hasn't finished yet, essentiaGenres / essentiaMoods
+  // will be null and Claude builds the shot list from BPM/key/energy alone.
+  // That's intentional — Director Mode is instant, analysis arrives silently.
+  if (essentiaGenres) {
+    console.log(
+      "[song-analyzer] EffNet data from DB —",
+      "genre:", essentiaGenres.slice(0, 2).map(g => g.label).join(", "),
+      "| mood:", essentiaMoods?.slice(0, 2).map(m => m.label).join(", "),
+      "| voice:", essentiaVoice,
+      "| danceability:", essentiaDanceability?.toFixed(2),
+    );
   }
 
   // ── 2. Build lyric context for Claude ─────────────────────────────────────

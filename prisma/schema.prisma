@@ -374,6 +374,21 @@ model Track {
   essentiaTimbre        String?   // "bright" | "dark" | null
   essentiaAutoTags      Json?     // top 50 MSD tags with scores
   essentiaAnalyzedAt    DateTime? // when the analysis was performed
+
+  // ── EffNet-Discogs Background Analysis (via waitUntil on upload) ──────────
+  analysisStatus       String?   @default("pending") // pending | analyzing | completed | failed
+  analysisError        String?
+  analyzedAt           DateTime?
+  effnetGenre          Json?     // top Discogs styles with scores
+  effnetMood           Json?     // mood/theme classifications
+  effnetInstruments    Json?     // detected instruments with scores
+  effnetDanceability   Float?    // 0-1
+  effnetVoice          Json?     // { isVocal: bool, gender: string|null }
+  effnetMoodAggressive Float?    // 0-1
+  effnetMoodHappy      Float?    // 0-1
+  effnetMoodSad        Float?    // 0-1
+  effnetMoodRelaxed    Float?    // 0-1
+  effnetTonal          Boolean?  // tonal vs atonal
 }
 
 model AudioFingerprint {

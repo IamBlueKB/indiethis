@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { fingerprintTrack } from "@/lib/fingerprint";
 import { NextRequest, NextResponse } from "next/server";
 import { moderateContent } from "@/lib/agents/content-moderation";
-// NOTE: analyzeUrlWithEffnet imported dynamically below to prevent onnxruntime-node
-// load failures from crashing this module on envs without libonnxruntime.so.
+import { waitUntil } from "@vercel/functions";
+import { runEffNetBackground } from "@/lib/audio/effnet-background";
 
 export async function GET() {
   const session = await auth();
@@ -74,36 +74,12 @@ export async function POST(req: NextRequest) {
     update: {},
   }).catch(() => { /* silent — non-critical */ });
 
-  // EffNet-Discogs ML analysis — runs in background after track creation.
-  // Local ONNX inference — no Replicate API calls, no external dependencies.
-  // Falls back silently on any failure.
-  if (track.fileUrl) {
-    void (async () => {
-      try {
-        const { analyzeUrlWithEffnet } = await import("@/lib/audio/effnet-discogs");
-        const effnet = await analyzeUrlWithEffnet(track.fileUrl!);
-        if (!effnet) return;
-        await db.track.update({
-          where: { id: track.id },
-          data: {
-            essentiaGenres:       effnet.genres,
-            essentiaMoods:        effnet.moods,
-            essentiaInstruments:  effnet.instruments,
-            essentiaDanceability: effnet.danceability,
-            essentiaVoice:        effnet.isVocal ? "vocal" : "instrumental",
-            essentiaAnalyzedAt:   new Date(),
-          },
-        });
-        console.log(`[tracks] EffNet analysis complete for track ${track.id}:`, {
-          topGenre: effnet.genres[0]?.label,
-          topMood:  effnet.moods[0]?.label,
-          danceability: effnet.danceability.toFixed(2),
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn("[tracks] EffNet analysis failed for track:", track.id, msg);
-      }
-    })();
+  // EffNet-Discogs ML analysis — background, guarded by ENABLE_EFFNET_ANALYSIS flag.
+  // waitUntil keeps the Vercel function alive after the response is sent so the
+  // ~50-60 second analysis completes without blocking the 201 response.
+  // Set ENABLE_EFFNET_ANALYSIS=true in Vercel env vars to activate.
+  if (track.fileUrl && process.env.ENABLE_EFFNET_ANALYSIS === "true") {
+    waitUntil(runEffNetBackground(track.id, track.fileUrl));
   }
 
   return NextResponse.json({ track }, { status: 201 });
