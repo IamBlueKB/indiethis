@@ -17,6 +17,40 @@ function getAudioContext(): typeof import("node-web-audio-api")["AudioContext"] 
   return require("node-web-audio-api").AudioContext;
 }
 
+/**
+ * Download a URL to an ArrayBuffer using Node's built-in https/http modules.
+ * Avoids relying on global fetch which is unavailable on Node 16.
+ */
+function downloadUrl(url: string, timeoutMs = 45_000): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const transport = url.startsWith("https") ? require("node:https") : require("node:http");
+    const chunks: Buffer[] = [];
+    const timer = setTimeout(() => reject(new Error("Download timed out")), timeoutMs);
+
+    transport.get(url, (res: import("http").IncomingMessage) => {
+      if (res.statusCode && res.statusCode >= 400) {
+        clearTimeout(timer);
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      // Follow redirects (UploadThing CDN redirects to R2)
+      if (res.statusCode && res.statusCode >= 300 && res.headers.location) {
+        clearTimeout(timer);
+        downloadUrl(res.headers.location, timeoutMs).then(resolve).catch(reject);
+        return;
+      }
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        clearTimeout(timer);
+        const buf = Buffer.concat(chunks);
+        resolve(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+      });
+      res.on("error", (err: Error) => { clearTimeout(timer); reject(err); });
+    }).on("error", (err: Error) => { clearTimeout(timer); reject(err); });
+  });
+}
+
 // ─── BPM detection via Essentia RhythmExtractor2013 ──────────────────────────
 //
 // Replaces the old hand-rolled peak-detection algorithm which consistently
@@ -131,26 +165,15 @@ export async function detectAudioFeatures(fileUrl: string): Promise<AudioFeature
 
   try {
     // ── 1. Download ───────────────────────────────────────────────────────────
-    const controller = new AbortController();
-    const downloadTimeout = setTimeout(() => controller.abort(), 45_000);
     const t0 = Date.now();
-
-    let response: Response;
+    let arrayBuffer: ArrayBuffer;
     try {
-      response = await fetch(fileUrl, { signal: controller.signal });
+      arrayBuffer = await downloadUrl(fileUrl);
     } catch (fetchErr) {
       console.error(`[audio-analysis] Download failed for ${urlShort}:`, fetchErr);
       return result;
-    } finally {
-      clearTimeout(downloadTimeout);
     }
 
-    if (!response.ok) {
-      console.error(`[audio-analysis] Download HTTP ${response.status} for ${urlShort}`);
-      return result;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
     if (arrayBuffer.byteLength === 0) {
       console.error(`[audio-analysis] Empty response body for ${urlShort}`);
       return result;
