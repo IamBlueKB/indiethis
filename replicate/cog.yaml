@@ -5,7 +5,7 @@ build:
     - ffmpeg
     - libsndfile1
   python_packages:
-    - essentia==2.1b6.dev1110
+    - essentia-tensorflow==2.1b6.dev1110
     - onnxruntime==1.17.0
     - requests==2.32.3
     - numpy==1.26.4
