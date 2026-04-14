@@ -28,7 +28,6 @@ import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
 import { sendVideoConversionEmail1 }  from "@/lib/agents/video-conversion";
 import type { MusicVideo }      from "@prisma/client";
 import {
-  routeScene,
   inferSceneType,
   type SceneSpec,
 } from "@/lib/video-studio/model-router";
@@ -41,7 +40,7 @@ import {
   type PlannedSceneInput,
   type GeneratedSceneOutput,
 } from "@/lib/video-studio/generator";
-import { VIDEO_MODELS, DEFAULT_QUICK_MODEL } from "@/lib/video-studio/models";
+import { VIDEO_MODELS, DEFAULT_QUICK_MODEL, DEFAULT_DIRECTOR_MODEL } from "@/lib/video-studio/models";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -113,35 +112,99 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     });
     const stylePrompt = styleRecord?.promptBase ?? "";
 
-    // Map sections → planned scenes
-    const sections    = analysis.sections ?? [];
-    const plannedScenes: PlannedSceneInput[] = sections.slice(0, getSceneLimit(videoLength)).map((section, idx) => {
-      const hasLyrics = !!section.lyrics;
-      const sceneType = inferSceneType(section.type, section.energy, hasLyrics);
-      const spec: SceneSpec = {
-        type:                  sceneType,
-        hasLipSync:            hasLyrics && sceneType === "performance",
-        hasFastMotion:         section.energy > 0.7,
-        hasMultipleCharacters: false,
-        characterRefs:         [],
-        energyLevel:           section.energy,
-        duration:              Math.min(section.duration, 8),
-      };
-      const decision = routeScene(spec, mode);
-      const lyricSnippet = section.lyrics ? ` "${(section.lyrics as string).slice(0, 60).trim()}"` : "";
-      const prompt = `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
+    // ── Director Mode: build planned scenes from shot list ──────────────────
+    // In Director Mode the user built a shot list via the AI Director chat.
+    // Each shot has a description, camera direction, film look, and optional
+    // per-scene model override.  Use those prompts directly — do NOT fall back
+    // to auto-generated section prompts, which ignore the Director's creative work.
+    type ShotListItem = {
+      index?:              number;
+      title?:              string;
+      description?:        string;
+      cameraDirection?:    string;
+      filmLook?:           string;
+      model?:              string;
+      energyLevel?:        number;
+      startTime?:          number;
+      endTime?:            number;
+      hasLipSync?:         boolean;
+      referenceImageUrl?:  string;
+    };
 
-      return {
-        index:       idx,
-        model:       decision.config.model,
-        prompt:      prompt.slice(0, 500),
-        startTime:   section.startTime,
-        endTime:     section.endTime,
-        duration:    spec.duration,
-        aspectRatio,
-        spec,
-      };
-    });
+    const directorShotList: ShotListItem[] =
+      mode === "DIRECTOR" && Array.isArray(vid.shotList) && (vid.shotList as ShotListItem[]).length > 0
+        ? (vid.shotList as ShotListItem[])
+        : [];
+
+    // Map sections → planned scenes
+    const sections = analysis.sections ?? [];
+    const sceneLimit = getSceneLimit(videoLength);
+
+    const plannedScenes: PlannedSceneInput[] = directorShotList.length > 0
+      // ── Director path: use Director shot list prompts ──────────────────────
+      ? directorShotList.slice(0, sceneLimit).map((shot, idx) => {
+          const energy    = shot.energyLevel ?? (sections[idx]?.energy ?? 0.5);
+          const hasLyrics = shot.hasLipSync ?? false;
+          const sceneType = inferSceneType("verse", energy, hasLyrics);
+          const spec: SceneSpec = {
+            type:                  sceneType,
+            hasLipSync:            hasLyrics,
+            hasFastMotion:         energy > 0.7,
+            hasMultipleCharacters: false,
+            characterRefs:         [],
+            energyLevel:           energy,
+            duration:              Math.min(
+              (shot.endTime ?? 0) - (shot.startTime ?? 0) || 5,
+              8,
+            ),
+          };
+
+          // Build rich cinematic prompt from Director's creative notes
+          const parts = [stylePrompt];
+          if (shot.description) parts.push(shot.description);
+          if (shot.cameraDirection) parts.push(`Camera: ${shot.cameraDirection}`);
+          if (shot.filmLook) parts.push(`Film look: ${shot.filmLook}`);
+          parts.push("cinematic motion, high quality music video");
+
+          return {
+            index:              idx,
+            model:              VIDEO_MODELS["kling-3-pro"].id, // multi-shot t2v default
+            prompt:             parts.filter(Boolean).join(", ").slice(0, 500),
+            startTime:          shot.startTime ?? (sections[idx]?.startTime ?? idx * 8),
+            endTime:            shot.endTime   ?? (sections[idx]?.endTime   ?? (idx + 1) * 8),
+            duration:           spec.duration,
+            aspectRatio,
+            spec,
+            referenceImageUrl:  shot.referenceImageUrl,
+          };
+        })
+      // ── Quick / fallback path: auto-generate from song sections ────────────
+      : sections.slice(0, sceneLimit).map((section, idx) => {
+          const hasLyrics = !!section.lyrics;
+          const sceneType = inferSceneType(section.type, section.energy, hasLyrics);
+          const spec: SceneSpec = {
+            type:                  sceneType,
+            hasLipSync:            hasLyrics && sceneType === "performance",
+            hasFastMotion:         section.energy > 0.7,
+            hasMultipleCharacters: false,
+            characterRefs:         [],
+            energyLevel:           section.energy,
+            duration:              Math.min(section.duration, 8),
+          };
+          const lyricSnippet = section.lyrics ? ` "${(section.lyrics as string).slice(0, 60).trim()}"` : "";
+          const prompt = `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
+
+          return {
+            index:       idx,
+            model:       VIDEO_MODELS["kling-3-pro"].id,
+            prompt:      prompt.slice(0, 500),
+            startTime:   section.startTime,
+            endTime:     section.endTime,
+            duration:    spec.duration,
+            aspectRatio,
+            spec,
+          };
+        });
 
     if (plannedScenes.length === 0) {
       // Fallback: one scene for the whole track
@@ -151,7 +214,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       };
       plannedScenes.push({
         index:       0,
-        model:       "fal-ai/kling-video/v3/pro/image-to-video",
+        model:       VIDEO_MODELS["kling-3-pro"].id,
         prompt:      `${stylePrompt}, music video, cinematic motion, high quality`,
         startTime:   0,
         endTime:     vid.trackDuration,
@@ -159,26 +222,6 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         aspectRatio,
         spec:        defaultSpec,
       });
-    }
-
-    // ── Director Mode: apply per-scene image overrides from shot list ──────────
-    // When the user edited scenes in the WorkflowBoard and set scene-level
-    // referenceImageUrls, those are stored on the shot list JSON.  Apply them
-    // to the matching planned scenes so each clip uses the right image.
-    if (mode === "DIRECTOR" && Array.isArray(vid.shotList)) {
-      type ShotListItem = { index?: number; referenceImageUrl?: string };
-      const shotListMap = new Map<number, string>();
-      for (const shot of vid.shotList as ShotListItem[]) {
-        if (typeof shot.index === "number" && shot.referenceImageUrl) {
-          shotListMap.set(shot.index, shot.referenceImageUrl);
-        }
-      }
-      if (shotListMap.size > 0) {
-        for (const scene of plannedScenes) {
-          const override = shotListMap.get(scene.index);
-          if (override) scene.referenceImageUrl = override;
-        }
-      }
     }
 
     await setProgress(musicVideoId, 25, `Generating ${plannedScenes.length} scenes…`, {
@@ -239,27 +282,21 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
           DEFAULT_QUICK_MODEL,
         );
       } else {
-        // ── Director Mode: per-scene i2v with model overrides ────────────────
-        // Each scene uses the model assigned by the model router / Director config.
-        const placeholders = await generateAllScenes(
+        // ── Director Mode: multi-shot text-to-video (same engine as Quick Mode) ─
+        // Uses the Director's shot list prompts.  The uploaded artist photo becomes
+        // elements[0] for character consistency — NOT the source frame for animation.
+        const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
+        await generateMultiShotVideo(
+          musicVideoId,
           plannedScenes,
           resolvedRefImage,
           vid.audioUrl,
-          undefined,   // no progress callback — webhook updates per scene
+          aspectRatio,
+          hasVocals,
           webhookUrl,
-          musicVideoId,
+          DEFAULT_DIRECTOR_MODEL,
         );
 
-        // Write placeholders so the generating UI has scene-level metadata
-        await db.musicVideo.update({
-          where: { id: musicVideoId },
-          data:  {
-            scenes:      placeholders as object[],
-            status:      "GENERATING",
-            progress:    25,
-            currentStep: `Generating ${plannedScenes.length} scenes…`,
-          },
-        });
       }
 
       // Auto-link to Release Board (non-blocking)
@@ -324,17 +361,52 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         };
       });
     } else {
-      // Director Mode dev: existing per-scene i2v path
-      sceneResults = await generateAllScenes(
+      // Director Mode dev: same multi-shot path as Quick Mode
+      const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
+      await generateMultiShotVideo(
+        musicVideoId,
         plannedScenes,
         resolvedRefImage,
         vid.audioUrl,
-        async (completed, total) => {
-          const genProgress = 28 + Math.round((completed / total) * 45);
-          await setProgress(musicVideoId, genProgress,
-            `Generated ${completed}/${total} scenes…`);
-        },
+        aspectRatio,
+        hasVocals,
+        undefined,             // no webhook → dev polling mode
+        DEFAULT_DIRECTOR_MODEL,
       );
+
+      // Assemble sceneResults from completed FalSceneJob records
+      const completedJobs = await db.falSceneJob.findMany({
+        where:   { musicVideoId },
+        orderBy: { sceneIndex: "asc" },
+      });
+      const maxShots = VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].maxShots;
+      sceneResults = completedJobs.map((job, i) => {
+        const offset    = i * maxShots;
+        const segScenes = plannedScenes.slice(offset, offset + maxShots);
+        const startTime = segScenes[0]?.startTime ?? 0;
+        const endTime   = segScenes[segScenes.length - 1]?.endTime ?? 0;
+        const energy    = segScenes.reduce((s, sc) => s + sc.spec.energyLevel, 0)
+                          / Math.max(segScenes.length, 1);
+        return {
+          sceneIndex:      job.sceneIndex,
+          videoUrl:        job.videoUrl  ?? "",
+          thumbnailUrl:    job.thumbnailUrl ?? null,
+          model:           job.model     ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
+          prompt:          segScenes.map(s => s.prompt).join(" · "),
+          startTime,
+          endTime,
+          energyLevel:     Math.round(energy * 100) / 100,
+          qaApproved:      null,
+          qaReason:        job.status === "FAILED" ? "Generation failed" : null,
+          qaRetried:       false,
+          originalPrompt:  segScenes.map(s => s.prompt).join(" · "),
+          refinedPrompt:   null,
+          primaryModel:    job.model ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
+          actualModel:     job.model ?? VIDEO_MODELS[DEFAULT_DIRECTOR_MODEL].id,
+          fallbackUsed:    false,
+          fallbackAttempts: 0,
+        };
+      });
     }
 
     // ── Phase 5: Stitch via Remotion Lambda ───────────────────────────────────

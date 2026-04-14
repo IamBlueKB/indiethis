@@ -155,18 +155,21 @@ function FanOut({ count, active, generating }: { count: number; active?: boolean
   if (count === 0) return <Arrow active={active} generating={generating} />;
   if (count === 1) return <Arrow active={active} generating={generating} />;
 
-  const rowH = 104; // approximate scene row height + gap
-  const totalH = count * rowH;
-  const midY = totalH / 2;
+  // Row height = node minHeight (88) + column gap (8); last row has no gap
+  const nodeH  = 88;
+  const gapH   = 8;
+  const rowH   = nodeH + gapH;          // 96 — spacing between branch centers
+  const totalH = count * rowH - gapH;   // exact column height
+  const midY   = totalH / 2;
 
   return (
     <div className="shrink-0 relative" style={{ width: 36, height: totalH }}>
       <svg width="36" height={totalH} style={{ position: "absolute", inset: 0 }}>
         {/* Vertical bar at center-left */}
         <line x1="4" y1="0" x2="4" y2={totalH} stroke={active ? "#D4A843" : "#2A2A2A"} strokeWidth="2" />
-        {/* Horizontal branches */}
+        {/* Horizontal branches — centered in each row */}
         {Array.from({ length: count }).map((_, i) => {
-          const y = i * rowH + rowH / 2;
+          const y = i * rowH + nodeH / 2;
           return (
             <g key={i}>
               <line x1="4" y1={y} x2="32" y2={y} stroke={active ? "#D4A843" : "#2A2A2A"} strokeWidth="2" />
@@ -193,16 +196,18 @@ function FanIn({ count, active, generating }: { count: number; active?: boolean;
   if (count === 0) return <Arrow active={active} generating={generating} />;
   if (count === 1) return <Arrow active={active} generating={generating} />;
 
-  const rowH = 104;
-  const totalH = count * rowH;
-  const midY = totalH / 2;
+  const nodeH  = 88;
+  const gapH   = 8;
+  const rowH   = nodeH + gapH;
+  const totalH = count * rowH - gapH;
+  const midY   = totalH / 2;
 
   return (
     <div className="shrink-0 relative" style={{ width: 36, height: totalH }}>
       <svg width="36" height={totalH} style={{ position: "absolute", inset: 0 }}>
         <line x1="32" y1="0" x2="32" y2={totalH} stroke={active ? "#D4A843" : "#2A2A2A"} strokeWidth="2" />
         {Array.from({ length: count }).map((_, i) => {
-          const y = i * rowH + rowH / 2;
+          const y = i * rowH + nodeH / 2;
           return (
             <line key={i} x1="0" y1={y} x2="32" y2={y} stroke={active ? "#D4A843" : "#2A2A2A"} strokeWidth="2" />
           );
