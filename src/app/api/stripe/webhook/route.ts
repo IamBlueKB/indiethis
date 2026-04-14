@@ -28,7 +28,9 @@ import { createOrder as createPrintfulOrder } from "@/lib/printful";
 import { getStreamLeasePricing } from "@/lib/stream-lease-pricing";
 import { createNotification } from "@/lib/notifications";
 import { createUserFromPending } from "@/lib/create-user-from-pending";
-import { startGeneration }       from "@/lib/video-studio/generate";
+// NOTE: startGeneration imported dynamically at call site — generate.ts pulls in
+// @remotion/lambda, @fal-ai/client, and the full video-generation stack which bloats
+// the webhook function bundle. Dynamic import keeps the webhook bundle lean.
 import { startPaymentRecoverySequence } from "@/lib/agents/payment-recovery";
 import { generateTrendReport }          from "@/lib/agents/trend-forecaster";
 import { generateProducerArtistMatch }  from "@/lib/agents/producer-artist-match";
@@ -816,8 +818,11 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            // Fire generation in background
-            void startGeneration(musicVideoId).catch(err =>
+            // Fire generation in background — dynamic import keeps generate.ts
+            // (remotion/lambda, fal, video pipeline) out of the webhook bundle.
+            void import("@/lib/video-studio/generate").then(m =>
+              m.startGeneration(musicVideoId)
+            ).catch(err =>
               console.error("[webhook/music-video] generation failed:", err)
             );
           }
