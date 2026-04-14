@@ -127,47 +127,74 @@ export async function detectAudioFeaturesFromBuffer(buffer: ArrayBuffer): Promis
  */
 export async function detectAudioFeatures(fileUrl: string): Promise<AudioFeatures> {
   const result: AudioFeatures = { bpm: null, musicalKey: null, energy: null };
+  const urlShort = fileUrl.slice(0, 80);
 
   try {
     // ── 1. Download ───────────────────────────────────────────────────────────
     const controller = new AbortController();
     const downloadTimeout = setTimeout(() => controller.abort(), 45_000);
+    const t0 = Date.now();
 
     let response: Response;
     try {
       response = await fetch(fileUrl, { signal: controller.signal });
+    } catch (fetchErr) {
+      console.error(`[audio-analysis] Download failed for ${urlShort}:`, fetchErr);
+      return result;
     } finally {
       clearTimeout(downloadTimeout);
     }
 
-    if (!response.ok) return result;
+    if (!response.ok) {
+      console.error(`[audio-analysis] Download HTTP ${response.status} for ${urlShort}`);
+      return result;
+    }
 
     const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength === 0) return result;
+    if (arrayBuffer.byteLength === 0) {
+      console.error(`[audio-analysis] Empty response body for ${urlShort}`);
+      return result;
+    }
+
+    console.log(`[audio-analysis] Downloaded ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)} MB in ${Date.now() - t0}ms`);
 
     // ── 2. Decode ─────────────────────────────────────────────────────────────
     // node-web-audio-api's AudioContext accepts the same API as the browser's.
     // We create a new context per call so parallel invocations don't interfere.
-    const AudioContext = getAudioContext();
+    let AudioContext: ReturnType<typeof getAudioContext>;
+    try {
+      AudioContext = getAudioContext();
+    } catch (ctxErr) {
+      console.error(`[audio-analysis] node-web-audio-api load failed:`, ctxErr);
+      return result;
+    }
+
     const audioContext = new AudioContext();
     let audioBuffer: AudioBuffer;
     try {
       // slice(0) copies the buffer so decodeAudioData can detach it safely
       audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    } catch {
+    } catch (decodeErr) {
+      console.error(`[audio-analysis] decodeAudioData failed for ${urlShort}:`, decodeErr);
       await audioContext.close();
       return result;
     }
 
     const channelData = audioBuffer.getChannelData(0);
+    console.log(`[audio-analysis] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.sampleRate}Hz, ${audioBuffer.numberOfChannels}ch`);
 
     // ── 3. BPM ────────────────────────────────────────────────────────────────
     try {
       const essentia = getEssentia();
       const bpm = detectBpmWithEssentia(channelData, essentia);
-      if (bpm !== null) result.bpm = bpm;
-    } catch {
-      // silent — leave result.bpm as null
+      if (bpm !== null) {
+        result.bpm = bpm;
+        console.log(`[audio-analysis] BPM detected: ${bpm}`);
+      } else {
+        console.warn(`[audio-analysis] BPM detection returned null`);
+      }
+    } catch (bpmErr) {
+      console.error(`[audio-analysis] BPM detection threw:`, bpmErr);
     }
 
     // ── 4. Key ────────────────────────────────────────────────────────────────
@@ -177,14 +204,28 @@ export async function detectAudioFeatures(fileUrl: string): Promise<AudioFeature
       const keyData  = essentia.KeyExtractor(vector);
       if (keyData?.key) {
         result.musicalKey = `${keyData.key} ${keyData.scale}`;
+        console.log(`[audio-analysis] Key detected: ${result.musicalKey}`);
+      } else {
+        console.warn(`[audio-analysis] KeyExtractor returned no key`);
       }
-    } catch {
-      // silent — leave result.musicalKey as null
+    } catch (keyErr) {
+      console.error(`[audio-analysis] Key detection threw:`, keyErr);
+    }
+
+    // ── 5. Energy ─────────────────────────────────────────────────────────────
+    try {
+      let sumSq = 0;
+      for (let i = 0; i < channelData.length; i++) sumSq += channelData[i] * channelData[i];
+      const rms = Math.sqrt(sumSq / channelData.length);
+      result.energy = Math.min(rms / 0.25, 1);
+      console.log(`[audio-analysis] Energy: ${result.energy.toFixed(3)} (RMS=${rms.toFixed(4)})`);
+    } catch (energyErr) {
+      console.error(`[audio-analysis] Energy calculation threw:`, energyErr);
     }
 
     await audioContext.close();
-  } catch {
-    // silent — network errors, unsupported format, etc.
+  } catch (outerErr) {
+    console.error(`[audio-analysis] Unexpected outer error for ${urlShort}:`, outerErr);
   }
 
   return result;

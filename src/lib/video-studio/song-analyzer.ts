@@ -427,21 +427,30 @@ export async function analyzeSong(opts: AnalyzeOptions): Promise<SongAnalysis> {
 
   // Run live audio analysis if still missing BPM/energy (fresh uploads)
   if (bpm === null || energy === null) {
+    console.log(
+      "[song-analyzer] Live analysis needed — bpm:", bpm, "energy:", energy,
+      "| url:", audioUrl.slice(0, 80),
+    );
     try {
-      console.log("[song-analyzer] Running live audio analysis for", audioUrl.slice(0, 60));
       const detected = await detectAudioFeatures(audioUrl);
+      console.log("[song-analyzer] Live analysis result — bpm:", detected.bpm, "key:", detected.musicalKey, "energy:", detected.energy);
       if (bpm    === null && detected.bpm    !== null) bpm    = detected.bpm;
       if (key    === null && detected.musicalKey !== null) key = detected.musicalKey;
       if (energy === null && detected.energy !== null) energy = detected.energy;
     } catch (err) {
-      console.warn("[song-analyzer] Live audio analysis failed:", err);
+      console.error("[song-analyzer] Live audio analysis threw (unexpected — detectAudioFeatures should not throw):", err);
     }
+  } else {
+    console.log("[song-analyzer] Using DB values — bpm:", bpm, "key:", key, "energy:", energy);
   }
 
   // Defaults when analysis still unavailable
   const finalBpm    = bpm    ?? 120;
   const finalKey    = key    ?? "C major";
   const finalEnergy = energy ?? 0.65;
+  if (bpm === null)    console.warn("[song-analyzer] BPM analysis failed — falling back to 120");
+  if (key === null)    console.warn("[song-analyzer] Key analysis failed — falling back to C major");
+  if (energy === null) console.warn("[song-analyzer] Energy analysis failed — falling back to 0.65");
 
   // ── 1.5. EffNet data — read from DB only (no live inference here) ────────────
   // EffNet classification now runs in the background via waitUntil() on track
