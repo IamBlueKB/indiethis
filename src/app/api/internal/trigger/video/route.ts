@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   if (analysisOnly) {
     const { startAnalysisOnly } = await import("@/lib/video-studio/generate");
-    void startAnalysisOnly(musicVideoId).catch((err) =>
+    await startAnalysisOnly(musicVideoId).catch((err) =>
       console.error("[internal/trigger/video] startAnalysisOnly failed:", err),
     );
   } else {
