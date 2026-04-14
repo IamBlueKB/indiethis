@@ -4,11 +4,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "@ffmpeg-installer/ffmpeg",
     "fluent-ffmpeg",
-    "node-web-audio-api",  // 40MB platform binaries — exclude from webpack bundle
+    "node-web-audio-api",
     "essentia.js",
     "pdf-parse",
     "pdfjs-dist",
-    "onnxruntime-web",     // WASM package — load from node_modules at runtime
   ],
   // Include EffNet-Discogs model files and onnxruntime-web WASM in the Vercel
   // serverless function bundle. Without this, Next.js file tracing won't include
