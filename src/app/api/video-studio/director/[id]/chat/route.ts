@@ -169,16 +169,6 @@ export async function POST(
       ? (video.conversationLog as unknown as ChatMessage[])
       : [];
 
-    // Look up film look preset from selected style
-    let filmLook: string | null = null;
-    if (video.style) {
-      const preset = await db.videoStyle.findFirst({
-        where:  { name: video.style },
-        select: { defaultFilmLook: true },
-      }).catch(() => null);
-      filmLook = preset?.defaultFilmLook ?? null;
-    }
-
     // Add user message
     const newUserMsg: ChatMessage = {
       role:      "user",
@@ -199,7 +189,7 @@ export async function POST(
     const essentiaCtx = buildEssentiaContext(analysis);
     const hasCharRef   = Array.isArray(video.characterRefs) && (video.characterRefs as string[]).length > 0;
     const styleLine    = video.style
-      ? `The artist selected visual style: "${video.style}"${filmLook ? ` with film look preset: "${filmLook}"` : ""}. This is their chosen starting point — honor it, do not override it.`
+      ? `The artist selected visual style: "${video.style}". This is their chosen starting point — honor it, do not override it.`
       : "The artist chose to start from scratch with no preset style.";
     const charRefLine  = hasCharRef
       ? `The artist uploaded a character reference photo (@Element1 is set). Do NOT ask who is in the video — you already know. Always use @Element1 for any scene featuring the artist.`

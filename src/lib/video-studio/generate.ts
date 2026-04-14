@@ -476,18 +476,8 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
 
     // Generate the Director's opening message as a specific creative proposal
     try {
-      // Look up film look from the VideoStyle preset if a style was selected
-      let filmLook: string | undefined;
-      if (video.style) {
-        const preset = await db.videoStyle.findFirst({
-          where:  { name: video.style },
-          select: { defaultFilmLook: true },
-        }).catch(() => null);
-        filmLook = preset?.defaultFilmLook ?? undefined;
-      }
-
       const hasCharRef = Array.isArray(video.characterRefs) && video.characterRefs.length > 0;
-      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, filmLook, hasCharRef);
+      const greeting = await generateInitialGreeting(video.trackTitle, analysis, video.style ?? undefined, undefined, hasCharRef);
       if (greeting) {
         const greetingMsg = { role: "assistant", content: greeting, createdAt: new Date().toISOString() };
         await db.musicVideo.update({
