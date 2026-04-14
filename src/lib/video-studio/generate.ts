@@ -18,7 +18,10 @@
 
 import { db }                   from "@/lib/db";
 import { fal }                  from "@fal-ai/client";
-import { analyzeSong, type SongAnalysis } from "@/lib/video-studio/song-analyzer";
+// NOTE: analyzeSong imported dynamically at call sites to prevent song-analyzer
+// (and its transitive deps: essentia, node-web-audio-api, onnxruntime-web) from
+// being statically bundled into routes that import generate.ts (e.g. stripe/webhook).
+import type { SongAnalysis } from "@/lib/video-studio/song-analyzer";
 import { claude, SONNET }       from "@/lib/claude";
 import { sendMusicVideoCompleteEmail } from "@/lib/brevo/email";
 import { autoLinkToRelease }    from "@/lib/release-board/auto-link";
@@ -75,6 +78,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
     });
 
+    const { analyzeSong } = await import("@/lib/video-studio/song-analyzer");
     const analysis = await analyzeSong({
       audioUrl:  vid.audioUrl,
       trackId:   vid.trackId ?? undefined,
@@ -446,6 +450,7 @@ export async function startAnalysisOnly(musicVideoId: string): Promise<void> {
       data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
     });
 
+    const { analyzeSong } = await import("@/lib/video-studio/song-analyzer");
     const analysis = await analyzeSong({
       audioUrl: video.audioUrl,
       trackId:  video.trackId ?? undefined,
