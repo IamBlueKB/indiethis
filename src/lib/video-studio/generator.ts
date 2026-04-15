@@ -438,7 +438,6 @@ export async function generateSceneKeyframe(
       prompt,
       image_url:           referencePhotoUrl,
       guidance_scale:      7,   // higher than avatar (3.5) to force real scene change
-      num_inference_steps: 28,
     },
   });
 

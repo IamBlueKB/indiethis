@@ -67,7 +67,6 @@ export async function generateAvatarVariations(
           image_url: input.sourcePhotoUrl,
           seed,
           guidance_scale:       3.5,
-          num_inference_steps:  28,
         },
       });
       const images = (result.data as { images?: { url: string }[] }).images;
