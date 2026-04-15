@@ -415,30 +415,32 @@ export async function generateSceneKeyframe(
   cameraDirection?:  string,
   filmLook?:         string,
 ): Promise<string> {
-  const parts = [`Place this person in a scene: ${description}`];
-  if (cameraDirection) parts.push(cameraDirection);
-  if (filmLook)        parts.push(filmLook);
-  parts.push("cinematic composition, music video quality, sharp focus");
+  // Build a prompt that explicitly directs FLUX Kontext to change the scene
+  // while preserving the subject's appearance (same pattern as avatar generator).
+  const sceneParts: string[] = [
+    `Change the background and environment: ${description}.`,
+    `Keep the person's face, body, and appearance exactly the same.`,
+  ];
+  if (cameraDirection) sceneParts.push(cameraDirection);
+  if (filmLook)        sceneParts.push(filmLook);
+  sceneParts.push("Cinematic music video quality, professional lighting, sharp focus.");
 
-  const prompt = parts.join(". ").slice(0, 800);
+  const prompt = sceneParts.join(" ").slice(0, 800);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await fal.subscribe("fal-ai/flux-kontext/pro" as any, {
+  // Match the exact call pattern used by the avatar generator (which works in prod).
+  // No extra pollInterval/logs options; no output_format (not accepted by this model).
+  const result = await fal.subscribe("fal-ai/flux-kontext/pro" as Parameters<typeof fal.subscribe>[0], {
     input: {
       prompt,
       image_url:           referencePhotoUrl,
-      guidance_scale:      3.5,
+      guidance_scale:      7,   // higher than avatar (3.5) to force real scene change
       num_inference_steps: 28,
-      output_format:       "jpeg",
     },
-    pollInterval: 3000,
-    logs:         false,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const output   = (result as any).data ?? result;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const imageUrl = (output as any)?.images?.[0]?.url ?? (output as any)?.image?.url ?? "";
+  // Access result.data the same way avatar generator does
+  const images   = (result.data as { images?: { url: string }[] }).images;
+  const imageUrl = images?.[0]?.url ?? "";
 
   if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
   return imageUrl;
