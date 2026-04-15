@@ -21,7 +21,7 @@ import { AVATAR_STYLES } from "./styles";
 
 const utapi = new UTApi();
 
-const MODEL = "fal-ai/flux-kontext/pro";
+const MODEL = "fal-ai/flux-pro/kontext";
 const VARIATIONS = 4;
 
 // ─── Types ────────────────────────────────────────────────────────────────────

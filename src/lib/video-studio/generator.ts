@@ -370,7 +370,7 @@ export async function generateMultiShotVideo(
  * reference photos. The resulting portrait URL is fed into every scene
  * that has characterRefs, providing visual character lock across clips.
  *
- * Uses fal-ai/flux-kontext/pro (image-to-image editing model).
+ * Uses fal-ai/flux-pro/kontext (image-to-image editing model).
  */
 export async function generateCharacterPortrait(
   referenceImageUrl: string,
@@ -379,7 +379,7 @@ export async function generateCharacterPortrait(
   const prompt = `${styleBase}, professional music video lighting, clean background, consistent character portrait, facing camera, sharp focus, cinematic quality`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await fal.subscribe("fal-ai/flux-kontext/pro" as any, {
+  const result = await fal.subscribe("fal-ai/flux-pro/kontext" as any, {
     input: {
       prompt,
       image_url:       referenceImageUrl,
@@ -429,7 +429,7 @@ export async function generateSceneKeyframe(
 
   // Match the exact call pattern used by the avatar generator (which works in prod).
   // No extra pollInterval/logs options; no output_format (not accepted by this model).
-  const result = await fal.subscribe("fal-ai/flux-kontext/pro" as Parameters<typeof fal.subscribe>[0], {
+  const result = await fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
     input: {
       prompt,
       image_url:           referencePhotoUrl,

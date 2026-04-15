@@ -64,7 +64,7 @@ interface RefinementInput {
 
 const MODEL_STANDARD = "fal-ai/seedream-v4";
 const MODEL_PREMIUM  = "fal-ai/seedream-v4";   // same high-quality model, more variations
-const MODEL_REFINE   = "fal-ai/flux-kontext/pro";
+const MODEL_REFINE   = "fal-ai/flux-pro/kontext";
 
 function variationCount(tier: Tier): number {
   return tier === "STANDARD" ? 4 : 8;

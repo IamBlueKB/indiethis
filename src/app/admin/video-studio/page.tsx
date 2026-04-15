@@ -30,7 +30,7 @@ const MODEL_COST: Record<string, number> = {
   "fal-ai/seedance-1.5-pro":        0.10,
   "fal-ai/seedance-2.0":            0.12,
   "fal-ai/wan-pro":                 0.07,
-  "fal-ai/flux-kontext/pro":        0.05,
+  "fal-ai/flux-pro/kontext":        0.05,
   DEFAULT:                          0.08,
 };
 
