@@ -542,14 +542,13 @@ export async function generateSceneClip(
     scene.aspectRatio === "1:1"  ? "1:1"  :
     "16:9";
 
-  // Kling v3 supports 3–15s. Cap at 10 for cost control.
-  // Pass as string — Kling API schema uses string enum ("5", "10", etc.)
-  const clipDuration = String(Math.min(Math.max(Math.round(scene.duration), 3), 10));
+  // Keep numeric for calculations; Kling API expects string enum ("5", "10", etc.)
+  const clipDurationNum = Math.min(Math.max(Math.round(scene.duration), 3), 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let input: Record<string, any> = {
     prompt:       scene.prompt,
-    duration:     clipDuration,
+    duration:     clipDurationNum,   // overridden to string for Kling below
     aspect_ratio: aspectRatioParam,
   };
 
@@ -563,12 +562,12 @@ export async function generateSceneClip(
     // Seedance 2.0 — supports audio embedding
     if (audioUrl) input.audio_url = audioUrl;
     // Seedance 2.0 uses 5s clips max
-    input.duration = Math.min(clipDuration, 5);
+    input.duration = Math.min(clipDurationNum, 5);
   }
 
   if (scene.model === "fal-ai/bytedance/seedance/v1.5/pro/image-to-video") {
     // Seedance 1.5 Pro — keyframe transitions
-    input.duration = Math.min(clipDuration, 5);
+    input.duration = Math.min(clipDurationNum, 5);
     if (nextSceneImageUrl) {
       input.end_image_url = nextSceneImageUrl;
     }
@@ -585,6 +584,8 @@ export async function generateSceneClip(
   ) {
     // Kling i2v — disable native audio; Remotion overlays the artist's audio track
     input.generate_audio = false;
+    // Kling API expects duration as a string enum ("5", "10", etc.)
+    input.duration = String(clipDurationNum);
     // Kling i2v expects start_image_url, not image_url
     if (input.image_url) {
       input.start_image_url = input.image_url;
