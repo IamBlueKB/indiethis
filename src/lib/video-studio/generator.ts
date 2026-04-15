@@ -506,7 +506,7 @@ export async function generateAllKeyframes(
  * Generates a single scene clip using the appropriate fal.ai model.
  *
  * Each model has different API surface:
- *   Kling 3.0 Pro / 2.6 Pro — image_url (optional), prompt, duration, aspect_ratio
+ *   Kling 3.0 Pro / 2.6 Pro — start_image_url (required for i2v), prompt, duration, aspect_ratio, generate_audio
  *   Veo 3.1                 — image_url (optional), prompt, duration, aspect_ratio
  *   Seedance 2.0            — image_url (optional), prompt, audio_url (optional)
  *   Seedance 1.5 Pro        — start_image_url + end_image_url for keyframe transitions
@@ -568,6 +568,11 @@ export async function generateSceneClip(
   ) {
     // Kling i2v — disable native audio; Remotion overlays the artist's audio track
     input.generate_audio = false;
+    // Kling i2v expects start_image_url, not image_url
+    if (input.image_url) {
+      input.start_image_url = input.image_url;
+      delete input.image_url;
+    }
   }
 
   // ── PRODUCTION (webhook mode): submit job, store lookup record, return placeholder ──
