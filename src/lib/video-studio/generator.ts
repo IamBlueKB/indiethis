@@ -415,17 +415,21 @@ export async function generateSceneKeyframe(
   cameraDirection?:  string,
   filmLook?:         string,
 ): Promise<string> {
-  // Build a prompt that explicitly directs FLUX Kontext to change the scene
-  // while preserving the subject's appearance (same pattern as avatar generator).
+  // FLUX Kontext Pro is an image-editing model: it keeps the person identical
+  // while transforming the environment. Shot descriptions from Director Mode are
+  // cinematic narrative text (action verbs, motion), so we reframe them as a
+  // single captured still frame so FLUX generates the right environment.
   const sceneParts: string[] = [
-    `Change the background and environment: ${description}.`,
-    `Keep the person's face, body, and appearance exactly the same.`,
+    `Show the person from the reference photo in this scene, captured as a single cinematic still frame:`,
+    description,
+    `Preserve the person's exact face, hair, skin tone, clothing, and body.`,
+    `Only change the background, environment, and lighting to match the scene description.`,
   ];
-  if (cameraDirection) sceneParts.push(cameraDirection);
-  if (filmLook)        sceneParts.push(filmLook);
-  sceneParts.push("Cinematic music video quality, professional lighting, sharp focus.");
+  if (cameraDirection) sceneParts.push(`Camera: ${cameraDirection}.`);
+  if (filmLook)        sceneParts.push(`Visual style: ${filmLook}.`);
+  sceneParts.push("Music video quality, sharp focus, professional cinematography.");
 
-  const prompt = sceneParts.join(" ").slice(0, 800);
+  const prompt = sceneParts.join(" ").slice(0, 900);
 
   // Match the exact call pattern used by the avatar generator (which works in prod).
   // No extra pollInterval/logs options; no output_format (not accepted by this model).
