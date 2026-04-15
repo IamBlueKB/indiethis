@@ -215,7 +215,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
 
     if (vid.songStructure && vid.bpm) {
       // Already analyzed — use cached data
-      analysis = vid.songStructure as import("@/lib/video-studio/song-analyzer").SongAnalysis;
+      analysis = vid.songStructure as unknown as import("@/lib/video-studio/song-analyzer").SongAnalysis;
       await setProgress(musicVideoId, 20, "Planning your video…", { status: "PLANNING" });
       console.log(`[video-studio] Skipping Phase 1 for ${musicVideoId} — using cached analysis`);
     } else {
