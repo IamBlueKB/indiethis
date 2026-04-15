@@ -109,13 +109,6 @@ PRACTICAL: street lights, neon signs, car headlights, firelight, window light
 ## Style Modifiers
 cinematic grain, 35mm analog warmth, anamorphic lens flares, vignette, desaturated mids, high contrast blacks, crushed shadows, bleach bypass, cross-processed, ultra-saturated, neon noir, gothic atmosphere, dreamlike haze, stark minimalism, hyperreal clarity
 
-## @Element1 Rules — V2 Kling Character Consistency
-The artist's reference photo is bound as @Element1 in the generation model.
-- ALWAYS include "@Element1" in any scene featuring the artist (performance, narrative close-ups)
-- Describe the artist's actions clearly: "@Element1 walks through neon-lit alley, ECU on face, Rembrandt lighting"
-- DO NOT use @Element1 for abstract or establishing shots with no characters
-- Element referencing ensures face and appearance consistency across all shots in the video
-
 ## Creative Brief JSON Schema
 {
   "title": "string — evocative project title",
@@ -206,7 +199,7 @@ export async function POST(
         ].filter(Boolean).join(" ")
       : `No preset style selected. Format: ${video.aspectRatio ?? "16:9"} | Length: ${video.videoLength ?? "STANDARD"}.`;
     const charRefLine  = hasCharRef
-      ? `Character reference uploaded (@Element1 is set). Do NOT ask who is in the video. Always use @Element1 for scenes featuring the artist.`
+      ? `Character reference uploaded. Do NOT ask who is in the video. Describe the artist's actions in scene descriptions.`
       : `No character reference uploaded. Ask whether this is artist performance, narrative character, or abstract.`;
     const contextHint  = [
       `Track: "${video.trackTitle}"${video.bpm ? ` | ${video.bpm} BPM` : ""}${video.musicalKey ? ` | ${video.musicalKey}` : ""}${video.energy != null ? ` | energy ${Math.round(video.energy * 10)}/10` : ""}.`,

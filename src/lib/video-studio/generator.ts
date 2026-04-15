@@ -106,25 +106,13 @@ function chunkShots(
 }
 
 /**
- * Ensures every prompt references the artist as @Element1.
- * Kling's element referencing requires @Element1 in the prompt text
- * for the uploaded reference image to be applied to that character.
- */
-function ensureElementReference(prompt: string): string {
-  if (prompt.includes("@Element1")) return prompt;
-  // Prepend @Element1 to the prompt so Kling binds the artist reference
-  return `@Element1 ${prompt}`;
-}
-
-/**
  * V2 core generation function — submits all scenes as multi-shot Kling 3.0 calls.
  *
  * Flow:
  *   1. Optimize each scene prompt through WaveSpeed
- *   2. Inject @Element1 reference into every prompt
- *   3. Chunk into segments of ≤6 shots (Kling's per-call limit)
- *   4. Submit each segment as one fal.queue.submit / fal.subscribe call
- *   5. Create a FalSceneJob record per segment (webhook routes results back)
+ *   2. Chunk into segments of ≤6 shots (Kling's per-call limit)
+ *   3. Submit each segment as one fal.queue.submit / fal.subscribe call
+ *   4. Create a FalSceneJob record per segment (webhook routes results back)
  *
  * In production: fire-and-forget — webhook handles completion and stitching.
  * In dev:        polling — blocks until each segment completes.
@@ -156,14 +144,11 @@ export async function generateMultiShotVideo(
   }
   const modelId = VIDEO_MODELS[activeModelKey].id;
 
-  // ── 2. Optimize prompts + inject @Element1 ───────────────────────────────────
+  // ── 2. Optimize prompts ──────────────────────────────────────────────────────
   const optimizedShots: MultiShotInput[] = [];
 
   for (const scene of scenes) {
     let prompt = scene.prompt;
-
-    // Inject element reference if missing
-    prompt = ensureElementReference(prompt);
 
     // WaveSpeed prompt optimization (no-op if WAVESPEED_API_KEY not set)
     prompt = await optimizeVideoPrompt(prompt, "kling");
@@ -262,7 +247,7 @@ export async function generateMultiShotVideo(
     };
 
     // Lip-sync: pass audio + per-segment time range so Kling syncs the correct
-    // portion of the track to @Element1's mouth movement in this segment.
+    // portion of the track to the artist's mouth movement in this segment.
     if (segHasLipSync && audioUrl) {
       input.sound_url        = audioUrl;
       input.sound_start_time = segStartTime;
@@ -415,6 +400,100 @@ export async function generateCharacterPortrait(
   return imageUrl;
 }
 
+// ─── 6a-2: Scene keyframe generation via FLUX Kontext Pro ───────────────────────────
+
+/**
+ * Generates a single FLUX Kontext Pro keyframe for a scene.
+ * Places the artist (from referencePhotoUrl) into the scene described by
+ * description + cameraDirection + filmLook.
+ *
+ * Cost: $0.04 per call
+ */
+export async function generateSceneKeyframe(
+  referencePhotoUrl: string,
+  description:       string,
+  cameraDirection?:  string,
+  filmLook?:         string,
+): Promise<string> {
+  const parts = [`Place this person in a scene: ${description}`];
+  if (cameraDirection) parts.push(cameraDirection);
+  if (filmLook)        parts.push(filmLook);
+  parts.push("cinematic composition, music video quality, sharp focus");
+
+  const prompt = parts.join(". ").slice(0, 800);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await fal.subscribe("fal-ai/flux-kontext/pro" as any, {
+    input: {
+      prompt,
+      image_url:           referencePhotoUrl,
+      guidance_scale:      3.5,
+      num_inference_steps: 28,
+      output_format:       "jpeg",
+    },
+    pollInterval: 3000,
+    logs:         false,
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const output   = (result as any).data ?? result;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const imageUrl = (output as any)?.images?.[0]?.url ?? (output as any)?.image?.url ?? "";
+
+  if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
+  return imageUrl;
+}
+
+/**
+ * Generates FLUX keyframes for all scenes in parallel batches of 3.
+ * Skips any scenes that already have a keyframeUrl.
+ * Falls back to referencePhotoUrl if a scene's keyframe generation fails.
+ *
+ * Returns keyframe URLs indexed by scene index.
+ */
+export async function generateAllKeyframes(
+  inputs: Array<{
+    index:           number;
+    description?:    string;
+    cameraDirection?: string;
+    filmLook?:        string;
+    keyframeUrl?:     string;
+  }>,
+  referencePhotoUrl: string,
+): Promise<string[]> {
+  // Pre-fill with existing keyframe URLs (or reference photo as fallback)
+  const results: string[] = inputs.map(s => s.keyframeUrl ?? referencePhotoUrl);
+
+  const toGenerate = inputs.filter(s => !s.keyframeUrl);
+  const concurrency = 3;
+
+  for (let i = 0; i < toGenerate.length; i += concurrency) {
+    const chunk = toGenerate.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(
+      chunk.map(async (scene) => {
+        const url = await generateSceneKeyframe(
+          referencePhotoUrl,
+          scene.description ?? "music video scene",
+          scene.cameraDirection,
+          scene.filmLook,
+        );
+        return { index: scene.index, url };
+      })
+    );
+
+    for (const r of settled) {
+      if (r.status === "fulfilled") {
+        results[r.value.index] = r.value.url;
+      } else {
+        console.warn("[generateAllKeyframes] Keyframe failed for a scene — using reference photo:", r.reason);
+        // results[idx] already set to referencePhotoUrl as fallback
+      }
+    }
+  }
+
+  return results;
+}
+
 // ─── 6b: Per-scene generation with model-specific params ─────────────────────────
 
 /**
@@ -477,9 +556,12 @@ export async function generateSceneClip(
     }
   }
 
-  if (scene.model === "fal-ai/kling-video/v2.6/pro/image-to-video") {
-    // Kling 2.6 Pro (Elements) — character ref consistency
-    // image_url is already set above if referenceImageUrl exists
+  if (
+    scene.model === "fal-ai/kling-video/v3/pro/image-to-video" ||
+    scene.model === "fal-ai/kling-video/v2.6/pro/image-to-video"
+  ) {
+    // Kling i2v — disable native audio; Remotion overlays the artist's audio track
+    input.generate_audio = false;
   }
 
   // ── PRODUCTION (webhook mode): submit job, store lookup record, return placeholder ──

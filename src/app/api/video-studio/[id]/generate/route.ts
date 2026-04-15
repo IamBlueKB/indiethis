@@ -39,8 +39,9 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Only allow triggering from PENDING, FAILED, or PLANNING states
-    const triggerableStates = ["PENDING", "PLANNING", "FAILED"];
+    // Only allow triggering from these states
+    // STORYBOARD = Director Mode awaiting approval; artist clicked "Accept All"
+    const triggerableStates = ["PENDING", "PLANNING", "FAILED", "STORYBOARD"];
     if (!triggerableStates.includes(video.status)) {
       return NextResponse.json({
         error: `Cannot trigger generation from status ${video.status}`,

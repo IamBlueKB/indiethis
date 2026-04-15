@@ -6,6 +6,7 @@
  * Polls GET /api/video-studio/[id]/status every 5 seconds.
  * - Quick Mode: animated progress bar + stats cards
  * - Director Mode: live WorkflowBoard with per-scene clip status
+ * - STORYBOARD: keyframe approval grid (Director Mode only)
  * Redirects to /video-studio/[id]/preview when COMPLETE.
  */
 
@@ -13,12 +14,23 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter }                         from "next/navigation";
 import {
   Film, Music2, Zap, Wand2, Loader2, AlertCircle,
-  Activity, Clock, CheckCircle2, RefreshCw,
+  Activity, Clock, CheckCircle2, RefreshCw, Image as ImageIcon,
+  RotateCcw, Check,
 } from "lucide-react";
 
 import WorkflowBoard, { type WorkflowScene, type WorkflowClip } from "@/components/video-studio/WorkflowBoard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface StoryboardShot {
+  index?:          number;
+  title?:          string;
+  description?:    string;
+  cameraDirection?: string;
+  filmLook?:       string;
+  keyframeUrl?:    string;
+  redoCount?:      number;
+}
 
 interface StatusData {
   id:            string;
@@ -35,7 +47,7 @@ interface StatusData {
   thumbnailUrl:  string | null;
   errorMessage:  string | null;
   sceneCount:    number;
-  shotList:      WorkflowScene[];
+  shotList:      (WorkflowScene & StoryboardShot)[];
   clips:         WorkflowClip[];
   songSections:  Array<{ type: string; startTime: number; endTime: number; energy: number }>;
   brief:         {
@@ -55,6 +67,7 @@ const STEP_LABELS: Record<string, string> = {
   PENDING:    "Waiting to start…",
   ANALYZING:  "Analyzing your track — BPM, key, structure…",
   PLANNING:   "Planning your video — scene timing and models…",
+  STORYBOARD: "Review your storyboard — approve or regenerate scenes…",
   GENERATING: "Generating your scenes…",
   STITCHING:  "Stitching your final video…",
   COMPLETE:   "Done!",
@@ -65,6 +78,7 @@ const STATUS_PROGRESS: Record<string, number> = {
   PENDING:    3,
   ANALYZING:  15,
   PLANNING:   30,
+  STORYBOARD: 40,
   GENERATING: 60,
   STITCHING:  88,
   COMPLETE:   100,
@@ -170,9 +184,14 @@ function FilmStripProgress({
 export default function GeneratingClient({ id }: { id: string }) {
   const router = useRouter();
 
-  const [data,    setData]    = useState<StatusData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
+  const [data,         setData]         = useState<StatusData | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+  // Storyboard approval state
+  const [regenLoading, setRegenLoading] = useState<Record<number, boolean>>({});
+  const [acceptingAll, setAcceptingAll] = useState(false);
+  // Local keyframe overrides (updated by regen without waiting for poll)
+  const [localKeyframes, setLocalKeyframes] = useState<Record<number, { url: string; redoCount: number }>>({});
 
   const poll = useCallback(async () => {
     try {
@@ -205,17 +224,58 @@ export default function GeneratingClient({ id }: { id: string }) {
     await poll();
   }, [id, poll]);
 
+  // ── Storyboard: regenerate a single keyframe ─────────────────────────────────
+  const handleKeyframeRegen = useCallback(async (sceneIndex: number) => {
+    setRegenLoading(prev => ({ ...prev, [sceneIndex]: true }));
+    try {
+      const res = await fetch(`/api/video-studio/${id}/keyframe/regen`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ sceneIndex }),
+      });
+      const d = await res.json() as { keyframeUrl?: string; redoCount?: number; error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Regen failed");
+      // Apply locally so UI updates immediately without waiting for poll
+      setLocalKeyframes(prev => ({
+        ...prev,
+        [sceneIndex]: { url: d.keyframeUrl!, redoCount: d.redoCount! },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to regenerate keyframe");
+    } finally {
+      setRegenLoading(prev => ({ ...prev, [sceneIndex]: false }));
+    }
+  }, [id]);
+
+  // ── Storyboard: accept all → trigger Kling i2v ───────────────────────────────
+  const handleAcceptAll = useCallback(async () => {
+    setAcceptingAll(true);
+    try {
+      const res = await fetch(`/api/video-studio/${id}/generate`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? "Failed to start generation");
+      }
+      // Poll will pick up the GENERATING status
+      await poll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start generation");
+      setAcceptingAll(false);
+    }
+  }, [id, poll]);
+
   useEffect(() => {
     poll();
     const t = setInterval(poll, 5000);
     return () => clearInterval(t);
   }, [poll]);
 
-  const progress    = data ? (data.progress > 0 ? data.progress : (STATUS_PROGRESS[data.status] ?? 5)) : 3;
-  const statusLabel = data ? (data.currentStep ?? STEP_LABELS[data.status] ?? "Processing…") : "Starting…";
-  const isFailed    = data?.status === "FAILED";
-  const isComplete  = data?.status === "COMPLETE";
-  const isDirector  = data?.mode === "DIRECTOR";
+  const progress     = data ? (data.progress > 0 ? data.progress : (STATUS_PROGRESS[data.status] ?? 5)) : 3;
+  const statusLabel  = data ? (data.currentStep ?? STEP_LABELS[data.status] ?? "Processing…") : "Starting…";
+  const isFailed     = data?.status === "FAILED";
+  const isComplete   = data?.status === "COMPLETE";
+  const isDirector   = data?.mode === "DIRECTOR";
+  const isStoryboard = data?.status === "STORYBOARD";
 
   function getTimeEstimate(p: number): string {
     if (p >= 95) return "Almost done…";
@@ -274,8 +334,141 @@ export default function GeneratingClient({ id }: { id: string }) {
           </div>
         )}
 
+        {/* ── Storyboard approval (Director Mode only) ──────────────────────── */}
+        {isStoryboard && data && (
+          <div className="w-full space-y-6 max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-white">{data.trackTitle}</h1>
+                <p className="text-sm mt-1" style={{ color: "#888" }}>
+                  Review your keyframes. Regenerate any that don&apos;t look right, then approve all to start video generation.
+                </p>
+              </div>
+              <button
+                onClick={handleAcceptAll}
+                disabled={acceptingAll}
+                className="shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {acceptingAll
+                  ? <><Loader2 size={14} className="animate-spin" /> Starting…</>
+                  : <><Check size={14} /> Accept All &amp; Generate</>
+                }
+              </button>
+            </div>
+
+            {/* Keyframe grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {data.shotList.map((shot, i) => {
+                const local       = localKeyframes[i];
+                const keyframeUrl = local?.url ?? shot.keyframeUrl;
+                const redoCount   = local?.redoCount ?? shot.redoCount ?? 0;
+                const isRegening  = regenLoading[i] ?? false;
+                const maxedOut    = redoCount >= 3;
+                const shotLabel   = shot.title ?? `Scene ${i + 1}`;
+
+                return (
+                  <div
+                    key={i}
+                    className="rounded-xl border overflow-hidden"
+                    style={{ borderColor: "#2A2A2A", backgroundColor: "#111" }}
+                  >
+                    {/* Keyframe image */}
+                    <div className="relative aspect-video w-full" style={{ backgroundColor: "#0D0D0D" }}>
+                      {keyframeUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={keyframeUrl}
+                          alt={shotLabel}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageIcon size={32} style={{ color: "#333" }} />
+                        </div>
+                      )}
+                      {isRegening && (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: "rgba(10,10,10,0.7)" }}>
+                          <Loader2 size={28} className="animate-spin" style={{ color: "#D4A843" }} />
+                        </div>
+                      )}
+                      {/* Scene index badge */}
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-mono" style={{ backgroundColor: "rgba(0,0,0,0.7)", color: "#888" }}>
+                        SCENE {i + 1}
+                      </div>
+                      {/* Redo count badge */}
+                      {redoCount > 0 && (
+                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>
+                          {redoCount}/3
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Shot info + controls */}
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white leading-tight">{shotLabel}</p>
+                        {shot.description && (
+                          <p className="text-xs mt-1 line-clamp-2" style={{ color: "#666" }}>
+                            {shot.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {shot.cameraDirection && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#1A1A1A", color: "#555" }}>
+                            {shot.cameraDirection}
+                          </span>
+                        )}
+                        {shot.filmLook && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#1A1A1A", color: "#555" }}>
+                            {shot.filmLook}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleKeyframeRegen(i)}
+                        disabled={isRegening || maxedOut || acceptingAll}
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 transition-opacity"
+                        style={{
+                          backgroundColor: maxedOut ? "rgba(255,255,255,0.04)" : "rgba(212,168,67,0.1)",
+                          color:           maxedOut ? "#555" : "#D4A843",
+                          border:          `1px solid ${maxedOut ? "#222" : "rgba(212,168,67,0.2)"}`,
+                        }}
+                      >
+                        {isRegening
+                          ? <><Loader2 size={11} className="animate-spin" /> Regenerating…</>
+                          : maxedOut
+                            ? "Max regenerations reached"
+                            : <><RotateCcw size={11} /> Regenerate</>
+                        }
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Accept All (bottom) */}
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={handleAcceptAll}
+                disabled={acceptingAll}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold disabled:opacity-50"
+                style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+              >
+                {acceptingAll
+                  ? <><Loader2 size={14} className="animate-spin" /> Starting generation…</>
+                  : <><Check size={14} /> Accept All &amp; Generate Video</>
+                }
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Director Mode: Workflow Board ─────────────────────────────────── */}
-        {!isFailed && !isComplete && data && isDirector && (
+        {!isFailed && !isComplete && !isStoryboard && data && isDirector && (
           <div className="space-y-6">
             {/* Status header */}
             <div className="flex items-center justify-between">
@@ -319,7 +512,7 @@ export default function GeneratingClient({ id }: { id: string }) {
         )}
 
         {/* ── Quick Mode: Progress cards ─────────────────────────────────────── */}
-        {!isFailed && !isComplete && data && !isDirector && (
+        {!isFailed && !isComplete && !isStoryboard && data && !isDirector && (
           <div className="w-full space-y-8">
             {/* Track title */}
             <div className="text-center">

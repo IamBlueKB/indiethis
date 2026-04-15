@@ -33,14 +33,14 @@ import {
 } from "@/lib/video-studio/model-router";
 import {
   generateAllScenes,
-  generateMultiShotVideo,
   generateCharacterPortrait,
+  generateAllKeyframes,
   generateMultiFormatVideos,
   pickThumbnailScene,
   type PlannedSceneInput,
   type GeneratedSceneOutput,
 } from "@/lib/video-studio/generator";
-import { VIDEO_MODELS, DEFAULT_QUICK_MODEL, DEFAULT_DIRECTOR_MODEL } from "@/lib/video-studio/models";
+import { VIDEO_MODELS } from "@/lib/video-studio/models";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,134 @@ async function setProgress(id: string, progress: number, currentStep: string, ex
   });
 }
 
+// ─── Storyboard fast path ───────────────────────────────────────────────────────
+//
+// Called when artist clicks "Accept All" on the storyboard approval screen.
+// Reads the approved shotList (with keyframeUrls already set), builds plannedScenes
+// using those keyframes as the per-scene reference image, then fires Kling i2v.
+
+async function startFromStoryboard(musicVideoId: string, vid: MusicVideo): Promise<void> {
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) throw new Error("FAL_KEY not configured");
+  fal.config({ credentials: falKey });
+
+  // Re-read the latest shot list so we get any keyframes regenerated after initial generation
+  const fresh = await db.musicVideo.findUnique({
+    where:  { id: musicVideoId },
+    select: { shotList: true, referenceImageUrl: true, thumbnailUrl: true, audioUrl: true, aspectRatio: true, style: true },
+  });
+  if (!fresh) throw new Error(`MusicVideo ${musicVideoId} not found`);
+
+  type ApprovedShot = {
+    index?:          number;
+    description?:    string;
+    cameraDirection?: string;
+    filmLook?:       string;
+    keyframeUrl?:    string;
+    startTime?:      number;
+    endTime?:        number;
+    energyLevel?:    number;
+    hasLipSync?:     boolean;
+  };
+
+  const approvedShots: ApprovedShot[] = Array.isArray(fresh.shotList)
+    ? (fresh.shotList as ApprovedShot[])
+    : [];
+
+  if (approvedShots.length === 0) throw new Error("No approved shots in shot list");
+
+  const primaryRef = fresh.referenceImageUrl ?? fresh.thumbnailUrl ?? null;
+  if (!primaryRef) throw new Error("No reference image for scene generation");
+
+  // Load style prompt
+  const styleRecord = fresh.style
+    ? await db.videoStyle.findFirst({ where: { name: fresh.style }, select: { promptBase: true } }).catch(() => null)
+    : null;
+  const stylePrompt = styleRecord?.promptBase ?? "";
+
+  // Build PlannedSceneInput[] — use keyframeUrl as the per-scene reference image
+  const plannedScenes: PlannedSceneInput[] = approvedShots.map((shot, idx) => {
+    const energy    = shot.energyLevel ?? 0.5;
+    const hasLyrics = shot.hasLipSync  ?? false;
+    const sceneType = inferSceneType("verse", energy, hasLyrics);
+    const spec: SceneSpec = {
+      type:                  sceneType,
+      hasLipSync:            hasLyrics,
+      hasFastMotion:         energy > 0.7,
+      hasMultipleCharacters: false,
+      characterRefs:         [],
+      energyLevel:           energy,
+      duration:              Math.min(
+        (shot.endTime ?? 0) - (shot.startTime ?? 0) || 5,
+        8,
+      ),
+    };
+
+    const parts = [stylePrompt];
+    if (shot.description)    parts.push(shot.description);
+    if (shot.cameraDirection) parts.push(`Camera: ${shot.cameraDirection}`);
+    if (shot.filmLook)        parts.push(`Film look: ${shot.filmLook}`);
+    parts.push("cinematic motion, high quality music video");
+
+    return {
+      index:             idx,
+      model:             VIDEO_MODELS["kling-3-pro-i2v"].id,
+      prompt:            parts.filter(Boolean).join(", ").slice(0, 500),
+      startTime:         shot.startTime ?? (idx * 8),
+      endTime:           shot.endTime   ?? ((idx + 1) * 8),
+      duration:          spec.duration,
+      aspectRatio:       fresh.aspectRatio,
+      spec,
+      referenceImageUrl: shot.keyframeUrl ?? primaryRef, // keyframe → Kling i2v source
+    };
+  });
+
+  // Clear any stale FalSceneJobs
+  await db.falSceneJob.deleteMany({ where: { musicVideoId } });
+
+  await setProgress(musicVideoId, 45, `Generating ${plannedScenes.length} scenes…`, { status: "GENERATING" });
+
+  const isWebhookMode = process.env.NODE_ENV === "production";
+  const appUrl        = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+
+  if (isWebhookMode) {
+    const webhookUrl  = `${appUrl}/api/video-studio/webhook/fal`;
+    const placeholders = await generateAllScenes(
+      plannedScenes,
+      undefined,         // per-scene referenceImageUrl already on each PlannedSceneInput
+      fresh.audioUrl,
+      undefined,
+      webhookUrl,
+      musicVideoId,
+    );
+
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  {
+        scenes:      placeholders as object[],
+        status:      "GENERATING",
+        progress:    45,
+        currentStep: `Generating ${plannedScenes.length} scenes…`,
+      },
+    });
+
+    console.log(`[video-studio] Storyboard approved — ${plannedScenes.length} i2v jobs submitted for ${musicVideoId}`);
+  } else {
+    // Dev: polling (for local testing without webhook)
+    const sceneResults = await generateAllScenes(
+      plannedScenes,
+      undefined,
+      fresh.audioUrl,
+    );
+    // Dev path: store scenes, let normal poll loop detect COMPLETE
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { scenes: sceneResults as object[] },
+    });
+    console.log(`[video-studio] Dev storyboard resume — ${sceneResults.length} scenes generated for ${musicVideoId}`);
+  }
+}
+
 // ─── Main pipeline ──────────────────────────────────────────────────────────────
 
 export async function startGeneration(musicVideoId: string): Promise<void> {
@@ -69,6 +197,15 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     // Guard: never generate without confirmed payment (unless it's a free/included credit)
     if (vid.amount > 0 && !vid.stripePaymentId) {
       throw new Error(`Cannot start generation for MusicVideo ${musicVideoId}: payment not confirmed.`);
+    }
+
+    // ── STORYBOARD FAST PATH ─────────────────────────────────────────────────
+    // Artist has approved their storyboard. Skip phases 1–3 (already done).
+    // Read the approved shotList (with keyframeUrls), build plannedScenes,
+    // and fire Kling i2v directly.
+    if (vid.status === "STORYBOARD") {
+      await startFromStoryboard(musicVideoId, vid);
+      return;
     }
 
     // ── Phase 1: Analyze song ────────────────────────────────────────────────
@@ -129,6 +266,9 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       endTime?:            number;
       hasLipSync?:         boolean;
       referenceImageUrl?:  string;
+      // FLUX keyframe fields (populated in Phase 3b)
+      keyframeUrl?:        string;
+      redoCount?:          number;
     };
 
     const directorShotList: ShotListItem[] =
@@ -257,6 +397,63 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     // Resolved image: portrait if generated, otherwise raw reference
     const resolvedRefImage = characterPortraitUrl ?? primaryRefImage;
 
+    // ── Phase 3b: FLUX Kontext Pro keyframe generation ────────────────────────
+    // Generate a unique starting frame per scene so each Kling i2v clip has
+    // a distinct composition rather than animating the same ref photo.
+    //
+    // Director Mode: pause at STORYBOARD after keyframes so the artist can
+    //   approve or regenerate individual frames before Kling runs.
+    // Quick Mode: generate keyframes and immediately proceed to Kling.
+
+    await setProgress(musicVideoId, 28, `Generating ${plannedScenes.length} keyframe${plannedScenes.length !== 1 ? "s" : ""}…`);
+
+    // Build keyframe inputs — Director path uses shot descriptions; Quick path uses scene prompts
+    const keyframeInputs = directorShotList.length > 0
+      ? directorShotList.map((shot, i) => ({
+          index:           i,
+          description:     shot.description,
+          cameraDirection: shot.cameraDirection,
+          filmLook:        shot.filmLook,
+          keyframeUrl:     shot.keyframeUrl,
+        }))
+      : plannedScenes.map(scene => ({
+          index:       scene.index,
+          description: scene.prompt,
+        }));
+
+    const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage);
+
+    // Inject keyframe URLs as per-scene reference images for Kling i2v
+    for (let i = 0; i < plannedScenes.length; i++) {
+      if (keyframeUrls[i]) {
+        plannedScenes[i].referenceImageUrl = keyframeUrls[i];
+      }
+    }
+
+    if (mode === "DIRECTOR" && directorShotList.length > 0) {
+      // Store keyframeUrls + redoCount on each shot in shotList
+      const updatedShotList = directorShotList.map((shot, i) => ({
+        ...shot,
+        keyframeUrl: keyframeUrls[i] ?? shot.keyframeUrl ?? null,
+        redoCount:   shot.redoCount ?? 0,
+      }));
+
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  {
+          shotList:    updatedShotList as object[],
+          status:      "STORYBOARD",
+          progress:    40,
+          currentStep: "Review your storyboard — approve or regenerate scenes…",
+        },
+      });
+
+      console.log(`[video-studio] Director Mode — ${updatedShotList.length} keyframes ready for ${musicVideoId} — awaiting storyboard approval`);
+      return; // ← Webhook takes over after artist clicks "Accept All"
+    }
+
+    // Quick Mode: keyframes are on plannedScenes; continue to Phase 4
+
     // ── Phase 4a (PRODUCTION): Submit scenes via fal.queue.submit + webhook ──
     // fal.ai processes scenes externally; the webhook route handles stitching +
     // completion. startGeneration returns here — no blocking on Vercel.
@@ -266,27 +463,18 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     if (isWebhookMode) {
       const webhookUrl = `${appUrl}/api/video-studio/webhook/fal`;
 
-      if (mode === "QUICK") {
-        // ── Quick Mode V2: Kling 3.0 multi-shot text-to-video ────────────────
-        // generateMultiShotVideo writes segment placeholders + submits to fal.queue.
-        // The webhook handles assembly and stitching when all segments complete.
-        const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
-        await generateMultiShotVideo(
-          musicVideoId,
-          plannedScenes,
-          resolvedRefImage,
-          vid.audioUrl,
-          aspectRatio,
-          hasVocals,
-          webhookUrl,
-          DEFAULT_QUICK_MODEL,
-        );
-      } else {
-        // ── Director Mode: per-scene i2v using Director shot list prompts ───────
-        // Kling t2v elements param is unreliable; i2v animates the reference photo
-        // driven by the rich shot list prompts from the Director chat.
+      // Both Quick Mode and Director Mode (fallback) now use i2v with FLUX keyframes.
+      // Each plannedScene has referenceImageUrl = keyframeUrl set in Phase 3b.
+      // generateAllScenes uses per-scene referenceImageUrl if present, falls back to global.
+      {
+        // Ensure all scenes use the i2v model (Quick Mode scenes default to t2v model key)
+        const i2vScenes = plannedScenes.map(scene => ({
+          ...scene,
+          model: VIDEO_MODELS["kling-3-pro-i2v"].id,
+        }));
+
         const placeholders = await generateAllScenes(
-          plannedScenes,
+          i2vScenes,
           resolvedRefImage,
           vid.audioUrl,
           undefined,
@@ -317,59 +505,16 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
     }
 
     // ── Phase 4b (DEV): Polling mode — block until all scenes complete ────────
+    // Both modes now use i2v with FLUX keyframes
     let sceneResults: GeneratedSceneOutput[];
 
-    if (mode === "QUICK") {
-      // Quick Mode dev: use multi-shot polling
-      const hasVocals = plannedScenes.some(s => s.spec.hasLipSync);
-      await generateMultiShotVideo(
-        musicVideoId,
-        plannedScenes,
-        resolvedRefImage,
-        vid.audioUrl,
-        aspectRatio,
-        hasVocals,
-        undefined,             // no webhook → dev polling mode
-        DEFAULT_QUICK_MODEL,
-      );
-
-      // Assemble sceneResults from completed FalSceneJob records
-      const completedJobs = await db.falSceneJob.findMany({
-        where:   { musicVideoId },
-        orderBy: { sceneIndex: "asc" },
-      });
-      const maxShots = VIDEO_MODELS[DEFAULT_QUICK_MODEL].maxShots;
-      sceneResults = completedJobs.map((job, i) => {
-        const offset    = i * maxShots;
-        const segScenes = plannedScenes.slice(offset, offset + maxShots);
-        const startTime = segScenes[0]?.startTime ?? 0;
-        const endTime   = segScenes[segScenes.length - 1]?.endTime ?? 0;
-        const energy    = segScenes.reduce((s, sc) => s + sc.spec.energyLevel, 0)
-                          / Math.max(segScenes.length, 1);
-        return {
-          sceneIndex:      job.sceneIndex,
-          videoUrl:        job.videoUrl  ?? "",
-          thumbnailUrl:    job.thumbnailUrl ?? null,
-          model:           job.model     ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
-          prompt:          segScenes.map(s => s.prompt).join(" · "),
-          startTime,
-          endTime,
-          energyLevel:     Math.round(energy * 100) / 100,
-          qaApproved:      null,
-          qaReason:        job.status === "FAILED" ? "Generation failed" : null,
-          qaRetried:       false,
-          originalPrompt:  segScenes.map(s => s.prompt).join(" · "),
-          refinedPrompt:   null,
-          primaryModel:    job.model ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
-          actualModel:     job.model ?? VIDEO_MODELS[DEFAULT_QUICK_MODEL].id,
-          fallbackUsed:    false,
-          fallbackAttempts: 0,
-        };
-      });
-    } else {
-      // Director Mode dev: per-scene i2v with shot list prompts
+    {
+      const i2vScenes = plannedScenes.map(scene => ({
+        ...scene,
+        model: VIDEO_MODELS["kling-3-pro-i2v"].id,
+      }));
       sceneResults = await generateAllScenes(
-        plannedScenes,
+        i2vScenes,
         resolvedRefImage,
         vid.audioUrl,
         async (completed, total) => {
@@ -604,7 +749,7 @@ async function generateInitialGreeting(
     : `No preset style selected. Format: ${aspectRatio ?? "16:9"} | Length: ${videoLength ?? "STANDARD"}.`;
 
   const charRefContext = hasCharRef
-    ? `The artist uploaded a character reference photo (@Element1). You already know who is in this video — do NOT ask. Ask about location/setting instead.`
+    ? `The artist uploaded a character reference photo. You already know who is in this video — do NOT ask. Ask about location/setting instead.`
     : `No character reference was uploaded. Ask whether this is artist performance, a narrative character, or purely abstract.`;
 
   const systemPrompt = `You are the IndieThis Director — a world-class music video director. You've just analyzed the artist's track using audio ML classifiers and you know exactly what it sounds like. You also know the visual style they selected.
@@ -621,7 +766,7 @@ async function generateInitialGreeting(
 - Be specific — cite actual BPM, key, genre names, mood percentages, instrument names from the data
 - The style and film look the artist selected are NON-NEGOTIABLE starting points — work within them
 - Keep it conversational but expert — no bullet lists, 4–6 sentences max
-- If character reference photos were uploaded (@Element1 exists), skip asking who is in the video — you already know. Ask about location/setting instead.
+- If character reference photos were uploaded, skip asking who is in the video — you already know. Ask about location/setting instead.
 - If NO character reference was uploaded, ask: is this artist performance, a narrative character, or purely abstract/no people?
 - End with exactly ONE question.
 

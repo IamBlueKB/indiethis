@@ -159,20 +159,16 @@ static, handheld, steadicam, dolly_push, dolly_pull, truck, crane, whip_pan, orb
 ## Film Look Options
 clean_digital, 35mm_film, 16mm_grain, anamorphic, vhs_retro, noir
 
-## @Element1 Rule
-When the artist appears in a scene (performance, singing, narrative), prefix the description with "@Element1" so the AI model binds the artist's reference photo to that character. Example: "@Element1 stands on a rain-soaked rooftop, close-up on face, neon reflections in the water below."
-Skip @Element1 for pure abstract/establishing shots with no characters.
-
 For each section, write a JSON object with:
 - "index": number
 - "title": short punchy scene name (3-5 words)
-- "description": 2-3 sentences of detailed cinematic visual description (include @Element1 if artist is present)
+- "description": 2-3 sentences of detailed cinematic visual description
 - "hasLipSync": boolean — true ONLY if section has lyrics AND it is a singing/performance moment
 - "filmLook": one of the film look options — choose based on mood and energy
 - "cameraDirection": one camera direction from the options above — choose what best fits the moment
 
 Return ONLY a JSON array, no other text. Example:
-[{"index":0,"title":"Midnight Arrival","description":"@Element1 steps out of a black car onto rain-slicked streets, steadicam following at shoulder height. Neon signs bleed color into puddles below. Low angle looking up as they face the city.","hasLipSync":false,"filmLook":"35mm_film","cameraDirection":"steadicam"}]`,
+[{"index":0,"title":"Midnight Arrival","description":"The artist steps out of a black car onto rain-slicked streets, steadicam following at shoulder height. Neon signs bleed color into puddles below. Low angle looking up as they face the city.","hasLipSync":false,"filmLook":"35mm_film","cameraDirection":"steadicam"}]`,
       }],
     });
 
@@ -187,7 +183,7 @@ Return ONLY a JSON array, no other text. Example:
       sceneDescriptions = sections.slice(0, sceneLimit).map((s, i) => ({
         index:          i,
         title:          `${s.type.charAt(0).toUpperCase() + s.type.slice(1)} Scene ${i + 1}`,
-        description:    `@Element1 ${s.type} section of the music video. ${brief.logline ?? ""}`,
+        description:    `The artist in a ${s.type} section of the music video. ${brief.logline ?? ""}`,
         hasLipSync:     !!s.lyrics,
         filmLook:       "clean_digital",
         cameraDirection: "medium",
@@ -209,7 +205,7 @@ Return ONLY a JSON array, no other text. Example:
         duration:              Math.min(section.duration, 8),
       };
       const modelConfig = selectModel(spec);
-      const description = desc?.description ?? `@Element1 ${section.type} section of the music video`;
+      const description = desc?.description ?? `The artist in a ${section.type} section of the music video`;
 
       // Use Claude's explicit cameraDirection if valid, otherwise detect from description text
       const validCameraKeys   = Object.keys(CAMERA_DIRECTION_MAP) as CameraDirectionKey[];

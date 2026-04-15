@@ -139,7 +139,7 @@ ${likedSample || "(none yet)"}
 POORLY RATED PROMPTS (${disliked.length} total):
 ${dislikedSample || "(none yet)"}
 
-Identify 3–5 concrete patterns. Focus on: prompt specificity, descriptive language, camera direction clarity, lighting terms, energy level descriptions, use of @Element1.
+Identify 3–5 concrete patterns. Focus on: prompt specificity, descriptive language, camera direction clarity, lighting terms, energy level descriptions.
 
 Return JSON only:
 {

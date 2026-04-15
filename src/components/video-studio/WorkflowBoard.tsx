@@ -23,7 +23,7 @@ import { VIDEO_MODELS, type VideoModelKey } from "@/lib/video-studio/models";
 
 // Director Mode scene model options (curated subset — multi-shot + best i2v models)
 const SCENE_MODEL_OPTIONS: { key: VideoModelKey; label: string; badge: string; description: string }[] = [
-  { key: "kling-3-pro",       label: "Kling 3.0 Pro",          badge: "Multi-shot · Best",    description: "Multi-shot text-to-video with @Element1 character ref" },
+  { key: "kling-3-pro",       label: "Kling 3.0 Pro",          badge: "Multi-shot · Best",    description: "Multi-shot text-to-video with artist reference photo" },
   { key: "kling-3-standard",  label: "Kling 3.0 Standard",     badge: "Multi-shot · Faster",  description: "Same model as Pro but faster render at slightly lower quality" },
   { key: "kling-o3-pro",      label: "Kling O3 Pro",           badge: "Multi-shot",           description: "Alternative multi-shot model — different motion style" },
   { key: "kling-3-pro-i2v",   label: "Kling 3.0 Pro (Image)",  badge: "Image-to-video",       description: "Single-scene i2v with your reference photo as the frame" },
