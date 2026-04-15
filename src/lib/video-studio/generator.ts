@@ -1033,18 +1033,28 @@ export async function stitchWithRemotion(
     crossfadeMs: 500,
   };
 
-  const { renderId, bucketName } = await renderMediaOnLambda({
-    region:       awsRegion,
-    functionName,
-    serveUrl,
-    composition:  "MusicVideoComposition",
-    inputProps:   inputProps as unknown as Record<string, unknown>,
-    codec:        "h264",
-    imageFormat:  "jpeg",
-    maxRetries:   2,
-    privacy:      "public",
-    outName:      `music-video-${videoId}-${validRatio.replace(":", "x")}.mp4`,
-  });
+  let renderId:   string;
+  let bucketName: string;
+  try {
+    const submitted = await renderMediaOnLambda({
+      region:       awsRegion,
+      functionName,
+      serveUrl,
+      composition:  "MusicVideoComposition",
+      inputProps:   inputProps as unknown as Record<string, unknown>,
+      codec:        "h264",
+      imageFormat:  "jpeg",
+      maxRetries:   2,
+      privacy:      "public",
+      outName:      `music-video-${videoId}-${validRatio.replace(":", "x")}.mp4`,
+    });
+    renderId   = submitted.renderId;
+    bucketName = submitted.bucketName;
+  } catch (submitErr) {
+    const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+    console.error(`[generator] Remotion renderMediaOnLambda submit failed for ${videoId}:`, msg);
+    return scenes.find(s => s.videoUrl)?.videoUrl ?? "";
+  }
 
   // Poll until done
   const renderStart = Date.now();

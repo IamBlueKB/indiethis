@@ -15,7 +15,8 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
-  Video,
+  OffthreadVideo,
+  Sequence,
   interpolate,
   useCurrentFrame,
   useVideoConfig,
@@ -67,12 +68,17 @@ function SceneOverlay({ clip, startFrame, endFrame, crossfadeFrames }: SceneOver
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      <Video
-        src={clip.videoUrl}
-        startFrom={0}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        muted
-      />
+      {/* Sequence shifts the frame context so OffthreadVideo starts at second 0
+          of the clip file when the composition reaches startFrame.
+          OffthreadVideo uses FFmpeg for frame extraction — required for Lambda
+          rendering; <Video> uses browser playback which stalls on external URLs. */}
+      <Sequence from={startFrame} durationInFrames={endFrame - startFrame + 1}>
+        <OffthreadVideo
+          src={clip.videoUrl}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          muted
+        />
+      </Sequence>
     </AbsoluteFill>
   );
 }

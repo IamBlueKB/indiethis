@@ -5,7 +5,7 @@
   "scripts": {
     "start": "remotion studio src/index.ts",
     "build": "remotion bundle src/index.ts --out=../remotion-bundle",
-    "deploy": "remotion lambda sites create src/index.ts --site-name=indiethis-lyric-video"
+    "deploy": "remotion lambda sites create src/index.ts --site-name=indiethis-music-video"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.436",
