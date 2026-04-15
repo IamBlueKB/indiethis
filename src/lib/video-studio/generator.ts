@@ -447,9 +447,10 @@ export async function generateSceneKeyframe(
 /**
  * Generates FLUX keyframes for all scenes in parallel batches of 3.
  * Skips any scenes that already have a keyframeUrl.
- * Falls back to referencePhotoUrl if a scene's keyframe generation fails.
  *
- * Returns keyframe URLs indexed by scene index.
+ * Returns an array of (keyframeUrl | null) indexed by scene index.
+ * null means generation failed — callers should show an error state, not silently
+ * fall back to the reference photo (which causes "all 4 same image" confusion).
  */
 export async function generateAllKeyframes(
   inputs: Array<{
@@ -460,9 +461,9 @@ export async function generateAllKeyframes(
     keyframeUrl?:     string;
   }>,
   referencePhotoUrl: string,
-): Promise<string[]> {
-  // Pre-fill with existing keyframe URLs (or reference photo as fallback)
-  const results: string[] = inputs.map(s => s.keyframeUrl ?? referencePhotoUrl);
+): Promise<Array<string | null>> {
+  // Pre-fill: use existing keyframeUrl if present, null otherwise
+  const results: Array<string | null> = inputs.map(s => s.keyframeUrl ?? null);
 
   const toGenerate = inputs.filter(s => !s.keyframeUrl);
   const concurrency = 3;
@@ -485,8 +486,11 @@ export async function generateAllKeyframes(
       if (r.status === "fulfilled") {
         results[r.value.index] = r.value.url;
       } else {
-        console.warn("[generateAllKeyframes] Keyframe failed for a scene — using reference photo:", r.reason);
-        // results[idx] already set to referencePhotoUrl as fallback
+        console.error(
+          `[generateAllKeyframes] Scene ${toGenerate[i]?.index ?? "?"} failed:`,
+          r.reason instanceof Error ? r.reason.message : String(r.reason),
+        );
+        // Leave results[index] as null — storyboard UI will show "failed" state
       }
     }
   }

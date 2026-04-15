@@ -208,33 +208,44 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
       return;
     }
 
-    // ── Phase 1: Analyze song ────────────────────────────────────────────────
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
-    });
+    // ── Phase 1: Analyze song (skip if already analyzed) ────────────────────
+    // Re-analysis wastes 30-60s and can blow the Vercel function timeout budget.
+    // Use cached data when it exists (Director Mode re-enters here after chat).
+    let analysis: import("@/lib/video-studio/song-analyzer").SongAnalysis;
 
-    const { analyzeSong } = await import("@/lib/video-studio/song-analyzer");
-    const analysis = await analyzeSong({
-      audioUrl:  vid.audioUrl,
-      trackId:   vid.trackId ?? undefined,
-      duration:  vid.trackDuration,
-    });
+    if (vid.songStructure && vid.bpm) {
+      // Already analyzed — use cached data
+      analysis = vid.songStructure as import("@/lib/video-studio/song-analyzer").SongAnalysis;
+      await setProgress(musicVideoId, 20, "Planning your video…", { status: "PLANNING" });
+      console.log(`[video-studio] Skipping Phase 1 for ${musicVideoId} — using cached analysis`);
+    } else {
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  { status: "ANALYZING", progress: 5, currentStep: "Analyzing your track…" },
+      });
 
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data:  {
-        status:          "PLANNING",
-        progress:        20,
-        currentStep:     "Planning your video…",
-        bpm:             Math.round(analysis.bpm),
-        musicalKey:      analysis.key,
-        energy:          analysis.energy,
-        lyrics:          analysis.lyrics ?? null,
-        lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
-        songStructure:   analysis as object,
-      },
-    });
+      const { analyzeSong } = await import("@/lib/video-studio/song-analyzer");
+      analysis = await analyzeSong({
+        audioUrl:  vid.audioUrl,
+        trackId:   vid.trackId ?? undefined,
+        duration:  vid.trackDuration,
+      });
+
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  {
+          status:          "PLANNING",
+          progress:        20,
+          currentStep:     "Planning your video…",
+          bpm:             Math.round(analysis.bpm),
+          musicalKey:      analysis.key,
+          energy:          analysis.energy,
+          lyrics:          analysis.lyrics ?? null,
+          lyricTimestamps: analysis.lyricTimestamps ? (analysis.lyricTimestamps as object[]) : undefined,
+          songStructure:   analysis as object,
+        },
+      });
+    }
 
     // ── Phase 2: Plan scenes ─────────────────────────────────────────────────
     const videoLength = vid.videoLength;
@@ -423,15 +434,15 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
 
     const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage);
 
-    // Inject keyframe URLs as per-scene reference images for Kling i2v
+    // Inject keyframe URLs as per-scene reference images for Kling i2v.
+    // On null (FLUX failed), fall back to resolvedRefImage so Kling i2v still has a source.
     for (let i = 0; i < plannedScenes.length; i++) {
-      if (keyframeUrls[i]) {
-        plannedScenes[i].referenceImageUrl = keyframeUrls[i];
-      }
+      plannedScenes[i].referenceImageUrl = keyframeUrls[i] ?? resolvedRefImage;
     }
 
     if (mode === "DIRECTOR" && directorShotList.length > 0) {
-      // Store keyframeUrls + redoCount on each shot in shotList
+      // Store keyframeUrls + redoCount on each shot in shotList.
+      // null keyframeUrl is stored as-is so the storyboard UI can show the failed state.
       const updatedShotList = directorShotList.map((shot, i) => ({
         ...shot,
         keyframeUrl: keyframeUrls[i] ?? shot.keyframeUrl ?? null,

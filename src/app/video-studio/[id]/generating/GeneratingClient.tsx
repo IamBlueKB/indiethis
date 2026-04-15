@@ -384,8 +384,9 @@ export default function GeneratingClient({ id }: { id: string }) {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon size={32} style={{ color: "#333" }} />
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                          <ImageIcon size={24} style={{ color: "#444" }} />
+                          <p className="text-[10px] font-medium" style={{ color: "#555" }}>Keyframe failed — tap Regenerate</p>
                         </div>
                       )}
                       {isRegening && (
