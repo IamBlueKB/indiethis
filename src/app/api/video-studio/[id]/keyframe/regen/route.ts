@@ -34,7 +34,7 @@ export async function POST(
 
     const video = await db.musicVideo.findUnique({
       where:  { id },
-      select: { status: true, shotList: true, referenceImageUrl: true, thumbnailUrl: true },
+      select: { status: true, shotList: true, referenceImageUrl: true, thumbnailUrl: true, aspectRatio: true },
     });
 
     if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -89,6 +89,7 @@ export async function POST(
       shot.description ?? "music video scene",
       shot.cameraDirection,
       shot.filmLook,
+      video.aspectRatio ?? "16:9",
     );
 
     // Update the shot in the shot list

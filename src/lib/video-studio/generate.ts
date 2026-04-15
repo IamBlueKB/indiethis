@@ -115,7 +115,7 @@ async function startFromStoryboard(musicVideoId: string, vid: MusicVideo): Promi
       energyLevel:           energy,
       duration:              Math.min(
         (shot.endTime ?? 0) - (shot.startTime ?? 0) || 5,
-        8,
+        10,   // Kling v3 supports 3–15s; cap at 10 for cost control
       ),
     };
 
@@ -432,7 +432,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
           description: scene.prompt,
         }));
 
-    const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage);
+    const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage, vid.aspectRatio ?? "16:9");
 
     // Inject keyframe URLs as per-scene reference images for Kling i2v.
     // On null (FLUX failed), fall back to resolvedRefImage so Kling i2v still has a source.

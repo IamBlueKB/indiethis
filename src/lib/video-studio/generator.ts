@@ -414,6 +414,7 @@ export async function generateSceneKeyframe(
   description:       string,
   cameraDirection?:  string,
   filmLook?:         string,
+  aspectRatio?:      string,   // "16:9" | "9:16" | "1:1" — must match Kling target
 ): Promise<string> {
   // FLUX Kontext Pro is an image-editing model: it keeps the person identical
   // while transforming the environment. Shot descriptions from Director Mode are
@@ -433,11 +434,20 @@ export async function generateSceneKeyframe(
 
   // Match the exact call pattern used by the avatar generator (which works in prod).
   // No extra pollInterval/logs options; no output_format (not accepted by this model).
+  // Map our aspect ratio to FLUX Kontext's enum values.
+  // Critical: keyframe dimensions must match Kling's target aspect ratio or
+  // Kling will produce wrongly-sized clips (e.g. square when 16:9 is wanted).
+  const fluxAspectRatio =
+    aspectRatio === "9:16" ? "9:16" :
+    aspectRatio === "1:1"  ? "1:1"  :
+    "16:9";  // default to landscape for YouTube/standard
+
   const result = await fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
     input: {
       prompt,
-      image_url:           referencePhotoUrl,
-      guidance_scale:      7,   // higher than avatar (3.5) to force real scene change
+      image_url:     referencePhotoUrl,
+      guidance_scale: 7,        // higher than avatar (3.5) to force real scene change
+      aspect_ratio:  fluxAspectRatio,
     },
   });
 
@@ -466,6 +476,7 @@ export async function generateAllKeyframes(
     keyframeUrl?:     string;
   }>,
   referencePhotoUrl: string,
+  aspectRatio?:      string,   // passed through to each FLUX call
 ): Promise<Array<string | null>> {
   // Pre-fill: use existing keyframeUrl if present, null otherwise
   const results: Array<string | null> = inputs.map(s => s.keyframeUrl ?? null);
@@ -482,6 +493,7 @@ export async function generateAllKeyframes(
           scene.description ?? "music video scene",
           scene.cameraDirection,
           scene.filmLook,
+          aspectRatio,
         );
         return { index: scene.index, url };
       })
@@ -530,7 +542,9 @@ export async function generateSceneClip(
     scene.aspectRatio === "1:1"  ? "1:1"  :
     "16:9";
 
-  const clipDuration = Math.min(Math.round(scene.duration), 10);
+  // Kling v3 supports 3–15s. Cap at 10 for cost control.
+  // Pass as string — Kling API schema uses string enum ("5", "10", etc.)
+  const clipDuration = String(Math.min(Math.max(Math.round(scene.duration), 3), 10));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let input: Record<string, any> = {
