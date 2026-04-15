@@ -378,23 +378,16 @@ export async function generateCharacterPortrait(
 ): Promise<string> {
   const prompt = `${styleBase}, professional music video lighting, clean background, consistent character portrait, facing camera, sharp focus, cinematic quality`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await fal.subscribe("fal-ai/flux-pro/kontext" as any, {
+  const result = await fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
     input: {
       prompt,
-      image_url:       referenceImageUrl,
-      guidance_scale:  3.5,
-      num_inference_steps: 28,
-      output_format:   "jpeg",
+      image_url:      referenceImageUrl,
+      guidance_scale: 3.5,
     },
-    pollInterval: 3000,
-    logs:         false,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const output = (result as any).data ?? result;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const imageUrl = (output as any)?.images?.[0]?.url ?? (output as any)?.image?.url ?? "";
+  const images   = (result.data as { images?: { url: string }[] }).images;
+  const imageUrl = images?.[0]?.url ?? "";
 
   if (!imageUrl) throw new Error("FLUX Kontext Pro returned no image");
   return imageUrl;
