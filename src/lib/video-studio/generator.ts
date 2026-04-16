@@ -402,7 +402,9 @@ export async function generateCharacterPortrait(
  *
  * Cost: $0.04 per call
  */
-const FLUX_TIMEOUT_MS = 90_000; // 90 s — fail fast rather than blocking the Vercel function
+const FLUX_TIMEOUT_MS  = 120_000; // 120 s — generous but bounded
+const FLUX_POLL_MS     =   4_000; // poll fal.ai queue every 4 s
+const FLUX_MODEL       = "fal-ai/flux-pro/kontext";
 
 export async function generateSceneKeyframe(
   referencePhotoUrl: string,
@@ -427,8 +429,6 @@ export async function generateSceneKeyframe(
 
   const prompt = sceneParts.join(" ").slice(0, 900);
 
-  // Match the exact call pattern used by the avatar generator (which works in prod).
-  // No extra pollInterval/logs options; no output_format (not accepted by this model).
   // Map our aspect ratio to FLUX Kontext's enum values.
   // Critical: keyframe dimensions must match Kling's target aspect ratio or
   // Kling will produce wrongly-sized clips (e.g. square when 16:9 is wanted).
@@ -437,27 +437,71 @@ export async function generateSceneKeyframe(
     aspectRatio === "1:1"  ? "1:1"  :
     "16:9";  // default to landscape for YouTube/standard
 
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`FLUX keyframe timed out after ${FLUX_TIMEOUT_MS / 1000}s`)), FLUX_TIMEOUT_MS)
-  );
+  // ── Use fal.queue.submit + manual polling instead of fal.subscribe ────────────
+  //
+  // fal.subscribe() keeps internal setInterval polling timers alive even after a
+  // Promise.race timeout fires — the timers are never cleared, so the Vercel
+  // function hangs at 28% until Vercel's maxDuration kills it (300 s).
+  //
+  // fal.queue.submit() returns a request_id immediately. We then poll manually
+  // with our own setTimeout loop, which we fully control and can stop cleanly.
+  // When timeout fires, we cancel the queued job and throw — no zombie timers.
 
-  const result = await Promise.race([
-    fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
-      input: {
-        prompt,
-        image_url:     referencePhotoUrl,
-        guidance_scale: 7,
-        aspect_ratio:  fluxAspectRatio,
-      },
-    }),
-    timeout,
-  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const submitted = await (fal.queue as any).submit(FLUX_MODEL, {
+    input: {
+      prompt,
+      image_url:      referencePhotoUrl,
+      guidance_scale: 7,
+      aspect_ratio:   fluxAspectRatio,
+    },
+  });
+  const requestId: string = submitted.request_id;
+  console.log(`[generator] FLUX keyframe submitted — request_id: ${requestId}`);
 
-  const images   = (result.data as { images?: { url: string }[] }).images;
-  const imageUrl = images?.[0]?.url ?? "";
+  const pollStart = Date.now();
+  while (Date.now() - pollStart < FLUX_TIMEOUT_MS) {
+    await new Promise<void>(r => setTimeout(r, FLUX_POLL_MS));
 
-  if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
-  return imageUrl;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = await (fal.queue as any).status(FLUX_MODEL, {
+      requestId,
+      logs: false,
+    });
+
+    if (status.status === "COMPLETED") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res      = await (fal.queue as any).result(FLUX_MODEL, { requestId });
+      const images   = (res.data as { images?: { url: string }[] } | undefined)?.images
+                    ?? (res       as { images?: { url: string }[] }).images;
+      const imageUrl = images?.[0]?.url ?? "";
+      if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
+      console.log(`[generator] FLUX keyframe done — ${Math.round((Date.now() - pollStart) / 1000)}s`);
+      return imageUrl;
+    }
+
+    if (status.status === "FAILED") {
+      const errMsg = (status as { error?: string }).error ?? "unknown error";
+      throw new Error(`FLUX keyframe job failed: ${errMsg}`);
+    }
+
+    // IN_QUEUE or IN_PROGRESS — keep polling
+    console.log(
+      `[generator] FLUX keyframe ${status.status} — ` +
+      `${Math.round((Date.now() - pollStart) / 1000)}s elapsed (request_id: ${requestId})`,
+    );
+  }
+
+  // Timeout — cancel the job on fal.ai so we're not billed for a result we'll never use
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (fal.queue as any).cancel(FLUX_MODEL, { requestId });
+    console.warn(`[generator] FLUX keyframe cancelled after timeout — request_id: ${requestId}`);
+  } catch {
+    // Cancel is best-effort — don't let it mask the timeout error
+  }
+
+  throw new Error(`FLUX keyframe timed out after ${FLUX_TIMEOUT_MS / 1000}s (request_id: ${requestId})`);
 }
 
 /**

@@ -1420,6 +1420,34 @@ YoutubeReference
 | `defaultFilmLook` field on `VideoPreset` schema (db pushed, Prisma client regenerated); 10 presets seeded with genre-appropriate defaults (Hip-Hop → 35mm Film, Trap/Drill → Noir, EDM → Anamorphic, Indie → 16mm Grain, etc.) | ✅ DONE |
 | Admin Presets tab in `/admin/video-studio` — lists all 10 presets with inline `defaultFilmLook` dropdown editor | ✅ DONE |
 
+### Music Video Studio — Pipeline Debugging & Fixes (session 18, 2026-04-16)
+
+**Root causes found and fixed (all committed + pushed):**
+
+| Bug | Root Cause | Fix | Commit |
+|-----|-----------|-----|--------|
+| All scenes showed same frozen frame | `<Video startFrom={0}>` seeks to global composition time within a 5-10s clip — scene 3 at second 40 of composition sought to second 40 of a 10s clip = black/frozen | Replaced with `<OffthreadVideo>` inside `<Sequence from={startFrame}>` so each clip plays from second 0 when composition reaches that scene | `f55607b6` |
+| Wrong Remotion serve URL | `.env.local` + Vercel pointed to old `indiethis-lyric-video` bundle | Redeployed site with `--site-name=indiethis-music-video`; updated `.env.local` + Vercel to new S3 URL | manual |
+| Invalid FLUX Kontext Pro params | `generateCharacterPortrait` passed `num_inference_steps`, `output_format`, `pollInterval`, `logs` — not accepted by this model | Stripped to only valid params: `prompt`, `image_url`, `guidance_scale` | `3240f7c4` |
+| Pipeline stuck at 28% (GENERATING state) | `fal.subscribe` for FLUX blocks the Vercel function synchronously; no retry path from GENERATING state | Added 90s `Promise.race` timeout per FLUX call; added GENERATING to triggerable states in generate route with auto-reset to FAILED | `d0507016` + `26d748ee` |
+| Stale keyframe URLs reused on retry | `generateAllKeyframes` skipped scenes with existing `keyframeUrl` even when those fal.ai URLs had expired | Added `forceRegenerate` param; always `true` in main pipeline so every retry generates fresh keyframes | `d0507016` |
+| Stale FalSceneJobs corrupting scene count | Previous failed attempt's FalSceneJob records still in DB; webhook's `doneCount < sceneTotal` check was wrong | `deleteMany` FalSceneJobs before every generation attempt in the generate route | `95d2df1a` |
+| Kling i2v clips expiring during Lambda render | fal.ai video URLs are temporary; Remotion Lambda renders in distributed chunks and may fail to fetch mid-render | Webhook now re-uploads each Kling clip to UploadThing (permanent) BEFORE marking FalSceneJob COMPLETE — all Remotion input URLs are permanent by stitch time | `b7d5f5e9` |
+| Remotion errors silent — returns raw Kling clip | `stitchWithRemotion` had try-catch that returned `scenes.find(s => s.videoUrl)?.videoUrl` on any error — produced COMPLETE video with 1 raw clip (8s, no audio) with no indication of failure | Removed all silent fallbacks; `stitchWithRemotion` now throws; webhook catches + writes error to `MusicVideo.errorMessage` + sets status FAILED | `a7624dde` |
+| Webhook timeout — 3 Remotion renders exceed 300s | Webhook was rendering 16:9 + 9:16 + Spotify Canvas serially for every video; 3 × ~90s renders = 270s+ plus re-uploads | Reduced to primary aspect ratio only in webhook; Spotify Canvas removed from webhook path | `a7624dde` |
+| S3 Access Denied — Remotion can't load bundle | `remotionlambda-useast1-cgsi0sjcmz` bucket had no public access block config (defaults to blocking) and no bucket policy; Remotion Lambda uses Puppeteer/HTTP to load `index.html` — got 403 | Applied public access unblock + bucket policy allowing `s3:GetObject` on `sites/*` for `*` via Node.js AWS SDK script | AWS direct (no code commit) |
+
+**Architecture discoveries:**
+- `generateMultiShotVideo` (t2v multi-shot Kling) exists in codebase but is DEAD CODE — not called from `generate.ts`. Do NOT switch to it — it ignores FLUX keyframes entirely. The i2v pipeline (FLUX keyframe → Kling i2v per scene → Remotion stitch) is the correct approach.
+- `fal.subscribe` keeps internal polling timers alive in Node.js even after `Promise.race` timeout fires — function hangs because event loop never goes idle. Real fix needed: AbortController on the fal call or switch to `fal.queue.submit` for FLUX keyframes too. **TODO: still pending.**
+- Remotion bundle (`indiethis-music-video`) serves ALL compositions — `LyricVideo`, `CinematicLyricVideo`, `MusicVideoComposition`, `TrackCanvas`. All share `REMOTION_SERVE_URL` + `REMOTION_FUNCTION_NAME` env vars.
+- Lambda function: `remotion-render-4-0-436-mem2048mb-disk2048mb-120sec` in `us-east-1` — confirmed exists and IAM permissions are valid.
+- Kling i2v model: `fal-ai/kling-video/v3/pro/image-to-video` — requires `start_image_url` (NOT `image_url`), `duration` as string enum ("5" or "10"), `generate_audio: false`.
+- FLUX Kontext Pro: `fal-ai/flux-pro/kontext` — valid params ONLY: `prompt`, `image_url`, `guidance_scale`, `aspect_ratio`, `seed`. Rejects all other params.
+
+**Outstanding issue (not yet fixed):**
+- FLUX keyframe generation still blocking Vercel function at 28% — `fal.subscribe` hangs even after timeout fires due to zombie polling timers. Need to either: (a) use `AbortController` to properly cancel, or (b) switch FLUX keyframes to `fal.queue.submit` + webhook pattern. Pipeline reaches this state and gets stuck for 300s until Vercel kills the function.
+
 ### Artist Avatar System (Steps 1–11)
 | Feature | Status |
 |---------|--------|

@@ -18,7 +18,7 @@ import { db }                        from "@/lib/db";
 import { fal }                       from "@fal-ai/client";
 import { generateSceneKeyframe }     from "@/lib/video-studio/generator";
 
-export const maxDuration = 60;
+export const maxDuration = 130; // FLUX Kontext Pro can take up to 120s; give it headroom
 
 export async function POST(
   req: NextRequest,
