@@ -26,6 +26,33 @@ import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
 import { runVideoQualityGateAsync }        from "@/lib/video-studio/quality-gate";
 import { sendMusicVideoCompleteEmail }     from "@/lib/brevo/email";
 import { sendVideoConversionEmail1 }       from "@/lib/agents/video-conversion";
+import { UTApi }                           from "uploadthing/server";
+
+const utapi = new UTApi();
+
+/**
+ * Re-uploads a fal.ai video clip URL to permanent UploadThing storage.
+ * fal.ai URLs expire within hours; Remotion Lambda renders in distributed
+ * chunks and needs stable URLs for the full render duration.
+ *
+ * Falls back to the original fal.ai URL if upload fails.
+ */
+async function reuploadVideoUrl(falUrl: string, filename: string): Promise<string> {
+  try {
+    const res = await fetch(falUrl);
+    if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+    const buffer = await res.arrayBuffer();
+    const file   = new File([new Uint8Array(buffer)], filename, { type: "video/mp4" });
+    const upload = await utapi.uploadFiles(file);
+    const permanentUrl = upload.data?.ufsUrl ?? upload.data?.url;
+    if (!permanentUrl) throw new Error("No URL returned from UploadThing");
+    console.log(`[fal webhook] Uploaded ${filename} to UploadThing: ${permanentUrl}`);
+    return permanentUrl;
+  } catch (err) {
+    console.warn(`[fal webhook] Re-upload failed for ${filename} — keeping fal.ai URL:`, err);
+    return falUrl;
+  }
+}
 
 export const maxDuration = 300;
 
@@ -77,9 +104,16 @@ export async function POST(req: NextRequest) {
     const thumbnailUrl: string|null = payload?.video?.thumbnail_url ?? null;
 
     if (status === "OK" && videoUrl) {
+      // Re-upload to permanent storage BEFORE marking COMPLETE.
+      // fal.ai URLs are temporary and may expire during distributed Lambda chunk rendering.
+      // By the time the last scene's webhook triggers Remotion stitching, all URLs
+      // must be stable — this guarantees that invariant.
+      const filename     = `mv-${musicVideoId}-scene${sceneIndex}-${Date.now()}.mp4`;
+      const permanentUrl = await reuploadVideoUrl(videoUrl, filename);
+
       await db.falSceneJob.update({
         where: { id: job.id },
-        data:  { status: "COMPLETE", videoUrl, thumbnailUrl },
+        data:  { status: "COMPLETE", videoUrl: permanentUrl, thumbnailUrl },
       });
       console.log(`[fal webhook] Scene ${sceneIndex}/${sceneTotal - 1} of ${musicVideoId} ✓`);
     } else {
