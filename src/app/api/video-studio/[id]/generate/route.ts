@@ -40,12 +40,20 @@ export async function POST(
     }
 
     // Only allow triggering from these states
-    // STORYBOARD = Director Mode awaiting approval; artist clicked "Accept All"
-    const triggerableStates = ["PENDING", "PLANNING", "FAILED", "STORYBOARD"];
+    // GENERATING is included so stuck videos can be force-retried
+    const triggerableStates = ["PENDING", "PLANNING", "FAILED", "STORYBOARD", "GENERATING"];
     if (!triggerableStates.includes(video.status)) {
       return NextResponse.json({
         error: `Cannot trigger generation from status ${video.status}`,
       }, { status: 400 });
+    }
+
+    // If stuck in GENERATING, reset to FAILED first so startGeneration re-runs cleanly
+    if (video.status === "GENERATING") {
+      await db.musicVideo.update({
+        where: { id: video.id },
+        data:  { status: "FAILED", progress: 0, currentStep: "Restarting…" },
+      });
     }
 
     // Clear any stale FalSceneJobs from previous failed attempts so
