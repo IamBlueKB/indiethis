@@ -229,19 +229,41 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const durationMs     = Math.round(video.trackDuration * 1000);
-    // Generate primary ratio + 9:16 (for TikTok/Reels), then Spotify Canvas
-    const targetRatios   = Array.from(new Set([video.aspectRatio, "9:16"]));
-    const finalVideoUrls = await generateMultiFormatVideos(
-      musicVideoId,
-      sceneResults,
-      video.audioUrl,
-      targetRatios,
-      durationMs,
-      true,  // includeSpotifyCanvas
-    );
+    const durationMs = Math.round(video.trackDuration * 1000);
+    // Only render the artist's primary aspect ratio in this webhook call.
+    // Rendering 16:9 + 9:16 + Spotify Canvas serially would exceed the 300s Vercel
+    // function timeout for typical track lengths (3+ min = 5400 frames × 3 renders).
+    // Additional formats can be generated on demand from the preview page.
+    const targetRatios = [video.aspectRatio];
 
-    const finalVideoUrl    = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+    let finalVideoUrls: Record<string, string>;
+    try {
+      finalVideoUrls = await generateMultiFormatVideos(
+        musicVideoId,
+        sceneResults,
+        video.audioUrl,
+        targetRatios,
+        durationMs,
+        false,  // Spotify Canvas excluded from webhook render — would exceed 300s timeout
+      );
+    } catch (stitchErr) {
+      const errMsg = stitchErr instanceof Error ? stitchErr.message : String(stitchErr);
+      console.error(`[fal webhook] Remotion stitch failed for ${musicVideoId}:`, errMsg);
+      await db.musicVideo.update({
+        where: { id: musicVideoId },
+        data:  {
+          status:       "FAILED",
+          progress:     0,
+          currentStep:  "Stitching failed — check error message",
+          errorMessage: `Remotion: ${errMsg}`,
+          // Store the raw scene results so a retry can still access them
+          scenes:       sceneResults as object[],
+        },
+      });
+      return NextResponse.json({ received: true });
+    }
+
+    const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
     const thumbScene       = pickThumbnailScene(sceneResults);
     const finalThumbnailUrl = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
 

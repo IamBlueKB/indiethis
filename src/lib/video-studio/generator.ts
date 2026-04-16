@@ -1014,8 +1014,11 @@ export async function stitchWithRemotion(
   const awsRegion    = (process.env.REMOTION_REGION ?? process.env.AWS_REGION ?? "us-east-1") as Parameters<typeof renderMediaOnLambda>[0]["region"];
 
   if (!serveUrl || !functionName) {
-    console.warn("[generator] Remotion not configured — returning first scene URL as fallback");
-    return scenes.find(s => s.videoUrl)?.videoUrl ?? "";
+    throw new Error(
+      `Remotion not configured: REMOTION_SERVE_URL=${serveUrl ? "set" : "MISSING"}, ` +
+      `REMOTION_FUNCTION_NAME=${functionName ? "set" : "MISSING"}. ` +
+      `Set these in Vercel environment variables.`
+    );
   }
 
   const validRatio = (aspectRatio === "9:16" || aspectRatio === "1:1") ? aspectRatio : "16:9";
@@ -1037,28 +1040,30 @@ export async function stitchWithRemotion(
     crossfadeMs: 500,
   };
 
+  console.log(
+    `[generator] Remotion submit — ${sceneClips.length} clips, ratio=${validRatio}, ` +
+    `duration=${durationMs}ms, function=${functionName}`
+  );
+
   let renderId:   string;
   let bucketName: string;
-  try {
-    const submitted = await renderMediaOnLambda({
-      region:       awsRegion,
-      functionName,
-      serveUrl,
-      composition:  "MusicVideoComposition",
-      inputProps:   inputProps as unknown as Record<string, unknown>,
-      codec:        "h264",
-      imageFormat:  "jpeg",
-      maxRetries:   2,
-      privacy:      "public",
-      outName:      `music-video-${videoId}-${validRatio.replace(":", "x")}.mp4`,
-    });
-    renderId   = submitted.renderId;
-    bucketName = submitted.bucketName;
-  } catch (submitErr) {
-    const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
-    console.error(`[generator] Remotion renderMediaOnLambda submit failed for ${videoId}:`, msg);
-    return scenes.find(s => s.videoUrl)?.videoUrl ?? "";
-  }
+
+  const submitted = await renderMediaOnLambda({
+    region:       awsRegion,
+    functionName,
+    serveUrl,
+    composition:  "MusicVideoComposition",
+    inputProps:   inputProps as unknown as Record<string, unknown>,
+    codec:        "h264",
+    imageFormat:  "jpeg",
+    maxRetries:   2,
+    privacy:      "public",
+    outName:      `music-video-${videoId}-${validRatio.replace(":", "x")}.mp4`,
+  });
+
+  renderId   = submitted.renderId;
+  bucketName = submitted.bucketName;
+  console.log(`[generator] Remotion render started — renderId=${renderId}, bucket=${bucketName}`);
 
   // Poll until done
   const renderStart = Date.now();
@@ -1073,19 +1078,24 @@ export async function stitchWithRemotion(
     });
 
     if (progress.fatalErrorEncountered) {
-      const errMsg = progress.errors?.[0]?.message ?? "Unknown Remotion error";
+      const errMsg = progress.errors?.[0]?.message ?? "Unknown Remotion render error";
       console.error(`[generator] Remotion render failed for ${videoId}:`, errMsg);
-      // Fall back to first valid scene URL rather than crashing the whole pipeline
-      return scenes.find(s => s.videoUrl)?.videoUrl ?? "";
+      throw new Error(`Remotion render failed: ${errMsg}`);
     }
 
     if (progress.done) {
-      return progress.outputFile ?? "";
+      const outputUrl = progress.outputFile ?? "";
+      console.log(`[generator] Remotion done — ${outputUrl}`);
+      return outputUrl;
     }
+
+    console.log(
+      `[generator] Remotion progress — ${Math.round((progress.overallProgress ?? 0) * 100)}% ` +
+      `(${Math.round((Date.now() - renderStart) / 1000)}s elapsed)`
+    );
   }
 
-  console.error(`[generator] Remotion render timed out for ${videoId}`);
-  return scenes.find(s => s.videoUrl)?.videoUrl ?? "";
+  throw new Error(`Remotion render timed out after ${MAX_RENDER_MS / 60000} minutes for ${videoId}`);
 }
 
 /**
