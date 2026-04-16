@@ -437,44 +437,40 @@ export async function generateSceneKeyframe(
     aspectRatio === "1:1"  ? "1:1"  :
     "16:9";  // default to landscape for YouTube/standard
 
-  // ── Use fal.queue.submit + manual polling instead of fal.subscribe ────────────
+  // ── fal.run with AbortController ─────────────────────────────────────────────
   //
-  // fal.subscribe() keeps internal setInterval polling timers alive even after a
-  // Promise.race timeout fires — the timers are never cleared, so the Vercel
-  // function hangs at 28% until Vercel's maxDuration kills it (300 s).
+  // fal.run() is a direct HTTP POST — no queue, no polling intervals, zero timers.
+  // AbortController gives us clean cancellation: on timeout, the in-flight HTTP
+  // request is cancelled immediately. clearTimeout() prevents the abort from firing
+  // after a successful response. No zombie timers possible.
   //
-  // fal.queue.submit() returns a request_id immediately. We then poll manually
-  // with our own setTimeout loop, which we fully control and can stop cleanly.
-  // When timeout fires, we cancel the queued job and throw — no zombie timers.
+  // DO NOT use fal.subscribe — its internal polling setInterval stays alive even
+  // after a Promise.race timeout fires (zombie timers keep the Vercel fn running).
+  // DO NOT use fal.queue.submit directly — returns 403 Forbidden.
+  console.log(`[generator] FLUX keyframe submitting via fal.run — image_url: ${referencePhotoUrl.slice(0, 60)}… aspect: ${fluxAspectRatio}`);
 
-  // Use fal.subscribe with the SDK's built-in timeout option.
-  //
-  // The SDK's subscribeToStatus (polling mode) calls clearScheduledTasks() on
-  // timeout — this clears BOTH the timeout timer AND the polling interval timer,
-  // leaving no zombie timers in the Node.js event loop.
-  //
-  // DO NOT use Promise.race — it fires the rejection but leaves fal.subscribe's
-  // internal polling timers alive, causing the Vercel function to hang at 28%.
-  //
-  // DO NOT use fal.queue.submit directly — returns "Forbidden" 403 for unknown
-  // reasons despite the same credentials that fal.subscribe uses successfully.
-  console.log(`[generator] FLUX keyframe submitting — image_url: ${referencePhotoUrl.slice(0, 60)}… aspect: ${fluxAspectRatio}`);
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), FLUX_TIMEOUT_MS);
 
-  const result = await fal.subscribe(FLUX_MODEL as Parameters<typeof fal.subscribe>[0], {
-    input: {
-      prompt,
-      image_url:      referencePhotoUrl,
-      guidance_scale: 7,
-      aspect_ratio:   fluxAspectRatio,
-    },
-    // SDK timeout: clears all internal timers cleanly on expiry (polling mode only)
+  let result: { data: unknown; requestId: string };
+  try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    timeout: FLUX_TIMEOUT_MS,
-  } as any);
+    result = await (fal as any).run(FLUX_MODEL, {
+      input: {
+        prompt,
+        image_url:      referencePhotoUrl,
+        guidance_scale: 7,
+        aspect_ratio:   fluxAspectRatio,
+      },
+      abortSignal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   console.log(`[generator] FLUX keyframe response received`);
 
-  const images   = (result.data as { images?: { url: string }[] }).images;
+  const images   = (result!.data as { images?: { url: string }[] }).images;
   const imageUrl = images?.[0]?.url ?? "";
 
   if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
