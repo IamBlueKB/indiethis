@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getVideoPrice }         from "@/lib/video-studio/model-router";
 import { startGeneration }       from "@/lib/video-studio/generate";
 
-export const maxDuration = 60;
+export const maxDuration = 300; // full pipeline (FLUX keyframes up to 120s + Kling submit)
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
