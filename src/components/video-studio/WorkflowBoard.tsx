@@ -394,8 +394,8 @@ function SceneNode({
       }}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
             style={{
@@ -405,7 +405,7 @@ function SceneNode({
           >
             {scene.index + 1}
           </div>
-          <p className="text-xs font-bold text-white truncate">{scene.title}</p>
+          <p className="text-xs font-bold text-white truncate min-w-0">{scene.title}</p>
         </div>
         <div
           className="w-2 h-2 rounded-full shrink-0"
