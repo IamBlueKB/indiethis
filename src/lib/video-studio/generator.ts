@@ -447,6 +447,10 @@ export async function generateSceneKeyframe(
   // with our own setTimeout loop, which we fully control and can stop cleanly.
   // When timeout fires, we cancel the queued job and throw — no zombie timers.
 
+  // ── DIAG 1: log the exact image_url being sent to FLUX ──────────────────────
+  console.log(`[FLUX-DIAG] image_url being sent: ${referencePhotoUrl}`);
+  console.log(`[FLUX-DIAG] aspect_ratio: ${fluxAspectRatio} | prompt (first 120): ${prompt.slice(0, 120)}`);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submitted = await (fal.queue as any).submit(FLUX_MODEL, {
     input: {
@@ -457,7 +461,7 @@ export async function generateSceneKeyframe(
     },
   });
   const requestId: string = submitted.request_id;
-  console.log(`[generator] FLUX keyframe submitted — request_id: ${requestId}`);
+  console.log(`[FLUX-DIAG] job submitted — request_id: ${requestId}`);
 
   const pollStart = Date.now();
   while (Date.now() - pollStart < FLUX_TIMEOUT_MS) {
@@ -469,34 +473,45 @@ export async function generateSceneKeyframe(
       logs: false,
     });
 
+    // ── DIAG 2: log every status poll so we can see if it completes or times out
+    console.log(
+      `[FLUX-DIAG] status=${status.status} — ` +
+      `${Math.round((Date.now() - pollStart) / 1000)}s elapsed (request_id: ${requestId})`,
+    );
+
     if (status.status === "COMPLETED") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res      = await (fal.queue as any).result(FLUX_MODEL, { requestId });
+      const res = await (fal.queue as any).result(FLUX_MODEL, { requestId });
+
+      // ── DIAG 3: log the full result so we can confirm the field path ──────
+      console.log(`[FLUX-DIAG] raw result keys: ${Object.keys(res ?? {}).join(", ")}`);
+      console.log(`[FLUX-DIAG] result.data: ${JSON.stringify(res?.data).slice(0, 300)}`);
+      console.log(`[FLUX-DIAG] result (top-level, no .data): ${JSON.stringify(res).slice(0, 300)}`);
+
       const images   = (res.data as { images?: { url: string }[] } | undefined)?.images
                     ?? (res       as { images?: { url: string }[] }).images;
       const imageUrl = images?.[0]?.url ?? "";
+
+      console.log(`[FLUX-DIAG] parsed images array: ${JSON.stringify(images)}`);
+      console.log(`[FLUX-DIAG] final imageUrl: "${imageUrl}"`);
+
       if (!imageUrl) throw new Error("FLUX Kontext Pro returned no keyframe image");
-      console.log(`[generator] FLUX keyframe done — ${Math.round((Date.now() - pollStart) / 1000)}s`);
+      console.log(`[FLUX-DIAG] keyframe done — ${Math.round((Date.now() - pollStart) / 1000)}s — url: ${imageUrl}`);
       return imageUrl;
     }
 
     if (status.status === "FAILED") {
       const errMsg = (status as { error?: string }).error ?? "unknown error";
+      console.error(`[FLUX-DIAG] job FAILED — full status object: ${JSON.stringify(status)}`);
       throw new Error(`FLUX keyframe job failed: ${errMsg}`);
     }
-
-    // IN_QUEUE or IN_PROGRESS — keep polling
-    console.log(
-      `[generator] FLUX keyframe ${status.status} — ` +
-      `${Math.round((Date.now() - pollStart) / 1000)}s elapsed (request_id: ${requestId})`,
-    );
   }
 
   // Timeout — cancel the job on fal.ai so we're not billed for a result we'll never use
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (fal.queue as any).cancel(FLUX_MODEL, { requestId });
-    console.warn(`[generator] FLUX keyframe cancelled after timeout — request_id: ${requestId}`);
+    console.warn(`[FLUX-DIAG] job cancelled after timeout — request_id: ${requestId}`);
   } catch {
     // Cancel is best-effort — don't let it mask the timeout error
   }
