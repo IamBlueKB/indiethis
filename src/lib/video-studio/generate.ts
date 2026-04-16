@@ -432,7 +432,8 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
           description: scene.prompt,
         }));
 
-    const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage, vid.aspectRatio ?? "16:9");
+    // Always regenerate keyframes fresh — cached fal.ai URLs expire and break Kling i2v
+    const keyframeUrls = await generateAllKeyframes(keyframeInputs, resolvedRefImage, vid.aspectRatio ?? "16:9", true);
 
     // Inject keyframe URLs as per-scene reference images for Kling i2v.
     // On null (FLUX failed), fall back to resolvedRefImage so Kling i2v still has a source.

@@ -402,6 +402,8 @@ export async function generateCharacterPortrait(
  *
  * Cost: $0.04 per call
  */
+const FLUX_TIMEOUT_MS = 90_000; // 90 s — fail fast rather than blocking the Vercel function
+
 export async function generateSceneKeyframe(
   referencePhotoUrl: string,
   description:       string,
@@ -435,16 +437,22 @@ export async function generateSceneKeyframe(
     aspectRatio === "1:1"  ? "1:1"  :
     "16:9";  // default to landscape for YouTube/standard
 
-  const result = await fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
-    input: {
-      prompt,
-      image_url:     referencePhotoUrl,
-      guidance_scale: 7,        // higher than avatar (3.5) to force real scene change
-      aspect_ratio:  fluxAspectRatio,
-    },
-  });
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`FLUX keyframe timed out after ${FLUX_TIMEOUT_MS / 1000}s`)), FLUX_TIMEOUT_MS)
+  );
 
-  // Access result.data the same way avatar generator does
+  const result = await Promise.race([
+    fal.subscribe("fal-ai/flux-pro/kontext" as Parameters<typeof fal.subscribe>[0], {
+      input: {
+        prompt,
+        image_url:     referencePhotoUrl,
+        guidance_scale: 7,
+        aspect_ratio:  fluxAspectRatio,
+      },
+    }),
+    timeout,
+  ]);
+
   const images   = (result.data as { images?: { url: string }[] }).images;
   const imageUrl = images?.[0]?.url ?? "";
 
@@ -470,11 +478,14 @@ export async function generateAllKeyframes(
   }>,
   referencePhotoUrl: string,
   aspectRatio?:      string,   // passed through to each FLUX call
+  forceRegenerate?:  boolean,  // when true, ignore cached keyframeUrls and regenerate all
 ): Promise<Array<string | null>> {
-  // Pre-fill: use existing keyframeUrl if present, null otherwise
-  const results: Array<string | null> = inputs.map(s => s.keyframeUrl ?? null);
+  // Pre-fill with existing URLs unless force-regenerating
+  const results: Array<string | null> = inputs.map(s =>
+    (!forceRegenerate && s.keyframeUrl) ? s.keyframeUrl : null
+  );
 
-  const toGenerate = inputs.filter(s => !s.keyframeUrl);
+  const toGenerate = inputs.filter(s => forceRegenerate || !s.keyframeUrl);
   const concurrency = 3;
 
   for (let i = 0; i < toGenerate.length; i += concurrency) {
