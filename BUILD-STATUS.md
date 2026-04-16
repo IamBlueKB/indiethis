@@ -1,5 +1,5 @@
 # BUILD-STATUS.md — IndieThis
-_Last updated: 2026-04-09 (session 17)_
+_Last updated: 2026-04-16 (session 18)_
 
 ---
 
@@ -1439,14 +1439,28 @@ YoutubeReference
 
 **Architecture discoveries:**
 - `generateMultiShotVideo` (t2v multi-shot Kling) exists in codebase but is DEAD CODE — not called from `generate.ts`. Do NOT switch to it — it ignores FLUX keyframes entirely. The i2v pipeline (FLUX keyframe → Kling i2v per scene → Remotion stitch) is the correct approach.
-- `fal.subscribe` keeps internal polling timers alive in Node.js even after `Promise.race` timeout fires — function hangs because event loop never goes idle. Real fix needed: AbortController on the fal call or switch to `fal.queue.submit` for FLUX keyframes too. **TODO: still pending.**
+- `fal.subscribe` keeps internal `setInterval` polling timers alive in Node.js even after `Promise.race` timeout fires — event loop never goes idle, Vercel function hangs at 28% for 300s until hard kill. Fixed in `bd69cef0` (see below).
 - Remotion bundle (`indiethis-music-video`) serves ALL compositions — `LyricVideo`, `CinematicLyricVideo`, `MusicVideoComposition`, `TrackCanvas`. All share `REMOTION_SERVE_URL` + `REMOTION_FUNCTION_NAME` env vars.
 - Lambda function: `remotion-render-4-0-436-mem2048mb-disk2048mb-120sec` in `us-east-1` — confirmed exists and IAM permissions are valid.
 - Kling i2v model: `fal-ai/kling-video/v3/pro/image-to-video` — requires `start_image_url` (NOT `image_url`), `duration` as string enum ("5" or "10"), `generate_audio: false`.
 - FLUX Kontext Pro: `fal-ai/flux-pro/kontext` — valid params ONLY: `prompt`, `image_url`, `guidance_scale`, `aspect_ratio`, `seed`. Rejects all other params.
 
-**Outstanding issue (not yet fixed):**
-- FLUX keyframe generation still blocking Vercel function at 28% — `fal.subscribe` hangs even after timeout fires due to zombie polling timers. Need to either: (a) use `AbortController` to properly cancel, or (b) switch FLUX keyframes to `fal.queue.submit` + webhook pattern. Pipeline reaches this state and gets stuck for 300s until Vercel kills the function.
+**Additional fix — FLUX zombie timer (session 18 continuation):**
+
+| Bug | Root Cause | Fix | Commit |
+|-----|-----------|-----|--------|
+| Pipeline stuck at 28% — Vercel function hangs until 300s hard kill | `fal.subscribe()` creates `setInterval` polling timers internally. `Promise.race` fires the timeout rejection and our code exits, but the timers stay alive in Node.js — the event loop never goes idle so Vercel can't complete the function | Replaced `fal.subscribe` in `generateSceneKeyframe` with `fal.queue.submit` (returns `request_id` immediately, no timers) + manual `while` poll loop using `fal.queue.status` every 4s. When loop exits (done or timeout), all timers are cleaned up. On timeout, calls `fal.queue.cancel` best-effort before throwing. | `bd69cef0` |
+
+- `FLUX_TIMEOUT_MS` bumped 90s → 120s — more runway for slow FLUX jobs
+- `keyframe/regen` route `maxDuration` bumped 60s → 130s — single keyframe regen route must fit new 120s timeout
+- Poll loop logs `IN_QUEUE` / `IN_PROGRESS` + elapsed seconds every 4s — visible in Vercel function logs for debugging
+
+**All pipeline blockers resolved — end-to-end flow should now work:**
+1. Generate route submits FLUX keyframes via `fal.queue.submit` → polls cleanly → exits when done
+2. Kling i2v jobs submitted via `fal.queue.submit` → webhook receives callbacks
+3. Webhook re-uploads each clip to UploadThing (permanent URLs) → marks COMPLETE
+4. All scenes done → Remotion Lambda stitch → `COMPLETE` with stitched video + audio
+5. S3 bucket public access unblocked + bucket policy set (AWS direct, no code) — Remotion can load bundle
 
 ### Artist Avatar System (Steps 1–11)
 | Feature | Status |
