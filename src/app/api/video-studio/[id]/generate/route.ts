@@ -6,18 +6,18 @@
  *   - Retrying a FAILED video
  *   - Director Mode: triggering generation after shot list approval
  *
- * Requires the video to be owned by the requesting user (or guest with no userId).
- * Fires generation in background and returns immediately.
+ * Fires an Inngest event and returns immediately (< 1s).
+ * All heavy work (FLUX keyframes, Kling i2v, Remotion stitch) runs in Inngest steps.
  *
  * Returns: { started: true }
  */
 
-import { auth }                  from "@/lib/auth";
-import { db }                    from "@/lib/db";
-import { startGeneration }       from "@/lib/video-studio/generate";
+import { auth }        from "@/lib/auth";
+import { db }          from "@/lib/db";
+import { inngest }     from "@/inngest/client";
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 300;
+export const maxDuration = 60; // Route only fires Inngest events — no long work here
 
 export async function POST(
   req: NextRequest,
@@ -29,7 +29,14 @@ export async function POST(
 
     const video = await db.musicVideo.findUnique({
       where:  { id },
-      select: { id: true, status: true, userId: true },
+      select: {
+        id:                true,
+        status:            true,
+        userId:            true,
+        shotList:          true,
+        referenceImageUrl: true,
+        thumbnailUrl:      true,
+      },
     });
 
     if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -40,7 +47,6 @@ export async function POST(
     }
 
     // Only allow triggering from these states
-    // GENERATING is included so stuck videos can be force-retried
     const triggerableStates = ["PENDING", "PLANNING", "FAILED", "STORYBOARD", "GENERATING"];
     if (!triggerableStates.includes(video.status)) {
       return NextResponse.json({
@@ -48,7 +54,7 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // If stuck in GENERATING, reset to FAILED first so startGeneration re-runs cleanly
+    // If stuck in GENERATING, reset to FAILED first so the pipeline re-runs cleanly
     if (video.status === "GENERATING") {
       await db.musicVideo.update({
         where: { id: video.id },
@@ -56,11 +62,32 @@ export async function POST(
       });
     }
 
-    // Clear any stale FalSceneJobs from previous failed attempts so
-    // the webhook scene-count check isn't corrupted by old records.
+    // Clear any stale FalSceneJobs from previous failed attempts
     await db.falSceneJob.deleteMany({ where: { musicVideoId: id } });
 
-    await startGeneration(id);
+    const artistImageUrl = video.referenceImageUrl ?? video.thumbnailUrl ?? "";
+
+    if (video.status === "STORYBOARD") {
+      // Keyframes are already done. User is approving storyboard → start Kling i2v.
+      await inngest.send({
+        name: "video/scenes.approved",
+        data: { videoId: id },
+      });
+      console.log(`[generate] Fired scenes.approved for ${id} (STORYBOARD retry)`);
+    } else {
+      // Full pipeline — keyframes first, then Kling, then stitch.
+      const shotList = (video.shotList as Record<string, unknown>[]) ?? [];
+
+      await inngest.send({
+        name: "video/generate.requested",
+        data: {
+          videoId:        id,
+          scenes:         shotList,
+          artistImageUrl,
+        },
+      });
+      console.log(`[generate] Fired generate.requested for ${id} — ${shotList.length} scenes`);
+    }
 
     return NextResponse.json({ started: true });
 

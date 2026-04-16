@@ -17,15 +17,9 @@
 
 import { NextRequest, NextResponse }    from "next/server";
 import { db }                           from "@/lib/db";
-import {
-  generateMultiFormatVideos,
-  pickThumbnailScene,
-  type GeneratedSceneOutput,
-}                                       from "@/lib/video-studio/generator";
+import { type GeneratedSceneOutput }    from "@/lib/video-studio/generator";
 import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
-import { runVideoQualityGateAsync }        from "@/lib/video-studio/quality-gate";
-import { sendMusicVideoCompleteEmail }     from "@/lib/brevo/email";
-import { sendVideoConversionEmail1 }       from "@/lib/agents/video-conversion";
+import { inngest }                         from "@/inngest/client";
 import { UTApi }                           from "uploadthing/server";
 
 const utapi = new UTApi();
@@ -218,7 +212,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // ── 5. Write assembled scenes → stitch with Remotion ─────────────────────
+    // ── 5. Store assembled scene results + hand off to Inngest stitch step ───────
+    // Persist scene results with merged metadata so the stitch-video Inngest function
+    // can read them. Then fire video/stitch.requested — Remotion Lambda runs in its
+    // own Inngest step invocation (no 300s webhook timeout risk).
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data:  {
@@ -229,109 +226,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const durationMs = Math.round(video.trackDuration * 1000);
-    // Only render the artist's primary aspect ratio in this webhook call.
-    // Rendering 16:9 + 9:16 + Spotify Canvas serially would exceed the 300s Vercel
-    // function timeout for typical track lengths (3+ min = 5400 frames × 3 renders).
-    // Additional formats can be generated on demand from the preview page.
-    const targetRatios = [video.aspectRatio];
-
-    let finalVideoUrls: Record<string, string>;
-    try {
-      finalVideoUrls = await generateMultiFormatVideos(
-        musicVideoId,
-        sceneResults,
-        video.audioUrl,
-        targetRatios,
-        durationMs,
-        false,  // Spotify Canvas excluded from webhook render — would exceed 300s timeout
-      );
-    } catch (stitchErr) {
-      const errMsg = stitchErr instanceof Error ? stitchErr.message : String(stitchErr);
-      console.error(`[fal webhook] Remotion stitch failed for ${musicVideoId}:`, errMsg);
-      await db.musicVideo.update({
-        where: { id: musicVideoId },
-        data:  {
-          status:       "FAILED",
-          progress:     0,
-          currentStep:  "Stitching failed — check error message",
-          errorMessage: `Remotion: ${errMsg}`,
-          // Store the raw scene results so a retry can still access them
-          scenes:       sceneResults as object[],
-        },
-      });
-      return NextResponse.json({ received: true });
-    }
-
-    const finalVideoUrl = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
-    const thumbScene       = pickThumbnailScene(sceneResults);
-    const finalThumbnailUrl = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
-
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data:  {
-        status:         "COMPLETE",
-        progress:       100,
-        currentStep:    "Complete!",
-        scenes:         sceneResults as object[],
-        finalVideoUrl:  finalVideoUrl  ?? undefined,
-        finalVideoUrls: (Object.keys(finalVideoUrls).length > 0 ? finalVideoUrls : null) as object | undefined,
-        thumbnailUrl:   finalThumbnailUrl ?? undefined,
-      },
+    await inngest.send({
+      name: "video/stitch.requested",
+      data: { videoId: musicVideoId },
     });
 
-    console.log(`[fal webhook] ${musicVideoId} complete — ${completedScenes.length}/${sceneTotal} scenes`);
-
-    // ── 6. Quality gate — Claude Vision frame check (fire-and-forget) ─────────
-    // Runs asynchronously after response; result stored in MusicVideo.qaApproved/qaReport.
-    if (finalThumbnailUrl) {
-      const briefSummary = video.creativeBrief
-        ? JSON.stringify(video.creativeBrief).slice(0, 300)
-        : undefined;
-      runVideoQualityGateAsync(musicVideoId, finalThumbnailUrl, briefSummary);
-    }
-
-    // ── 6. Notification email ─────────────────────────────────────────────────
-    try {
-      const appUrl     = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
-      const previewUrl = `${appUrl}/video-studio/${musicVideoId}/preview`;
-
-      if (video.userId) {
-        const user = await db.user.findUnique({
-          where:  { id: video.userId },
-          select: { email: true, name: true, artistSlug: true },
-        });
-        if (user?.email) {
-          await sendMusicVideoCompleteEmail({
-            toEmail:    user.email,
-            toName:     user.name ?? "Artist",
-            trackTitle: video.trackTitle,
-            previewUrl,
-            mode:       video.mode as "QUICK" | "DIRECTOR",
-            artistSlug: user.artistSlug ?? undefined,
-          });
-        }
-      } else if (video.guestEmail) {
-        await sendVideoConversionEmail1({
-          id:            musicVideoId,
-          trackTitle:    video.trackTitle,
-          guestEmail:    video.guestEmail,
-          amount:        video.amount,
-          mode:          video.mode,
-          finalVideoUrl: finalVideoUrl ?? null,
-          finalVideoUrls: null,
-        });
-        await db.musicVideo.update({
-          where: { id: musicVideoId },
-          data:  {
-            conversionStep:   1,
-            conversionNextAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-          },
-        });
-      }
-    } catch (emailErr) {
-      console.warn("[fal webhook] notification email failed:", emailErr);
-    }
+    console.log(`[fal webhook] All ${sceneTotal} scenes done for ${musicVideoId} — stitch handed to Inngest`);
 
     return NextResponse.json({ received: true });
 
