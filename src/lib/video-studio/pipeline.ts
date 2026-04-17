@@ -56,7 +56,9 @@ export async function startKeyframeGeneration(
     const filmLook       = (scene.filmLook        as string) ?? "";
 
     const prompt =
-      `Place this person in the following scene: ${description}. ` +
+      `Full body shot of this person placed in the following scene: ${description}. ` +
+      `Show the complete figure from head to toe, natural pose, anatomically correct proportions, ` +
+      `wide enough framing to show the entire body. ` +
       (cameraDir  ? `${cameraDir}. `  : "") +
       (filmLook   ? `${filmLook}. `   : "") +
       `Maintain the person's exact facial features, clothing, and appearance from the reference photo.`;
@@ -148,8 +150,14 @@ export async function startSceneGeneration(videoId: string): Promise<void> {
 
   for (let i = 0; i < shotList.length; i++) {
     const scene    = shotList[i];
-    const prompt   = [scene.description, scene.cameraDirection, scene.filmLook]
-      .filter(Boolean).join(". ") as string;
+    const promptParts = [
+      "Full body shot, complete figure visible from head to toe",
+      scene.description,
+      scene.cameraDirection,
+      scene.filmLook,
+      "natural movement, consistent body orientation, anatomically correct",
+    ].filter(Boolean);
+    const prompt = promptParts.join(". ") as string;
     const duration = String(Math.min(Math.round((scene.duration as number) ?? 8), 15));
 
     const result = await (fal.queue as unknown as {
@@ -158,6 +166,7 @@ export async function startSceneGeneration(videoId: string): Promise<void> {
       input: {
         start_image_url: (scene.keyframeUrl as string) ?? "",
         prompt,
+        negative_prompt: "cropped body, cut off legs, torso only, disembodied, floating head, backwards legs, twisted limbs, distorted anatomy, deformed body, wrong body direction, anatomical errors, warped figure, disconnected body parts",
         duration,
         generate_audio: false,
         aspect_ratio:   aspectRatio,
