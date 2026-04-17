@@ -18,9 +18,7 @@ import { NextRequest, NextResponse }       from "next/server";
 import { db }                              from "@/lib/db";
 import { type GeneratedSceneOutput }       from "@/lib/video-studio/generator";
 import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
-import { generateMultiFormatVideos, pickThumbnailScene } from "@/lib/video-studio/generator";
-import { sendMusicVideoCompleteEmail }     from "@/lib/brevo/email";
-import { sendVideoConversionEmail1 }       from "@/lib/agents/video-conversion";
+import { renderMediaOnLambda }             from "@remotion/lambda/client";
 import { UTApi }                           from "uploadthing/server";
 
 const utapi  = new UTApi();
@@ -199,7 +197,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // ── 5. Stitch with Remotion Lambda (inline — no Inngest needed) ──────────
+    // ── 5. Submit Remotion render with webhook callback (no polling) ─────────
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data: {
@@ -210,79 +208,56 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    console.log(`[fal webhook] All ${sceneTotal} scenes done for ${musicVideoId} — starting Remotion stitch`);
+    console.log(`[fal webhook] All ${sceneTotal} scenes done for ${musicVideoId} — submitting Remotion render`);
 
-    const durationMs     = Math.round(video.trackDuration * 1000);
-    const finalVideoUrls = await generateMultiFormatVideos(
-      musicVideoId,
-      sceneResults,
-      video.audioUrl,
-      [video.aspectRatio],
-      durationMs,
-      false,
-    );
+    const serveUrl     = process.env.REMOTION_SERVE_URL ?? "";
+    const functionName = process.env.REMOTION_FUNCTION_NAME ?? "";
+    const awsRegion    = (process.env.REMOTION_REGION ?? process.env.AWS_REGION ?? "us-east-1") as "us-east-1";
+    const webhookUrl   = `${APP_URL}/api/video-studio/webhook/remotion`;
+    const durationMs   = Math.round(video.trackDuration * 1000);
+    const validRatio   = (video.aspectRatio === "9:16" || video.aspectRatio === "1:1") ? video.aspectRatio : "16:9";
 
-    const finalVideoUrl     = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
-    const thumbScene        = pickThumbnailScene(sceneResults);
-    const finalThumbnailUrl = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
+    type SceneClip = { videoUrl: string; startTime: number; endTime: number; duration: number };
+    const sceneClips: SceneClip[] = sceneResults
+      .filter(s => s.videoUrl)
+      .map(s => ({
+        videoUrl:  s.videoUrl,
+        startTime: s.startTime,
+        endTime:   s.endTime,
+        duration:  s.endTime - s.startTime,
+      }));
 
-    await db.musicVideo.update({
-      where: { id: musicVideoId },
-      data: {
-        status:         "COMPLETE",
-        progress:       100,
-        currentStep:    "Complete!",
-        scenes:         sceneResults as object[],
-        finalVideoUrl:  finalVideoUrl  ?? undefined,
-        finalVideoUrls: Object.keys(finalVideoUrls).length > 0
-          ? (finalVideoUrls as object)
-          : undefined,
-        thumbnailUrl:   finalThumbnailUrl ?? undefined,
+    const submitted = await renderMediaOnLambda({
+      region:       awsRegion,
+      functionName,
+      serveUrl,
+      composition:  "MusicVideoComposition",
+      inputProps: {
+        scenes:      sceneClips,
+        audioUrl:    video.audioUrl,
+        aspectRatio: validRatio,
+        durationMs,
+        crossfadeMs: 500,
+      } as unknown as Record<string, unknown>,
+      codec:        "h264",
+      imageFormat:  "jpeg",
+      maxRetries:   2,
+      privacy:      "public",
+      outName:      `music-video-${musicVideoId}-${validRatio.replace(":", "x")}.mp4`,
+      webhook: {
+        url:    webhookUrl,
+        secret: process.env.REMOTION_WEBHOOK_SECRET ?? null,
+        customData: { musicVideoId },
       },
     });
 
-    console.log(`[fal webhook] ${musicVideoId} complete — ${completedScenes.length}/${allJobs.length} scenes stitched`);
+    // Store renderId so the Remotion webhook can look up this video
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data:  { errorMessage: `remotion:${submitted.renderId}:${submitted.bucketName}` },
+    });
 
-    // ── 6. Notification email ────────────────────────────────────────────────
-    const previewUrl = `${APP_URL}/video-studio/${musicVideoId}/preview`;
-
-    try {
-      if (video.userId) {
-        const user = await db.user.findUnique({
-          where:  { id: video.userId },
-          select: { email: true, name: true, artistSlug: true },
-        });
-        if (user?.email) {
-          await sendMusicVideoCompleteEmail({
-            toEmail:    user.email,
-            toName:     user.name ?? "Artist",
-            trackTitle: video.trackTitle,
-            previewUrl,
-            mode:       video.mode as "QUICK" | "DIRECTOR",
-            artistSlug: user.artistSlug ?? undefined,
-          });
-        }
-      } else if (video.guestEmail) {
-        await sendVideoConversionEmail1({
-          id:             musicVideoId,
-          trackTitle:     video.trackTitle,
-          guestEmail:     video.guestEmail,
-          amount:         video.amount,
-          mode:           video.mode,
-          finalVideoUrl:  finalVideoUrl ?? null,
-          finalVideoUrls: null,
-        });
-        await db.musicVideo.update({
-          where: { id: musicVideoId },
-          data: {
-            conversionStep:   1,
-            conversionNextAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-          },
-        });
-      }
-    } catch (emailErr) {
-      console.warn("[fal webhook] Notification email failed:", emailErr);
-    }
+    console.log(`[fal webhook] Remotion render submitted for ${musicVideoId} — renderId=${submitted.renderId}`);
 
     return NextResponse.json({ received: true });
 
