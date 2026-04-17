@@ -5,23 +5,22 @@
  * Body: { guestEmail? }
  * Returns: { requiresPayment, amount } | { url } (Stripe)
  *
- * After payment clears (or for free/included credits), fires an Inngest event
- * instead of calling startGeneration() synchronously:
- *
- *   - video.status !== "STORYBOARD"  → video/generate.requested  (keyframes → approval → Kling)
- *   - video.status === "STORYBOARD"  → video/scenes.approved      (user approved; Kling i2v starts)
- *
- * The route returns in <1s. All heavy work runs in Inngest steps.
+ * No Inngest — directly submits fal.ai jobs and returns immediately.
+ *   - video.status !== "STORYBOARD"  → startKeyframeGeneration() (full pipeline)
+ *   - video.status === "STORYBOARD"  → startSceneGeneration()     (Kling i2v starts)
  */
 
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { stripe }                from "@/lib/stripe";
-import { inngest }               from "@/inngest/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoPrice }         from "@/lib/video-studio/model-router";
+import {
+  startKeyframeGeneration,
+  startSceneGeneration,
+} from "@/lib/video-studio/pipeline";
 
-export const maxDuration = 60; // Route only fires an Inngest event — no long work here
+export const maxDuration = 60;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
@@ -50,7 +49,7 @@ export async function POST(
     if (video.status === "COMPLETE") return NextResponse.json({ error: "Already complete" }, { status: 400 });
     if (!video.shotList) return NextResponse.json({ error: "Shot list required first" }, { status: 400 });
 
-    // Determine billing (same logic as /create route)
+    // Determine billing
     let tier: "GUEST" | "LAUNCH" | "PUSH" | "REIGN" = "GUEST";
     let amount = 0;
     let isFree = true; // DEV: bypass payment for testing
@@ -78,11 +77,10 @@ export async function POST(
       amount = getVideoPrice(tier, "DIRECTOR", video.videoLength as "SHORT" | "STANDARD" | "EXTENDED");
     }
 
-    // Update amount on record
     await db.musicVideo.update({ where: { id }, data: { amount } });
 
     if (isFree) {
-      await fireInngestPipelineEvent(id, video);
+      await firePipeline(id, video);
       return NextResponse.json({ requiresPayment: false, amount: 0 });
     }
 
@@ -128,7 +126,7 @@ export async function POST(
   }
 }
 
-// ─── Inngest event dispatcher ────────────────────────────────────────────────────
+// ─── Pipeline dispatcher ─────────────────────────────────────────────────────
 
 type VideoRecord = {
   id:                string;
@@ -139,32 +137,17 @@ type VideoRecord = {
   videoLength:       string;
 };
 
-async function fireInngestPipelineEvent(videoId: string, video: VideoRecord): Promise<void> {
-  const artistImageUrl = video.referenceImageUrl ?? video.thumbnailUrl ?? "";
-
+async function firePipeline(videoId: string, video: VideoRecord): Promise<void> {
   if (video.status === "STORYBOARD") {
-    // User has already approved storyboard — all keyframes are done.
-    // Skip keyframe generation; fire scenes.approved to start Kling i2v directly.
-    await inngest.send({
-      name: "video/scenes.approved",
-      data: { videoId },
-    });
-    console.log(`[director/approve] Storyboard approved — fired scenes.approved for ${videoId}`);
+    // All keyframes are already done — skip to Kling i2v.
+    await startSceneGeneration(videoId);
+    console.log(`[director/approve] Storyboard approved — started scene generation for ${videoId}`);
     return;
   }
 
-  // First time through — fire generate.requested with the existing shotList.
-  // Orchestrator fans out keyframe.generate events (one per scene).
-  const shotList = (video.shotList as Record<string, unknown>[]) ?? [];
-
-  await inngest.send({
-    name: "video/generate.requested",
-    data: {
-      videoId,
-      scenes:         shotList,
-      artistImageUrl,
-    },
-  });
-
-  console.log(`[director/approve] Fired generate.requested for ${videoId} — ${shotList.length} scenes`);
+  // First time through — submit FLUX keyframe jobs for all scenes.
+  const shotList       = (video.shotList as Record<string, unknown>[]) ?? [];
+  const artistImageUrl = video.referenceImageUrl ?? video.thumbnailUrl ?? "";
+  await startKeyframeGeneration(videoId, shotList, artistImageUrl);
+  console.log(`[director/approve] Started keyframe generation for ${videoId} — ${shotList.length} scenes`);
 }

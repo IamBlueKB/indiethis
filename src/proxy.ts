@@ -51,8 +51,10 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/merch/catalog")) return true;
   // Printful webhook — public (called by Printful servers)
   if (pathname.startsWith("/api/webhooks/printful")) return true;
-  // Inngest serve endpoint — must be publicly accessible for Inngest cloud to call back
+  // Inngest serve endpoint — publicly accessible (kept for registration, not invocation)
   if (pathname.startsWith("/api/inngest")) return true;
+  // fal.ai webhook callbacks — must be publicly accessible (no user session)
+  if (pathname.startsWith("/api/video-studio/webhook/")) return true;
   // Track overlay endpoint — public (used on explore / artist pages)
   if (pathname.match(/^\/api\/tracks\/[^/]+\/overlay$/)) return true;
   // Audio features endpoint — public (used by LazyAudioRadar on explore / artist pages)

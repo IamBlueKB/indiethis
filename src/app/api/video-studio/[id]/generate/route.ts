@@ -6,18 +6,23 @@
  *   - Retrying a FAILED video
  *   - Director Mode: triggering generation after shot list approval
  *
- * Fires an Inngest event and returns immediately (< 1s).
- * All heavy work (FLUX keyframes, Kling i2v, Remotion stitch) runs in Inngest steps.
+ * No Inngest — submits fal.ai jobs directly and returns immediately.
+ * All heavy work runs via fal.ai webhooks:
+ *   /webhook/keyframe → keyframe images
+ *   /webhook/fal      → scene clips + stitch
  *
  * Returns: { started: true }
  */
 
-import { auth }        from "@/lib/auth";
-import { db }          from "@/lib/db";
-import { inngest }     from "@/inngest/client";
+import { auth }          from "@/lib/auth";
+import { db }            from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  startKeyframeGeneration,
+  startSceneGeneration,
+} from "@/lib/video-studio/pipeline";
 
-export const maxDuration = 60; // Route only fires Inngest events — no long work here
+export const maxDuration = 60;
 
 export async function POST(
   req: NextRequest,
@@ -54,7 +59,7 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // If stuck in GENERATING, reset to FAILED first so the pipeline re-runs cleanly
+    // If stuck in GENERATING, reset so the pipeline re-runs cleanly
     if (video.status === "GENERATING") {
       await db.musicVideo.update({
         where: { id: video.id },
@@ -62,31 +67,17 @@ export async function POST(
       });
     }
 
-    // Clear any stale FalSceneJobs from previous failed attempts
-    await db.falSceneJob.deleteMany({ where: { musicVideoId: id } });
-
     const artistImageUrl = video.referenceImageUrl ?? video.thumbnailUrl ?? "";
 
     if (video.status === "STORYBOARD") {
-      // Keyframes are already done. User is approving storyboard → start Kling i2v.
-      await inngest.send({
-        name: "video/scenes.approved",
-        data: { videoId: id },
-      });
-      console.log(`[generate] Fired scenes.approved for ${id} (STORYBOARD retry)`);
+      // Keyframes are already done. User approved storyboard → start Kling i2v.
+      await startSceneGeneration(id);
+      console.log(`[generate] Started scene generation for ${id} (STORYBOARD retry)`);
     } else {
       // Full pipeline — keyframes first, then Kling, then stitch.
       const shotList = (video.shotList as Record<string, unknown>[]) ?? [];
-
-      await inngest.send({
-        name: "video/generate.requested",
-        data: {
-          videoId:        id,
-          scenes:         shotList,
-          artistImageUrl,
-        },
-      });
-      console.log(`[generate] Fired generate.requested for ${id} — ${shotList.length} scenes`);
+      await startKeyframeGeneration(id, shotList, artistImageUrl);
+      console.log(`[generate] Started keyframe generation for ${id} — ${shotList.length} scenes`);
     }
 
     return NextResponse.json({ started: true });

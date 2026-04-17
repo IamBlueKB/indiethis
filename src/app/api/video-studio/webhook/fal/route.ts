@@ -1,43 +1,43 @@
 /**
  * POST /api/video-studio/webhook/fal
  *
- * Receives completion callbacks from fal.ai when scene generation finishes.
- * fal.ai POSTs here (via the `fal_webhook` query param) with the result of
- * each fal.queue.submit() call.
+ * Receives Kling i2v scene completion callbacks from fal.ai.
+ * Called once per scene clip when its video is ready.
  *
- * Flow:
- *   1. Look up FalSceneJob by request_id to identify which video/scene completed
- *   2. Mark job COMPLETE or FAILED, storing videoUrl
+ * Flow per callback:
+ *   1. Look up FalSceneJob by request_id
+ *   2. Re-upload clip to UploadThing (fal.ai URLs expire)
  *   3. Update MusicVideo progress
- *   4. When all scenes are done → stitch with Remotion → mark COMPLETE
+ *   4. When all scenes done → run Remotion Lambda stitch inline → mark COMPLETE
  *
- * maxDuration: 300 — the last scene callback triggers Remotion Lambda stitching
- * which polls an external AWS Lambda. 5 minutes covers most video lengths.
+ * maxDuration: 300 — the final callback triggers Remotion Lambda stitching
+ * which polls AWS Lambda for up to ~5 minutes on long tracks.
  */
 
-import { NextRequest, NextResponse }    from "next/server";
-import { db }                           from "@/lib/db";
-import { type GeneratedSceneOutput }    from "@/lib/video-studio/generator";
+import { NextRequest, NextResponse }       from "next/server";
+import { db }                              from "@/lib/db";
+import { type GeneratedSceneOutput }       from "@/lib/video-studio/generator";
 import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
-import { inngest }                         from "@/inngest/client";
+import { generateMultiFormatVideos, pickThumbnailScene } from "@/lib/video-studio/generator";
+import { sendMusicVideoCompleteEmail }     from "@/lib/brevo/email";
+import { sendVideoConversionEmail1 }       from "@/lib/agents/video-conversion";
 import { UTApi }                           from "uploadthing/server";
 
-const utapi = new UTApi();
+const utapi  = new UTApi();
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
 
 /**
  * Re-uploads a fal.ai video clip URL to permanent UploadThing storage.
  * fal.ai URLs expire within hours; Remotion Lambda renders in distributed
  * chunks and needs stable URLs for the full render duration.
- *
- * Falls back to the original fal.ai URL if upload fails.
  */
 async function reuploadVideoUrl(falUrl: string, filename: string): Promise<string> {
   try {
-    const res = await fetch(falUrl);
+    const res          = await fetch(falUrl);
     if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-    const buffer = await res.arrayBuffer();
-    const file   = new File([new Uint8Array(buffer)], filename, { type: "video/mp4" });
-    const upload = await utapi.uploadFiles(file);
+    const buffer       = await res.arrayBuffer();
+    const file         = new File([new Uint8Array(buffer)], filename, { type: "video/mp4" });
+    const upload       = await utapi.uploadFiles(file);
     const permanentUrl = upload.data?.ufsUrl ?? upload.data?.url;
     if (!permanentUrl) throw new Error("No URL returned from UploadThing");
     console.log(`[fal webhook] Uploaded ${filename} to UploadThing: ${permanentUrl}`);
@@ -63,7 +63,6 @@ export async function POST(req: NextRequest) {
     // ── 1. Look up the scene job ─────────────────────────────────────────────
     const job = await db.falSceneJob.findUnique({ where: { requestId: request_id } });
     if (!job) {
-      // fal.ai may send retries — return 200 so it doesn't keep retrying
       console.warn(`[fal webhook] No FalSceneJob for request_id: ${request_id}`);
       return NextResponse.json({ received: true });
     }
@@ -71,9 +70,7 @@ export async function POST(req: NextRequest) {
     const { musicVideoId, sceneIndex, sceneTotal } = job;
 
     // Detect whether this is a V2 multi-shot (text-to-video) segment job
-    // or a legacy V1 single-scene (image-to-video) job.
-    // Multi-shot: sceneIndex = segment index; video.scenes holds one placeholder per segment.
-    // Legacy i2v: sceneIndex = scene index; video.scenes holds one placeholder per scene.
+    // or a V3 single-scene (image-to-video) job.
     const isMultiShot = job.model != null &&
       Object.values(VIDEO_MODELS).some(m => m.id === job.model && m.type === "text-to-video");
 
@@ -82,7 +79,7 @@ export async function POST(req: NextRequest) {
       `— scene/seg ${sceneIndex}/${sceneTotal - 1} — model: ${job.model ?? "unknown"}`,
     );
 
-    // Guard: if video already failed or completed (e.g. a late retry), skip
+    // Guard: skip if video is already complete or failed
     const videoCheck = await db.musicVideo.findUnique({
       where:  { id: musicVideoId },
       select: { status: true },
@@ -92,16 +89,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Record result ─────────────────────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const videoUrl:     string      = payload?.video?.url ?? "";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const thumbnailUrl: string|null = payload?.video?.thumbnail_url ?? null;
 
     if (status === "OK" && videoUrl) {
-      // Re-upload to permanent storage BEFORE marking COMPLETE.
-      // fal.ai URLs are temporary and may expire during distributed Lambda chunk rendering.
-      // By the time the last scene's webhook triggers Remotion stitching, all URLs
-      // must be stable — this guarantees that invariant.
       const filename     = `mv-${musicVideoId}-scene${sceneIndex}-${Date.now()}.mp4`;
       const permanentUrl = await reuploadVideoUrl(videoUrl, filename);
 
@@ -118,17 +109,16 @@ export async function POST(req: NextRequest) {
       console.error(`[fal webhook] Scene ${sceneIndex} of ${musicVideoId} failed — fal status: ${status}`);
     }
 
-    // ── 3. Count completed / failed jobs for this video ──────────────────────
+    // ── 3. Count completed / failed jobs ────────────────────────────────────
     const doneJobs = await db.falSceneJob.findMany({
       where:   { musicVideoId, status: { in: ["COMPLETE", "FAILED"] } },
       orderBy: { sceneIndex: "asc" },
     });
 
-    const doneCount = doneJobs.length;
+    const doneCount  = doneJobs.length;
+    const unitLabel  = isMultiShot ? "segments" : "scenes";
 
-    // Update progress (scene/segment gen = 25–75% of overall progress)
     const genProgress = 25 + Math.round((doneCount / sceneTotal) * 50);
-    const unitLabel   = isMultiShot ? "segments" : "scenes";
     await db.musicVideo.update({
       where: { id: musicVideoId },
       data:  {
@@ -138,11 +128,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (doneCount < sceneTotal) {
-      // More scenes still pending — nothing more to do yet
       return NextResponse.json({ received: true });
     }
 
-    // ── 4. All scenes done — build GeneratedSceneOutput[] ────────────────────
+    // ── 4. All scenes done — assemble scene results ──────────────────────────
     const allJobs = await db.falSceneJob.findMany({
       where:   { musicVideoId },
       orderBy: { sceneIndex: "asc" },
@@ -160,8 +149,7 @@ export async function POST(req: NextRequest) {
         trackTitle:    true,
         amount:        true,
         mode:          true,
-        scenes:        true,   // placeholder scenes written during submission
-        creativeBrief: true,   // for quality gate context
+        scenes:        true,
       },
     });
 
@@ -170,28 +158,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
-    // Merge job results with the placeholder scene metadata (model, prompt, timing)
     const placeholders = (video.scenes as GeneratedSceneOutput[] | null) ?? [];
 
     const sceneResults: GeneratedSceneOutput[] = allJobs.map(j => {
       const ph = placeholders.find(s => s.sceneIndex === j.sceneIndex);
       return {
         sceneIndex:       j.sceneIndex,
-        videoUrl:         j.videoUrl  ?? "",
-        thumbnailUrl:     j.thumbnailUrl ?? null,
-        model:            ph?.model            ?? "",
-        prompt:           ph?.prompt           ?? "",
-        startTime:        ph?.startTime        ?? 0,
-        endTime:          ph?.endTime          ?? 0,
-        energyLevel:      ph?.energyLevel      ?? 0.5,
+        videoUrl:         j.videoUrl        ?? "",
+        thumbnailUrl:     j.thumbnailUrl    ?? null,
+        model:            ph?.model          ?? "fal-ai/kling-video/v3/pro/image-to-video",
+        prompt:           ph?.prompt         ?? "",
+        startTime:        ph?.startTime      ?? 0,
+        endTime:          ph?.endTime        ?? 0,
+        energyLevel:      ph?.energyLevel    ?? 0.5,
         qaApproved:       null,
         qaReason:         j.status === "FAILED" ? "Generation failed" : null,
         qaRetried:        false,
-        originalPrompt:   ph?.originalPrompt   ?? "",
+        originalPrompt:   ph?.originalPrompt  ?? "",
         refinedPrompt:    null,
-        primaryModel:     ph?.primaryModel     ?? "",
-        actualModel:      ph?.actualModel      ?? "",
-        fallbackUsed:     ph?.fallbackUsed     ?? false,
+        primaryModel:     ph?.primaryModel    ?? "fal-ai/kling-video/v3/pro/image-to-video",
+        actualModel:      ph?.actualModel     ?? "fal-ai/kling-video/v3/pro/image-to-video",
+        fallbackUsed:     ph?.fallbackUsed    ?? false,
         fallbackAttempts: ph?.fallbackAttempts ?? 0,
       };
     });
@@ -201,7 +188,7 @@ export async function POST(req: NextRequest) {
     if (completedScenes.length === 0) {
       await db.musicVideo.update({
         where: { id: musicVideoId },
-        data:  {
+        data: {
           status:       "FAILED",
           progress:     0,
           currentStep:  "Generation failed",
@@ -212,13 +199,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // ── 5. Store assembled scene results + hand off to Inngest stitch step ───────
-    // Persist scene results with merged metadata so the stitch-video Inngest function
-    // can read them. Then fire video/stitch.requested — Remotion Lambda runs in its
-    // own Inngest step invocation (no 300s webhook timeout risk).
+    // ── 5. Stitch with Remotion Lambda (inline — no Inngest needed) ──────────
     await db.musicVideo.update({
       where: { id: musicVideoId },
-      data:  {
+      data: {
         scenes:      sceneResults as object[],
         status:      "STITCHING",
         progress:    75,
@@ -226,12 +210,79 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await inngest.send({
-      name: "video/stitch.requested",
-      data: { videoId: musicVideoId },
+    console.log(`[fal webhook] All ${sceneTotal} scenes done for ${musicVideoId} — starting Remotion stitch`);
+
+    const durationMs     = Math.round(video.trackDuration * 1000);
+    const finalVideoUrls = await generateMultiFormatVideos(
+      musicVideoId,
+      sceneResults,
+      video.audioUrl,
+      [video.aspectRatio],
+      durationMs,
+      false,
+    );
+
+    const finalVideoUrl     = finalVideoUrls[video.aspectRatio] ?? Object.values(finalVideoUrls)[0] ?? null;
+    const thumbScene        = pickThumbnailScene(sceneResults);
+    const finalThumbnailUrl = thumbScene?.videoUrl ?? video.thumbnailUrl ?? null;
+
+    await db.musicVideo.update({
+      where: { id: musicVideoId },
+      data: {
+        status:         "COMPLETE",
+        progress:       100,
+        currentStep:    "Complete!",
+        scenes:         sceneResults as object[],
+        finalVideoUrl:  finalVideoUrl  ?? undefined,
+        finalVideoUrls: Object.keys(finalVideoUrls).length > 0
+          ? (finalVideoUrls as object)
+          : undefined,
+        thumbnailUrl:   finalThumbnailUrl ?? undefined,
+      },
     });
 
-    console.log(`[fal webhook] All ${sceneTotal} scenes done for ${musicVideoId} — stitch handed to Inngest`);
+    console.log(`[fal webhook] ${musicVideoId} complete — ${completedScenes.length}/${allJobs.length} scenes stitched`);
+
+    // ── 6. Notification email ────────────────────────────────────────────────
+    const previewUrl = `${APP_URL}/video-studio/${musicVideoId}/preview`;
+
+    try {
+      if (video.userId) {
+        const user = await db.user.findUnique({
+          where:  { id: video.userId },
+          select: { email: true, name: true, artistSlug: true },
+        });
+        if (user?.email) {
+          await sendMusicVideoCompleteEmail({
+            toEmail:    user.email,
+            toName:     user.name ?? "Artist",
+            trackTitle: video.trackTitle,
+            previewUrl,
+            mode:       video.mode as "QUICK" | "DIRECTOR",
+            artistSlug: user.artistSlug ?? undefined,
+          });
+        }
+      } else if (video.guestEmail) {
+        await sendVideoConversionEmail1({
+          id:             musicVideoId,
+          trackTitle:     video.trackTitle,
+          guestEmail:     video.guestEmail,
+          amount:         video.amount,
+          mode:           video.mode,
+          finalVideoUrl:  finalVideoUrl ?? null,
+          finalVideoUrls: null,
+        });
+        await db.musicVideo.update({
+          where: { id: musicVideoId },
+          data: {
+            conversionStep:   1,
+            conversionNextAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          },
+        });
+      }
+    } catch (emailErr) {
+      console.warn("[fal webhook] Notification email failed:", emailErr);
+    }
 
     return NextResponse.json({ received: true });
 

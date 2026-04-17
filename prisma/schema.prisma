@@ -2857,6 +2857,23 @@ model FalSceneJob {
   @@index([status])
 }
 
+// Lookup table: maps fal.ai request_id → MusicVideo keyframe job
+// Created by startKeyframeGeneration(); resolved when /webhook/keyframe fires.
+model FalKeyframeJob {
+  id           String   @id @default(cuid())
+  requestId    String   @unique   // fal.ai request_id returned by fal.queue.submit()
+  musicVideoId String
+  sceneIndex   Int
+  totalScenes  Int
+  status       String   @default("PENDING")  // PENDING | COMPLETE | FAILED
+  imageUrl     String?  // UploadThing permanent URL once complete
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([musicVideoId])
+  @@index([status])
+}
+
 model VideoStyle {
   id          String   @id @default(cuid())
   name        String   @unique
