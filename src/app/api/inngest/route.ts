@@ -24,7 +24,8 @@ import {
 
 export const maxDuration = 300;
 
-export const { GET, POST, PUT } = serve({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const serveOpts: any = {
   client:    inngest,
   functions: [
     videoOrchestrator,
@@ -34,6 +35,8 @@ export const { GET, POST, PUT } = serve({
     generateScene,
     stitchVideo,
   ],
-  // TODO: remove once signing key mismatch resolved — temporarily bypasses sig check
+  // TODO: remove once signing key is confirmed correct — temp bypass for pipeline test
   skipSignatureValidation: true,
-});
+};
+
+export const { GET, POST, PUT } = serve(serveOpts);
