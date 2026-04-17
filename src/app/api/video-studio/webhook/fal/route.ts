@@ -227,11 +227,11 @@ export async function POST(req: NextRequest) {
         duration:  s.endTime - s.startTime,
       }));
 
-    const submitted = await renderMediaOnLambda({
-      region:       awsRegion,
+    const renderParams = {
+      region:          awsRegion,
       functionName,
       serveUrl,
-      composition:  "MusicVideoComposition",
+      composition:     "MusicVideoComposition",
       inputProps: {
         scenes:      sceneClips,
         audioUrl:    video.audioUrl,
@@ -239,19 +239,41 @@ export async function POST(req: NextRequest) {
         durationMs,
         crossfadeMs: 500,
       } as unknown as Record<string, unknown>,
-      codec:               "h264",
-      imageFormat:         "jpeg",
-      maxRetries:          3,
-      privacy:             "public",
-      concurrencyPerLambda: 1,
-      framesPerLambda:     20,
-      outName:             `music-video-${musicVideoId}-${validRatio.replace(":", "x")}.mp4`,
+      codec:           "h264" as const,
+      imageFormat:     "jpeg" as const,
+      maxRetries:      1,
+      privacy:         "public" as const,
+      framesPerLambda: 200,
+      outName:         `music-video-${musicVideoId}-${validRatio.replace(":", "x")}.mp4`,
       webhook: {
         url:    webhookUrl,
         secret: process.env.REMOTION_WEBHOOK_SECRET ?? null,
         customData: { musicVideoId },
       },
-    });
+    };
+
+    // Retry with exponential backoff on AWS rate limit errors
+    const MAX_RETRIES = 3;
+    let submitted: Awaited<ReturnType<typeof renderMediaOnLambda>> | null = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        submitted = await renderMediaOnLambda(renderParams);
+        break;
+      } catch (renderErr) {
+        const msg = renderErr instanceof Error ? renderErr.message : String(renderErr);
+        const isRateLimit = msg.includes("Rate Exceeded") ||
+                            msg.includes("TooManyRequests") ||
+                            msg.includes("ConcurrentInvocationLimitExceeded");
+        if (isRateLimit && attempt < MAX_RETRIES) {
+          const delay = 2000 * Math.pow(2, attempt - 1);
+          console.warn(`[fal webhook] Remotion rate limit hit (attempt ${attempt}/${MAX_RETRIES}) — retrying in ${delay}ms`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw renderErr;
+      }
+    }
+    if (!submitted) throw new Error("Remotion render failed after all retries");
 
     // Store renderId so the Remotion webhook can look up this video
     await db.musicVideo.update({
