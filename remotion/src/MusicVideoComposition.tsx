@@ -4,7 +4,8 @@
  * Music Video Studio — Final composition.
  *
  * Assembles generated scene clips into a full music video with:
- *   - Beat-aligned crossfade transitions between scenes
+ *   - Eased crossfade transitions between scenes (ease-in-out opacity)
+ *   - Subtle Ken Burns scale drift per clip for cinematic motion
  *   - Full-track audio overlay
  *   - Aspect-ratio-aware layout (16:9, 9:16, 1:1)
  *
@@ -15,6 +16,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  Easing,
   OffthreadVideo,
   Sequence,
   interpolate,
@@ -36,48 +38,89 @@ export interface MusicVideoProps {
   audioUrl:    string;
   aspectRatio: "16:9" | "9:16" | "1:1";
   durationMs:  number;  // total video duration in ms
-  crossfadeMs: number;  // crossfade overlap in ms (default 500)
+  crossfadeMs: number;  // crossfade overlap in ms (default 800)
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FPS = 30;
 
-// ─── Crossfade overlay ────────────────────────────────────────────────────────
+// Subtle Ken Burns scale: each clip drifts from 1.0 → 1.04 over its lifetime
+// giving the impression of gentle camera movement even on still-starting clips.
+const SCALE_START = 1.0;
+const SCALE_END   = 1.04;
+
+// ─── Scene clip with eased crossfade + Ken Burns ──────────────────────────────
 
 interface SceneOverlayProps {
-  clip:             SceneClip;
-  startFrame:       number;  // frame this clip begins at
-  endFrame:         number;  // frame this clip ends at
-  crossfadeFrames:  number;
+  clip:            SceneClip;
+  startFrame:      number;
+  endFrame:        number;
+  crossfadeFrames: number;
 }
 
 function SceneOverlay({ clip, startFrame, endFrame, crossfadeFrames }: SceneOverlayProps) {
   const frame = useCurrentFrame();
 
-  // Only render when this clip is active (with a small margin)
+  // Only render when this clip is active (with margin)
   if (frame < startFrame - 1 || frame > endFrame + 1) return null;
 
-  const localFrame    = frame - startFrame;
-  const clipDuration  = endFrame - startFrame;
+  const localFrame   = frame - startFrame;
+  const clipDuration = endFrame - startFrame;
 
-  // Fade in at start, fade out at end
-  const fadeIn  = interpolate(localFrame, [0, crossfadeFrames],              [0, 1], { extrapolateLeft: "clamp",  extrapolateRight: "clamp" });
-  const fadeOut = interpolate(localFrame, [clipDuration - crossfadeFrames, clipDuration], [1, 0], { extrapolateLeft: "clamp",  extrapolateRight: "clamp" });
+  // ── Opacity: ease-in at start, ease-out at end ──────────────────────────────
+  const fadeIn = interpolate(
+    localFrame,
+    [0, crossfadeFrames],
+    [0, 1],
+    {
+      extrapolateLeft:  "clamp",
+      extrapolateRight: "clamp",
+      easing:           Easing.out(Easing.ease),
+    },
+  );
+
+  const fadeOut = interpolate(
+    localFrame,
+    [clipDuration - crossfadeFrames, clipDuration],
+    [1, 0],
+    {
+      extrapolateLeft:  "clamp",
+      extrapolateRight: "clamp",
+      easing:           Easing.in(Easing.ease),
+    },
+  );
+
   const opacity = Math.min(fadeIn, fadeOut);
+
+  // ── Ken Burns: slow scale drift across the full clip ────────────────────────
+  const scale = interpolate(
+    localFrame,
+    [0, clipDuration],
+    [SCALE_START, SCALE_END],
+    {
+      extrapolateLeft:  "clamp",
+      extrapolateRight: "clamp",
+      easing:           Easing.inOut(Easing.ease),
+    },
+  );
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      {/* Sequence shifts the frame context so OffthreadVideo starts at second 0
-          of the clip file when the composition reaches startFrame.
-          OffthreadVideo uses FFmpeg for frame extraction — required for Lambda
-          rendering; <Video> uses browser playback which stalls on external URLs. */}
       <Sequence from={startFrame} durationInFrames={endFrame - startFrame + 1}>
-        <OffthreadVideo
-          src={clip.videoUrl}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          muted
-        />
+        {/* Wrapper handles Ken Burns scale without affecting opacity layering */}
+        <AbsoluteFill
+          style={{
+            transform:      `scale(${scale})`,
+            transformOrigin: "center center",
+          }}
+        >
+          <OffthreadVideo
+            src={clip.videoUrl}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            muted
+          />
+        </AbsoluteFill>
       </Sequence>
     </AbsoluteFill>
   );
@@ -88,12 +131,11 @@ function SceneOverlay({ clip, startFrame, endFrame, crossfadeFrames }: SceneOver
 export function MusicVideoComposition({
   scenes,
   audioUrl,
-  crossfadeMs = 500,
+  crossfadeMs = 800,
 }: MusicVideoProps) {
   const { durationInFrames } = useVideoConfig();
   const crossfadeFrames = Math.round((crossfadeMs / 1000) * FPS);
 
-  // Build a timeline of scene clips mapped to frame positions
   const timeline = scenes
     .filter(s => s.videoUrl)
     .map((scene) => {
@@ -108,12 +150,8 @@ export function MusicVideoComposition({
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
-      {/* Audio track */}
-      {audioUrl && (
-        <Audio src={audioUrl} startFrom={0} />
-      )}
+      {audioUrl && <Audio src={audioUrl} startFrom={0} />}
 
-      {/* Scene clips layered with crossfades */}
       {timeline.map(({ clip, startFrame, endFrame }, i) => (
         <SceneOverlay
           key={i}

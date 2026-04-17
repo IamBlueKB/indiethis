@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
         audioUrl:    video.audioUrl,
         aspectRatio: validRatio,
         durationMs,
-        crossfadeMs: 500,
+        crossfadeMs: 800,
       } as unknown as Record<string, unknown>,
       codec:           "h264" as const,
       imageFormat:     "jpeg" as const,
