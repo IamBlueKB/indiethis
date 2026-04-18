@@ -408,6 +408,16 @@ export async function POST(req: NextRequest) {
     results.albumMasteringNudge = "skipped (not due)";
   }
 
+  // ── Stuck Stitch Recovery — runs every tick (lightweight DB query) ──────────
+  // Finds MusicVideo records stuck in STITCHING >30 min and recovers or fails them.
+  try {
+    const { recoverStuckStitches } = await import("@/lib/video-studio/stitch-recovery");
+    const recovery = await recoverStuckStitches();
+    results.stitchRecovery = `checked=${recovery.checked} recovered=${recovery.recovered} failed=${recovery.failed} skipped=${recovery.skipped}`;
+  } catch (err) {
+    results.stitchRecovery = `error: ${String(err)}`;
+  }
+
   return NextResponse.json({
     ok:       true,
     duration: `${Date.now() - now}ms`,

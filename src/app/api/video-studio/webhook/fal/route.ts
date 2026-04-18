@@ -20,9 +20,13 @@ import { type GeneratedSceneOutput }       from "@/lib/video-studio/generator";
 import { VIDEO_MODELS }                    from "@/lib/video-studio/models";
 import { renderMediaOnLambda }             from "@remotion/lambda/client";
 import { UTApi }                           from "uploadthing/server";
+import { fal }                             from "@fal-ai/client";
 
 const utapi  = new UTApi();
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+// Use APP_WEBHOOK_URL for Remotion callbacks — must be publicly reachable.
+// Set APP_WEBHOOK_URL=https://indiethis.com in production (or ngrok URL in dev).
+// Never use NEXT_PUBLIC_APP_URL here — it resolves to localhost in dev.
+const APP_URL = process.env.APP_WEBHOOK_URL ?? "https://indiethis.com";
 
 /**
  * Re-uploads a fal.ai video clip URL to permanent UploadThing storage.
@@ -100,21 +104,99 @@ export async function POST(req: NextRequest) {
       });
       console.log(`[fal webhook] Scene ${sceneIndex}/${sceneTotal - 1} of ${musicVideoId} ✓`);
     } else {
+      // ── Scene failed — retry up to 2× before giving up ───────────────────
       await db.falSceneJob.update({
         where: { id: job.id },
         data:  { status: "FAILED" },
       });
       console.error(`[fal webhook] Scene ${sceneIndex} of ${musicVideoId} failed — fal status: ${status}`);
+
+      // Count how many times this specific scene has already failed
+      const priorFailures = await db.falSceneJob.count({
+        where: { musicVideoId, sceneIndex, status: "FAILED" },
+      });
+
+      if (priorFailures < 2) {
+        // Attempt a retry: re-submit to Kling from the saved keyframeUrl
+        try {
+          const videoForRetry = await db.musicVideo.findUnique({
+            where:  { id: musicVideoId },
+            select: { shotList: true, aspectRatio: true, scenes: true },
+          });
+          const shotList    = (videoForRetry?.shotList as Record<string, unknown>[]) ?? [];
+          const placeholders = (videoForRetry?.scenes as Record<string, unknown>[]) ?? [];
+          const shot        = shotList[sceneIndex];
+          const ph          = placeholders.find(s => s.sceneIndex === sceneIndex);
+          const keyframeUrl = shot?.keyframeUrl as string | undefined;
+          const prompt      = ph?.prompt as string | undefined;
+          const aspectRatio = videoForRetry?.aspectRatio === "9:16" ? "9:16" : "16:9";
+          const duration    = String(Math.min(Math.round((shot?.duration as number) ?? 8), 15));
+
+          if (keyframeUrl && prompt) {
+            fal.config({ credentials: process.env.FAL_KEY! });
+            const retryResult = await (fal.queue as unknown as {
+              submit: (model: string, opts: unknown) => Promise<{ request_id: string }>;
+            }).submit("fal-ai/kling-video/v3/pro/image-to-video", {
+              input: {
+                start_image_url: keyframeUrl,
+                prompt:          `Full body shot, complete figure visible from head to toe. ${prompt}`,
+                negative_prompt: "cropped body, cut off legs, torso only, disembodied, floating head, backwards legs, twisted limbs, distorted anatomy, deformed body, anatomical errors",
+                duration,
+                generate_audio:  false,
+                aspect_ratio:    aspectRatio,
+              },
+              webhookUrl: `${APP_URL}/api/video-studio/webhook/fal`,
+            });
+
+            // Create a new FalSceneJob for the retry so it flows through the webhook
+            await db.falSceneJob.create({
+              data: {
+                requestId:    retryResult.request_id,
+                musicVideoId,
+                sceneIndex,
+                sceneTotal,
+                model:        "fal-ai/kling-video/v3/pro/image-to-video",
+              },
+            });
+
+            console.log(`[fal webhook] Scene ${sceneIndex} retry #${priorFailures} submitted — request_id: ${retryResult.request_id}`);
+            // Return early — don't proceed to stitch counting until retry resolves
+            return NextResponse.json({ received: true });
+          }
+        } catch (retryErr) {
+          console.error(`[fal webhook] Scene ${sceneIndex} retry submission failed:`, retryErr);
+          // Fall through to counting — treat as permanent failure
+        }
+      } else {
+        console.error(`[fal webhook] Scene ${sceneIndex} of ${musicVideoId} — all retries exhausted, proceeding without this clip`);
+      }
     }
 
-    // ── 3. Count completed / failed jobs ────────────────────────────────────
-    const doneJobs = await db.falSceneJob.findMany({
-      where:   { musicVideoId, status: { in: ["COMPLETE", "FAILED"] } },
-      orderBy: { sceneIndex: "asc" },
+    // ── 3. Count completed / failed jobs (by unique sceneIndex, latest job per scene) ─
+    // Using latest-per-sceneIndex logic so retries don't double-count.
+    const allJobsForCount = await db.falSceneJob.findMany({
+      where:   { musicVideoId },
+      orderBy: { createdAt: "asc" },
     });
 
-    const doneCount  = doneJobs.length;
+    // Find the latest job for each sceneIndex
+    const latestByScene = new Map<number, typeof allJobsForCount[0]>();
+    for (const j of allJobsForCount) {
+      const existing = latestByScene.get(j.sceneIndex);
+      if (!existing || j.createdAt > existing.createdAt) {
+        latestByScene.set(j.sceneIndex, j);
+      }
+    }
+
+    // Only count scenes where the latest attempt is terminal (COMPLETE or FAILED)
+    const terminalScenes = [...latestByScene.values()].filter(j =>
+      j.status === "COMPLETE" || j.status === "FAILED"
+    );
+    const doneCount  = terminalScenes.length;
     const unitLabel  = isMultiShot ? "segments" : "scenes";
+
+    // Build doneJobs for downstream use (assembly step uses this)
+    const doneJobs = [...latestByScene.values()].sort((a, b) => a.sceneIndex - b.sceneIndex);
 
     const genProgress = 25 + Math.round((doneCount / sceneTotal) * 50);
     await db.musicVideo.update({
@@ -130,10 +212,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 4. All scenes done — assemble scene results ──────────────────────────
-    const allJobs = await db.falSceneJob.findMany({
-      where:   { musicVideoId },
-      orderBy: { sceneIndex: "asc" },
-    });
+    // doneJobs is already built above (latest terminal job per sceneIndex, sorted by sceneIndex)
 
     const video = await db.musicVideo.findUnique({
       where:  { id: musicVideoId },
@@ -158,7 +237,7 @@ export async function POST(req: NextRequest) {
 
     const placeholders = (video.scenes as GeneratedSceneOutput[] | null) ?? [];
 
-    const sceneResults: GeneratedSceneOutput[] = allJobs.map(j => {
+    const sceneResults: GeneratedSceneOutput[] = doneJobs.map(j => {
       const ph = placeholders.find(s => s.sceneIndex === j.sceneIndex);
       return {
         sceneIndex:       j.sceneIndex,
@@ -243,7 +322,7 @@ export async function POST(req: NextRequest) {
       imageFormat:     "jpeg" as const,
       maxRetries:      1,
       privacy:         "public" as const,
-      framesPerLambda: 200,
+      framesPerLambda: 300,  // ~5 chunks for a 45s video — within 240s Lambda timeout, low concurrency
       outName:         `music-video-${musicVideoId}-${validRatio.replace(":", "x")}.mp4`,
       webhook: {
         url:    webhookUrl,
@@ -265,7 +344,9 @@ export async function POST(req: NextRequest) {
                             msg.includes("TooManyRequests") ||
                             msg.includes("ConcurrentInvocationLimitExceeded");
         if (isRateLimit && attempt < MAX_RETRIES) {
-          const delay = 2000 * Math.pow(2, attempt - 1);
+          // AWS rate limits can persist 10-30s; use longer backoff: 8s, 20s, 45s
+          const delays = [8000, 20000, 45000];
+          const delay  = delays[attempt - 1] ?? 45000;
           console.warn(`[fal webhook] Remotion rate limit hit (attempt ${attempt}/${MAX_RETRIES}) — retrying in ${delay}ms`);
           await new Promise(r => setTimeout(r, delay));
           continue;

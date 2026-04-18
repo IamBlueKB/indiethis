@@ -19,7 +19,10 @@
 import { fal }  from "@fal-ai/client";
 import { db }   from "@/lib/db";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+// Use APP_WEBHOOK_URL for fal/Remotion callbacks — must be publicly reachable.
+// Set APP_WEBHOOK_URL=https://indiethis.com in production (or ngrok URL in dev).
+// Never use NEXT_PUBLIC_APP_URL here — it resolves to localhost in dev.
+const APP_URL = process.env.APP_WEBHOOK_URL ?? "https://indiethis.com";
 
 // ─── Keyframe generation ────────────────────────────────────────────────────────
 

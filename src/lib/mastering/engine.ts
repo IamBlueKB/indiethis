@@ -1,14 +1,19 @@
 /**
- * engine.ts — Python DSP engine client
+ * engine.ts — Replicate Cog mastering engine client
  *
- * Thin TypeScript wrapper around the Python FastAPI engine.
- * All heavy audio processing runs server-side in Python (Pedalboard, Matchering,
- * librosa, pyloudnorm). This file handles serialization, error propagation,
+ * Thin TypeScript wrapper around the Python DSP engine deployed on Replicate.
+ * All heavy audio processing runs in Python (Pedalboard, Matchering, librosa,
+ * pyloudnorm, Demucs). This file handles serialization, error propagation,
  * and type safety only — zero DSP logic lives here.
+ *
+ * Model: r8.im/indiethis/indiethis-mastering
+ * Env:   REPLICATE_API_TOKEN, REPLICATE_MASTERING_MODEL_VERSION
  */
 
-const ENGINE_URL = process.env.MASTERING_ENGINE_URL ?? "http://localhost:8000";
-const ENGINE_SECRET = process.env.MASTERING_ENGINE_SECRET ?? "";
+import Replicate from "replicate";
+
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
+const MASTERING_VERSION = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -202,65 +207,107 @@ export interface PreviewResult {
   endSec:      number;
 }
 
-// ─── Engine request helper ─────────────────────────────────────────────────────
+// ─── Replicate engine helper ──────────────────────────────────────────────────
 
-async function enginePost<T>(endpoint: string, body: unknown): Promise<T> {
-  const res = await fetch(`${ENGINE_URL}${endpoint}`, {
-    method:  "POST",
-    headers: {
-      "Content-Type":    "application/json",
-      "X-Engine-Secret": ENGINE_SECRET,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "unknown error");
-    throw new Error(`Engine ${endpoint} failed (${res.status}): ${text}`);
+/**
+ * Call the Replicate mastering model with a given action and string inputs.
+ * All inputs are serialized as JSON strings — the Cog model accepts only strings.
+ * The model returns a JSON string which we parse back into T.
+ */
+async function callMasteringEngine<T>(
+  action: string,
+  inputs: Record<string, string> = {},
+): Promise<T> {
+  if (!MASTERING_VERSION) {
+    throw new Error(
+      "REPLICATE_MASTERING_MODEL_VERSION is not set. " +
+      "Deploy the Cog model first and set the env var.",
+    );
   }
 
-  return res.json() as Promise<T>;
+  const prediction = await replicate.predictions.create({
+    version: MASTERING_VERSION,
+    input:   { action, ...inputs },
+  });
+
+  const result = await replicate.wait(prediction);
+
+  if (result.status === "failed") {
+    throw new Error(`Mastering engine action="${action}" failed: ${result.error ?? "unknown"}`);
+  }
+
+  // The Cog predict() returns a JSON string via cog.Path or plain string output
+  const raw = result.output as string;
+  return JSON.parse(raw) as T;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+//
+// jobId is threaded through to the Cog model so it can use it as the Supabase
+// storage path prefix (mastering/{jobId}/...).  Pass the Prisma MasteringJob.id
+// wherever it is available in scope.
 
 /**
  * Analyze an audio file — returns BPM, key, LUFS, sections, frequency balance.
  * Used for both stem files and stereo mixes.
  */
 export async function analyzeAudio(audioUrl: string): Promise<AudioAnalysis> {
-  return enginePost<AudioAnalysis>("/analyze", { audioUrl });
+  return callMasteringEngine<AudioAnalysis>("analyze", { audio_url: audioUrl });
 }
 
 /**
  * Separate a stereo mix into vocal / bass / drums / other stems.
  * Used in Master Only mode before per-stem processing.
  */
-export async function separateStems(audioUrl: string): Promise<SeparatedStems> {
-  return enginePost<SeparatedStems>("/separate", { audioUrl });
+export async function separateStems(audioUrl: string, jobId = ""): Promise<SeparatedStems> {
+  return callMasteringEngine<SeparatedStems>("separate", {
+    audio_url: audioUrl,
+    job_id:    jobId,
+  });
 }
 
 /**
  * Classify uploaded stems by type (vocals, bass, drums, etc.)
  * and analyze each for frequency content, dynamics, LUFS.
+ *
+ * Accepts an array of URLs; the Cog model handles both list and dict formats.
  */
 export async function classifyStems(stemUrls: string[]): Promise<ClassifiedStem[]> {
-  return enginePost<ClassifiedStem[]>("/classify-stems", { stemUrls });
+  return callMasteringEngine<ClassifiedStem[]>("classify-stems", {
+    stems_json: JSON.stringify(stemUrls),
+  });
 }
 
 /**
  * Mix stems down to stereo using Claude's per-stem processing chains.
+ *
+ * stems_json: dict of stemType → url built from params.stems[].stemUrl/stemType
+ * mix_params_json: full MixParams (chains, sections, bpm)
  */
-export async function mixStems(params: MixParams): Promise<MixResult> {
-  return enginePost<MixResult>("/mix", params);
+export async function mixStems(params: MixParams, jobId = ""): Promise<MixResult> {
+  // Build name→url dict so the Cog can download each stem
+  const stemsDict: Record<string, string> = {};
+  for (const chain of params.stems) {
+    stemsDict[chain.stemType] = chain.stemUrl;
+  }
+  return callMasteringEngine<MixResult>("mix", {
+    stems_json:      JSON.stringify(stemsDict),
+    mix_params_json: JSON.stringify(params),
+    job_id:          jobId,
+  });
 }
 
 /**
  * Master a stereo mix — generates 4 named versions (Clean, Warm, Punch, Loud)
  * and platform-specific exports.
  */
-export async function masterAudio(params: MasterParams): Promise<MasterResult> {
-  return enginePost<MasterResult>("/master", params);
+export async function masterAudio(params: MasterParams, jobId = ""): Promise<MasterResult> {
+  return callMasteringEngine<MasterResult>("master", {
+    audio_url:          params.audioUrl,
+    reference_url:      params.referenceUrl ?? "",
+    master_params_json: JSON.stringify(params),
+    job_id:             jobId,
+  });
 }
 
 /**
@@ -270,22 +317,24 @@ export async function masterAudio(params: MasterParams): Promise<MasterResult> {
  */
 export async function generatePreview(
   params: MixParams | MasterParams,
-  mode: "mix" | "master"
+  mode: "mix" | "master",
+  jobId = "",
 ): Promise<PreviewResult> {
-  return enginePost<PreviewResult>("/preview", { ...params, previewOnly: true, mode });
+  const audioUrl = (params as MasterParams).audioUrl ?? "";
+  return callMasteringEngine<PreviewResult>("preview", {
+    audio_url: audioUrl,
+    job_id:    jobId,
+  });
 }
 
 /**
- * Health check — verify the engine is reachable before kicking off a job.
+ * Health check — verify the engine is reachable / env is configured.
+ * On Replicate there is no persistent "ping" — we do a lightweight health action.
  */
 export async function pingEngine(): Promise<{ ok: boolean; version?: string }> {
   try {
-    const res = await fetch(`${ENGINE_URL}/health`, {
-      headers: { "X-Engine-Secret": ENGINE_SECRET },
-    });
-    if (!res.ok) return { ok: false };
-    const data = await res.json() as { version?: string };
-    return { ok: true, version: data.version };
+    const result = await callMasteringEngine<{ ok: boolean; version?: string }>("health");
+    return result;
   } catch {
     return { ok: false };
   }

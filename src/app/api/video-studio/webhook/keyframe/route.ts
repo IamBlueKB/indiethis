@@ -19,8 +19,112 @@ import { NextRequest, NextResponse }          from "next/server";
 import { db }                                 from "@/lib/db";
 import { UTApi }                              from "uploadthing/server";
 import { startSceneGeneration }               from "@/lib/video-studio/pipeline";
+import { fal }                                from "@fal-ai/client";
 
 const utapi = new UTApi();
+
+// ─── Keyframe QA ──────────────────────────────────────────────────────────────
+
+interface KeyframeQAResult {
+  pass:            boolean;
+  fullBody:        boolean;
+  faceVisible:     boolean;
+  framing:         "wide" | "medium" | "close";
+  suggestedPrompt: string | null;
+}
+
+/**
+ * Runs Claude Vision on a generated keyframe.
+ * Returns pass=true only if the frame shows a visible face AND appropriate framing.
+ * On error, returns pass=true so a Vision outage never blocks generation.
+ */
+async function validateKeyframe(
+  keyframeUrl: string,
+  scenePrompt: string,
+): Promise<KeyframeQAResult> {
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const response = await anthropic.messages.create({
+      model:      "claude-sonnet-4-20250514",
+      max_tokens: 400,
+      messages: [{
+        role:    "user",
+        content: [
+          { type: "image", source: { type: "url", url: keyframeUrl } },
+          {
+            type: "text",
+            text: `You are evaluating a keyframe image for a music video scene.
+
+Original scene prompt: "${scenePrompt.slice(0, 300)}"
+
+Answer these questions about the image:
+1. Is a human face clearly visible and not obscured? (face_visible: true/false)
+2. Does the image show the full body from head to toe? (full_body: true/false)
+3. What is the framing? wide = full body visible, medium = waist up, close = face/shoulders only
+
+Pass criteria: face_visible must be true. If the prompt requests a full body shot, full_body must also be true.
+
+If pass is false, provide a brief revised prompt addition to fix the issue (e.g. "full body shot, complete figure head to toe, face clearly visible, wide angle").
+
+Return ONLY valid JSON:
+{
+  "pass": boolean,
+  "full_body": boolean,
+  "face_visible": boolean,
+  "framing": "wide" | "medium" | "close",
+  "suggested_prompt": string | null
+}`,
+          },
+        ],
+      }],
+    });
+
+    const text    = response.content[0].type === "text" ? response.content[0].text : "";
+    const cleaned = text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    const parsed  = JSON.parse(cleaned);
+
+    return {
+      pass:            parsed.pass           === true,
+      fullBody:        parsed.full_body      === true,
+      faceVisible:     parsed.face_visible   === true,
+      framing:         parsed.framing        ?? "medium",
+      suggestedPrompt: parsed.suggested_prompt ?? null,
+    };
+  } catch (err) {
+    console.warn("[keyframe webhook] QA check failed — passing through:", err);
+    // Non-blocking: pass on error so Vision outages never stall generation
+    return { pass: true, fullBody: true, faceVisible: true, framing: "wide", suggestedPrompt: null };
+  }
+}
+
+/**
+ * Re-generates a FLUX Kontext Pro keyframe synchronously with an improved prompt.
+ * Uses fal.run() (blocking) — suitable for in-webhook retries up to ~20s per attempt.
+ */
+async function regenerateKeyframe(
+  artistImageUrl: string,
+  prompt:         string,
+): Promise<string | null> {
+  try {
+    fal.config({ credentials: process.env.FAL_KEY! });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (fal as any).run("fal-ai/flux-pro/kontext", {
+      input: {
+        prompt,
+        image_url:    artistImageUrl,
+      },
+    });
+
+    const url = result?.images?.[0]?.url ?? result?.image?.url ?? null;
+    return url ?? null;
+  } catch (err) {
+    console.error("[keyframe webhook] Keyframe regeneration failed:", err);
+    return null;
+  }
+}
 
 /** Re-uploads a fal.ai image URL to permanent UploadThing storage. */
 async function reuploadImageUrl(falUrl: string, filename: string): Promise<string> {
@@ -40,7 +144,8 @@ async function reuploadImageUrl(falUrl: string, filename: string): Promise<strin
   }
 }
 
-export const maxDuration = 60;
+// Increased to 120s — QA checks + up to 2 FLUX retries can take ~60s total
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
@@ -76,7 +181,53 @@ export async function POST(req: NextRequest) {
 
     if (status === "OK" && falImageUrl) {
       const filename     = `keyframe-${musicVideoId}-scene${sceneIndex}-${Date.now()}.png`;
-      const permanentUrl = await reuploadImageUrl(falImageUrl, filename);
+      let permanentUrl   = await reuploadImageUrl(falImageUrl, filename);
+
+      // ── QA: Claude Vision keyframe check + FLUX auto-retry ─────────────────
+      const video0 = await db.musicVideo.findUnique({
+        where:  { id: musicVideoId },
+        select: { shotList: true, referenceImageUrl: true, thumbnailUrl: true },
+      });
+      const shotList0   = (video0?.shotList as Record<string, unknown>[]) ?? [];
+      const scenePrompt = (shotList0[sceneIndex]?.prompt as string) ?? "";
+      const artistRef   = (video0?.referenceImageUrl ?? video0?.thumbnailUrl) ?? "";
+
+      const MAX_QA_RETRIES = 2;
+      let qaAttempt = 0;
+      let qaPassed  = false;
+
+      while (qaAttempt <= MAX_QA_RETRIES) {
+        const qa = await validateKeyframe(permanentUrl, scenePrompt);
+        if (qa.pass) { qaPassed = true; break; }
+
+        qaAttempt++;
+        if (qaAttempt > MAX_QA_RETRIES) {
+          console.warn(`[keyframe webhook] QA failed after ${MAX_QA_RETRIES} retries for scene ${sceneIndex} — using best result`);
+          qaPassed = true; // Use what we have rather than blocking generation
+          break;
+        }
+
+        console.log(`[keyframe webhook] QA failed (attempt ${qaAttempt}) — regenerating scene ${sceneIndex}. Issue: face=${qa.faceVisible} fullBody=${qa.fullBody}`);
+
+        // Build improved prompt
+        const fixSuffix = qa.suggestedPrompt
+          ?? "full body shot head to toe, face clearly visible facing camera, wide angle framing, complete figure";
+        const improvedPrompt =
+          `Full body shot of this person: ${scenePrompt.slice(0, 400)}. ` +
+          `Show the complete figure from head to toe. ${fixSuffix}. ` +
+          `Maintain exact facial features, clothing and appearance from reference photo.`;
+
+        if (!artistRef) break; // Can't retry without reference image
+
+        const retryUrl = await regenerateKeyframe(artistRef, improvedPrompt);
+        if (!retryUrl) break;
+
+        const retryFilename = `keyframe-${musicVideoId}-scene${sceneIndex}-retry${qaAttempt}-${Date.now()}.png`;
+        permanentUrl = await reuploadImageUrl(retryUrl, retryFilename);
+      }
+
+      console.log(`[keyframe webhook] Scene ${sceneIndex} QA ${qaPassed ? "passed" : "forced-pass after retries"}`);
+      // ── End QA block ────────────────────────────────────────────────────────
 
       await db.falKeyframeJob.update({
         where: { id: job.id },

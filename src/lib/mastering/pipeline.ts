@@ -155,7 +155,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       sections:     firstStemAnalysis.sections,
       bpm:          firstStemAnalysis.bpm,
       referenceUrl: referenceUrl ?? undefined,
-    });
+    }, jobId);
 
     // ── 4. Analyze the mixdown ─────────────────────────────────────────────────
     const mixAnalysis = await analyzeAudio(mixResult.mixdownUrl);
@@ -192,7 +192,7 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
       versions:             versionTargets,
       referenceUrl:         referenceUrl ?? undefined,
       platforms,
-    });
+    }, jobId);
 
     // ── 7. Generate free 30-second preview (always, even for guests) ───────────
     const preview = await generatePreview(
@@ -202,7 +202,8 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
         versions:   versionTargets,
         platforms:  [],
       },
-      "master"
+      "master",
+      jobId,
     );
 
     // ── 8. Persist results ─────────────────────────────────────────────────────
@@ -272,7 +273,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
     // ── 2. Separate stems (for per-stem mastering adjustments) ────────────────
     await setStatus(jobId, "SEPARATING");
 
-    const separated = await separateStems(stereoUrl);
+    const separated = await separateStems(stereoUrl, jobId);
     const stemUrls  = [separated.vocals, separated.bass, separated.drums, separated.other];
 
     // ── 3. Classify separated stems ───────────────────────────────────────────
@@ -307,7 +308,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       sections:     analysis.sections,
       bpm:          analysis.bpm,
       referenceUrl: job.referenceTrackUrl ?? undefined,
-    });
+    }, jobId);
 
     // ── 6. Analyze recombined mix ─────────────────────────────────────────────
     const mixAnalysis = await analyzeAudio(mixResult.mixdownUrl);
@@ -339,7 +340,7 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       versions:    versionTargets,
       referenceUrl: job.referenceTrackUrl ?? undefined,
       platforms,
-    });
+    }, jobId);
 
     // ── 9. Generate free 30-second preview ────────────────────────────────────
     const preview = await generatePreview(
@@ -349,7 +350,8 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
         versions:   versionTargets,
         platforms:  [],
       },
-      "master"
+      "master",
+      jobId,
     );
 
     // ── 10. Persist results ────────────────────────────────────────────────────
@@ -517,7 +519,7 @@ export async function runAlbumMasteringPipeline(albumGroupId: string): Promise<v
           eq:                    mergedEq,
           versions,
           platforms:             (job.platforms as string[] | null) ?? ["spotify", "apple_music", "youtube", "wav_master"],
-        });
+        }, job.id);
 
         // Generate 30s preview (highest-energy section)
         const previewResult = await generatePreview(
@@ -528,7 +530,8 @@ export async function runAlbumMasteringPipeline(albumGroupId: string): Promise<v
             versions:  [versions[0]],
             platforms: ["spotify"],
           },
-          "master"
+          "master",
+          job.id,
         );
 
         await setStatus(job.id, "COMPLETE", {
