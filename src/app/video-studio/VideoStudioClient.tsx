@@ -17,7 +17,7 @@ import {
   Loader2, AlertCircle, Check, X, Wand2, Clapperboard, Image as ImageIcon,
 } from "lucide-react";
 import { useUploadThing }  from "@/lib/uploadthing-client";
-import { DEFAULT_VIDEO_PRICES } from "@/lib/video-studio/model-router";
+import { VIDEO_TIER_PRICES, type VideoTier } from "@/lib/video-studio/model-router";
 import ImageSourceStep, { type ImageSource } from "@/components/video-studio/ImageSourceStep";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -38,9 +38,8 @@ interface UserTrack {
   audioFeatures?: { duration: number } | null;
 }
 
-type WizardMode   = "QUICK" | "DIRECTOR";
-type VideoLength  = "SHORT" | "STANDARD" | "EXTENDED";
-type AspectRatio  = "16:9" | "9:16" | "1:1";
+type WizardMode  = "QUICK" | "DIRECTOR";
+type AspectRatio = "16:9" | "9:16" | "1:1";
 
 interface Props {
   userId:                string | null;
@@ -61,30 +60,15 @@ const FORMAT_OPTIONS: { value: AspectRatio; label: string; icon: string; sub: st
   { value: "1:1",  label: "Instagram Feed",   icon: "■", sub: "Square · 1080×1080"    },
 ];
 
-const LENGTH_OPTIONS: { value: VideoLength; label: string; sub: string }[] = [
-  { value: "SHORT",    label: "Short",    sub: "First verse + chorus · ~1 min" },
-  { value: "STANDARD", label: "Standard", sub: "Most of the song · up to 3 min" },
-  { value: "EXTENDED", label: "Extended", sub: "Full song · no limit"           },
+const QUICK_TIER_OPTIONS: { value: VideoTier; label: string; sub: string; price: number }[] = [
+  { value: "QUICK_60",  label: "60s",  sub: "8 shots · up to 60s",  price: VIDEO_TIER_PRICES.QUICK_60  },
+  { value: "QUICK_120", label: "120s", sub: "12 shots · up to 120s", price: VIDEO_TIER_PRICES.QUICK_120 },
 ];
 
-// ─── Price helper ───────────────────────────────────────────────────────────────
-
-function formatTier(tier: string | null): "GUEST" | "LAUNCH" | "PUSH" | "REIGN" {
-  if (tier === "LAUNCH" || tier === "PUSH" || tier === "REIGN") return tier;
-  return "GUEST";
-}
-
-function getPrice(mode: WizardMode, length: VideoLength, tier: string | null): number {
-  const t = formatTier(tier);
-  if (t !== "GUEST") {
-    // Subscriber extras
-    const key = `${t}_${mode}_${length === "SHORT" ? "EXTRA_SHORT" : length === "EXTENDED" ? "EXTRA_EXTENDED" : "EXTRA_STANDARD"}` as keyof typeof DEFAULT_VIDEO_PRICES;
-    const val = DEFAULT_VIDEO_PRICES[key as keyof typeof DEFAULT_VIDEO_PRICES];
-    if (typeof val === "number" && val > 0) return val;
-  }
-  const guestKey = `GUEST_${mode}_${length}` as keyof typeof DEFAULT_VIDEO_PRICES;
-  return (DEFAULT_VIDEO_PRICES[guestKey] as number | undefined) ?? 1999;
-}
+const DIRECTOR_TIER_OPTIONS: { value: VideoTier; label: string; sub: string; price: number }[] = [
+  { value: "DIRECTOR_60",  label: "60s",  sub: "8 shots · up to 60s",  price: VIDEO_TIER_PRICES.DIRECTOR_60  },
+  { value: "DIRECTOR_120", label: "120s", sub: "12 shots · up to 120s", price: VIDEO_TIER_PRICES.DIRECTOR_120 },
+];
 
 function fmtPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -123,7 +107,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
   const [selectedStyle, setSelectedStyle] = useState<string>("");
   const [activeCat,     setActiveCat]    = useState<typeof CATEGORIES[number]>("ALL");
   const [aspectRatio,   setAspectRatio]  = useState<AspectRatio>("16:9");
-  const [videoLength,   setVideoLength]  = useState<VideoLength>("STANDARD");
+  const [videoTier,     setVideoTier]    = useState<VideoTier>("QUICK_60");
 
   // Step 3 — confirm + pay
   const [guestEmail,  setGuestEmail]  = useState(initialGuestEmail ?? "");
@@ -208,7 +192,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
           trackDuration,
           trackId:          selectedTrackId ?? undefined,
           mode,
-          videoLength,
+          videoTier,
           style:            selectedStyle,
           aspectRatio,
           guestEmail:       !userId ? guestEmail.trim() : undefined,
@@ -279,8 +263,12 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
   const filteredStyles = activeCat === "ALL" ? styles : styles.filter(s => s.category === activeCat);
   const selectedStyleObj = styles.find(s => s.name === selectedStyle);
 
-  const price    = getPrice(mode, videoLength, userTier);
-  const STEPS    = 4; // total wizard steps
+  // Keep tier in sync with mode — Quick always starts on QUICK_60, Director on DIRECTOR_60
+  const resolvedTier: VideoTier = mode === "QUICK"
+    ? (videoTier === "QUICK_60" || videoTier === "QUICK_120" ? videoTier : "QUICK_60")
+    : (videoTier === "DIRECTOR_60" || videoTier === "DIRECTOR_120" ? videoTier : "DIRECTOR_60");
+  const price = VIDEO_TIER_PRICES[resolvedTier];
+  const STEPS = 4; // total wizard steps
 
   // ─── Render ─────────────────────────────────────────────────────────────────────
 
@@ -305,7 +293,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
             {(["QUICK", "DIRECTOR"] as WizardMode[]).map(m => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => { setMode(m); setVideoTier(m === "QUICK" ? "QUICK_60" : "DIRECTOR_60"); }}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all"
                 style={{
                   backgroundColor: mode === m ? (m === "QUICK" ? "#D4A843" : "#1E1E1E") : "transparent",
@@ -640,22 +628,25 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
               </div>
             </div>
 
-            {/* Video length */}
+            {/* Video tier (duration) */}
             <div className="space-y-3">
               <p className="text-sm font-semibold text-white">Video length</p>
-              <div className="grid grid-cols-3 gap-3">
-                {LENGTH_OPTIONS.map(l => (
+              <div className="grid grid-cols-2 gap-3">
+                {(mode === "QUICK" ? QUICK_TIER_OPTIONS : DIRECTOR_TIER_OPTIONS).map(t => (
                   <button
-                    key={l.value}
-                    onClick={() => setVideoLength(l.value)}
+                    key={t.value}
+                    onClick={() => setVideoTier(t.value)}
                     className="rounded-xl border px-4 py-4 text-left transition-all"
                     style={{
-                      borderColor:     videoLength === l.value ? "#D4A843" : "#2A2A2A",
-                      backgroundColor: videoLength === l.value ? "rgba(212,168,67,0.08)" : "transparent",
+                      borderColor:     resolvedTier === t.value ? "#D4A843" : "#2A2A2A",
+                      backgroundColor: resolvedTier === t.value ? "rgba(212,168,67,0.08)" : "transparent",
                     }}
                   >
-                    <p className="text-sm font-bold text-white">{l.label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#888" }}>{l.sub}</p>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className="text-sm font-bold text-white">{t.label}</p>
+                      <p className="text-sm font-black" style={{ color: "#D4A843" }}>{fmtPrice(t.price)}</p>
+                    </div>
+                    <p className="text-xs" style={{ color: "#888" }}>{t.sub}</p>
                   </button>
                 ))}
               </div>
@@ -727,7 +718,7 @@ export default function VideoStudioClient({ userId, userTier, initialMode, initi
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#666" }}>Output</p>
                     <p className="text-sm font-bold text-white">
-                      {FORMAT_OPTIONS.find(f => f.value === aspectRatio)?.label} · {LENGTH_OPTIONS.find(l => l.value === videoLength)?.label}
+                      {FORMAT_OPTIONS.find(f => f.value === aspectRatio)?.label} · {resolvedTier.replace("_", " ").replace("QUICK ", "").replace("DIRECTOR ", "")}
                     </p>
                   </div>
                 </div>

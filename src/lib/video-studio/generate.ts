@@ -304,10 +304,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
             hasMultipleCharacters: false,
             characterRefs:         [],
             energyLevel:           energy,
-            duration:              Math.min(
-              (shot.endTime ?? 0) - (shot.startTime ?? 0) || 5,
-              8,
-            ),
+            duration:              Math.min(Math.max((shot.endTime ?? 0) - (shot.startTime ?? 0) || 5, 5), 10),
           };
 
           // Build rich cinematic prompt from Director's creative notes
@@ -340,7 +337,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
             hasMultipleCharacters: false,
             characterRefs:         [],
             energyLevel:           section.energy,
-            duration:              Math.min(section.duration, 8),
+            duration:              Math.min(Math.max(section.duration, 5), 10),
           };
           const lyricSnippet = section.lyrics ? ` "${(section.lyrics as string).slice(0, 60).trim()}"` : "";
           const prompt = `${stylePrompt}, ${section.type} section of a music video, ${sceneType} scene${lyricSnippet}, energy level ${Math.round(section.energy * 10)}/10, cinematic motion`;
@@ -369,7 +366,7 @@ export async function startGeneration(musicVideoId: string): Promise<void> {
         prompt:      `${stylePrompt}, music video, cinematic motion, high quality`,
         startTime:   0,
         endTime:     vid.trackDuration,
-        duration:    Math.min(vid.trackDuration, 8),
+        duration:    Math.min(Math.max(vid.trackDuration, 5), 10),
         aspectRatio,
         spec:        defaultSpec,
       });
@@ -945,10 +942,17 @@ export async function regenerateScene(
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
 
 function getSceneLimit(videoLength: string): number {
+  // New tiers (2026 pricing update)
   switch (videoLength) {
-    case "SHORT":    return 4;
-    case "STANDARD": return 7;
-    case "EXTENDED": return 10;
-    default:         return 7;
+    case "CANVAS":       return 1;
+    case "QUICK_60":     return 8;
+    case "QUICK_120":    return 12;
+    case "DIRECTOR_60":  return 8;
+    case "DIRECTOR_120": return 12;
+    // Legacy fallback
+    case "SHORT":    return 8;
+    case "STANDARD": return 8;
+    case "EXTENDED": return 12;
+    default:         return 8;
   }
 }

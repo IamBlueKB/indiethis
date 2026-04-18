@@ -1044,7 +1044,7 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       title: "AI Music Video",
       desc: "Turn your track into a professional AI-generated music video. Share-worthy in minutes.",
       cta: "Create yours",
-      price: "from $19",
+      price: "from $14.99",
       link: link("/dashboard/ai/video", "/video-studio"),
       gradient: "linear-gradient(135deg, #0a1a0a, #0a0a0a)",
     },

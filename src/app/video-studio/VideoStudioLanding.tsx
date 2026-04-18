@@ -282,7 +282,7 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
                   className="flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-bold transition-all border"
                   style={{ borderColor: "#333", color: "#ccc", backgroundColor: "rgba(255,255,255,0.04)" }}
                 >
-                  <Clapperboard size={16} /> Director Mode — from $24.99
+                  <Clapperboard size={16} /> Director Mode — from $69.99
                 </button>
               </div>
 
@@ -314,13 +314,13 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
               icon={Zap}
               title="Quick Mode"
               description="Upload your track and our AI analyzes the BPM, energy, and song structure to automatically generate a full music video in minutes."
-              price="$14.99"
+              price="$39.99"
               accent="#D4A843"
               cardStyle={{ background: "linear-gradient(135deg, #111 0%, #0D0D0D 100%)", border: "1px solid rgba(255,255,255,0.08)" }}
               features={[
                 "AI selects the best visual style",
                 "Beat-synced scene transitions",
-                "4–7 generated scenes",
+                "8 scenes · 60s or 12 scenes · 120s",
                 "16:9, 9:16, or 1:1 format",
                 "Download MP4 instantly",
               ]}
@@ -330,15 +330,15 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
               icon={Clapperboard}
               title="Director Mode"
               description="Collaborate with our AI director in a creative conversation. Build a shot list, approve the creative brief, and get a bespoke video that tells your story."
-              price="$24.99"
+              price="$69.99"
               accent="#E85D4A"
               cardStyle={{ background: "linear-gradient(135deg, #1a1500 0%, #0F0F0F 60%)", border: "1px solid rgba(212,168,67,0.3)" }}
               features={[
                 "AI creative brief from your vision",
                 "Custom shot list with scene prompts",
-                "Per-scene model selection",
-                "One free scene regeneration",
-                "Director notes preserved",
+                "3 redos per scene",
+                "8 scenes · 60s or 12 scenes · 120s",
+                "Push/Reign: 1 free video/month",
               ]}
               onStart={handleStart}
             />
@@ -371,9 +371,9 @@ export default function VideoStudioLanding({ userId, userTier }: Props) {
             <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#D4A843" }}>
               Already on IndieThis?
             </p>
-            <h2 className="text-xl font-black text-white mb-2">Launch subscribers get 1 video/month included</h2>
+            <h2 className="text-xl font-black text-white mb-2">Push & Reign subscribers get 1 Director video/month included</h2>
             <p className="text-sm mb-6" style={{ color: "#888" }}>
-              Plus cover art, mastering, press kits, merch store, and an artist page — all for $19/month.
+              Push plan: 1 Director 60s video/month ($69.99 value) &nbsp;·&nbsp; Reign plan: 1 Director 120s video/month ($99.99 value). Additional videos at full price.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               {userId ? (

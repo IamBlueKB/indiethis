@@ -91,6 +91,7 @@ model User {
   openToCollaborations     Boolean                @default(false)
   onboardingTourCompleted  Boolean                @default(false)
   albumNudgeSent            Boolean                @default(false)  // true once album-mastering nudge email sent
+  videoStudioCreditUsedAt   DateTime?                               // when subscriber used their monthly free video (null = not used this month)
   aiGenerations            AIGeneration[]
   artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]

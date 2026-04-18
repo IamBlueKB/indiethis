@@ -53,26 +53,43 @@ export async function POST(
       customerEmail = email ?? undefined;
     }
 
-    const modeLabel   = video.mode === "DIRECTOR" ? "Director Mode" : "Quick Mode";
-    const lengthLabel = video.videoLength === "SHORT" ? "Short (up to 1 min)"
-                      : video.videoLength === "EXTENDED" ? "Extended (full song)"
-                      : "Standard (up to 3 min)";
+    // Map videoLength/videoTier → Stripe price ID
+    const TIER_PRICE_IDS: Record<string, string | undefined> = {
+      CANVAS:       process.env.STRIPE_PRICE_VIDEO_CANVAS,
+      QUICK_60:     process.env.STRIPE_PRICE_VIDEO_QUICK_60,
+      QUICK_120:    process.env.STRIPE_PRICE_VIDEO_QUICK_120,
+      DIRECTOR_60:  process.env.STRIPE_PRICE_VIDEO_DIRECTOR_60,
+      DIRECTOR_120: process.env.STRIPE_PRICE_VIDEO_DIRECTOR_120,
+    };
+
+    const tierKey   = video.videoLength ?? (video.mode === "DIRECTOR" ? "DIRECTOR_60" : "QUICK_60");
+    const priceId   = TIER_PRICE_IDS[tierKey];
+
+    const tierLabels: Record<string, string> = {
+      CANVAS:       "Canvas (1 shot · up to 9s loop)",
+      QUICK_60:     "Quick Mode · 8 shots / 60s",
+      QUICK_120:    "Quick Mode · 12 shots / 120s",
+      DIRECTOR_60:  "Director Mode · 8 shots / 60s",
+      DIRECTOR_120: "Director Mode · 12 shots / 120s",
+    };
+    const tierLabel = tierLabels[tierKey] ?? "Music Video";
+
+    const lineItem = priceId
+      ? { price: priceId, quantity: 1 as const }
+      : {
+          price_data: {
+            currency:     "usd",
+            unit_amount:  video.amount,
+            product_data: { name: `IndieThis Music Video — ${tierLabel}`, description: `"${video.trackTitle}"` },
+          },
+          quantity: 1 as const,
+        };
 
     const checkoutSession = await stripe.checkout.sessions.create({
       mode:           "payment",
       customer:        customerId,
       customer_email:  !customerId ? customerEmail : undefined,
-      line_items: [{
-        price_data: {
-          currency:     "usd",
-          unit_amount:  video.amount,
-          product_data: {
-            name:        `IndieThis Music Video — ${modeLabel}`,
-            description: `"${video.trackTitle}" · ${lengthLabel}`,
-          },
-        },
-        quantity: 1,
-      }],
+      line_items: [lineItem],
       metadata: {
         musicVideoId: video.id,
         tool:         "MUSIC_VIDEO",

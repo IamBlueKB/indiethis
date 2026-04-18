@@ -317,53 +317,98 @@ export function inferSceneType(
  *
  * See src/lib/video-studio/pricing.ts for the live PlatformPricing query.
  */
+// ─── New pricing tiers (2026 update) ─────────────────────────────────────────
+//
+// Tiers: CANVAS | QUICK_60 | QUICK_120 | DIRECTOR_60 | DIRECTOR_120
+// No subscriber discounts on Video Studio — additional videos at full price.
+// Push/Reign subscribers get a free included video per month (see credit check).
+
+export type VideoTier =
+  | "CANVAS"       // $14.99 — 1 shot, 3–9s loop, Spotify Canvas
+  | "QUICK_60"     // $39.99 — 8 shots, up to 60s
+  | "QUICK_120"    // $59.99 — 12 shots, up to 120s
+  | "DIRECTOR_60"  // $69.99 — 8 shots, up to 60s, Director chat + redos
+  | "DIRECTOR_120" // $99.99 — 12 shots, up to 120s, Director chat + redos
+
+export const VIDEO_TIER_PRICES: Record<VideoTier, number> = {
+  CANVAS:       1499,  // $14.99
+  QUICK_60:     3999,  // $39.99
+  QUICK_120:    5999,  // $59.99
+  DIRECTOR_60:  6999,  // $69.99
+  DIRECTOR_120: 9999,  // $99.99
+};
+
+/** Shot count per tier */
+export const VIDEO_TIER_SHOTS: Record<VideoTier, number> = {
+  CANVAS:       1,
+  QUICK_60:     8,
+  QUICK_120:    12,
+  DIRECTOR_60:  8,
+  DIRECTOR_120: 12,
+};
+
+/** Max track duration (seconds) per tier */
+export const VIDEO_TIER_MAX_DURATION: Record<VideoTier, number> = {
+  CANVAS:        9,
+  QUICK_60:     60,
+  QUICK_120:    120,
+  DIRECTOR_60:  60,
+  DIRECTOR_120: 120,
+};
+
+/** Min scene duration (seconds) — spec: 5s */
+export const MIN_SCENE_DURATION = 5;
+
+/** Max scene duration (seconds) — spec: 10s */
+export const MAX_SCENE_DURATION = 10;
+
+/** Subscriber free included video per month */
+export const SUBSCRIBER_INCLUDED_TIER: Partial<Record<string, VideoTier>> = {
+  PUSH:  "DIRECTOR_60",
+  REIGN: "DIRECTOR_120",
+};
+
+/** Scene regeneration (per redo) */
+export const SCENE_REGEN_PRICE = 299; // $2.99
+
+/** Legacy price table — kept for any existing references */
 export const DEFAULT_VIDEO_PRICES = {
-  // Non-subscriber
-  GUEST_QUICK_SHORT:    1499,  // $14.99
-  GUEST_QUICK_STANDARD: 1999,  // $19.99
-  GUEST_QUICK_EXTENDED: 2499,  // $24.99
-  GUEST_DIRECTOR_SHORT:    2499, // $24.99
-  GUEST_DIRECTOR_STANDARD: 2999, // $29.99
-  GUEST_DIRECTOR_EXTENDED: 3999, // $39.99
-
-  // Subscriber extras (LAUNCH)
-  LAUNCH_QUICK_EXTRA_SHORT:    1299, // $12.99
-  LAUNCH_QUICK_EXTRA_STANDARD: 1799, // $17.99
-  LAUNCH_QUICK_EXTRA_EXTENDED: 2299, // $22.99
-  LAUNCH_DIRECTOR_SHORT:    1999, // $19.99
-  LAUNCH_DIRECTOR_STANDARD: 2499, // $24.99
-  LAUNCH_DIRECTOR_EXTENDED: 3499, // $34.99
-
-  // Subscriber extras (PUSH)
-  PUSH_QUICK_EXTRA_SHORT:    999,  // $9.99
-  PUSH_QUICK_EXTRA_STANDARD: 1499, // $14.99
-  PUSH_QUICK_EXTRA_EXTENDED: 1999, // $19.99
-  PUSH_DIRECTOR_SHORT:    1799, // $17.99
-  PUSH_DIRECTOR_STANDARD: 2299, // $22.99
-  PUSH_DIRECTOR_EXTENDED: 2999, // $29.99
-
-  // Subscriber extras (REIGN)
-  REIGN_QUICK_EXTRA_SHORT:    999,  // $9.99
-  REIGN_QUICK_EXTRA_STANDARD: 1299, // $12.99
-  REIGN_QUICK_EXTRA_EXTENDED: 1799, // $17.99
-  REIGN_DIRECTOR_SHORT:    1499, // $14.99
-  REIGN_DIRECTOR_STANDARD: 1999, // $19.99
-  REIGN_DIRECTOR_EXTENDED: 2499, // $24.99
-
-  // Length upgrade for included credits
-  LENGTH_UPGRADE_TO_STANDARD: 500, // +$5
-  LENGTH_UPGRADE_TO_EXTENDED: 1000, // +$10
-
-  // Scene regeneration
-  SCENE_REGEN: 299, // $2.99
+  GUEST_QUICK_SHORT:    3999,  // remapped to QUICK_60
+  GUEST_QUICK_STANDARD: 3999,
+  GUEST_QUICK_EXTENDED: 5999,
+  GUEST_DIRECTOR_SHORT:    6999,
+  GUEST_DIRECTOR_STANDARD: 6999,
+  GUEST_DIRECTOR_EXTENDED: 9999,
+  LAUNCH_QUICK_EXTRA_SHORT:    3999,
+  LAUNCH_QUICK_EXTRA_STANDARD: 3999,
+  LAUNCH_QUICK_EXTRA_EXTENDED: 5999,
+  LAUNCH_DIRECTOR_SHORT:    6999,
+  LAUNCH_DIRECTOR_STANDARD: 6999,
+  LAUNCH_DIRECTOR_EXTENDED: 9999,
+  PUSH_QUICK_EXTRA_SHORT:    3999,
+  PUSH_QUICK_EXTRA_STANDARD: 3999,
+  PUSH_QUICK_EXTRA_EXTENDED: 5999,
+  PUSH_DIRECTOR_SHORT:    6999,
+  PUSH_DIRECTOR_STANDARD: 6999,
+  PUSH_DIRECTOR_EXTENDED: 9999,
+  REIGN_QUICK_EXTRA_SHORT:    3999,
+  REIGN_QUICK_EXTRA_STANDARD: 3999,
+  REIGN_QUICK_EXTRA_EXTENDED: 5999,
+  REIGN_DIRECTOR_SHORT:    6999,
+  REIGN_DIRECTOR_STANDARD: 6999,
+  REIGN_DIRECTOR_EXTENDED: 9999,
+  LENGTH_UPGRADE_TO_STANDARD: 0,
+  LENGTH_UPGRADE_TO_EXTENDED: 2000,
+  SCENE_REGEN: 299,
 } as const;
 
-/** Map (tier, mode, length) → price in cents. */
+/** Map (tier, mode, length) → price in cents. @deprecated use VIDEO_TIER_PRICES */
 export function getVideoPrice(
-  tier:   "GUEST" | "LAUNCH" | "PUSH" | "REIGN",
+  _tier:   string,
   mode:   "QUICK" | "DIRECTOR",
   length: "SHORT" | "STANDARD" | "EXTENDED",
 ): number {
-  const key = `${tier}_${mode}_${length}` as keyof typeof DEFAULT_VIDEO_PRICES;
-  return DEFAULT_VIDEO_PRICES[key] ?? 0;
+  if (mode === "QUICK")    return length === "EXTENDED" ? VIDEO_TIER_PRICES.QUICK_120    : VIDEO_TIER_PRICES.QUICK_60;
+  if (mode === "DIRECTOR") return length === "EXTENDED" ? VIDEO_TIER_PRICES.DIRECTOR_120 : VIDEO_TIER_PRICES.DIRECTOR_60;
+  return VIDEO_TIER_PRICES.QUICK_60;
 }

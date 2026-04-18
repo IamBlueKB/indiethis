@@ -23,14 +23,11 @@
 import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { getVideoPrice }         from "@/lib/video-studio/model-router";
+import { VIDEO_TIER_PRICES, SUBSCRIBER_INCLUDED_TIER, type VideoTier } from "@/lib/video-studio/model-router";
 
-// Included credits per tier per month
-const INCLUDED_VIDEOS: Record<string, number> = {
-  LAUNCH: 1,
-  PUSH:   2,
-  REIGN:  4,
-};
+// Which tiers get a free monthly video, and which VideoTier it maps to
+// PUSH → DIRECTOR_60, REIGN → DIRECTOR_120 (per spec)
+// Launch → no included video
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,61 +40,71 @@ export async function POST(req: NextRequest) {
       trackDuration:     number;
       trackId?:          string;
       mode:              string;
-      videoLength:       string;
+      videoTier?:        VideoTier;  // new tier system
+      videoLength?:      string;     // legacy — mapped to videoTier if videoTier absent
       style:             string;
       aspectRatio:       string;
       guestEmail?:       string;
-      characterRefs?:    string[]; // pre-seeded from cover art studio or Director Mode uploads
-      referenceImageUrl?: string;  // primary image from Image Source wizard step
-      imageSource?:       string;  // UPLOAD | AVATAR | AI_GENERATED
+      characterRefs?:    string[];
+      referenceImageUrl?: string;
+      imageSource?:       string;
     };
 
     const {
       audioUrl, trackTitle, trackDuration, trackId,
-      mode, videoLength, style, aspectRatio, guestEmail,
+      mode, style, aspectRatio, guestEmail,
       characterRefs, referenceImageUrl, imageSource,
     } = body;
+
+    // Resolve videoTier — prefer explicit videoTier, fall back to mapping legacy videoLength
+    const videoTier: VideoTier = body.videoTier
+      ?? (mode === "DIRECTOR" ? "DIRECTOR_60" : "QUICK_60");
+    // Keep videoLength in DB for backwards compat
+    const videoLength = body.videoLength ?? videoTier;
 
     if (!audioUrl || !trackTitle || !trackDuration) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     // ── Determine billing ────────────────────────────────────────────────────
-    let tier: "GUEST" | "LAUNCH" | "PUSH" | "REIGN" = "GUEST";
-    let amount     = 0;
-    let isFree     = false;
+    let amount = VIDEO_TIER_PRICES[videoTier] ?? 3999;
+    let isFree = false;
 
     if (userId) {
-      const sub = await db.subscription.findFirst({
-        where:  { userId, status: "ACTIVE" },
-        select: { tier: true },
+      const user = await db.user.findUnique({
+        where:  { id: userId },
+        select: {
+          videoStudioCreditUsedAt: true,
+          subscription: { select: { tier: true } },
+        },
       });
-      if (sub?.tier && ["LAUNCH", "PUSH", "REIGN"].includes(sub.tier)) {
-        tier = sub.tier as "LAUNCH" | "PUSH" | "REIGN";
 
-        // Count videos used this calendar month
+      const subTier = user?.subscription?.tier ?? null;
+      const includedTier = subTier ? SUBSCRIBER_INCLUDED_TIER[subTier] : undefined;
+
+      if (includedTier) {
+        // Check if credit was used this calendar month
         const monthStart = new Date();
         monthStart.setUTCDate(1);
         monthStart.setUTCHours(0, 0, 0, 0);
 
-        const usedThisMonth = await db.musicVideo.count({
-          where: {
-            userId,
-            amount: 0,
-            createdAt: { gte: monthStart },
-          },
-        });
+        const creditUsedAt = user?.videoStudioCreditUsedAt;
+        const creditAvailable = !creditUsedAt || creditUsedAt < monthStart;
 
-        const included = INCLUDED_VIDEOS[tier] ?? 0;
-        if (usedThisMonth < included) {
+        // Credit covers the included tier exactly — not upgrades
+        if (creditAvailable && videoTier === includedTier) {
           isFree = true;
           amount = 0;
         }
       }
     }
 
-    if (!isFree) {
-      amount = getVideoPrice(tier, mode as "QUICK" | "DIRECTOR", videoLength as "SHORT" | "STANDARD" | "EXTENDED");
+    // ── Mark credit used (if applicable) ────────────────────────────────────
+    if (isFree && userId) {
+      await db.user.update({
+        where: { id: userId },
+        data:  { videoStudioCreditUsedAt: new Date() },
+      });
     }
 
     // ── Create record ────────────────────────────────────────────────────────
