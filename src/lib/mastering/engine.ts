@@ -13,7 +13,9 @@
 import Replicate from "replicate";
 
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
-const MASTERING_VERSION = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
+const MASTERING_VERSION  = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
+const SUPABASE_URL       = process.env.SUPABASE_URL ?? "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? "";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -227,7 +229,12 @@ async function callMasteringEngine<T>(
 
   const prediction = await replicate.predictions.create({
     version: MASTERING_VERSION,
-    input:   { action, ...inputs },
+    input:   {
+      action,
+      ...inputs,
+      supabase_url:         SUPABASE_URL,
+      supabase_service_key: SUPABASE_SERVICE_KEY,
+    },
   });
 
   const result = await replicate.wait(prediction);

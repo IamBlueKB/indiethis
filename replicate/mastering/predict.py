@@ -225,8 +225,22 @@ class Predictor(BasePredictor):
             description="JSON string of per-stem processing chains from Claude decisions layer",
             default="{}"
         ),
+        supabase_url: str = Input(
+            description="Supabase project URL (passed from caller if not set as env var)",
+            default=""
+        ),
+        supabase_service_key: str = Input(
+            description="Supabase service role key (passed from caller if not set as env var)",
+            default=""
+        ),
     ) -> str:
         """Routes to the appropriate method. Always returns a JSON string."""
+
+        # Allow caller to supply Supabase credentials if not set as env vars
+        if supabase_url:
+            os.environ["SUPABASE_URL"] = supabase_url
+        if supabase_service_key:
+            os.environ["SUPABASE_SERVICE_KEY"] = supabase_service_key
 
         if action == "health":
             return json.dumps({"ok": True, "version": "1.0.0"})
