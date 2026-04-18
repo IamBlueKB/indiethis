@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     // Check subscription status and included credits
     if (session?.user?.id) {
       const sub = await prisma.subscription.findUnique({
-        where:  { userId: session.user.id },
+        where:  { userId: session!.user!.id },
         select: { id: true, tier: true, status: true, aiMasterCreditsUsed: true, aiMasterCreditsLimit: true },
       });
 
