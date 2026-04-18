@@ -49,24 +49,24 @@ export async function POST(req: NextRequest) {
       albumGroupId?:         string;
     };
 
-    // Payment verification — must have either a Stripe payment or an included credit
-    if (!body.stripePaymentId && !body.creditsUsed) {
-      return NextResponse.json({ error: "Payment required before processing." }, { status: 402 });
-    }
+    // ── TESTING: paywall bypassed — re-enable before launch ──────────────────
+    const PAYWALL_ENABLED = false;
 
     // Verify Stripe payment if present (skip for credit-based jobs)
     let chargedAmount = 0;
-    if (body.stripePaymentId) {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
-      const paymentIntent = await stripe.paymentIntents.retrieve(body.stripePaymentId);
-      if (paymentIntent.status !== "succeeded") {
-        return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
+    if (PAYWALL_ENABLED) {
+      if (!body.stripePaymentId && !body.creditsUsed) {
+        return NextResponse.json({ error: "Payment required before processing." }, { status: 402 });
       }
-      chargedAmount = paymentIntent.amount;
-    } else if (body.creditsUsed) {
-      // Credit was already deducted in /api/mastering/checkout — verify user is authenticated
-      if (!session?.user?.id) {
+      if (body.stripePaymentId) {
+        const Stripe = (await import("stripe")).default;
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+        const paymentIntent = await stripe.paymentIntents.retrieve(body.stripePaymentId);
+        if (paymentIntent.status !== "succeeded") {
+          return NextResponse.json({ error: "Payment not confirmed." }, { status: 402 });
+        }
+        chargedAmount = paymentIntent.amount;
+      } else if (body.creditsUsed && !session?.user?.id) {
         return NextResponse.json({ error: "Authentication required for credit-based jobs." }, { status: 401 });
       }
     }
