@@ -128,10 +128,14 @@ function SceneOverlay({ clip, startFrame, endFrame, crossfadeFrames }: SceneOver
 
 // ─── Main composition ─────────────────────────────────────────────────────────
 
+// Audio fade-out duration in seconds
+const AUDIO_FADE_OUT_S = 1.5;
+
 export function MusicVideoComposition({
   scenes,
   audioUrl,
   crossfadeMs = 800,
+  durationMs,
 }: MusicVideoProps) {
   const { durationInFrames } = useVideoConfig();
   const crossfadeFrames = Math.round((crossfadeMs / 1000) * FPS);
@@ -144,21 +148,44 @@ export function MusicVideoComposition({
         Math.round(scene.endTime * FPS),
         durationInFrames - 1,
       );
-      return { clip: scene, startFrame, endFrame };
+      // Guard: cap crossfadeFrames to half the clip length so short clips
+      // never show black (fade-in and fade-out would overlap and cancel out)
+      const safeCrossfadeFrames = Math.min(
+        crossfadeFrames,
+        Math.floor((endFrame - startFrame) / 2),
+      );
+      return { clip: scene, startFrame, endFrame, safeCrossfadeFrames };
     })
     .filter(({ startFrame, endFrame }) => startFrame < endFrame);
 
+  // Audio fade-out: ramp volume to 0 over the last AUDIO_FADE_OUT_S seconds
+  const totalFrames      = durationMs ? Math.round((durationMs / 1000) * FPS) : durationInFrames;
+  const fadeOutStartFrame = totalFrames - Math.round(AUDIO_FADE_OUT_S * FPS);
+
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
-      {audioUrl && <Audio src={audioUrl} startFrom={0} />}
+      {audioUrl && (
+        <Audio
+          src={audioUrl}
+          startFrom={0}
+          volume={(frame) =>
+            interpolate(
+              frame,
+              [fadeOutStartFrame, totalFrames],
+              [1, 0],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.ease) },
+            )
+          }
+        />
+      )}
 
-      {timeline.map(({ clip, startFrame, endFrame }, i) => (
+      {timeline.map(({ clip, startFrame, endFrame, safeCrossfadeFrames }, i) => (
         <SceneOverlay
           key={i}
           clip={clip}
           startFrame={startFrame}
           endFrame={endFrame}
-          crossfadeFrames={crossfadeFrames}
+          crossfadeFrames={safeCrossfadeFrames}
         />
       ))}
     </AbsoluteFill>
