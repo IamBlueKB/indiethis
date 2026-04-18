@@ -11,6 +11,7 @@
  */
 
 import Replicate from "replicate";
+import { fal }    from "@fal-ai/client";
 
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
 const MASTERING_VERSION  = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
@@ -264,13 +265,29 @@ export async function analyzeAudio(audioUrl: string): Promise<AudioAnalysis> {
 
 /**
  * Separate a stereo mix into vocal / bass / drums / other stems.
- * Used in Master Only mode before per-stem processing.
+ * Routes to fal.ai (fal-ai/demucs) — keeps torch/demucs out of the
+ * Cog image so the Replicate push stays under the size limit.
  */
 export async function separateStems(audioUrl: string, jobId = ""): Promise<SeparatedStems> {
-  return callMasteringEngine<SeparatedStems>("separate", {
-    audio_url: audioUrl,
-    job_id:    jobId,
-  });
+  const result = await fal.subscribe("fal-ai/demucs", {
+    input: {
+      audio_url: audioUrl,
+      stems: ["vocals", "drums", "bass", "other"],
+    },
+  }) as any;
+
+  // fal-ai/demucs returns stems nested under a `stems` key or at root level.
+  // Each stem may be a URL string or an object with a `.url` property.
+  const raw: Record<string, unknown> = result?.stems ?? result ?? {};
+  const toUrl = (v: unknown): string =>
+    typeof v === "string" ? v : (v as { url?: string })?.url ?? "";
+
+  return {
+    vocals: toUrl(raw.vocals),
+    bass:   toUrl(raw.bass),
+    drums:  toUrl(raw.drums),
+    other:  toUrl(raw.other),
+  };
 }
 
 /**
