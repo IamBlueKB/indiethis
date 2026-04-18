@@ -109,6 +109,8 @@ export function MasterGuestWizard({
   const [playing,    setPlaying]    = useState<VersionName | "reference" | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [uploading,  setUploading]  = useState(false);
+  const [stereoDragging, setStereoDragging] = useState(false);
+  const [stemsDragging,  setStemsDragging]  = useState(false);
 
   interface TrendingTrack { id: string; title: string; artistName: string; coverUrl: string | null; slug: string; }
   const [trendingTracks, setTrendingTracks] = useState<TrendingTrack[]>([]);
@@ -509,8 +511,12 @@ export function MasterGuestWizard({
 
             {mode === "MASTER_ONLY" ? (
               <div
+                onDragOver={(e) => { e.preventDefault(); setStereoDragging(true); }}
+                onDragLeave={() => setStereoDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setStereoDragging(false); const f = e.dataTransfer.files[0]; if (f) setStereoFile(f); }}
                 onClick={() => inputRef.current?.click()}
-                className={cn("rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer transition-all", stereoFile ? "border-[#D4A843]" : "border-[#2A2A2A] hover:border-[#444]")}
+                className={cn("rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer transition-all", stereoFile ? "border-[#D4A843]" : stereoDragging ? "border-[#D4A843]" : "border-[#2A2A2A] hover:border-[#444]")}
+                style={stereoDragging ? { backgroundColor: "rgba(212,168,67,0.05)" } : undefined}
               >
                 <input ref={inputRef} type="file" accept=".wav,.aiff,.aif,.flac,.mp3" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setStereoFile(f); }} />
                 <Upload size={22} className="mx-auto mb-3" style={{ color: stereoFile ? "#D4A843" : "#555" }} />
@@ -526,11 +532,15 @@ export function MasterGuestWizard({
             ) : (
               <div className="space-y-3">
                 <div
+                  onDragOver={(e) => { e.preventDefault(); setStemsDragging(true); }}
+                  onDragLeave={() => setStemsDragging(false)}
+                  onDrop={(e) => { e.preventDefault(); setStemsDragging(false); if (e.dataTransfer.files) addStemFiles(e.dataTransfer.files); }}
                   onClick={() => stemsRef.current?.click()}
-                  className="rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer border-[#2A2A2A] hover:border-[#444] transition-all"
+                  className={cn("rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all", stemsDragging ? "border-[#D4A843]" : stems.length ? "border-[#D4A843]" : "border-[#2A2A2A] hover:border-[#444]")}
+                  style={stemsDragging ? { backgroundColor: "rgba(212,168,67,0.05)" } : undefined}
                 >
                   <input ref={stemsRef} type="file" accept=".wav,.aiff,.aif,.flac,.mp3" multiple className="hidden" onChange={(e) => { if (e.target.files) addStemFiles(e.target.files); }} />
-                  <Upload size={22} className="mx-auto mb-2" style={{ color: "#555" }} />
+                  <Upload size={22} className="mx-auto mb-2" style={{ color: stems.length ? "#D4A843" : "#555" }} />
                   <p className="text-sm font-medium">Drop stems or click to browse</p>
                   <p className="text-xs mt-1" style={{ color: "#555" }}>2–16 stems · Max 500 MB each</p>
                 </div>
