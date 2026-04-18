@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         select: { id: true, tier: true, status: true, aiMasterCreditsUsed: true, aiMasterCreditsLimit: true },
       });
 
-      if (sub && sub.status === "ACTIVE") {
+      if (sub !== null && sub.status === "ACTIVE") {
         subId = sub.id;
 
         // If the subscriber has included credits remaining, use one instead of charging
