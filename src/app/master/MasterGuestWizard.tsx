@@ -256,7 +256,9 @@ export function MasterGuestWizard({
           guestName:             name || undefined,
         }),
       });
-      const { jobId: id } = await res.json() as { jobId: string };
+      const resData = await res.json() as { jobId?: string; error?: string };
+      if (!res.ok || !resData.jobId) throw new Error(resData.error ?? "Failed to start mastering job.");
+      const id = resData.jobId;
 
       // Set guest email cookie so status polling works
       document.cookie = `indiethis_guest_email=${encodeURIComponent(email)}; path=/; max-age=604800`;

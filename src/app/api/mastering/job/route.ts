@@ -118,26 +118,34 @@ export async function POST(req: NextRequest) {
     });
 
     // Fire first Replicate action with a webhook URL — returns instantly.
-    // Replicate calls back each webhook handler when each step finishes.
-    // Status is polled via GET /api/mastering/job/[id]/status
-    if (body.mode === "MASTER_ONLY") {
-      await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
-      await startMasteringAction(
-        "analyze",
-        { audio_url: body.inputFileUrl!, job_id: job.id },
-        "/api/mastering/webhook/replicate/analyze",
-      );
-    } else {
-      // MIX_AND_MASTER: classify uploaded stems first
-      await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
-      const stemUrls = (body.stems ?? []).map((s) => s.url);
-      await startMasteringAction(
-        "classify-stems",
-        { stems_json: JSON.stringify(stemUrls), job_id: job.id },
-        "/api/mastering/webhook/replicate/classify",
-      );
+    // Any error here marks the job FAILED so the frontend stops polling.
+    try {
+      if (body.mode === "MASTER_ONLY") {
+        await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
+        await startMasteringAction(
+          "analyze",
+          { audio_url: body.inputFileUrl!, job_id: job.id },
+          "/api/mastering/webhook/replicate/analyze",
+        );
+      } else {
+        await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
+        const stemUrls = (body.stems ?? []).map((s) => s.url);
+        await startMasteringAction(
+          "classify-stems",
+          { stems_json: JSON.stringify(stemUrls), job_id: job.id },
+          "/api/mastering/webhook/replicate/classify",
+        );
+      }
+    } catch (startErr) {
+      const msg = startErr instanceof Error ? startErr.message : String(startErr);
+      console.error(`Failed to start mastering pipeline for job ${job.id}:`, msg);
+      await prisma.masteringJob.update({
+        where: { id: job.id },
+        data:  { status: "FAILED", reportData: { error: msg } as any },
+      });
     }
 
+    // Always return the job ID — client polls for status
     return NextResponse.json({ jobId: job.id, status: "PENDING" });
   } catch (err) {
     console.error("POST /api/mastering/job:", err);
