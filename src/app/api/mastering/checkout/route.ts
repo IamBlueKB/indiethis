@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid tier or mode." }, { status: 400 });
     }
 
-    // ── Payment bypass (env-flag only) ───────────────────────────────────────
-    if (process.env.MASTERING_PAYWALL_DISABLED === "true") {
+    // ── TESTING: paywall bypassed — re-enable before launch ─────────────────
+    const PAYWALL_ENABLED = false;
+    if (!PAYWALL_ENABLED) {
       return NextResponse.json({ creditsUsed: true, creditsRemaining: 99 });
     }
 
