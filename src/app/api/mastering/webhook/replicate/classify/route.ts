@@ -25,13 +25,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     id:     string;
     status: string;
-    output: string;
+    output: string | string[];
     error?: string;
     input:  { job_id: string; stems_json: string };
   };
 
   const jobId = body.input?.job_id;
   if (!jobId) return NextResponse.json({ error: "No job_id" }, { status: 400 });
+  console.error("Webhook body:", JSON.stringify(body).slice(0, 500));
 
   if (body.status !== "succeeded") {
     await prisma.masteringJob.update({
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const classifiedStems = JSON.parse(body.output) as ClassifiedStem[];
+    const raw = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
+    const classifiedStems = JSON.parse(raw) as ClassifiedStem[];
     const job             = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
 
     // Store classified stems in analysisData for the next handler to read
