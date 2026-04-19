@@ -23,9 +23,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { runMixAndMasterPipeline, runMasterOnlyPipeline } from "@/lib/mastering/pipeline";
+
+// Keep the function alive up to 5 minutes — Replicate pipeline takes 1–4 min
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -117,17 +121,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Kick off pipeline in the background (fire and forget)
+    // Kick off pipeline — waitUntil keeps the Vercel function alive after
+    // the response is sent so the full Replicate pipeline can complete.
     // Status is polled via GET /api/mastering/job/[id]/status
-    if (body.mode === "MIX_AND_MASTER") {
-      runMixAndMasterPipeline(job.id).catch((err) => {
+    const pipelinePromise = body.mode === "MIX_AND_MASTER"
+      ? runMixAndMasterPipeline(job.id)
+      : runMasterOnlyPipeline(job.id);
+
+    waitUntil(
+      pipelinePromise.catch((err) => {
         console.error(`Pipeline failed for job ${job.id}:`, err);
-      });
-    } else {
-      runMasterOnlyPipeline(job.id).catch((err) => {
-        console.error(`Pipeline failed for job ${job.id}:`, err);
-      });
-    }
+      }),
+    );
 
     return NextResponse.json({ jobId: job.id, status: "PENDING" });
   } catch (err) {
