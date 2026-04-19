@@ -273,54 +273,15 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       data:  { genre, analysisData: analysis as any },
     });
 
-    // ── 2. Separate stems (for per-stem mastering adjustments) ────────────────
-    await setStatus(jobId, "SEPARATING");
-
-    const separated = await separateStems(stereoUrl, jobId);
-    const stemUrls  = [separated.vocals, separated.bass, separated.drums, separated.other];
-
-    // ── 3. Classify separated stems ───────────────────────────────────────────
-    const classifiedStems = await classifyStems(stemUrls);
-
-    // ── 4. Claude decides per-stem mastering adjustments ─────────────────────
-    await setStatus(jobId, "MIXING");
-
-    const mood        = job.mood ?? "CLEAN";
-    const nlPrompt    = null; // no NL prompt in Master Only mode at this stage
-    const presetName  = getPresetNameForGenre(genre);
-
-    const mixDecision = await decideMixParameters({
-      stems:                 classifiedStems,
-      analysis,
-      genre,
-      mood,
-      naturalLanguagePrompt: nlPrompt,
-      referenceUrl:          job.referenceTrackUrl ?? null,
-      presetName,
-      essentiaHints,
-    });
-
-    await prisma.masteringJob.update({
-      where: { id: jobId },
-      data:  { mixParameters: { chains: mixDecision.chains as any[], reasoning: mixDecision.reasoning } as any },
-    });
-
-    // ── 5. Reprocess stems and recombine ──────────────────────────────────────
-    const mixResult = await mixStems({
-      stems:        mixDecision.chains,
-      sections:     analysis.sections,
-      bpm:          analysis.bpm,
-      referenceUrl: job.referenceTrackUrl ?? undefined,
-    }, jobId);
-
-    // ── 6. Analyze recombined mix ─────────────────────────────────────────────
-    const mixAnalysis = await analyzeAudio(mixResult.mixdownUrl);
-
-    // ── 7. Claude decides mastering chain ─────────────────────────────────────
+    // ── 2. Claude decides mastering chain (direct from stereo analysis) ────────
     await setStatus(jobId, "MASTERING");
 
+    const mood       = job.mood ?? "CLEAN";
+    const nlPrompt   = null;
+    const presetName = getPresetNameForGenre(genre);
+
     const masterDecision = await decideMasterParameters({
-      analysis:              mixAnalysis,
+      analysis,
       genre,
       mood,
       naturalLanguagePrompt: nlPrompt,
@@ -336,19 +297,19 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
       data:  { masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } as any },
     });
 
-    // ── 8. Master → 4 versions + platform exports ─────────────────────────────
+    // ── 3. Master → 4 versions + platform exports ─────────────────────────────
     const masterResult = await masterAudio({
-      audioUrl:    mixResult.mixdownUrl,
+      audioUrl:     stereoUrl,
       ...masterDecision.params,
-      versions:    versionTargets,
+      versions:     versionTargets,
       referenceUrl: job.referenceTrackUrl ?? undefined,
       platforms,
     }, jobId);
 
-    // ── 9. Generate free 30-second preview ────────────────────────────────────
+    // ── 4. Generate 30-second preview ─────────────────────────────────────────
     const preview = await generatePreview(
       {
-        audioUrl:   mixResult.mixdownUrl,
+        audioUrl:   stereoUrl,
         ...masterDecision.params,
         versions:   versionTargets,
         platforms:  [],
