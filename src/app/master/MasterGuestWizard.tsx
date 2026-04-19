@@ -171,7 +171,7 @@ export function MasterGuestWizard({
           status:      string;
           versions?:   MasterVersion[];
           exports?:    { platform: string; lufs: number; format: string; url: string }[];
-          reportData?: MasterReport;
+          reportData?: MasterReport & { error?: string };
           previewUrl?: string;
         };
         setJobStatus(data.status);
@@ -186,7 +186,8 @@ export function MasterGuestWizard({
           setStep("compare");
           clearInterval(pollRef.current!);
         } else if (data.status === "FAILED") {
-          setError("Processing failed. Please try again.");
+          const errDetail = (data.reportData as any)?.error;
+          setError(errDetail ? `Processing failed: ${errDetail}` : "Processing failed. Please try again.");
           clearInterval(pollRef.current!);
         }
       } catch { /* retry */ }

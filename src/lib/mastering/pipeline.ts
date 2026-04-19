@@ -230,7 +230,10 @@ export async function runMixAndMasterPipeline(jobId: string): Promise<void> {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await setStatus(jobId, "FAILED");
+    await prisma.masteringJob.update({
+      where: { id: jobId },
+      data:  { status: "FAILED", reportData: { error: message } as any },
+    });
     console.error(`MasteringJob ${jobId} failed:`, message);
     throw err;
   }
@@ -376,7 +379,10 @@ export async function runMasterOnlyPipeline(jobId: string): Promise<void> {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await setStatus(jobId, "FAILED");
+    await prisma.masteringJob.update({
+      where: { id: jobId },
+      data:  { status: "FAILED", reportData: { error: message } as any },
+    });
     console.error(`MasteringJob ${jobId} (MasterOnly) failed:`, message);
     throw err;
   }
