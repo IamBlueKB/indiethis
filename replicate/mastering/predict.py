@@ -17,13 +17,12 @@ from cog import BasePredictor, Input
 
 
 # ---------- Supabase setup ----------
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-
-
 def get_supabase():
-    if SUPABASE_URL and SUPABASE_SERVICE_KEY:
-        return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    # Read at call time so credentials set via predict() inputs take effect
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_KEY")
+    if url and key:
+        return create_client(url, key)
     return None
 
 
