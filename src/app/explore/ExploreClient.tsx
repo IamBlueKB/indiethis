@@ -1366,7 +1366,8 @@ export default function ExploreClient({ isSubscriber = false }: { isSubscriber?:
 
   // Store section — shown on "all" or "store" filter only (not cluttering music/beats views)
   const showStore  = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "store");
-  const showMerch  = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "merch");
+  // Merch shows on "all", "merch", or "store" — clothing/physical products belong alongside digital on the Store tab
+  const showMerch  = activeFilter !== "sound" && (activeFilter === "all" || activeFilter === "merch" || activeFilter === "store");
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#f5f5f5" }}>
