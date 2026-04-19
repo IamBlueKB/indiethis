@@ -128,9 +128,9 @@ export function AlbumWizardClient({ userId, onBack }: { userId: string; onBack?:
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ filename: track.file.name, contentType: track.file.type, folder: "mastering" }),
         });
-        const { uploadUrl, fileUrl } = await res.json() as { uploadUrl: string; fileUrl: string };
+        const { uploadUrl, accessUrl } = await res.json() as { uploadUrl: string; fileUrl: string; accessUrl: string };
         await fetch(uploadUrl, { method: "PUT", body: track.file, headers: { "Content-Type": track.file.type } });
-        updateTrack(track.id, { fileUrl, status: "ready" });
+        updateTrack(track.id, { fileUrl: accessUrl, status: "ready" });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");

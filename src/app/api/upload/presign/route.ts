@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 
@@ -63,11 +63,18 @@ export async function POST(req: NextRequest) {
       ContentType: contentType,
     });
 
-    // Presigned URL valid for 15 minutes — plenty of time for large files
+    // Presigned PUT URL valid for 15 minutes — plenty of time for large files
     const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
-    const fileUrl   = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
 
-    return NextResponse.json({ uploadUrl, fileUrl });
+    // Presigned GET URL valid for 4 hours — passed to Replicate/fal so they can
+    // download the file even if the S3 bucket blocks public access.
+    const getCommand = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+    const accessUrl  = await getSignedUrl(s3, getCommand, { expiresIn: 14400 });
+
+    // Plain URL kept for reference (may not be publicly accessible)
+    const fileUrl = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
+
+    return NextResponse.json({ uploadUrl, fileUrl, accessUrl });
   } catch (err) {
     console.error("[upload/presign]", err);
     return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });

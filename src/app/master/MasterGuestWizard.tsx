@@ -202,9 +202,9 @@ export function MasterGuestWizard({
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ filename: file.name, contentType: file.type, folder: "mastering" }),
     });
-    const { uploadUrl, fileUrl } = await res.json() as { uploadUrl: string; fileUrl: string };
+    const { uploadUrl, accessUrl } = await res.json() as { uploadUrl: string; fileUrl: string; accessUrl: string };
     await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-    return fileUrl;
+    return accessUrl;
   }
 
   // ── Full job start (post-payment or included credit) ──────────────────────
