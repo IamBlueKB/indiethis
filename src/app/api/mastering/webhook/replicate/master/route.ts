@@ -1,0 +1,80 @@
+/**
+ * POST /api/mastering/webhook/replicate/master
+ *
+ * Replicate calls this when the "master" action completes (both modes).
+ * Stores the 4 mastered versions + platform exports, then fires "preview".
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { db as prisma } from "@/lib/db";
+import { startMasteringAction } from "@/lib/mastering/engine";
+import type { MasterResult } from "@/lib/mastering/engine";
+
+export const maxDuration = 60;
+
+function verifySecret(req: NextRequest): boolean {
+  const secret = process.env.REPLICATE_WEBHOOK_SECRET;
+  if (!secret) return true;
+  return new URL(req.url).searchParams.get("secret") === secret;
+}
+
+export async function POST(req: NextRequest) {
+  if (!verifySecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json() as {
+    id:     string;
+    status: string;
+    output: string;
+    error?: string;
+    input:  { job_id: string; audio_url: string };
+  };
+
+  const jobId = body.input?.job_id;
+  if (!jobId) return NextResponse.json({ error: "No job_id" }, { status: 400 });
+
+  if (body.status !== "succeeded") {
+    await prisma.masteringJob.update({
+      where: { id: jobId },
+      data:  { status: "FAILED", reportData: { error: body.error ?? "Master step failed" } as any },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  try {
+    const masterResult = JSON.parse(body.output) as MasterResult;
+    const job          = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+
+    await prisma.masteringJob.update({
+      where: { id: jobId },
+      data:  {
+        versions:   masterResult.versions as any,
+        exports:    masterResult.exports  as any,
+        reportData: masterResult.report   as any,
+      },
+    });
+
+    // Determine audio URL for preview:
+    // MASTER_ONLY → inputFileUrl
+    // MIX_AND_MASTER → mixdownUrl stored in analysisData during mix step
+    const analysisData = job.analysisData as Record<string, unknown> | null;
+    const previewAudioUrl = (analysisData?.mixdownUrl as string | undefined)
+      ?? job.inputFileUrl
+      ?? body.input.audio_url;
+
+    // Fire preview action
+    await startMasteringAction("preview", {
+      audio_url: previewAudioUrl,
+      job_id:    jobId,
+    }, "/api/mastering/webhook/replicate/preview");
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Master webhook failed for job ${jobId}:`, message);
+    await prisma.masteringJob.update({
+      where: { id: jobId },
+      data:  { status: "FAILED", reportData: { error: message } as any },
+    });
+    return NextResponse.json({ ok: true });
+  }
+}

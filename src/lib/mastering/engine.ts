@@ -14,9 +14,11 @@ import Replicate from "replicate";
 import { fal }    from "@fal-ai/client";
 
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
-const MASTERING_VERSION  = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
-const SUPABASE_URL       = process.env.SUPABASE_URL ?? "";
+const MASTERING_VERSION    = process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
+const SUPABASE_URL         = process.env.SUPABASE_URL ?? "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? "";
+const APP_URL              = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
+const WEBHOOK_SECRET       = process.env.REPLICATE_WEBHOOK_SECRET ?? "";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -208,6 +210,38 @@ export interface PreviewResult {
   previewUrl:  string;
   startSec:    number;
   endSec:      number;
+}
+
+// ─── Webhook-based action starter ────────────────────────────────────────────
+
+/**
+ * Create a Replicate prediction and return immediately — no blocking.
+ * Replicate will POST the result to webhookPath when done.
+ * webhookPath: e.g. "/api/mastering/webhook/replicate/analyze"
+ */
+export async function startMasteringAction(
+  action:      string,
+  inputs:      Record<string, string>,
+  webhookPath: string,
+): Promise<string> {
+  if (!MASTERING_VERSION) {
+    throw new Error("REPLICATE_MASTERING_MODEL_VERSION is not set.");
+  }
+  const secret = WEBHOOK_SECRET ? `?secret=${encodeURIComponent(WEBHOOK_SECRET)}` : "";
+  const webhookUrl = `${APP_URL}${webhookPath}${secret}`;
+
+  const prediction = await replicate.predictions.create({
+    version: MASTERING_VERSION,
+    input: {
+      action,
+      ...inputs,
+      supabase_url:         SUPABASE_URL,
+      supabase_service_key: SUPABASE_SERVICE_KEY,
+    },
+    webhook:                webhookUrl,
+    webhook_events_filter:  ["completed"],
+  });
+  return prediction.id;
 }
 
 // ─── Replicate engine helper ──────────────────────────────────────────────────

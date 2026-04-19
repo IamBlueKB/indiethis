@@ -23,13 +23,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { waitUntil } from "@vercel/functions";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
-import { runMixAndMasterPipeline, runMasterOnlyPipeline } from "@/lib/mastering/pipeline";
-
-// Keep the function alive up to 5 minutes — Replicate pipeline takes 1–4 min
-export const maxDuration = 300;
+import { startMasteringAction } from "@/lib/mastering/engine";
 
 export async function POST(req: NextRequest) {
   try {
@@ -121,18 +117,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Kick off pipeline — waitUntil keeps the Vercel function alive after
-    // the response is sent so the full Replicate pipeline can complete.
+    // Fire first Replicate action with a webhook URL — returns instantly.
+    // Replicate calls back each webhook handler when each step finishes.
     // Status is polled via GET /api/mastering/job/[id]/status
-    const pipelinePromise = body.mode === "MIX_AND_MASTER"
-      ? runMixAndMasterPipeline(job.id)
-      : runMasterOnlyPipeline(job.id);
-
-    waitUntil(
-      pipelinePromise.catch((err) => {
-        console.error(`Pipeline failed for job ${job.id}:`, err);
-      }),
-    );
+    if (body.mode === "MASTER_ONLY") {
+      await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
+      await startMasteringAction(
+        "analyze",
+        { audio_url: body.inputFileUrl!, job_id: job.id },
+        "/api/mastering/webhook/replicate/analyze",
+      );
+    } else {
+      // MIX_AND_MASTER: classify uploaded stems first
+      await prisma.masteringJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
+      const stemUrls = (body.stems ?? []).map((s) => s.url);
+      await startMasteringAction(
+        "classify-stems",
+        { stems_json: JSON.stringify(stemUrls), job_id: job.id },
+        "/api/mastering/webhook/replicate/classify",
+      );
+    }
 
     return NextResponse.json({ jobId: job.id, status: "PENDING" });
   } catch (err) {

@@ -372,7 +372,7 @@ export async function runRevisionPipeline(jobId: string, revisionNote: string): 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getPresetNameForGenre(genre: string): string {
+export function getPresetNameForGenre(genre: string): string {
   const map: Record<string, string> = {
     HIP_HOP:    "Hip-Hop Clean",
     POP:        "Bright Pop",
