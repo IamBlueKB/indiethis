@@ -272,8 +272,7 @@ async function callMasteringEngine<T>(
     },
   });
 
-  // 90s timeout per action — prevents Vercel function hanging past maxDuration
-  const result = await replicate.wait(prediction, { interval: 2000, maxAttempts: 45 });
+  const result = await replicate.wait(prediction);
 
   if (result.status === "failed") {
     throw new Error(`Mastering engine action="${action}" failed: ${result.error ?? "unknown"}`);
