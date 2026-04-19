@@ -164,6 +164,13 @@ export function MasterGuestWizard({
   useEffect(() => {
     if (!jobId || jobStatus === "COMPLETE" || jobStatus === "FAILED") return;
 
+    // Hard timeout — if no result after 9 min the Vercel function timed out
+    const timeoutId = setTimeout(() => {
+      clearInterval(pollRef.current!);
+      setError("Processing timed out. Please try again — warm server runs are faster.");
+      setJobStatus("FAILED");
+    }, 9 * 60 * 1000);
+
     pollRef.current = setInterval(async () => {
       try {
         const res  = await fetch(`/api/mastering/job/${jobId}/status`);
@@ -176,6 +183,7 @@ export function MasterGuestWizard({
         };
         setJobStatus(data.status);
         if (data.status === "COMPLETE") {
+          clearTimeout(timeoutId);
           setResult({
             versions:        data.versions ?? [],
             exports:         data.exports  ?? [],
@@ -186,6 +194,7 @@ export function MasterGuestWizard({
           setStep("compare");
           clearInterval(pollRef.current!);
         } else if (data.status === "FAILED") {
+          clearTimeout(timeoutId);
           const errDetail = (data.reportData as any)?.error;
           setError(errDetail ? `Processing failed: ${errDetail}` : "Processing failed. Please try again.");
           clearInterval(pollRef.current!);
@@ -193,7 +202,10 @@ export function MasterGuestWizard({
       } catch { /* retry */ }
     }, 3000);
 
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      clearTimeout(timeoutId);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [jobId, jobStatus]);
 
   // ── Upload helper ─────────────────────────────────────────────────────────
