@@ -24,7 +24,7 @@ jobs:
           success=false
           for attempt in 1 2 3; do
             echo "==> Push attempt $attempt/3..."
-            if cog push r8.im/${{ secrets.REPLICATE_USERNAME }}/indiethis-master-engine; then
+            if cog push r8.im/${{ secrets.REPLICATE_USERNAME }}/indiethis-dsp; then
               success=true
               break
             fi
