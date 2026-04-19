@@ -293,6 +293,11 @@ class Predictor(BasePredictor):
         if y_clean.ndim == 1:
             y_clean = np.stack([y_clean, y_clean])
 
+        # Write as 16-bit PCM WAV — half the size of float32 (keeps files under Supabase 50 MB limit)
+        def write_wav(path, audio, samplerate):
+            sf.write(path, audio.T, samplerate, subtype="PCM_16")
+
+        write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16 (matchering may write float)
         remote_clean = f"mastering/{job_id}/master_clean.wav"
         versions["clean"] = upload_to_supabase(clean_path, "processed", remote_clean)
 
@@ -304,7 +309,7 @@ class Predictor(BasePredictor):
         ])
         y_warm = warm_board(y_clean, sr)
         warm_path = os.path.join(out_dir, "warm.wav")
-        sf.write(warm_path, y_warm.T, sr)
+        write_wav(warm_path, y_warm, sr)
         versions["warm"] = upload_to_supabase(warm_path, "processed", f"mastering/{job_id}/master_warm.wav")
 
         punch_board = Pedalboard([
@@ -315,7 +320,7 @@ class Predictor(BasePredictor):
         ])
         y_punch = punch_board(y_clean, sr)
         punch_path = os.path.join(out_dir, "punch.wav")
-        sf.write(punch_path, y_punch.T, sr)
+        write_wav(punch_path, y_punch, sr)
         versions["punch"] = upload_to_supabase(punch_path, "processed", f"mastering/{job_id}/master_punch.wav")
 
         loud_board = Pedalboard([
@@ -325,7 +330,7 @@ class Predictor(BasePredictor):
         ])
         y_loud = loud_board(y_clean, sr)
         loud_path = os.path.join(out_dir, "loud.wav")
-        sf.write(loud_path, y_loud.T, sr)
+        write_wav(loud_path, y_loud, sr)
         versions["loud"] = upload_to_supabase(loud_path, "processed", f"mastering/{job_id}/master_loud.wav")
 
         os.unlink(input_path)
