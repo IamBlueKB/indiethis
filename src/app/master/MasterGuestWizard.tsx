@@ -171,20 +171,20 @@ export function MasterGuestWizard({
       .catch(() => {});
   }, [step]);
 
-  // ── Rotating processing tips ──────────────────────────────────────────────
-  const PROCESSING_TIPS = [
-    "Did you know? You can create a music video from this track in Video Studio.",
-    "Add cover art to complete your release — try the Cover Art generator.",
-    "Set up your merch store and sell directly from your artist page.",
-    "Your mastered track can be added to a release with cover art and lyric video.",
-    "Upload your studio bounce sessions to your artist page — fans love behind-the-scenes content.",
-    "Try Director Mode for a cinematic music video with AI-generated scenes.",
-    "Your track analysis powers smarter mastering — the more you use it, the better it gets.",
-  ];
+  // ── Engine status messages per stage ──────────────────────────────────────
+  const ENGINE_MESSAGES: Record<string, string[]> = {
+    PENDING:    ["Queuing your job…", "Warming up the engine…"],
+    ANALYZING:  ["Analyzing frequency balance…", "Detecting BPM and key…", "Measuring loudness levels…", "Identifying genre characteristics…"],
+    SEPARATING: ["Isolating vocal track…", "Separating drums and bass…", "Extracting instrument layers…"],
+    MIXING:     ["Applying vocal presence boost…", "Tightening low end compression…", "Balancing stereo field…"],
+    MASTERING:  ["Applying warm EQ curve…", "Shaping punch dynamics…", "Normalizing to -14 LUFS…", "Generating 4 master versions…"],
+    PREVIEWING: ["Finding highest energy section…", "Applying fade transitions…"],
+  };
 
+  // Sequence index shared across both status msgs and cards
   useEffect(() => {
     if (step !== "processing") return;
-    const id = setInterval(() => setTipIdx((i) => (i + 1) % PROCESSING_TIPS.length), 6000);
+    const id = setInterval(() => setTipIdx((i) => i + 1), 3500);
     return () => clearInterval(id);
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -778,24 +778,117 @@ export function MasterGuestWizard({
                   from { transform: scaleY(0.6); }
                   to   { transform: scaleY(1.15); }
                 }
-                @keyframes tipFade {
-                  0%   { opacity: 0; transform: translateY(4px); }
-                  15%  { opacity: 1; transform: translateY(0); }
-                  85%  { opacity: 1; transform: translateY(0); }
+                @keyframes itemFade {
+                  0%   { opacity: 0; transform: translateY(6px); }
+                  12%  { opacity: 1; transform: translateY(0); }
+                  88%  { opacity: 1; transform: translateY(0); }
                   100% { opacity: 0; transform: translateY(-4px); }
                 }
               `}</style>
 
-              {/* Rotating platform tips */}
-              <div className="text-center px-4 min-h-[36px]">
-                <p
-                  key={tipIdx}
-                  className="text-[11px] leading-relaxed"
-                  style={{ color: "#555", animation: "tipFade 6s ease-in-out forwards" }}
-                >
-                  {PROCESSING_TIPS[tipIdx]}
-                </p>
-              </div>
+              {/* Engine status + feature cards alternating block */}
+              {(() => {
+                // Pattern: status, status, card, status, status, card, ...
+                // Every 3rd item (0-indexed: 2, 5, 8, ...) is a card
+                const isCard = tipIdx % 3 === 2;
+                const cardIdx = Math.floor(tipIdx / 3) % 7;
+                const stageMessages = ENGINE_MESSAGES[jobStatus] ?? ENGINE_MESSAGES.MASTERING;
+                const msgIdx = (isCard ? tipIdx - 1 : tipIdx) % stageMessages.length;
+
+                const FEATURE_CARDS = [
+                  // Card 0 — Video Studio: full-bleed gold, icon left
+                  <div key="video" className="rounded-2xl overflow-hidden" style={{ background: "#D4A843" }}>
+                    <div className="flex items-center gap-4 px-5 py-4">
+                      <span style={{ fontSize: 28 }}>🎬</span>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest" style={{ color: "#0A0A0A", opacity: 0.6 }}>Video Studio</p>
+                        <p className="font-bold text-sm leading-tight mt-0.5" style={{ color: "#0A0A0A" }}>Turn this track into a cinematic music video</p>
+                      </div>
+                    </div>
+                  </div>,
+
+                  // Card 1 — Cover Art: dark with glow border, centered
+                  <div key="cover" className="rounded-2xl text-center py-5 px-4" style={{ background: "#0D0D0D", border: "1px solid #D4A843", boxShadow: "0 0 20px rgba(212,168,67,0.15)" }}>
+                    <p style={{ fontSize: 26 }}>🎨</p>
+                    <p className="text-xs font-semibold mt-2 mb-1" style={{ color: "#D4A843" }}>Cover Art Generator</p>
+                    <p className="text-sm font-bold" style={{ color: "#fff" }}>Your sound deserves a visual identity</p>
+                  </div>,
+
+                  // Card 2 — Lyric Video: split layout with divider
+                  <div key="lyric" className="rounded-2xl overflow-hidden flex" style={{ background: "#111", border: "1px solid #222" }}>
+                    <div className="flex items-center justify-center px-5" style={{ background: "#1A1A1A", borderRight: "1px solid #222" }}>
+                      <span style={{ fontSize: 30 }}>✍️</span>
+                    </div>
+                    <div className="flex-1 px-4 py-4">
+                      <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#555" }}>Lyric Video</p>
+                      <p className="text-sm font-bold leading-snug" style={{ color: "#fff" }}>Words move when the beat drops</p>
+                    </div>
+                  </div>,
+
+                  // Card 3 — Merch Store: gradient background
+                  <div key="merch" className="rounded-2xl px-5 py-4" style={{ background: "linear-gradient(135deg, #1A0A00 0%, #2A1500 100%)", border: "1px solid #3A2000" }}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#D4A843" }}>Merch Store</p>
+                        <p className="text-sm font-bold" style={{ color: "#fff" }}>Sell from your artist page</p>
+                        <p className="text-xs mt-0.5" style={{ color: "#888" }}>Zero inventory required</p>
+                      </div>
+                      <span style={{ fontSize: 26 }}>👕</span>
+                    </div>
+                  </div>,
+
+                  // Card 4 — Release Board: minimal single line with accent
+                  <div key="release" className="rounded-2xl px-5 py-5" style={{ background: "#111", border: "1px solid #1A1A1A" }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-1 h-10 rounded-full" style={{ background: "#D4A843" }} />
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: "#fff" }}>Release Board</p>
+                        <p className="text-xs mt-0.5" style={{ color: "#666" }}>Package track + art + video into one release</p>
+                      </div>
+                      <span className="ml-auto" style={{ fontSize: 22 }}>🚀</span>
+                    </div>
+                  </div>,
+
+                  // Card 5 — Studio Bounces: dark noise texture feel
+                  <div key="bounces" className="rounded-2xl px-5 py-4" style={{ background: "#0A0A0A", border: "1px solid #2A2A2A" }}>
+                    <p style={{ fontSize: 22 }}>🎙️</p>
+                    <p className="text-xs uppercase tracking-widest font-bold mt-2 mb-1" style={{ color: "#555" }}>Studio Bounces</p>
+                    <p className="text-sm font-bold" style={{ color: "#D4A843" }}>Show fans the creative process</p>
+                    <p className="text-[11px] mt-1" style={{ color: "#555" }}>Upload session clips to your artist page</p>
+                  </div>,
+
+                  // Card 6 — Beat Marketplace: bold two-tone
+                  <div key="beats" className="rounded-2xl overflow-hidden" style={{ background: "#111" }}>
+                    <div className="px-5 pt-4 pb-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#555" }}>Beat Marketplace</p>
+                        <span style={{ fontSize: 18 }}>💰</span>
+                      </div>
+                      <p className="text-base font-black" style={{ color: "#fff" }}>Your beats are worth something</p>
+                    </div>
+                    <div className="px-5 py-2" style={{ background: "#D4A843" }}>
+                      <p className="text-[11px] font-bold" style={{ color: "#0A0A0A" }}>License tracks directly from your page →</p>
+                    </div>
+                  </div>,
+                ];
+
+                return (
+                  <div className="min-h-[88px] flex items-center">
+                    {isCard ? (
+                      <div key={`card-${cardIdx}-${tipIdx}`} className="w-full" style={{ animation: "itemFade 5.5s ease-in-out forwards" }}>
+                        {FEATURE_CARDS[cardIdx]}
+                      </div>
+                    ) : (
+                      <div key={`msg-${tipIdx}`} className="w-full text-center" style={{ animation: "itemFade 3.5s ease-in-out forwards" }}>
+                        <p className="text-xs font-mono tracking-wide" style={{ color: "#555" }}>
+                          <span style={{ color: "#D4A843", marginRight: 6 }}>▸</span>
+                          {stageMessages[msgIdx]}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <p className="text-center text-[11px]" style={{ color: "#444" }}>
                 We'll email <span style={{ color: "#666" }}>{email}</span> when it's ready
