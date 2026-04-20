@@ -258,7 +258,7 @@ Return ONLY the JSON array.`,
   const text = (response.content[0] as { type: string; text: string }).text.trim();
 
   try {
-    const parsed = JSON.parse(text) as StemProcessingChain[];
+    const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim()) as StemProcessingChain[];
     return parsed;
   } catch {
     // If Claude's output can't be parsed, return the original chains unchanged
@@ -312,7 +312,7 @@ export async function decideMixParameters(opts: {
   });
 
   const text = (response.content[0] as { type: string; text: string }).text.trim();
-  const parsed = JSON.parse(text) as { stems: StemProcessingChain[]; reasoning: string };
+  const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim()) as { stems: StemProcessingChain[]; reasoning: string };
 
   let chains = parsed.stems;
 
@@ -353,7 +353,7 @@ export async function decideMasterParameters(opts: {
   });
 
   const text = (response.content[0] as { type: string; text: string }).text.trim();
-  const parsed = JSON.parse(text) as {
+  const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim()) as {
     eq:                    EQBand[];
     multibandCompression:  MultibandBand[];
     stereoWidth:           number;
