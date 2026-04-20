@@ -91,6 +91,19 @@ export async function GET(
       url = masterExport?.url ?? null;
     }
 
+    // Final fallback: pull directly from versions field (WAV PCM_16 from Replicate)
+    // versions may be an array [{name, url}] or dict {clean: url, warm: url, ...}
+    if (!url) {
+      const vKey = targetVersion.toLowerCase();
+      if (Array.isArray(job.versions)) {
+        const v = (job.versions as { name: string; url: string }[])
+          .find((v) => v.name.toLowerCase() === vKey);
+        url = v?.url ?? null;
+      } else if (job.versions && typeof job.versions === "object") {
+        url = (job.versions as Record<string, string>)[vKey] ?? null;
+      }
+    }
+
     if (!url) {
       return NextResponse.json({ error: "File not available yet." }, { status: 404 });
     }
