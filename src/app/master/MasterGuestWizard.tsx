@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = "email" | "mode" | "upload" | "configure" | "payment" | "processing" | "direction" | "compare" | "export";
+type Step = "email" | "mode" | "upload" | "configure" | "payment" | "processing" | "direction" | "compare";
 type Mode = "MIX_AND_MASTER" | "MASTER_ONLY";
 type Tier = "STANDARD" | "PREMIUM" | "PRO";
 type Mood = "CLEAN" | "WARM" | "PUNCH" | "LOUD";
@@ -95,7 +95,8 @@ export function MasterGuestWizard({
   const [tier,       setTier]       = useState<Tier>(initialTier as Tier);
   const [mood,       setMood]       = useState<Mood>("CLEAN");
   const [platforms,  setPlatforms]  = useState(["spotify", "apple_music", "youtube", "wav_master"]);
-  const [nlPrompt,   setNlPrompt]   = useState("");
+  const [nlPrompt,       setNlPrompt]       = useState("");
+  const [selectedFormat, setSelectedFormat] = useState<string>("wav_24_44");
 
   // Direction dropdowns (v2 spec)
   const [vibeDirection,   setVibeDirection]   = useState<string>("");
@@ -171,7 +172,7 @@ export function MasterGuestWizard({
 
   // ── Fetch trending tracks for post-delivery section ───────────────────────
   useEffect(() => {
-    if (step !== "export") return;
+    if (step !== "compare") return;
     fetch("/api/explore/trending?limit=4")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (Array.isArray(d?.tracks)) setTrendingTracks(d.tracks.slice(0, 4)); })
@@ -1297,12 +1298,50 @@ export function MasterGuestWizard({
               </div>
             )}
 
-            <button onClick={() => setStep("export")} disabled={!selected} className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
-              Download files <ChevronRight size={16} />
-            </button>
+            {/* Format picker + Download — inline, no separate step */}
+            {selected && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#777" }}>Choose file format</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "wav_24_44",   label: "WAV 24-bit",    sub: "44.1kHz · Studio master" },
+                    { id: "wav_24_48",   label: "WAV 24-bit",    sub: "48kHz · Video / broadcast" },
+                    { id: "wav_16_44",   label: "WAV 16-bit",    sub: "44.1kHz · CD quality" },
+                    { id: "mp3_320",     label: "MP3 320kbps",   sub: "Streaming & social" },
+                    { id: "flac_24_44",  label: "FLAC 24-bit",   sub: "Lossless archive" },
+                    { id: "aiff_24_44",  label: "AIFF 24-bit",   sub: "Apple / Logic" },
+                  ].map((fmt) => (
+                    <button
+                      key={fmt.id}
+                      type="button"
+                      onClick={() => setSelectedFormat(fmt.id)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5 text-left transition-all",
+                        selectedFormat === fmt.id
+                          ? "border-[#D4A843] bg-[#D4A843]/8"
+                          : "border-[#2A2A2A] hover:border-[#444]"
+                      )}
+                    >
+                      <p className="text-xs font-bold" style={{ color: selectedFormat === fmt.id ? "#D4A843" : "#ccc" }}>{fmt.label}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>{fmt.sub}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <a
+                  href={`/api/mastering/job/${jobId}/download?format=${selectedFormat}&version=${selected}`}
+                  download
+                  className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  <Download size={15} />
+                  Download {selected} · {selectedFormat === "mp3_320" ? "MP3" : selectedFormat.startsWith("wav") ? "WAV" : selectedFormat.startsWith("flac") ? "FLAC" : "AIFF"}
+                </a>
+              </div>
+            )}
 
             {/* Upsell */}
-            <div className="rounded-xl border border-[#D4A843]/30 p-4 text-center" style={{ backgroundColor: "#D4A843/5" }}>
+            <div className="rounded-xl border border-[#D4A843]/30 p-4 text-center">
               <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>Get up to 50% off every master</p>
               <p className="text-xs mt-1 mb-3" style={{ color: "#777" }}>Subscribe to IndieThis and never pay full price again.</p>
               <a href="/pricing" className="inline-flex items-center gap-1 text-xs font-bold px-4 py-2 rounded-lg transition-all hover:opacity-90" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
@@ -1312,144 +1351,7 @@ export function MasterGuestWizard({
           </div>
         )}
 
-        {/* ── STEP: Export ─────────────────────────────────────────────── */}
-        {step === "export" && result && (
-          <div className="space-y-5">
-            <div className="text-center">
-              <h2 className="text-lg font-bold">Download your files</h2>
-              <p className="text-xs mt-1" style={{ color: "#777" }}>Version: <span style={{ color: "#D4A843" }}>{selected}</span></p>
-            </div>
-
-            {/* Format downloads */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#D4A843" }}>Format Downloads</p>
-                <button
-                  onClick={downloadAllFiles}
-                  className="text-xs font-semibold hover:opacity-80 transition-opacity flex items-center gap-1"
-                  style={{ color: "#D4A843" }}
-                >
-                  <Download size={11} /> Download All
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: "mp3_320",     label: "MP3 320kbps",         size: "~12 MB",   use: "Streaming & social" },
-                  { id: "wav_16_44",   label: "WAV 16-bit 44.1kHz",  size: "~50 MB",   use: "CD quality" },
-                  { id: "wav_24_44",   label: "WAV 24-bit 44.1kHz",  size: "~75 MB",   use: "Studio master" },
-                  { id: "wav_24_48",   label: "WAV 24-bit 48kHz",    size: "~80 MB",   use: "Video / broadcast" },
-                  { id: "flac_24_44",  label: "FLAC 24-bit 44.1kHz", size: "~35 MB",   use: "Lossless archive" },
-                  { id: "aiff_24_44",  label: "AIFF 24-bit 44.1kHz", size: "~75 MB",   use: "Apple / Logic" },
-                ].map((fmt) => (
-                  <div key={fmt.id} className="rounded-xl border border-[#2A2A2A] p-3 flex flex-col gap-2">
-                    <div>
-                      <div className="text-xs font-bold">{fmt.label}</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: "#777" }}>{fmt.use} · {fmt.size}</div>
-                    </div>
-                    <a
-                      href={`/api/mastering/job/${jobId}/download?format=${fmt.id}&version=${selected}`}
-                      download
-                      className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold hover:opacity-90 transition-all"
-                      style={{ backgroundColor: "#1A1A1A", border: "1px solid #2A2A2A", color: "#D4A843" }}
-                    >
-                      <Download size={11} /> Download
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Platform-targeted exports */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#777" }}>Platform Exports</p>
-              {result.exports.map((ex) => {
-                const p = PLATFORMS.find((x) => x.id === ex.platform);
-                return (
-                  <div key={ex.platform} className="flex items-center justify-between p-4 rounded-xl border border-[#2A2A2A] mb-2">
-                    <div>
-                      <div className="text-sm font-semibold">{p?.label ?? ex.platform}</div>
-                      <div className="text-[11px]" style={{ color: "#777" }}>{ex.format} · {ex.lufs.toFixed(1)} LUFS</div>
-                    </div>
-                    <a href={ex.url} download className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>
-                      <Download size={12} /> Download
-                    </a>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Post-delivery upsell */}
-            <div className="rounded-2xl border border-[#D4A843]/30 p-5 text-center">
-              <p className="font-bold mb-1">Like your master?</p>
-              <p className="text-sm mb-4" style={{ color: "#777" }}>IndieThis subscribers save up to 50% on every track — plus full studio tools.</p>
-              <a href="/pricing" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all" style={{ backgroundColor: "#E85D4A", color: "#fff" }}>
-                Start your subscription <ChevronRight size={15} />
-              </a>
-            </div>
-
-            {/* Post-delivery: Discover more music */}
-            <div className="pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">Discover more music on IndieThis</p>
-                <a
-                  href="/explore"
-                  className="flex items-center gap-1 text-xs hover:text-white transition-colors"
-                  style={{ color: "#D4A843" }}
-                >
-                  Explore all <ExternalLink size={11} />
-                </a>
-              </div>
-              {trendingTracks.length > 0 ? (
-                <div className="relative">
-                  <button
-                    onClick={() => discoverRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: "#1A1A1A", border: "1px solid #333", color: "#D4A843" }}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <div ref={discoverRef} className="flex gap-3 overflow-x-auto pb-2 px-8" style={{ scrollbarWidth: "none" }}>
-                  {trendingTracks.map((t) => (
-                    <a
-                      key={t.id}
-                      href={`/${t.slug}`}
-                      className="shrink-0 w-36 rounded-xl border border-[#2A2A2A] overflow-hidden hover:border-[#444] transition-colors"
-                      style={{ backgroundColor: "#111" }}
-                    >
-                      <div className="w-full h-28 bg-[#1A1A1A] flex items-center justify-center overflow-hidden">
-                        {t.coverUrl ? (
-                          <img src={t.coverUrl} alt={t.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <Music size={20} style={{ color: "#333" }} />
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs font-semibold truncate">{t.title}</p>
-                        <p className="text-[10px] truncate mt-0.5" style={{ color: "#777" }}>{t.artistName}</p>
-                      </div>
-                    </a>
-                  ))}
-                  </div>
-                  <button
-                    onClick={() => discoverRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: "#1A1A1A", border: "1px solid #333", color: "#D4A843" }}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              ) : (
-                <a
-                  href="/explore"
-                  className="flex items-center justify-center gap-2 p-4 rounded-xl border border-[#2A2A2A] text-sm hover:border-[#444] transition-colors"
-                  style={{ color: "#777" }}
-                >
-                  <Music size={15} /> Browse independent artists on IndieThis
-                </a>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Export step removed — format picker + download is now inline in compare step */}
 
       </div>
     </div>

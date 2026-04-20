@@ -38,26 +38,40 @@ const FORMAT_EXT: Record<string, string> = {
 
 /** Generate a fresh Supabase signed URL via REST API (no SDK needed) */
 async function generateSupabaseSignedUrl(filePath: string, expiresIn = 3600): Promise<string | null> {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, ""); // strip trailing slash
   const serviceKey  = process.env.SUPABASE_SERVICE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
+  if (!supabaseUrl || !serviceKey) {
+    console.error("[download] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY");
+    return null;
+  }
 
   try {
-    const res = await fetch(
-      `${supabaseUrl}/storage/v1/object/sign/processed/${filePath}`,
-      {
-        method:  "POST",
-        headers: {
-          "Authorization": `Bearer ${serviceKey}`,
-          "Content-Type":  "application/json",
-        },
-        body: JSON.stringify({ expiresIn }),
-      }
-    );
-    if (!res.ok) return null;
-    const data = await res.json() as { signedURL?: string };
-    return data.signedURL ? `${supabaseUrl}/storage/v1${data.signedURL}` : null;
-  } catch {
+    const endpoint = `${supabaseUrl}/storage/v1/object/sign/processed/${filePath}`;
+    const res = await fetch(endpoint, {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type":  "application/json",
+        "apikey":        serviceKey,  // some Supabase versions require this header too
+      },
+      body: JSON.stringify({ expiresIn }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`[download] Supabase sign failed ${res.status} for ${filePath}:`, errBody);
+      return null;
+    }
+
+    const data = await res.json() as { signedURL?: string; error?: string };
+    if (!data.signedURL) {
+      console.error("[download] Supabase sign returned no signedURL:", data);
+      return null;
+    }
+    // signedURL is a relative path like /object/sign/processed/...?token=...
+    return `${supabaseUrl}/storage/v1${data.signedURL}`;
+  } catch (err) {
+    console.error("[download] generateSupabaseSignedUrl threw:", err);
     return null;
   }
 }
@@ -110,14 +124,33 @@ export async function GET(
 
     // Resolve version name
     const targetVersion = version ?? job.selectedVersion ?? "Warm";
-
-    // Pull download URL from exports JSON
-    const exportsData = job.exports as Record<string, string> | null ?? {};
+    const vKey = targetVersion.toLowerCase();
     const effectiveFormat = format === "all" ? "wav_24_48" : format;
-    const key = `${effectiveFormat}_${targetVersion.toLowerCase()}`;
-    let url: string | null = exportsData[key] ?? exportsData[effectiveFormat] ?? null;
 
-    // Fallback: platform exports array
+    let url: string | null = null;
+
+    // PRIMARY: generate a fresh signed URL from the permanent stored file path.
+    // Stored signed URLs in exports/versions expire (1h from mastering time).
+    // File paths are permanent — always generate a fresh 1-hour signed URL.
+    const pathMap: Record<string, string | null> = {
+      clean: job.cleanFilePath ?? null,
+      warm:  job.warmFilePath  ?? null,
+      punch: job.punchFilePath ?? null,
+      loud:  job.loudFilePath  ?? null,
+    };
+    const storedPath = pathMap[vKey] ?? null;
+    if (storedPath) {
+      url = await generateSupabaseSignedUrl(storedPath, 3600);
+    }
+
+    // FALLBACK A: exports JSON (stored during pipeline — may be expired)
+    if (!url) {
+      const exportsData = job.exports as Record<string, string> | null ?? {};
+      const key = `${effectiveFormat}_${vKey}`;
+      url = exportsData[key] ?? exportsData[effectiveFormat] ?? null;
+    }
+
+    // FALLBACK B: platform exports array
     if (!url) {
       const platformExports = Array.isArray(job.exports)
         ? (job.exports as { platform: string; url: string; format: string }[])
@@ -126,30 +159,14 @@ export async function GET(
       url = masterExport?.url ?? null;
     }
 
-    // Fallback: pull directly from versions field (signed URL from Replicate)
+    // FALLBACK C: versions field (Replicate delivery URLs — short-lived)
     if (!url) {
-      const vKey = targetVersion.toLowerCase();
       if (Array.isArray(job.versions)) {
         const v = (job.versions as { name: string; url: string }[])
           .find((v) => v.name.toLowerCase() === vKey);
         url = v?.url ?? null;
       } else if (job.versions && typeof job.versions === "object") {
         url = (job.versions as Record<string, string>)[vKey] ?? null;
-      }
-    }
-
-    // Fallback: generate fresh signed URL from stored file path (never expires)
-    if (!url) {
-      const vKey = targetVersion.toLowerCase();
-      const pathMap: Record<string, string | null> = {
-        clean: job.cleanFilePath ?? null,
-        warm:  job.warmFilePath  ?? null,
-        punch: job.punchFilePath ?? null,
-        loud:  job.loudFilePath  ?? null,
-      };
-      const storedPath = pathMap[vKey] ?? null;
-      if (storedPath) {
-        url = await generateSupabaseSignedUrl(storedPath, 3600);
       }
     }
 
