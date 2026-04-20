@@ -125,8 +125,9 @@ export function MasterGuestWizard({
   const [directionModifying, setDirectionModifying] = useState(false);
   const [directionLoading,   setDirectionLoading]   = useState(false);
 
-  // Rotating tips state
-  const [tipIdx, setTipIdx] = useState(0);
+  // Processing screen rotating content — separate timers for messages vs cards
+  const [msgIdx,  setMsgIdx]  = useState(0);  // engine status messages, cycles every 4s
+  const [cardIdx, setCardIdx] = useState(0);  // feature cards, cycles every 8s
 
   interface TrendingTrack { id: string; title: string; artistName: string; coverUrl: string | null; slug: string; }
   const [trendingTracks, setTrendingTracks] = useState<TrendingTrack[]>([]);
@@ -187,16 +188,30 @@ export function MasterGuestWizard({
     PREVIEWING: ["Finding highest energy section…", "Applying fade transitions…"],
   };
 
-  // Sequence index shared across both status msgs and cards
+  // Engine status messages — cycle every 4s while processing
   useEffect(() => {
     if (step !== "processing") return;
-    const id = setInterval(() => setTipIdx((i) => i + 1), 3500);
+    const id = setInterval(() => setMsgIdx((i) => i + 1), 4000);
+    return () => clearInterval(id);
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Feature discovery cards — cycle every 8s while processing
+  useEffect(() => {
+    if (step !== "processing") return;
+    const id = setInterval(() => setCardIdx((i) => (i + 1) % 7), 8000);
     return () => clearInterval(id);
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Status polling ────────────────────────────────────────────────────────
+  // Dep array is [jobId, step] — NOT jobStatus.
+  // Using jobStatus as a dep caused the effect to re-subscribe every time the
+  // status updated, creating an infinite re-subscription loop when AWAITING_DIRECTION
+  // was detected (handler clears interval → jobStatus change → effect re-runs →
+  // new interval immediately sees AWAITING_DIRECTION again → loop).
+  // Now: the effect only starts when we enter the processing step, and cleans up
+  // when we leave it (direction step, compare step, etc).
   useEffect(() => {
-    if (!jobId || jobStatus === "COMPLETE" || jobStatus === "FAILED") return;
+    if (!jobId || step !== "processing") return;
 
     // Hard timeout — if no result after 9 min the Vercel function timed out
     const timeoutId = setTimeout(() => {
@@ -224,9 +239,10 @@ export function MasterGuestWizard({
           const rec = (data.analysisData?.directionRecommendation as string | null) ?? null;
           setDirectionRec(rec);
           setDirectionCustom(rec ?? "");
-          setStep("direction");
+          setStep("direction");   // leaves processing → effect cleanup fires
         } else if (data.status === "COMPLETE") {
           clearTimeout(timeoutId);
+          clearInterval(pollRef.current!);
           setResult({
             versions:        Array.isArray(data.versions) ? data.versions : [],
             exports:         Array.isArray(data.exports)  ? data.exports  : [],
@@ -236,21 +252,20 @@ export function MasterGuestWizard({
             selectedVersion: null,
           });
           setStep("compare");
-          clearInterval(pollRef.current!);
         } else if (data.status === "FAILED") {
           clearTimeout(timeoutId);
+          clearInterval(pollRef.current!);
           const errDetail = (data.reportData as any)?.error;
           setError(errDetail ? `Processing failed: ${errDetail}` : "Processing failed. Please try again.");
-          clearInterval(pollRef.current!);
         }
-      } catch { /* retry */ }
+      } catch { /* retry on next tick */ }
     }, 3000);
 
     return () => {
       clearTimeout(timeoutId);
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [jobId, jobStatus]);
+  }, [jobId, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Upload helper ─────────────────────────────────────────────────────────
   async function uploadFile(file: File): Promise<string> {
@@ -818,13 +833,24 @@ export function MasterGuestWizard({
         {/* ── STEP: Processing ─────────────────────────────────────────── */}
         {step === "processing" && (() => {
           const stages = [
-            { key: "PENDING",    label: "Queued",           pct: 5  },
-            { key: "ANALYZING",  label: "Analyzing",        pct: 30 },
-            { key: "MASTERING",  label: "Mastering",        pct: 75 },
-            { key: "PREVIEWING", label: "Preview",          pct: 92 },
+            { key: "PENDING",             label: "Queued",     pct: 5  },
+            { key: "ANALYZING",           label: "Analyzing",  pct: 30 },
+            { key: "AWAITING_DIRECTION",  label: "Analyzing",  pct: 30 }, // same visual slot as analyze
+            { key: "MASTERING",           label: "Mastering",  pct: 75 },
+            { key: "PREVIEWING",          label: "Preview",    pct: 92 },
+          ];
+          // Dot labels for display (no AWAITING_DIRECTION shown — it's invisible to the user)
+          const dotStages = [
+            { key: "PENDING",    label: "Queued"   },
+            { key: "ANALYZING",  label: "Analyzing"},
+            { key: "MASTERING",  label: "Mastering"},
+            { key: "PREVIEWING", label: "Preview"  },
           ];
           const currentIdx = stages.findIndex(s => s.key === jobStatus);
           const pct = currentIdx >= 0 ? stages[currentIdx].pct : (jobStatus === "COMPLETE" ? 100 : 5);
+          // For dot highlight: treat AWAITING_DIRECTION same as ANALYZING
+          const dotStatus = jobStatus === "AWAITING_DIRECTION" ? "ANALYZING" : jobStatus;
+          const dotIdx = dotStages.findIndex(s => s.key === dotStatus);
           const label = statusLabels[jobStatus] ?? "Processing…";
           // 28 bars for the waveform visualizer
           const BAR_COUNT = 28;
@@ -858,11 +884,11 @@ export function MasterGuestWizard({
                 })}
               </div>
 
-              {/* Stage labels under bar */}
+              {/* Stage dots under bar */}
               <div className="flex justify-between px-1">
-                {stages.map((s, i) => {
-                  const done   = i < currentIdx;
-                  const active = i === currentIdx;
+                {dotStages.map((s, i) => {
+                  const done   = i < dotIdx;
+                  const active = i === dotIdx;
                   return (
                     <div key={s.key} className="flex flex-col items-center gap-1">
                       <div className="w-1.5 h-1.5 rounded-full" style={{
@@ -890,15 +916,26 @@ export function MasterGuestWizard({
                 }
               `}</style>
 
-              {/* Engine status + feature cards alternating block */}
+              {/* Engine status messages — what the AI is doing right now */}
               {(() => {
-                // Pattern: status, status, card, status, status, card, ...
-                // Every 3rd item (0-indexed: 2, 5, 8, ...) is a card
-                const isCard = tipIdx % 3 === 2;
-                const cardIdx = Math.floor(tipIdx / 3) % 7;
                 const stageMessages = ENGINE_MESSAGES[jobStatus] ?? ENGINE_MESSAGES.MASTERING;
-                const msgIdx = (isCard ? tipIdx - 1 : tipIdx) % stageMessages.length;
+                const msg = stageMessages[msgIdx % stageMessages.length];
+                return (
+                  <div className="text-center" style={{ minHeight: 28 }}>
+                    <p key={`msg-${msgIdx}`} className="text-xs font-mono tracking-wide" style={{ color: "#555", animation: "itemFade 4s ease-in-out forwards" }}>
+                      <span style={{ color: "#D4A843", marginRight: 6 }}>▸</span>
+                      {msg}
+                    </p>
+                  </div>
+                );
+              })()}
 
+              <p className="text-center text-[11px]" style={{ color: "#444" }}>
+                We'll email <span style={{ color: "#666" }}>{email}</span> when it's ready
+              </p>
+
+              {/* Feature discovery cards — separate section below */}
+              {(() => {
                 const FEATURE_CARDS = [
                   // Card 0 — Video Studio: full-bleed gold, icon left
                   <div key="video" className="rounded-2xl overflow-hidden" style={{ background: "#D4A843" }}>
@@ -975,28 +1012,13 @@ export function MasterGuestWizard({
                     </div>
                   </div>,
                 ];
-
                 return (
-                  <div className="min-h-[88px] flex items-center">
-                    {isCard ? (
-                      <div key={`card-${cardIdx}-${tipIdx}`} className="w-full" style={{ animation: "itemFade 5.5s ease-in-out forwards" }}>
-                        {FEATURE_CARDS[cardIdx]}
-                      </div>
-                    ) : (
-                      <div key={`msg-${tipIdx}`} className="w-full text-center" style={{ animation: "itemFade 3.5s ease-in-out forwards" }}>
-                        <p className="text-xs font-mono tracking-wide" style={{ color: "#555" }}>
-                          <span style={{ color: "#D4A843", marginRight: 6 }}>▸</span>
-                          {stageMessages[msgIdx]}
-                        </p>
-                      </div>
-                    )}
+                  <div key={`card-${cardIdx}`} style={{ animation: "itemFade 8s ease-in-out forwards" }}>
+                    {FEATURE_CARDS[cardIdx]}
                   </div>
                 );
               })()}
 
-              <p className="text-center text-[11px]" style={{ color: "#444" }}>
-                We'll email <span style={{ color: "#666" }}>{email}</span> when it's ready
-              </p>
             </div>
           );
         })()}
