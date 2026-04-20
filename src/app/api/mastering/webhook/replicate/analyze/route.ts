@@ -2,16 +2,16 @@
  * POST /api/mastering/webhook/replicate/analyze
  *
  * Replicate calls this when the "analyze" action completes (MASTER_ONLY mode).
- * Receives the AudioAnalysis result, asks Claude for a mastering chain,
- * then fires the "master" action with its own webhook.
+ * Receives the AudioAnalysis result, asks Claude for a mastering direction recommendation,
+ * stores analysis fields, then sets status to AWAITING_DIRECTION so the artist can
+ * accept / modify / skip before mastering begins.
  *
  * Each handler runs in < 15 seconds — no blocking waits.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { db as prisma } from "@/lib/db";
-import { startMasteringAction } from "@/lib/mastering/engine";
-import { decideMasterParameters, detectGenre, getVersionTargets } from "@/lib/mastering/decisions";
+import { decideMasterParameters, detectGenre, getVersionTargets, generateDirectionRecommendation } from "@/lib/mastering/decisions";
 import { getPresetNameForGenre } from "@/lib/mastering/pipeline";
 import { buildEssentiaHints } from "@/lib/mastering/decisions";
 import type { AudioAnalysis } from "@/lib/mastering/engine";
@@ -95,48 +95,55 @@ export async function POST(req: NextRequest) {
 
     const job = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
 
-    const genre          = job.genre ?? await detectGenre(analysis);
-    const mood           = job.mood ?? "CLEAN";
-    const presetName     = getPresetNameForGenre(genre);
-    const essentiaHints  = await getEssentiaHints(job.trackId ?? null);
+    const genre         = job.genre ?? await detectGenre(analysis);
+    const mood          = job.mood ?? "CLEAN";
+    const presetName    = getPresetNameForGenre(genre);
+    const essentiaHints = await getEssentiaHints(job.trackId ?? null);
 
-    await prisma.masteringJob.update({
-      where: { id: jobId },
-      data:  { genre, analysisData: analysis as any, status: "MASTERING" },
-    });
+    // Read NLP direction from mixParameters if artist provided one before payment
+    const mixParams = job.mixParameters as Record<string, unknown> | null;
+    const naturalLanguagePrompt = (mixParams?.naturalLanguagePrompt as string | null) ?? null;
 
-    // Claude decides mastering chain — fast Claude API call
+    // Claude decides mastering chain
     const masterDecision = await decideMasterParameters({
       analysis,
       genre,
       mood,
-      naturalLanguagePrompt: null,
+      naturalLanguagePrompt,
       presetName,
       essentiaHints,
     });
 
+    // Generate AI direction recommendation (Claude Haiku — cheap, fast)
+    let directionRecommendation: string | null = null;
+    try {
+      directionRecommendation = await generateDirectionRecommendation(analysis, genre);
+    } catch (recErr) {
+      console.error("Direction recommendation failed (non-fatal):", recErr);
+    }
+
+    // Store input analysis fields + direction recommendation
+    // Set AWAITING_DIRECTION so frontend shows the recommendation step
     await prisma.masteringJob.update({
       where: { id: jobId },
-      data:  { masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } as any },
+      data:  {
+        genre,
+        analysisData:  { ...analysis, directionRecommendation } as any,
+        status:        "AWAITING_DIRECTION",
+        inputLufs:     analysis.lufs,
+        inputBpm:      analysis.bpm,
+        inputKey:      analysis.key,
+        inputBalance:  {
+          sub:  (balance.sub  ?? 0) / totalEnergy,
+          low:  (balance.low  ?? 0) / totalEnergy,
+          mid:  (balance.mid  ?? 0) / totalEnergy,
+          high: (balance.high ?? 0) / totalEnergy,
+        },
+        masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } as any,
+      },
     });
 
-    const versionTargets = getVersionTargets(genre);
-    const platforms      = (job.platforms as string[] | null) ?? ["spotify", "apple_music", "youtube", "wav_master"];
-
-    // Fire master action — Replicate webhooks back when done
-    await startMasteringAction("master", {
-      audio_url:          job.inputFileUrl!,
-      reference_url:      job.referenceTrackUrl ?? "",
-      master_params_json: JSON.stringify({
-        audioUrl:     job.inputFileUrl!,
-        ...masterDecision.params,
-        versions:     versionTargets,
-        referenceUrl: job.referenceTrackUrl ?? null,
-        platforms,
-      }),
-      job_id: jobId,
-    }, "/api/mastering/webhook/replicate/master");
-
+    // Do NOT fire master action yet — wait for artist to confirm/skip direction
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

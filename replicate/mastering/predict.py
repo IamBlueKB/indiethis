@@ -90,6 +90,8 @@ class Predictor(BasePredictor):
         job_id: str = Input(description="Unique job ID for organizing outputs", default=""),
         supabase_url: str = Input(description="Supabase project URL", default=""),
         supabase_service_key: str = Input(description="Supabase service role key", default=""),
+        genre: str = Input(description="Genre for genre-aware processing (HIP_HOP, POP, RNB, ELECTRONIC, ROCK, INDIE, ACOUSTIC, JAZZ)", default=""),
+        input_balance: str = Input(description="JSON string with input frequency balance {sub, low, mid, high}", default="{}"),
     ) -> str:
 
         # Allow caller to supply Supabase credentials
@@ -109,7 +111,8 @@ class Predictor(BasePredictor):
             stems = json.loads(stems_urls)
             result = self._mix(stems, job_id)
         elif action == "master":
-            result = self._master(audio_url, reference_url, job_id)
+            balance_data = json.loads(input_balance) if input_balance and input_balance != "{}" else {}
+            result = self._master(audio_url, reference_url, job_id, genre=genre, input_balance=balance_data)
         elif action == "preview":
             result = self._preview(audio_url, job_id)
         else:
@@ -262,7 +265,7 @@ class Predictor(BasePredictor):
         return {"mixed_url": signed_url}
 
     # ---------- MASTER ----------
-    def _master(self, audio_url, reference_url, job_id):
+    def _master(self, audio_url, reference_url, job_id, genre="", input_balance=None):
         input_path = download_audio(audio_url)
         out_dir = tempfile.mkdtemp()
         versions = {}
@@ -311,49 +314,137 @@ class Predictor(BasePredictor):
             except Exception:
                 return 0.0
 
+        # ---- Genre-aware chain parameters ----
+        g = (genre or "").upper()
+        bal = input_balance or {}
+        sub_e  = float(bal.get("sub",  0))
+        mid_e  = float(bal.get("mid",  0))
+        high_e = float(bal.get("high", 0))
+
+        # Warm chain params
+        if g == "HIP_HOP":
+            warm_low_gain    = 3.0 if sub_e <= mid_e * 1.5 else 1.0  # more sub unless already bass-heavy
+            warm_high_gain   = -1.0 if high_e >= mid_e * 0.5 else 1.0
+            warm_comp_ratio  = 2.5
+            warm_threshold   = -15.0
+        elif g == "ACOUSTIC":
+            warm_low_gain    = 1.5 if sub_e <= mid_e * 1.5 else 0.5
+            warm_high_gain   = -0.5 if high_e >= mid_e * 0.5 else 1.5
+            warm_comp_ratio  = 1.8
+            warm_threshold   = -18.0
+        elif g in ("ELECTRONIC", "ELECTRONIC_EDM"):
+            warm_low_gain    = 2.0 if sub_e <= mid_e * 1.5 else 0.5
+            warm_high_gain   = 2.0
+            warm_comp_ratio  = 2.0
+            warm_threshold   = -14.0
+        elif g == "RNB":
+            warm_low_gain    = 2.0 if sub_e <= mid_e * 1.5 else 0.8
+            warm_high_gain   = -0.5
+            warm_comp_ratio  = 2.0
+            warm_threshold   = -16.0
+        elif g == "ROCK":
+            warm_low_gain    = 1.5 if sub_e <= mid_e * 1.5 else 0.5
+            warm_high_gain   = 1.0 if high_e < mid_e * 0.5 else -0.5
+            warm_comp_ratio  = 2.5
+            warm_threshold   = -14.0
+        else:
+            warm_low_gain    = 2.5 if sub_e <= mid_e * 1.5 else 1.0
+            warm_high_gain   = -1.5 if high_e >= mid_e * 0.5 else 1.0
+            warm_comp_ratio  = 2.0
+            warm_threshold   = -16.0
+
+        # Universal high-shelf boost when highs are weak
+        extra_high_boost = 1.5 if high_e < mid_e * 0.5 else 0.0
+
+        # Punch chain params
+        if g == "HIP_HOP":
+            punch_ratio    = 5.0
+            punch_attack   = 3.0
+        elif g == "ACOUSTIC":
+            punch_ratio    = 2.0
+            punch_attack   = 10.0
+        elif g == "ELECTRONIC":
+            punch_ratio    = 4.5
+            punch_attack   = 2.0
+        elif g == "ROCK":
+            punch_ratio    = 5.0
+            punch_attack   = 3.0
+        else:
+            punch_ratio    = 4.0
+            punch_attack   = 5.0
+
+        # Loud chain params
+        if g == "HIP_HOP":
+            loud_gain      = 5.0
+            loud_threshold = -0.1
+        elif g == "ACOUSTIC":
+            loud_gain      = 2.5
+            loud_threshold = -0.5
+        elif g in ("ELECTRONIC", "ELECTRONIC_EDM"):
+            loud_gain      = 6.0
+            loud_threshold = -0.05
+        elif g == "RNB":
+            loud_gain      = 4.0
+            loud_threshold = -0.2
+        elif g == "ROCK":
+            loud_gain      = 4.5
+            loud_threshold = -0.1
+        else:
+            loud_gain      = 4.0
+            loud_threshold = -0.1
+
         write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16 (matchering may write float)
         remote_clean = f"mastering/{job_id}/master_clean.wav"
         lufs_data = {}
         true_peak_data = {}
-        lufs_data["clean"]    = measure_lufs(y_clean)
+        lufs_data["clean"]      = measure_lufs(y_clean)
         true_peak_data["clean"] = measure_true_peak(y_clean)
         versions["clean"] = upload_to_supabase(clean_path, "processed", remote_clean)
 
-        warm_board = Pedalboard([
-            LowShelfFilter(cutoff_frequency_hz=200, gain_db=2.5),
-            HighShelfFilter(cutoff_frequency_hz=8000, gain_db=-1.5),
-            Compressor(threshold_db=-16, ratio=2, attack_ms=20, release_ms=200),
-            Limiter(threshold_db=-0.5)
-        ])
+        warm_fx = [
+            LowShelfFilter(cutoff_frequency_hz=200, gain_db=warm_low_gain),
+            HighShelfFilter(cutoff_frequency_hz=8000, gain_db=warm_high_gain),
+            Compressor(threshold_db=warm_threshold, ratio=warm_comp_ratio, attack_ms=20, release_ms=200),
+            Limiter(threshold_db=-0.5),
+        ]
+        if extra_high_boost > 0:
+            warm_fx.insert(1, HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+        warm_board = Pedalboard(warm_fx)
         y_warm = warm_board(y_clean, sr)
         warm_path = os.path.join(out_dir, "warm.wav")
         write_wav(warm_path, y_warm, sr)
-        lufs_data["warm"]    = measure_lufs(y_warm)
+        lufs_data["warm"]      = measure_lufs(y_warm)
         true_peak_data["warm"] = measure_true_peak(y_warm)
         versions["warm"] = upload_to_supabase(warm_path, "processed", f"mastering/{job_id}/master_warm.wav")
 
-        punch_board = Pedalboard([
+        punch_fx = [
             PeakFilter(cutoff_frequency_hz=2500, gain_db=3, q=1.2),
             LowShelfFilter(cutoff_frequency_hz=60, gain_db=2),
-            Compressor(threshold_db=-12, ratio=4, attack_ms=5, release_ms=60),
-            Limiter(threshold_db=-0.3)
-        ])
+            Compressor(threshold_db=-12, ratio=punch_ratio, attack_ms=punch_attack, release_ms=60),
+            Limiter(threshold_db=-0.3),
+        ]
+        if extra_high_boost > 0:
+            punch_fx.append(HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+        punch_board = Pedalboard(punch_fx)
         y_punch = punch_board(y_clean, sr)
         punch_path = os.path.join(out_dir, "punch.wav")
         write_wav(punch_path, y_punch, sr)
-        lufs_data["punch"]    = measure_lufs(y_punch)
+        lufs_data["punch"]      = measure_lufs(y_punch)
         true_peak_data["punch"] = measure_true_peak(y_punch)
         versions["punch"] = upload_to_supabase(punch_path, "processed", f"mastering/{job_id}/master_punch.wav")
 
-        loud_board = Pedalboard([
+        loud_fx = [
             Compressor(threshold_db=-8, ratio=6, attack_ms=2, release_ms=30),
-            Gain(gain_db=4),
-            Limiter(threshold_db=-0.1)
-        ])
+            Gain(gain_db=loud_gain),
+            Limiter(threshold_db=loud_threshold),
+        ]
+        if extra_high_boost > 0:
+            loud_fx.append(HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+        loud_board = Pedalboard(loud_fx)
         y_loud = loud_board(y_clean, sr)
         loud_path = os.path.join(out_dir, "loud.wav")
         write_wav(loud_path, y_loud, sr)
-        lufs_data["loud"]    = measure_lufs(y_loud)
+        lufs_data["loud"]      = measure_lufs(y_loud)
         true_peak_data["loud"] = measure_true_peak(y_loud)
         versions["loud"] = upload_to_supabase(loud_path, "processed", f"mastering/{job_id}/master_loud.wav")
 

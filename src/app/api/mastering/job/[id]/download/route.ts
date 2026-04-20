@@ -4,20 +4,20 @@
  * Returns a redirect to the appropriate master file URL.
  *
  * Query params:
- *   format  — mp3_320 | wav_16_44 | wav_24_44 | wav_24_48 | flac_24_44 | aiff_24_44 | all
- *   version — Clean | Warm | Punch | Loud (optional, defaults to selectedVersion)
+ *   format       — mp3_320 | wav_16_44 | wav_24_44 | wav_24_48 | flac_24_44 | aiff_24_44 | all
+ *   version      — Clean | Warm | Punch | Loud (optional, defaults to selectedVersion)
+ *   access_token — guest token from MasteringAccessToken (7-day expiry)
  *
  * All formats are derived from the master WAV 24-bit 48kHz via FFmpeg in the
  * job pipeline. The wav_24_48 URL is the source file; other format URLs are
  * stored in the job's `exports` JSON alongside the platform exports.
  *
- * Accessible by: job owner OR guest with matching email cookie.
+ * Accessible by: job owner | guest with matching email cookie | guest access token
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
-
 const FORMAT_MIME: Record<string, string> = {
   mp3_320:    "audio/mpeg",
   wav_16_44:  "audio/wav",
@@ -36,14 +36,41 @@ const FORMAT_EXT: Record<string, string> = {
   aiff_24_44: "aiff",
 };
 
+/** Generate a fresh Supabase signed URL via REST API (no SDK needed) */
+async function generateSupabaseSignedUrl(filePath: string, expiresIn = 3600): Promise<string | null> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/storage/v1/object/sign/processed/${filePath}`,
+      {
+        method:  "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceKey}`,
+          "Content-Type":  "application/json",
+        },
+        body: JSON.stringify({ expiresIn }),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { signedURL?: string };
+    return data.signedURL ? `${supabaseUrl}/storage/v1${data.signedURL}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const { searchParams } = req.nextUrl;
-  const format  = searchParams.get("format") ?? "wav_24_48";
-  const version = searchParams.get("version") ?? null;
+  const format      = searchParams.get("format") ?? "wav_24_48";
+  const version     = searchParams.get("version") ?? null;
+  const accessToken = searchParams.get("access_token") ?? null;
 
   try {
     const session    = await auth();
@@ -59,30 +86,38 @@ export async function GET(
         versions:        true,
         exports:         true,
         selectedVersion: true,
+        cleanFilePath:   true,
+        warmFilePath:    true,
+        punchFilePath:   true,
+        loudFilePath:    true,
       },
     });
 
     if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
     if (job.status !== "COMPLETE") return NextResponse.json({ error: "Job not complete." }, { status: 409 });
 
-    // Access control
+    // Access control — owner, email cookie, or access token
     const isOwner = session?.user?.id && job.userId === session.user.id;
     const isGuest = guestEmail && job.guestEmail === guestEmail;
-    if (!isOwner && !isGuest) return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
+    let tokenValid = false;
+    if (accessToken) {
+      const t = await prisma.masteringAccessToken.findUnique({ where: { token: accessToken } });
+      if (t && t.jobId === id && t.expiresAt > new Date()) tokenValid = true;
+    }
+    if (!isOwner && !isGuest && !tokenValid) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
+    }
 
     // Resolve version name
     const targetVersion = version ?? job.selectedVersion ?? "Warm";
 
-    // Pull download URL from exports JSON — job pipeline stores format URLs there.
-    // Key format: `${format}_${version.toLowerCase()}` e.g. "mp3_320_warm"
+    // Pull download URL from exports JSON
     const exportsData = job.exports as Record<string, string> | null ?? {};
-
-    // "all" — redirect to a zip endpoint (not yet implemented, redirect to wav master)
     const effectiveFormat = format === "all" ? "wav_24_48" : format;
     const key = `${effectiveFormat}_${targetVersion.toLowerCase()}`;
     let url: string | null = exportsData[key] ?? exportsData[effectiveFormat] ?? null;
 
-    // Fallback: find the wav_master platform export and redirect there
+    // Fallback: platform exports array
     if (!url) {
       const platformExports = Array.isArray(job.exports)
         ? (job.exports as { platform: string; url: string; format: string }[])
@@ -91,8 +126,7 @@ export async function GET(
       url = masterExport?.url ?? null;
     }
 
-    // Final fallback: pull directly from versions field (WAV PCM_16 from Replicate)
-    // versions may be an array [{name, url}] or dict {clean: url, warm: url, ...}
+    // Fallback: pull directly from versions field (signed URL from Replicate)
     if (!url) {
       const vKey = targetVersion.toLowerCase();
       if (Array.isArray(job.versions)) {
@@ -104,6 +138,21 @@ export async function GET(
       }
     }
 
+    // Fallback: generate fresh signed URL from stored file path (never expires)
+    if (!url) {
+      const vKey = targetVersion.toLowerCase();
+      const pathMap: Record<string, string | null> = {
+        clean: job.cleanFilePath ?? null,
+        warm:  job.warmFilePath  ?? null,
+        punch: job.punchFilePath ?? null,
+        loud:  job.loudFilePath  ?? null,
+      };
+      const storedPath = pathMap[vKey] ?? null;
+      if (storedPath) {
+        url = await generateSupabaseSignedUrl(storedPath, 3600);
+      }
+    }
+
     if (!url) {
       return NextResponse.json({ error: "File not available yet." }, { status: 404 });
     }
@@ -112,7 +161,7 @@ export async function GET(
     const ext      = FORMAT_EXT[effectiveFormat] ?? "wav";
     const filename = `master_${targetVersion.toLowerCase()}_${id.slice(-6)}_indiethis.${ext}`;
 
-    // Redirect to the S3/R2 pre-signed URL with a content-disposition hint
+    // Redirect to the pre-signed URL with content-disposition hint
     const redirect = new URL(url);
     redirect.searchParams.set("response-content-disposition", `attachment; filename="${filename}"`);
     redirect.searchParams.set("response-content-type", FORMAT_MIME[effectiveFormat] ?? "audio/wav");

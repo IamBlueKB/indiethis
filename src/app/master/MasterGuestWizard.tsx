@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = "email" | "mode" | "upload" | "configure" | "payment" | "processing" | "compare" | "export";
+type Step = "email" | "mode" | "upload" | "configure" | "payment" | "processing" | "direction" | "compare" | "export";
 type Mode = "MIX_AND_MASTER" | "MASTER_ONLY";
 type Tier = "STANDARD" | "PREMIUM" | "PRO";
 type Mood = "CLEAN" | "WARM" | "PUNCH" | "LOUD";
@@ -113,6 +113,15 @@ export function MasterGuestWizard({
   const [stereoDragging, setStereoDragging] = useState(false);
   const [stemsDragging,  setStemsDragging]  = useState(false);
 
+  // Direction assistant state
+  const [directionRec,       setDirectionRec]       = useState<string | null>(null);
+  const [directionCustom,    setDirectionCustom]    = useState("");
+  const [directionModifying, setDirectionModifying] = useState(false);
+  const [directionLoading,   setDirectionLoading]   = useState(false);
+
+  // Rotating tips state
+  const [tipIdx, setTipIdx] = useState(0);
+
   interface TrendingTrack { id: string; title: string; artistName: string; coverUrl: string | null; slug: string; }
   const [trendingTracks, setTrendingTracks] = useState<TrendingTrack[]>([]);
 
@@ -162,6 +171,23 @@ export function MasterGuestWizard({
       .catch(() => {});
   }, [step]);
 
+  // ── Rotating processing tips ──────────────────────────────────────────────
+  const PROCESSING_TIPS = [
+    "Did you know? You can create a music video from this track in Video Studio.",
+    "Add cover art to complete your release — try the Cover Art generator.",
+    "Set up your merch store and sell directly from your artist page.",
+    "Your mastered track can be added to a release with cover art and lyric video.",
+    "Upload your studio bounce sessions to your artist page — fans love behind-the-scenes content.",
+    "Try Director Mode for a cinematic music video with AI-generated scenes.",
+    "Your track analysis powers smarter mastering — the more you use it, the better it gets.",
+  ];
+
+  useEffect(() => {
+    if (step !== "processing") return;
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % PROCESSING_TIPS.length), 6000);
+    return () => clearInterval(id);
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Status polling ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!jobId || jobStatus === "COMPLETE" || jobStatus === "FAILED") return;
@@ -183,9 +209,17 @@ export function MasterGuestWizard({
           reportData?:   MasterReport & { error?: string };
           previewUrl?:   string;
           inputFileUrl?: string;
+          analysisData?: Record<string, unknown>;
         };
         setJobStatus(data.status);
-        if (data.status === "COMPLETE") {
+        if (data.status === "AWAITING_DIRECTION") {
+          clearInterval(pollRef.current!);
+          // Extract Claude's recommendation from analysisData
+          const rec = (data.analysisData?.directionRecommendation as string | null) ?? null;
+          setDirectionRec(rec);
+          setDirectionCustom(rec ?? "");
+          setStep("direction");
+        } else if (data.status === "COMPLETE") {
           clearTimeout(timeoutId);
           setResult({
             versions:        Array.isArray(data.versions) ? data.versions : [],
@@ -362,11 +396,12 @@ export function MasterGuestWizard({
   }
 
   const statusLabels: Record<string, string> = {
-    PENDING:    "Queued…",
-    ANALYZING:  "Analyzing your audio…",
-    SEPARATING: "Separating stems…",
-    MIXING:     "Applying processing chain…",
-    MASTERING:  "Mastering — generating 4 versions…",
+    PENDING:             "Queued…",
+    ANALYZING:           "Analyzing your audio…",
+    SEPARATING:          "Separating stems…",
+    MIXING:              "Applying processing chain…",
+    MASTERING:           "Mastering — generating 4 versions…",
+    AWAITING_DIRECTION:  "Analysis complete…",
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -583,7 +618,15 @@ export function MasterGuestWizard({
               <div className="rounded-xl border border-[#2A2A2A] focus-within:border-[#D4A843] transition-colors p-0.5">
                 <div className="flex items-start gap-2 px-3 pt-2.5 pb-1">
                   <Zap size={13} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
-                  <textarea placeholder="More reverb on the chorus. Punchier kick. Wide stereo on the pad…" value={nlPrompt} onChange={(e) => setNlPrompt(e.target.value)} rows={2} className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]" />
+                  <textarea
+                  placeholder={mode === "MASTER_ONLY"
+                    ? "Warmer tone. Brighter highs. More low end. Radio-ready loudness."
+                    : "More reverb on the chorus. Punchier kick. Wide stereo on the pad."}
+                  value={nlPrompt}
+                  onChange={(e) => setNlPrompt(e.target.value)}
+                  rows={2}
+                  className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
+                />
                 </div>
               </div>
             </div>
@@ -735,7 +778,24 @@ export function MasterGuestWizard({
                   from { transform: scaleY(0.6); }
                   to   { transform: scaleY(1.15); }
                 }
+                @keyframes tipFade {
+                  0%   { opacity: 0; transform: translateY(4px); }
+                  15%  { opacity: 1; transform: translateY(0); }
+                  85%  { opacity: 1; transform: translateY(0); }
+                  100% { opacity: 0; transform: translateY(-4px); }
+                }
               `}</style>
+
+              {/* Rotating platform tips */}
+              <div className="text-center px-4 min-h-[36px]">
+                <p
+                  key={tipIdx}
+                  className="text-[11px] leading-relaxed"
+                  style={{ color: "#555", animation: "tipFade 6s ease-in-out forwards" }}
+                >
+                  {PROCESSING_TIPS[tipIdx]}
+                </p>
+              </div>
 
               <p className="text-center text-[11px]" style={{ color: "#444" }}>
                 We'll email <span style={{ color: "#666" }}>{email}</span> when it's ready
@@ -743,6 +803,138 @@ export function MasterGuestWizard({
             </div>
           );
         })()}
+
+        {/* ── STEP: Direction assistant ─────────────────────────────── */}
+        {step === "direction" && (
+          <div className="space-y-5">
+            <div className="text-center">
+              <h2 className="text-lg font-bold">Mastering direction</h2>
+              <p className="text-xs mt-1" style={{ color: "#777" }}>
+                Based on your track analysis, here's what I'd recommend:
+              </p>
+            </div>
+
+            {directionRec && !directionModifying && (
+              <div className="rounded-2xl border border-[#D4A843]/40 p-5" style={{ backgroundColor: "rgba(212,168,67,0.05)" }}>
+                <div className="flex items-start gap-3">
+                  <Zap size={16} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
+                  <p className="text-sm leading-relaxed" style={{ color: "#ccc" }}>{directionRec}</p>
+                </div>
+              </div>
+            )}
+
+            {directionModifying && (
+              <div className="rounded-2xl border border-[#2A2A2A] focus-within:border-[#D4A843] transition-colors p-0.5">
+                <div className="px-3 pt-2.5 pb-2">
+                  <textarea
+                    value={directionCustom}
+                    onChange={(e) => setDirectionCustom(e.target.value)}
+                    rows={3}
+                    autoFocus
+                    placeholder="Describe what you want from the master…"
+                    className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            <div className="space-y-2">
+              {/* Accept */}
+              {!directionModifying && (
+                <button
+                  disabled={directionLoading}
+                  onClick={async () => {
+                    setDirectionLoading(true);
+                    setError(null);
+                    try {
+                      await fetch(`/api/mastering/job/${jobId}/confirm-direction`, {
+                        method:  "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body:    JSON.stringify({ direction: directionRec }),
+                      });
+                      setJobStatus("MASTERING");
+                      setStep("processing");
+                    } catch {
+                      setError("Failed to confirm direction. Please try again.");
+                    } finally {
+                      setDirectionLoading(false);
+                    }
+                  }}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  {directionLoading ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Apply this direction
+                </button>
+              )}
+
+              {/* Modify */}
+              {!directionModifying ? (
+                <button
+                  onClick={() => setDirectionModifying(true)}
+                  className="w-full py-3 rounded-xl text-sm font-semibold border border-[#2A2A2A] hover:border-[#444] transition-colors"
+                  style={{ color: "#ccc" }}
+                >
+                  Modify
+                </button>
+              ) : (
+                <button
+                  disabled={directionLoading}
+                  onClick={async () => {
+                    setDirectionLoading(true);
+                    setError(null);
+                    try {
+                      await fetch(`/api/mastering/job/${jobId}/confirm-direction`, {
+                        method:  "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body:    JSON.stringify({ direction: directionCustom.trim() || null }),
+                      });
+                      setJobStatus("MASTERING");
+                      setStep("processing");
+                    } catch {
+                      setError("Failed to confirm direction. Please try again.");
+                    } finally {
+                      setDirectionLoading(false);
+                    }
+                  }}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all"
+                  style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                >
+                  {directionLoading ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Apply my direction
+                </button>
+              )}
+
+              {/* Skip */}
+              <button
+                disabled={directionLoading}
+                onClick={async () => {
+                  setDirectionLoading(true);
+                  setError(null);
+                  try {
+                    await fetch(`/api/mastering/job/${jobId}/confirm-direction`, {
+                      method:  "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body:    JSON.stringify({ direction: null }),
+                    });
+                    setJobStatus("MASTERING");
+                    setStep("processing");
+                  } catch {
+                    setError("Failed to skip direction. Please try again.");
+                  } finally {
+                    setDirectionLoading(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl text-xs hover:opacity-70 transition-opacity"
+                style={{ color: "#555" }}
+              >
+                Skip — master without direction
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── STEP: Compare ────────────────────────────────────────────── */}
         {step === "compare" && result && (

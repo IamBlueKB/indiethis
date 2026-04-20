@@ -18,6 +18,12 @@ function verifySecret(req: NextRequest): boolean {
   return new URL(req.url).searchParams.get("secret") === secret;
 }
 
+function extractFilePath(signedUrl: string | undefined): string | null {
+  if (!signedUrl) return null;
+  const match = signedUrl.match(/\/object\/sign\/processed\/(.+?)\?/);
+  return match ? match[1] : null;
+}
+
 export async function POST(req: NextRequest) {
   if (!verifySecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -73,9 +79,13 @@ export async function POST(req: NextRequest) {
     await prisma.masteringJob.update({
       where: { id: jobId },
       data:  {
-        versions:   versionsArray as any,
-        exports:    (masterResult.exports  ?? []) as any,
-        reportData: (masterResult.report   ?? null) as any,
+        versions:      versionsArray as any,
+        exports:       (masterResult.exports  ?? []) as any,
+        reportData:    (masterResult.report   ?? null) as any,
+        cleanFilePath: extractFilePath(versionsRaw["clean"]),
+        warmFilePath:  extractFilePath(versionsRaw["warm"]),
+        punchFilePath: extractFilePath(versionsRaw["punch"]),
+        loudFilePath:  extractFilePath(versionsRaw["loud"]),
       },
     });
 

@@ -393,3 +393,42 @@ No other text.`,
   const valid  = ["HIP_HOP", "POP", "RNB", "ELECTRONIC", "ROCK", "INDIE", "ACOUSTIC", "JAZZ"];
   return valid.includes(genre) ? genre : "HIP_HOP";
 }
+
+// ─── AI Direction Recommendation ──────────────────────────────────────────────
+
+/**
+ * generateDirectionRecommendation — Claude Haiku call (~$0.01)
+ *
+ * Given track analysis data, produces a 1-2 sentence plain-language mastering
+ * direction recommendation the artist can Accept / Modify / Skip.
+ * Runs AFTER payment — never before.
+ */
+export async function generateDirectionRecommendation(
+  analysis: AudioAnalysis,
+  genre:    string,
+): Promise<string> {
+  const sub  = analysis.frequencyBalance.find(b => b.band === "sub")?.energy  ?? 0;
+  const low  = analysis.frequencyBalance.find(b => b.band === "low")?.energy  ?? 0;
+  const mid  = analysis.frequencyBalance.find(b => b.band === "mid")?.energy  ?? 0;
+  const high = analysis.frequencyBalance.find(b => b.band === "high")?.energy ?? 0;
+
+  const response = await anthropic.messages.create({
+    model:      "claude-haiku-4-5",
+    max_tokens: 100,
+    messages: [{
+      role:    "user",
+      content: `You are a mastering engineer. Based on this track analysis, give a brief, plain-language recommendation for mastering direction. Keep it to 1-2 sentences. Be specific about what you'd adjust.
+
+Analysis:
+- BPM: ${analysis.bpm.toFixed(0)}
+- Key: ${analysis.key}
+- LUFS: ${analysis.lufs.toFixed(1)}
+- Frequency balance: sub=${sub.toFixed(2)}, low=${low.toFixed(2)}, mid=${mid.toFixed(2)}, high=${high.toFixed(2)}
+- Genre: ${genre}
+
+Respond with just the recommendation, no preamble.`,
+    }],
+  });
+
+  return (response.content[0] as { type: string; text: string }).text.trim();
+}

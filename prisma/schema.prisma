@@ -3149,6 +3149,22 @@ model MasteringJob {
   // Mastering report (on-screen card, not PDF)
   reportData              Json?     // { finalLufs, truePeak, dynamicRange, loudnessPenalties }
 
+  // Intelligence layer — input analysis snapshot
+  inputLufs               Float?
+  inputBpm                Float?
+  inputKey                String?
+  inputBalance            Json?     // { sub, low, mid, high }
+  directionUsed           String?   // NLP prompt text applied to mastering
+
+  // Persistent file paths (signed URLs expire; paths are permanent)
+  cleanFilePath           String?   // mastering/{jobId}/master_clean.wav
+  warmFilePath            String?
+  punchFilePath           String?
+  loudFilePath            String?
+
+  // Guest access token relation
+  accessToken             MasteringAccessToken?
+
   // Payment
   stripePaymentId         String?
   amount                  Int?      // cents
@@ -3206,6 +3222,19 @@ model MasteringAlbumGroup {
 
   @@index([userId])
   @@index([status])
+}
+
+model MasteringAccessToken {
+  id        String       @id @default(cuid())
+  jobId     String       @unique
+  job       MasteringJob @relation(fields: [jobId], references: [id])
+  token     String       @unique @default(cuid())
+  email     String
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+
+  @@index([token])
+  @@index([email])
 }
 
 model MasteringPreset {
