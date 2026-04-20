@@ -297,8 +297,26 @@ class Predictor(BasePredictor):
         def write_wav(path, audio, samplerate):
             sf.write(path, audio.T, samplerate, subtype="PCM_16")
 
+        meter = pyln.Meter(sr)
+
+        def measure_lufs(audio_2d):
+            try:
+                return round(float(meter.integrated_loudness(audio_2d[0])), 1)
+            except Exception:
+                return 0.0
+
+        def measure_true_peak(audio_2d):
+            try:
+                return round(float(np.max(np.abs(audio_2d))) * 20, 1)  # approx dBTP
+            except Exception:
+                return 0.0
+
         write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16 (matchering may write float)
         remote_clean = f"mastering/{job_id}/master_clean.wav"
+        lufs_data = {}
+        true_peak_data = {}
+        lufs_data["clean"]    = measure_lufs(y_clean)
+        true_peak_data["clean"] = measure_true_peak(y_clean)
         versions["clean"] = upload_to_supabase(clean_path, "processed", remote_clean)
 
         warm_board = Pedalboard([
@@ -310,6 +328,8 @@ class Predictor(BasePredictor):
         y_warm = warm_board(y_clean, sr)
         warm_path = os.path.join(out_dir, "warm.wav")
         write_wav(warm_path, y_warm, sr)
+        lufs_data["warm"]    = measure_lufs(y_warm)
+        true_peak_data["warm"] = measure_true_peak(y_warm)
         versions["warm"] = upload_to_supabase(warm_path, "processed", f"mastering/{job_id}/master_warm.wav")
 
         punch_board = Pedalboard([
@@ -321,6 +341,8 @@ class Predictor(BasePredictor):
         y_punch = punch_board(y_clean, sr)
         punch_path = os.path.join(out_dir, "punch.wav")
         write_wav(punch_path, y_punch, sr)
+        lufs_data["punch"]    = measure_lufs(y_punch)
+        true_peak_data["punch"] = measure_true_peak(y_punch)
         versions["punch"] = upload_to_supabase(punch_path, "processed", f"mastering/{job_id}/master_punch.wav")
 
         loud_board = Pedalboard([
@@ -331,12 +353,18 @@ class Predictor(BasePredictor):
         y_loud = loud_board(y_clean, sr)
         loud_path = os.path.join(out_dir, "loud.wav")
         write_wav(loud_path, y_loud, sr)
+        lufs_data["loud"]    = measure_lufs(y_loud)
+        true_peak_data["loud"] = measure_true_peak(y_loud)
         versions["loud"] = upload_to_supabase(loud_path, "processed", f"mastering/{job_id}/master_loud.wav")
 
         os.unlink(input_path)
         shutil.rmtree(out_dir, ignore_errors=True)
 
-        return {"versions": versions}
+        return {
+            "versions":   versions,
+            "lufs":       lufs_data,
+            "true_peak":  true_peak_data,
+        }
 
     # ---------- PREVIEW ----------
     def _preview(self, audio_url, job_id):

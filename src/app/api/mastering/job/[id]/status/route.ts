@@ -41,6 +41,7 @@ export async function GET(
         userId:           true,
         guestEmail:       true,
         analysisData:     true,
+        inputFileUrl:     true,
       },
     });
 

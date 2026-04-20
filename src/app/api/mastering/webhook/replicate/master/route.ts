@@ -47,8 +47,11 @@ export async function POST(req: NextRequest) {
     const job    = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
 
     // Python returns versions as {clean: url, warm: url, punch: url, loud: url}
+    // with optional lufs: {clean: -14.0, ...} and true_peak: {clean: -0.3, ...}
     // Frontend expects [{name, url, lufs, truePeak, waveformData}]
-    const versionsRaw = (parsed.versions ?? {}) as Record<string, string>;
+    const versionsRaw  = (parsed.versions  ?? {}) as Record<string, string>;
+    const lufsRaw      = (parsed.lufs      ?? {}) as Record<string, number>;
+    const truePeakRaw  = (parsed.true_peak ?? {}) as Record<string, number>;
     const versionOrder: [string, string][] = [
       ["clean", "Clean"],
       ["warm",  "Warm"],
@@ -60,8 +63,8 @@ export async function POST(req: NextRequest) {
       .map(([key, name]) => ({
         name,
         url:          versionsRaw[key],
-        lufs:         0,
-        truePeak:     0,
+        lufs:         lufsRaw[key]     ?? 0,
+        truePeak:     truePeakRaw[key] ?? 0,
         waveformData: [] as number[],
       }));
 

@@ -44,6 +44,7 @@ interface JobResult {
   exports:         { platform: string; lufs: number; format: string; url: string }[];
   reportData:      MasterReport | null;
   previewUrl:      string;
+  originalUrl:     string | null;
   selectedVersion: string | null;
 }
 
@@ -106,7 +107,7 @@ export function MasterGuestWizard({
   const [jobStatus,  setJobStatus]  = useState("PENDING");
   const [result,     setResult]     = useState<JobResult | null>(null);
   const [selected,   setSelected]   = useState<VersionName | null>(null);
-  const [playing,    setPlaying]    = useState<VersionName | "reference" | null>(null);
+  const [playing,    setPlaying]    = useState<VersionName | "reference" | "original" | null>(null);
   const [error,      setError]      = useState<string | null>(null);
   const [uploading,  setUploading]  = useState(false);
   const [stereoDragging, setStereoDragging] = useState(false);
@@ -175,11 +176,12 @@ export function MasterGuestWizard({
       try {
         const res  = await fetch(`/api/mastering/job/${jobId}/status`);
         const data = await res.json() as {
-          status:      string;
-          versions?:   MasterVersion[];
-          exports?:    { platform: string; lufs: number; format: string; url: string }[];
-          reportData?: MasterReport & { error?: string };
-          previewUrl?: string;
+          status:        string;
+          versions?:     MasterVersion[];
+          exports?:      { platform: string; lufs: number; format: string; url: string }[];
+          reportData?:   MasterReport & { error?: string };
+          previewUrl?:   string;
+          inputFileUrl?: string;
         };
         setJobStatus(data.status);
         if (data.status === "COMPLETE") {
@@ -189,6 +191,7 @@ export function MasterGuestWizard({
             exports:         Array.isArray(data.exports)  ? data.exports  : [],
             reportData:      data.reportData ?? null,
             previewUrl:      data.previewUrl ?? "",
+            originalUrl:     data.inputFileUrl ?? null,
             selectedVersion: null,
           });
           setStep("compare");
@@ -665,19 +668,80 @@ export function MasterGuestWizard({
         )}
 
         {/* ── STEP: Processing ─────────────────────────────────────────── */}
-        {step === "processing" && (
-          <div className="text-center py-16 space-y-6">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ backgroundColor: "#1A1A1A", border: "2px solid #D4A843" }}>
-              <Loader2 size={36} className="animate-spin" style={{ color: "#D4A843" }} />
-            </div>
-            <div>
-              <p className="text-lg font-semibold">{statusLabels[jobStatus] ?? "Processing…"}</p>
-              <p className="text-sm mt-2" style={{ color: "#777" }}>
-                We'll email <span style={{ color: "#D4A843" }}>{email}</span> when it's ready.
+        {step === "processing" && (() => {
+          const stages = [
+            { key: "PENDING",    label: "Queued",           pct: 5  },
+            { key: "ANALYZING",  label: "Analyzing",        pct: 30 },
+            { key: "MASTERING",  label: "Mastering",        pct: 75 },
+            { key: "PREVIEWING", label: "Preview",          pct: 92 },
+          ];
+          const currentIdx = stages.findIndex(s => s.key === jobStatus);
+          const pct = currentIdx >= 0 ? stages[currentIdx].pct : (jobStatus === "COMPLETE" ? 100 : 5);
+          const label = statusLabels[jobStatus] ?? "Processing…";
+          // 28 bars for the waveform visualizer
+          const BAR_COUNT = 28;
+          const barHeights = [40,60,80,55,90,70,45,85,65,75,50,95,60,80,45,70,85,55,90,65,75,50,80,60,70,45,85,55];
+          return (
+            <div className="py-10 space-y-7">
+              <div className="text-center space-y-1">
+                <p className="font-semibold" style={{ color: "#aaa" }}>{label}</p>
+                <p className="text-3xl font-bold tracking-tight" style={{ color: "#D4A843" }}>{pct}%</p>
+              </div>
+
+              {/* Waveform visualizer */}
+              <div className="flex items-end justify-center gap-[3px]" style={{ height: 60 }}>
+                {Array.from({ length: BAR_COUNT }).map((_, i) => {
+                  const baseH = barHeights[i % barHeights.length];
+                  const filled = (i / BAR_COUNT) * 100 <= pct;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        width: 5,
+                        height: `${baseH}%`,
+                        borderRadius: 3,
+                        backgroundColor: filled ? "#D4A843" : "#2A2A2A",
+                        animation: filled ? `masterPulse ${0.6 + (i % 5) * 0.15}s ease-in-out infinite alternate` : "none",
+                        opacity: filled ? 1 : 0.4,
+                        transition: "background-color 0.4s ease",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Stage labels under bar */}
+              <div className="flex justify-between px-1">
+                {stages.map((s, i) => {
+                  const done   = i < currentIdx;
+                  const active = i === currentIdx;
+                  return (
+                    <div key={s.key} className="flex flex-col items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{
+                        backgroundColor: done || active ? "#D4A843" : "#2A2A2A",
+                        boxShadow: active ? "0 0 6px #D4A843" : "none",
+                      }} />
+                      <span className="text-[9px]" style={{ color: active ? "#D4A843" : done ? "#666" : "#333" }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <style>{`
+                @keyframes masterPulse {
+                  from { transform: scaleY(0.6); }
+                  to   { transform: scaleY(1.15); }
+                }
+              `}</style>
+
+              <p className="text-center text-[11px]" style={{ color: "#444" }}>
+                We'll email <span style={{ color: "#666" }}>{email}</span> when it's ready
               </p>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── STEP: Compare ────────────────────────────────────────────── */}
         {step === "compare" && result && (
@@ -689,7 +753,58 @@ export function MasterGuestWizard({
               </p>
             </div>
 
-            {/* Compare to reference */}
+            {/* A/B toggle: Original ↔ Selected mastered version */}
+            {result.originalUrl && (
+              <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
+                {/* Toggle bar */}
+                <div className="grid grid-cols-2" style={{ backgroundColor: "#111" }}>
+                  {(["original", "mastered"] as const).map((side) => {
+                    const active = side === "original" ? (playing === "original") : (playing !== null && playing !== "original" && playing !== "reference");
+                    const isOrig = side === "original";
+                    return (
+                      <button
+                        key={side}
+                        onClick={() => {
+                          audioRef.current?.pause();
+                          if (isOrig) {
+                            audioRef.current = new Audio(result.originalUrl!);
+                            audioRef.current.play();
+                            audioRef.current.onended = () => setPlaying(null);
+                            setPlaying("original");
+                          } else {
+                            const v = result.versions.find(v => v.name === (selected ?? result.versions[0]?.name));
+                            if (v?.url) {
+                              audioRef.current = new Audio(v.url);
+                              audioRef.current.play();
+                              audioRef.current.onended = () => setPlaying(null);
+                              setPlaying(v.name as VersionName);
+                            }
+                          }
+                        }}
+                        className="py-2.5 text-xs font-semibold transition-all"
+                        style={{
+                          color: active ? "#0A0A0A" : "#777",
+                          backgroundColor: active ? "#D4A843" : "transparent",
+                        }}
+                      >
+                        {isOrig ? "Original" : `Mastered${selected ? ` · ${selected}` : ""}`}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Status line */}
+                <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: "#0D0D0D" }}>
+                  {(playing === "original" || (playing && playing !== "reference")) && (
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: "#D4A843" }} />
+                  )}
+                  <span className="text-[10px]" style={{ color: "#555" }}>
+                    {playing === "original" ? "Playing original…" : playing && playing !== "reference" ? `Playing ${playing}…` : "Tap Original or Mastered to compare"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Reference track */}
             {uploadedRefUrl && (
               <div className="flex items-center gap-3 p-3 rounded-xl border border-[#2A2A2A]">
                 <button
