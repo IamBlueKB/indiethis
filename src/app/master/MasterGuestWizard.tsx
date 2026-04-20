@@ -116,10 +116,11 @@ export function MasterGuestWizard({
   interface TrendingTrack { id: string; title: string; artistName: string; coverUrl: string | null; slug: string; }
   const [trendingTracks, setTrendingTracks] = useState<TrendingTrack[]>([]);
 
-  const audioRef    = useRef<HTMLAudioElement | null>(null);
-  const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
-  const inputRef    = useRef<HTMLInputElement | null>(null);
-  const stemsRef    = useRef<HTMLInputElement | null>(null);
+  const audioRef      = useRef<HTMLAudioElement | null>(null);
+  const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef      = useRef<HTMLInputElement | null>(null);
+  const stemsRef      = useRef<HTMLInputElement | null>(null);
+  const discoverRef   = useRef<HTMLDivElement | null>(null);
 
   // ── Download all — triggers all 6 format files + all platform exports ──────
   function downloadAllFiles() {
@@ -988,7 +989,15 @@ export function MasterGuestWizard({
                 </a>
               </div>
               {trendingTracks.length > 0 ? (
-                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+                <div className="relative">
+                  <button
+                    onClick={() => discoverRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: "#1A1A1A", border: "1px solid #333", color: "#D4A843" }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <div ref={discoverRef} className="flex gap-3 overflow-x-auto pb-2 px-8" style={{ scrollbarWidth: "none" }}>
                   {trendingTracks.map((t) => (
                     <a
                       key={t.id}
@@ -1009,6 +1018,14 @@ export function MasterGuestWizard({
                       </div>
                     </a>
                   ))}
+                  </div>
+                  <button
+                    onClick={() => discoverRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: "#1A1A1A", border: "1px solid #333", color: "#D4A843" }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
               ) : (
                 <a
