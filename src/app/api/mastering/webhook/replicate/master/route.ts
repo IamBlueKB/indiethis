@@ -55,9 +55,13 @@ export async function POST(req: NextRequest) {
     // Python returns versions as {clean: url, warm: url, punch: url, loud: url}
     // with optional lufs: {clean: -14.0, ...} and true_peak: {clean: -0.3, ...}
     // Frontend expects [{name, url, lufs, truePeak, waveformData}]
-    const versionsRaw  = (parsed.versions  ?? {}) as Record<string, string>;
-    const lufsRaw      = (parsed.lufs      ?? {}) as Record<string, number>;
-    const truePeakRaw  = (parsed.true_peak ?? {}) as Record<string, number>;
+    const versionsRaw      = (parsed.versions          ?? {}) as Record<string, string>;
+    const lufsRaw          = (parsed.lufs              ?? {}) as Record<string, number>;
+    const truePeakRaw      = (parsed.true_peak         ?? {}) as Record<string, number>;
+    const versionWaveforms = (parsed.version_waveforms ?? {}) as Record<string, number[]>;
+    const versionStats     = (parsed.version_stats     ?? {}) as Record<string, Record<string, number>>;
+    const previewPathsRaw  = (parsed.preview_paths     ?? {}) as Record<string, string>;
+
     const versionOrder: [string, string][] = [
       ["clean", "Clean"],
       ["warm",  "Warm"],
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
         url:          versionsRaw[key],
         lufs:         lufsRaw[key]     ?? 0,
         truePeak:     truePeakRaw[key] ?? 0,
-        waveformData: [] as number[],
+        waveformData: versionWaveforms[key] ?? [] as number[],
       }));
 
     const masterResult = parsed as unknown as MasterResult;
@@ -79,13 +83,20 @@ export async function POST(req: NextRequest) {
     await prisma.masteringJob.update({
       where: { id: jobId },
       data:  {
-        versions:      versionsArray as any,
-        exports:       (masterResult.exports  ?? []) as any,
-        reportData:    (masterResult.report   ?? null) as any,
-        cleanFilePath: extractFilePath(versionsRaw["clean"]),
-        warmFilePath:  extractFilePath(versionsRaw["warm"]),
-        punchFilePath: extractFilePath(versionsRaw["punch"]),
-        loudFilePath:  extractFilePath(versionsRaw["loud"]),
+        versions:           versionsArray as any,
+        exports:            (masterResult.exports  ?? []) as any,
+        reportData:         (masterResult.report   ?? null) as any,
+        cleanFilePath:      extractFilePath(versionsRaw["clean"]),
+        warmFilePath:       extractFilePath(versionsRaw["warm"]),
+        punchFilePath:      extractFilePath(versionsRaw["punch"]),
+        loudFilePath:       extractFilePath(versionsRaw["loud"]),
+        versionWaveforms:   versionWaveforms as any,
+        versionStats:       versionStats as any,
+        originalPreviewPath: previewPathsRaw["original"] ?? null,
+        previewCleanPath:   previewPathsRaw["clean"]    ?? null,
+        previewWarmPath:    previewPathsRaw["warm"]     ?? null,
+        previewPunchPath:   previewPathsRaw["punch"]    ?? null,
+        previewLoudPath:    previewPathsRaw["loud"]     ?? null,
       },
     });
 

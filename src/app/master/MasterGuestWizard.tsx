@@ -10,8 +10,9 @@
  * - Pay first, then all 4 mastered versions generated for comparison
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
+import MasterPreviewPlayer from "@/components/mastering/MasterPreviewPlayer";
 import {
   Upload, Loader2, ChevronRight, ChevronLeft, Check, Download,
   Play, Pause, Zap, Info, X, Music, Wand2, ExternalLink,
@@ -40,12 +41,19 @@ interface MasterReport {
 }
 
 interface JobResult {
-  versions:        MasterVersion[];
-  exports:         { platform: string; lufs: number; format: string; url: string }[];
-  reportData:      MasterReport | null;
-  previewUrl:      string;
-  originalUrl:     string | null;
-  selectedVersion: string | null;
+  versions:         MasterVersion[];
+  exports:          { platform: string; lufs: number; format: string; url: string }[];
+  reportData:       MasterReport | null;
+  previewUrl:       string;
+  originalUrl:      string | null;
+  selectedVersion:  string | null;
+  // Preview player fields
+  inputLufs:        number | null;
+  referenceTrackUrl: string | null;
+  referenceFileName: string | null;
+  previewWaveform:  number[] | null;
+  versionWaveforms: Record<string, number[]> | null;
+  versionStats:     Record<string, { lufs: number; peak: number; range: number; width: number }> | null;
 }
 
 const TIER_PRICES: Record<Tier, Record<Mode, string>> = {
@@ -226,13 +234,19 @@ export function MasterGuestWizard({
       try {
         const res  = await fetch(`/api/mastering/job/${jobId}/status`);
         const data = await res.json() as {
-          status:        string;
-          versions?:     MasterVersion[];
-          exports?:      { platform: string; lufs: number; format: string; url: string }[];
-          reportData?:   MasterReport & { error?: string };
-          previewUrl?:   string;
-          inputFileUrl?: string;
-          analysisData?: Record<string, unknown>;
+          status:             string;
+          versions?:          MasterVersion[];
+          exports?:           { platform: string; lufs: number; format: string; url: string }[];
+          reportData?:        MasterReport & { error?: string };
+          previewUrl?:        string;
+          inputFileUrl?:      string;
+          analysisData?:      Record<string, unknown>;
+          inputLufs?:         number | null;
+          referenceTrackUrl?: string | null;
+          referenceFileName?: string | null;
+          previewWaveform?:   number[] | null;
+          versionWaveforms?:  Record<string, number[]> | null;
+          versionStats?:      Record<string, { lufs: number; peak: number; range: number; width: number }> | null;
         };
         setJobStatus(data.status);
         if (data.status === "AWAITING_DIRECTION") {
@@ -246,12 +260,18 @@ export function MasterGuestWizard({
           clearTimeout(timeoutId);
           clearInterval(pollRef.current!);
           setResult({
-            versions:        Array.isArray(data.versions) ? data.versions : [],
-            exports:         Array.isArray(data.exports)  ? data.exports  : [],
-            reportData:      data.reportData ?? null,
-            previewUrl:      data.previewUrl ?? "",
-            originalUrl:     data.inputFileUrl ?? null,
-            selectedVersion: null,
+            versions:          Array.isArray(data.versions) ? data.versions : [],
+            exports:           Array.isArray(data.exports)  ? data.exports  : [],
+            reportData:        data.reportData ?? null,
+            previewUrl:        data.previewUrl ?? "",
+            originalUrl:       data.inputFileUrl ?? null,
+            selectedVersion:   null,
+            inputLufs:         data.inputLufs ?? null,
+            referenceTrackUrl: data.referenceTrackUrl ?? null,
+            referenceFileName: data.referenceFileName ?? null,
+            previewWaveform:   Array.isArray(data.previewWaveform)  ? data.previewWaveform  : null,
+            versionWaveforms:  data.versionWaveforms  ?? null,
+            versionStats:      data.versionStats      ?? null,
           });
           setStep("compare");
         } else if (data.status === "FAILED") {
@@ -1161,143 +1181,26 @@ export function MasterGuestWizard({
         {step === "compare" && result && (
           <div className="space-y-5">
             <div className="text-center">
-              <h2 className="text-lg font-bold">Compare your versions</h2>
+              <h2 className="text-lg font-bold">Your master is ready</h2>
               <p className="text-xs mt-1" style={{ color: "#777" }}>
                 AI recommends: <span style={{ color: "#D4A843" }}>{result.versions[0]?.name}</span>
               </p>
             </div>
 
-            {/* A/B toggle: Original ↔ Selected mastered version */}
-            {result.originalUrl && (
-              <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-                {/* Toggle bar */}
-                <div className="grid grid-cols-2" style={{ backgroundColor: "#111" }}>
-                  {(["original", "mastered"] as const).map((side) => {
-                    const active = side === "original" ? (playing === "original") : (playing !== null && playing !== "original" && playing !== "reference");
-                    const isOrig = side === "original";
-                    return (
-                      <button
-                        key={side}
-                        onClick={() => {
-                          audioRef.current?.pause();
-                          if (isOrig) {
-                            audioRef.current = new Audio(result.originalUrl!);
-                            audioRef.current.play();
-                            audioRef.current.onended = () => setPlaying(null);
-                            setPlaying("original");
-                          } else {
-                            const v = result.versions.find(v => v.name === (selected ?? result.versions[0]?.name));
-                            if (v?.url) {
-                              audioRef.current = new Audio(v.url);
-                              audioRef.current.play();
-                              audioRef.current.onended = () => setPlaying(null);
-                              setPlaying(v.name as VersionName);
-                            }
-                          }
-                        }}
-                        className="py-2.5 text-xs font-semibold transition-all"
-                        style={{
-                          color: active ? "#0A0A0A" : "#777",
-                          backgroundColor: active ? "#D4A843" : "transparent",
-                        }}
-                      >
-                        {isOrig ? "Original" : `Mastered${selected ? ` · ${selected}` : ""}`}
-                      </button>
-                    );
-                  })}
-                </div>
-                {/* Status line */}
-                <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: "#0D0D0D" }}>
-                  {(playing === "original" || (playing && playing !== "reference")) && (
-                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: "#D4A843" }} />
-                  )}
-                  <span className="text-[10px]" style={{ color: "#555" }}>
-                    {playing === "original" ? "Playing original…" : playing && playing !== "reference" ? `Playing ${playing}…` : "Tap Original or Mastered to compare"}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Reference track */}
-            {uploadedRefUrl && (
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-[#2A2A2A]">
-                <button
-                  onClick={() => {
-                    if (playing === "reference") {
-                      audioRef.current?.pause();
-                      setPlaying(null);
-                    } else {
-                      audioRef.current?.pause();
-                      audioRef.current = new Audio(uploadedRefUrl);
-                      audioRef.current.play();
-                      audioRef.current.onended = () => setPlaying(null);
-                      setPlaying("reference");
-                    }
-                  }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "#1A1A1A", border: "1px solid #333" }}
-                >
-                  {playing === "reference"
-                    ? <Pause size={12} style={{ color: "#D4A843" }} />
-                    : <Play  size={12} style={{ color: "#D4A843" }} />
-                  }
-                </button>
-                <div>
-                  <p className="text-xs font-semibold">Reference track</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: "#777" }}>
-                    {refFileName ?? "Your reference"} — compare loudness &amp; tone
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {result.versions.map((v) => (
-              <div
-                key={v.name}
-                onClick={() => selectVersion(v.name)}
-                className={cn("rounded-2xl border p-4 cursor-pointer transition-all", selected === v.name ? "border-[#D4A843] bg-[#D4A843]/8" : "border-[#2A2A2A] hover:border-[#444]")}
-              >
-                <div className="flex items-center gap-3">
-                  <button onClick={(e) => { e.stopPropagation(); togglePlay(v); }} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#1A1A1A", border: "1px solid #333" }}>
-                    {playing === v.name ? <Pause size={13} style={{ color: "#D4A843" }} /> : <Play size={13} style={{ color: "#D4A843" }} />}
-                  </button>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm">{v.name}</span>
-                      {v.name === result.versions[0]?.name && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}>AI recommends</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: "#777" }}>
-                      {VERSION_DESCRIPTIONS[v.name]} · {v.lufs.toFixed(1)} LUFS
-                    </div>
-                  </div>
-                  {selected === v.name && <Check size={15} style={{ color: "#D4A843" }} />}
-                </div>
-              </div>
-            ))}
-
-            {/* Mastering report */}
-            {result.reportData && (
-              <div className="rounded-xl border border-[#2A2A2A] p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Info size={13} style={{ color: "#D4A843" }} />
-                  <span className="text-xs font-semibold" style={{ color: "#D4A843" }}>Mastering Report</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "LUFS",    value: `${result.reportData.finalLufs.toFixed(1)} dB` },
-                    { label: "Peak",    value: `${result.reportData.truePeak.toFixed(1)} dBTP` },
-                    { label: "Dynamic", value: `${result.reportData.dynamicRange.toFixed(1)} dB` },
-                  ].map((m) => (
-                    <div key={m.label} className="rounded-lg p-2 text-center" style={{ backgroundColor: "#111" }}>
-                      <div className="text-sm font-bold">{m.value}</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: "#777" }}>{m.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* ── New preview player ── */}
+            <MasterPreviewPlayer
+              jobId={jobId ?? ""}
+              versions={result.versions.map((v) => ({ name: v.name, url: v.url, lufs: v.lufs }))}
+              previewUrl={result.previewUrl}
+              originalUrl={result.originalUrl}
+              inputLufs={result.inputLufs}
+              referenceFileName={result.referenceFileName}
+              referenceTrackUrl={result.referenceTrackUrl}
+              previewWaveform={result.previewWaveform}
+              versionWaveforms={result.versionWaveforms}
+              versionStats={result.versionStats}
+              onVersionChange={(name) => selectVersion(name as VersionName)}
+            />
 
             {/* Format picker + Download — inline, no separate step */}
             {selected && (

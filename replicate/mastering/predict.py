@@ -50,6 +50,54 @@ def upload_to_supabase(local_path, bucket, remote_path):
     return res["signedURL"]
 
 
+# ---------- Helper: extract waveform peaks from audio array ----------
+def extract_waveform_from_array(y_mono, num_points=200):
+    """Returns list of num_points normalized amplitude values (0-1)."""
+    n = len(y_mono)
+    if n == 0:
+        return [0.0] * num_points
+    chunk_size = max(1, n // num_points)
+    peaks = []
+    for i in range(num_points):
+        chunk = y_mono[i * chunk_size : (i + 1) * chunk_size]
+        peaks.append(float(np.max(np.abs(chunk))) if len(chunk) > 0 else 0.0)
+    max_peak = max(peaks) if max(peaks) > 0 else 1.0
+    return [p / max_peak for p in peaks]
+
+
+# ---------- Helper: dynamic range (dB) ----------
+def measure_dynamic_range(audio_2d):
+    try:
+        y_mono = audio_2d[0] if audio_2d.ndim > 1 else audio_2d
+        peak_db = 20 * np.log10(max(float(np.max(np.abs(y_mono))), 1e-6))
+        rms = librosa.feature.rms(y=y_mono)[0]
+        rms_sorted = np.sort(rms)
+        floor_rms = np.mean(rms_sorted[:max(1, len(rms_sorted) // 4)])
+        floor_db = 20 * np.log10(max(float(floor_rms), 1e-6))
+        dr = round(peak_db - floor_db, 1)
+        return max(0.0, min(dr, 40.0))
+    except Exception:
+        return 0.0
+
+
+# ---------- Helper: stereo width (0–100 %) ----------
+def measure_stereo_width(audio_2d):
+    try:
+        if audio_2d.ndim < 2 or audio_2d.shape[0] < 2:
+            return 0.0
+        L, R = audio_2d[0], audio_2d[1]
+        side = (L - R) / 2
+        mid  = (L + R) / 2
+        side_pwr = float(np.mean(side ** 2))
+        mid_pwr  = float(np.mean(mid  ** 2))
+        total = mid_pwr + side_pwr
+        if total < 1e-10:
+            return 0.0
+        return round(min((side_pwr / total) * 200, 100.0), 1)
+    except Exception:
+        return 0.0
+
+
 # ---------- Helper: key estimation (Krumhansl-Schmuckler) ----------
 def estimate_key(chroma):
     avg_chroma = chroma.mean(axis=1)
@@ -448,13 +496,77 @@ class Predictor(BasePredictor):
         true_peak_data["loud"] = measure_true_peak(y_loud)
         versions["loud"] = upload_to_supabase(loud_path, "processed", f"mastering/{job_id}/master_loud.wav")
 
+        # ---- Per-version preview clips + waveforms + full stats ----
+        # Find best 30-second window using the normalized clean mono audio
+        y_clean_mono = librosa.to_mono(y_clean)
+        hop_sz = sr
+        rms_env = librosa.feature.rms(y=y_clean_mono, hop_length=hop_sz)[0]
+        window_frames = 30
+        if len(rms_env) > window_frames:
+            best_start_f, best_rms_v = 0, 0.0
+            for fi in range(len(rms_env) - window_frames):
+                avg = float(np.mean(rms_env[fi : fi + window_frames]))
+                if avg > best_rms_v:
+                    best_rms_v = avg
+                    best_start_f = fi
+            preview_start = best_start_f * hop_sz
+        else:
+            preview_start = 0
+        preview_end = preview_start + (30 * sr)
+
+        def make_clip(audio_2d, start, end, srate):
+            end = min(end, audio_2d.shape[1])
+            clip = audio_2d[:, start:end].copy()
+            fade = int(0.5 * srate)
+            if clip.shape[1] > fade * 2:
+                clip[:, :fade]  *= np.linspace(0, 1, fade)
+                clip[:, -fade:] *= np.linspace(1, 0, fade)
+            return clip
+
+        v_audio_map = {
+            "original": y_clean,
+            "clean":    y_clean,
+            "warm":     y_warm,
+            "punch":    y_punch,
+            "loud":     y_loud,
+        }
+
+        version_waveforms: dict = {}
+        preview_paths:     dict = {}
+
+        for vname, vaudio in v_audio_map.items():
+            clip = make_clip(vaudio, preview_start, preview_end, sr)
+            clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+            sf.write(clip_tmp, clip.T, sr, subtype="PCM_16")
+            remote_p = f"mastering/{job_id}/preview_{vname}.wav"
+            upload_to_supabase(clip_tmp, "processed", remote_p)
+            preview_paths[vname] = remote_p
+            clip_mono = clip[0] if clip.ndim > 1 else clip
+            version_waveforms[vname] = extract_waveform_from_array(clip_mono)
+            os.unlink(clip_tmp)
+
+        # Full per-version stats
+        version_stats: dict = {}
+        for vname, vaudio in {
+            "clean": y_clean, "warm": y_warm, "punch": y_punch, "loud": y_loud
+        }.items():
+            version_stats[vname] = {
+                "lufs":         lufs_data.get(vname, 0),
+                "truePeak":     true_peak_data.get(vname, 0),
+                "dynamicRange": measure_dynamic_range(vaudio),
+                "stereoWidth":  measure_stereo_width(vaudio),
+            }
+
         os.unlink(input_path)
         shutil.rmtree(out_dir, ignore_errors=True)
 
         return {
-            "versions":   versions,
-            "lufs":       lufs_data,
-            "true_peak":  true_peak_data,
+            "versions":          versions,
+            "lufs":              lufs_data,
+            "true_peak":         true_peak_data,
+            "version_waveforms": version_waveforms,
+            "version_stats":     version_stats,
+            "preview_paths":     preview_paths,
         }
 
     # ---------- PREVIEW ----------

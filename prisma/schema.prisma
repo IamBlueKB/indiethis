@@ -3168,6 +3168,16 @@ model MasteringJob {
   punchFilePath           String?
   loudFilePath            String?
 
+  // Preview player data (waveform + per-version 30s clips)
+  previewWaveform         Json?     // float[] 200 values — original track waveform peaks (0-1)
+  versionWaveforms        Json?     // { clean: float[], warm: float[], punch: float[], loud: float[] }
+  versionStats            Json?     // { clean: {lufs,peak,range,width}, warm: {...}, ... }
+  originalPreviewPath     String?   // mastering/{jobId}/preview_original.wav
+  previewCleanPath        String?   // mastering/{jobId}/preview_clean.wav
+  previewWarmPath         String?
+  previewPunchPath        String?
+  previewLoudPath         String?
+
   // Guest access token relation
   accessToken             MasteringAccessToken?
 
