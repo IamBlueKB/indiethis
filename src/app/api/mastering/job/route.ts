@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
       referenceTrackUrl?:    string;
       referenceFileName?:    string;
       naturalLanguagePrompt?: string;
+      vibeDirection?:        string;
+      platformTarget?:       string;
+      customDirection?:      string;
+      mixDirection?:         string;
       stripePaymentId?:      string;
       creditsUsed?:          boolean;
       guestEmail?:           string;
@@ -110,6 +114,10 @@ export async function POST(req: NextRequest) {
         mixParameters:       body.naturalLanguagePrompt
                                ? { naturalLanguagePrompt: body.naturalLanguagePrompt } as any
                                : undefined,
+        vibeDirection:       body.vibeDirection    ?? null,
+        platformTarget:      body.platformTarget   ?? null,
+        customDirection:     body.customDirection  ?? null,
+        mixDirection:        body.mixDirection     ?? null,
         stripePaymentId:     body.stripePaymentId,
         amount:              chargedAmount,
         albumGroupId:        body.albumGroupId ?? null,

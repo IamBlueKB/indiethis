@@ -97,6 +97,12 @@ export function MasterGuestWizard({
   const [platforms,  setPlatforms]  = useState(["spotify", "apple_music", "youtube", "wav_master"]);
   const [nlPrompt,   setNlPrompt]   = useState("");
 
+  // Direction dropdowns (v2 spec)
+  const [vibeDirection,   setVibeDirection]   = useState<string>("");
+  const [platformTarget,  setPlatformTarget]  = useState<string>("");
+  const [customDirection, setCustomDirection] = useState<string>("");
+  const [mixDirection,    setMixDirection]    = useState<string>("");
+
   const [stereoFile,    setStereoFile]    = useState<File | null>(null);
   const [stems,         setStems]         = useState<{ file: File; name: string; type?: string }[]>([]);
   const [uploadedRefUrl, setUploadedRefUrl] = useState<string | null>(null);
@@ -288,6 +294,10 @@ export function MasterGuestWizard({
           referenceTrackUrl:     uploadedRefUrl ?? undefined,
           referenceFileName:     refFileName ?? undefined,
           naturalLanguagePrompt: nlPrompt.trim() || undefined,
+          vibeDirection:         vibeDirection  || undefined,
+          platformTarget:        platformTarget || undefined,
+          customDirection:       customDirection.trim() || undefined,
+          mixDirection:          mixDirection   || undefined,
           stripePaymentId:       paymentIntentId,
           creditsUsed:           creditsUsed ?? false,
           guestEmail:            email,
@@ -612,23 +622,117 @@ export function MasterGuestWizard({
               </div>
             )}
 
-            {/* Direction */}
-            <div>
-              <p className="text-xs font-medium mb-2" style={{ color: "#777" }}>Direction <span style={{ color: "#555" }}>(optional)</span></p>
-              <div className="rounded-xl border border-[#2A2A2A] focus-within:border-[#D4A843] transition-colors p-0.5">
-                <div className="flex items-start gap-2 px-3 pt-2.5 pb-1">
-                  <Zap size={13} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
-                  <textarea
-                  placeholder={mode === "MASTER_ONLY"
-                    ? "Warmer tone. Brighter highs. More low end. Radio-ready loudness."
-                    : "More reverb on the chorus. Punchier kick. Wide stereo on the pad."}
-                  value={nlPrompt}
-                  onChange={(e) => setNlPrompt(e.target.value)}
-                  rows={2}
-                  className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
-                />
+            {/* Direction — Vibe + Platform dropdowns */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-medium" style={{ color: "#777" }}>Direction <span style={{ color: "#555" }}>(optional)</span></p>
+
+              {/* Vibe Direction */}
+              <div>
+                <p className="text-[10px] mb-1.5" style={{ color: "#555" }}>Vibe</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {[
+                    { value: "warm_full",            label: "Warm & full",          desc: "Low shelf boost, gentle high roll-off, light compression" },
+                    { value: "bright_crisp",         label: "Bright & crisp",       desc: "High shelf boost, mid-high presence, clean limiting" },
+                    { value: "punchy_loud",          label: "Punchy & loud",        desc: "Mid presence boost, aggressive compression, pushed LUFS" },
+                    { value: "lofi_vintage",         label: "Lo-fi / vintage",      desc: "Subtle saturation, rolled highs, relaxed dynamics" },
+                    { value: "natural_transparent",  label: "Natural / transparent", desc: "Minimal processing, preserve original character" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setVibeDirection(vibeDirection === opt.value ? "" : opt.value)}
+                      className={cn(
+                        "flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all text-xs",
+                        vibeDirection === opt.value
+                          ? "border-[#D4A843] bg-[#D4A843]/8"
+                          : "border-[#2A2A2A] hover:border-[#444]"
+                      )}
+                    >
+                      <span className="font-medium" style={{ color: vibeDirection === opt.value ? "#D4A843" : "#ccc" }}>{opt.label}</span>
+                      <span className="text-[10px] ml-3 text-right" style={{ color: "#555" }}>{opt.desc}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {/* Platform Target */}
+              <div>
+                <p className="text-[10px] mb-1.5" style={{ color: "#555" }}>Platform ready</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { value: "spotify",      label: "Spotify",        lufs: "−14 LUFS" },
+                    { value: "apple_music",  label: "Apple Music",    lufs: "−16 LUFS" },
+                    { value: "youtube",      label: "YouTube",        lufs: "−14 LUFS" },
+                    { value: "club_dj",      label: "Club / DJ",      lufs: "−8 to −10" },
+                    { value: "radio",        label: "Radio ready",    lufs: "−12 LUFS" },
+                    { value: "tiktok",       label: "TikTok / Reels", lufs: "−14 LUFS" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPlatformTarget(platformTarget === opt.value ? "" : opt.value)}
+                      className={cn(
+                        "flex flex-col rounded-lg border px-3 py-2 text-left transition-all",
+                        platformTarget === opt.value
+                          ? "border-[#D4A843] bg-[#D4A843]/8"
+                          : "border-[#2A2A2A] hover:border-[#444]"
+                      )}
+                    >
+                      <span className="text-xs font-medium" style={{ color: platformTarget === opt.value ? "#D4A843" : "#ccc" }}>{opt.label}</span>
+                      <span className="text-[10px]" style={{ color: "#555" }}>{opt.lufs}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mix direction — stems mode only */}
+              {mode === "MIX_AND_MASTER" && (
+                <div>
+                  <p className="text-[10px] mb-1.5" style={{ color: "#555" }}>Mix direction</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { value: "vocal_forward",  label: "Vocal forward",  desc: "Boost vocals, duck competing freqs" },
+                      { value: "bass_heavy",     label: "Bass heavy",     desc: "Sub boost, tighten kick" },
+                      { value: "balanced_mix",   label: "Balanced mix",   desc: "Even stem levels, gentle processing" },
+                      { value: "drum_focused",   label: "Drum focused",   desc: "Punch kicks/snares, tighten cymbals" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setMixDirection(mixDirection === opt.value ? "" : opt.value)}
+                        className={cn(
+                          "flex flex-col rounded-lg border px-3 py-2 text-left transition-all",
+                          mixDirection === opt.value
+                            ? "border-[#D4A843] bg-[#D4A843]/8"
+                            : "border-[#2A2A2A] hover:border-[#444]"
+                        )}
+                      >
+                        <span className="text-xs font-medium" style={{ color: mixDirection === opt.value ? "#D4A843" : "#ccc" }}>{opt.label}</span>
+                        <span className="text-[10px]" style={{ color: "#555" }}>{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Custom direction — Premium/Pro only */}
+              {(tier === "PREMIUM" || tier === "PRO") && (
+                <div>
+                  <p className="text-[10px] mb-1.5" style={{ color: "#555" }}>Custom notes <span style={{ color: "#444" }}>(Premium)</span></p>
+                  <div className="rounded-xl border border-[#2A2A2A] focus-within:border-[#D4A843] transition-colors p-0.5">
+                    <div className="flex items-start gap-2 px-3 pt-2.5 pb-1">
+                      <Zap size={13} className="mt-0.5 shrink-0" style={{ color: "#D4A843" }} />
+                      <textarea
+                        placeholder="Add specific notes — e.g. more low end, wider stereo, brighter vocals."
+                        value={customDirection}
+                        onChange={(e) => setCustomDirection(e.target.value)}
+                        rows={2}
+                        className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-[#444]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Reference track — Premium/Pro only */}

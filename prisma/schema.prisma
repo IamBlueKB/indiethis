@@ -3156,6 +3156,12 @@ model MasteringJob {
   inputBalance            Json?     // { sub, low, mid, high }
   directionUsed           String?   // NLP prompt text applied to mastering
 
+  // Direction dropdowns (v2 spec)
+  vibeDirection           String?   // warm_full | bright_crisp | punchy_loud | lofi_vintage | natural_transparent
+  platformTarget          String?   // spotify | apple_music | youtube | club_dj | radio | tiktok
+  customDirection         String?   // Premium/Pro only — free-text notes
+  mixDirection            String?   // stems mode: vocal_forward | bass_heavy | balanced_mix | drum_focused
+
   // Persistent file paths (signed URLs expire; paths are permanent)
   cleanFilePath           String?   // mastering/{jobId}/master_clean.wav
   warmFilePath            String?
