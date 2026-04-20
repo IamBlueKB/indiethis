@@ -230,18 +230,30 @@ export async function startMasteringAction(
   const secret = WEBHOOK_SECRET ? `?secret=${encodeURIComponent(WEBHOOK_SECRET)}` : "";
   const webhookUrl = `${APP_URL}${webhookPath}${secret}`;
 
-  const prediction = await replicate.predictions.create({
-    version: MASTERING_VERSION,
-    input: {
-      action,
-      ...inputs,
-      supabase_url:         SUPABASE_URL,
-      supabase_service_key: SUPABASE_SERVICE_KEY,
-    },
-    webhook:                webhookUrl,
-    webhook_events_filter:  ["completed"],
-  });
-  return prediction.id;
+  // Retry up to 3 times on 429 rate limit
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+    try {
+      const prediction = await replicate.predictions.create({
+        version: MASTERING_VERSION,
+        input: {
+          action,
+          ...inputs,
+          supabase_url:         SUPABASE_URL,
+          supabase_service_key: SUPABASE_SERVICE_KEY,
+        },
+        webhook:                webhookUrl,
+        webhook_events_filter:  ["completed"],
+      });
+      return prediction.id;
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("429")) throw err; // only retry on rate limit
+    }
+  }
+  throw lastError;
 }
 
 // ─── Replicate engine helper ──────────────────────────────────────────────────
