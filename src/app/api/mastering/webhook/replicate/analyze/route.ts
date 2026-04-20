@@ -65,8 +65,35 @@ export async function POST(req: NextRequest) {
 
   try {
     const raw = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
-    const analysis = JSON.parse(raw) as AudioAnalysis;
-    const job      = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+    const rawAnalysis = JSON.parse(raw) as Record<string, unknown>;
+
+    // Normalize Python output → AudioAnalysis shape
+    // Python returns: { bpm, key, lufs, balance: {sub,low,mid,high}, beat_count, duration }
+    // TypeScript expects: { bpm, key, lufs, frequencyBalance: FrequencyBand[], sections: DetectedSection[], durationSec, ... }
+    const balance = (rawAnalysis.balance ?? {}) as Record<string, number>;
+    const totalEnergy = Math.max(
+      (balance.sub ?? 0) + (balance.low ?? 0) + (balance.mid ?? 0) + (balance.high ?? 0),
+      0.0001
+    );
+    const analysis: AudioAnalysis = {
+      bpm:              (rawAnalysis.bpm as number) ?? 120,
+      key:              (rawAnalysis.key as string) ?? "C major",
+      lufs:             (rawAnalysis.lufs as number) ?? -14,
+      truePeak:         0,
+      dynamicRange:     0,
+      stereoWidth:      0,
+      spectralCentroid: 0,
+      durationSec:      (rawAnalysis.duration as number) ?? 0,
+      frequencyBalance: [
+        { band: "sub",  hzLow: 0,    hzHigh: 60,   energy: (balance.sub  ?? 0) / totalEnergy },
+        { band: "low",  hzLow: 60,   hzHigh: 250,  energy: (balance.low  ?? 0) / totalEnergy },
+        { band: "mid",  hzLow: 250,  hzHigh: 2000, energy: (balance.mid  ?? 0) / totalEnergy },
+        { band: "high", hzLow: 2000, hzHigh: 20000,energy: (balance.high ?? 0) / totalEnergy },
+      ],
+      sections: [],  // Python analyze doesn't detect sections; Claude works from BPM/key/lufs/balance
+    };
+
+    const job = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
 
     const genre          = job.genre ?? await detectGenre(analysis);
     const mood           = job.mood ?? "CLEAN";
