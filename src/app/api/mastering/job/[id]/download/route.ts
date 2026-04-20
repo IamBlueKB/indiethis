@@ -177,13 +177,31 @@ export async function GET(
     // Construct a clean filename
     const ext      = FORMAT_EXT[effectiveFormat] ?? "wav";
     const filename = `master_${targetVersion.toLowerCase()}_${id.slice(-6)}_indiethis.${ext}`;
+    const mime     = FORMAT_MIME[effectiveFormat] ?? "audio/wav";
 
-    // Redirect to the pre-signed URL with content-disposition hint
-    const redirect = new URL(url);
-    redirect.searchParams.set("response-content-disposition", `attachment; filename="${filename}"`);
-    redirect.searchParams.set("response-content-type", FORMAT_MIME[effectiveFormat] ?? "audio/wav");
+    // PROXY the file through this route instead of redirecting.
+    // The <a download> attribute only works for same-origin URLs — if we redirect
+    // to Supabase (cross-origin), the browser ignores `download` and plays the file.
+    // By streaming through here we keep same-origin and force a file download.
+    const fileRes = await fetch(url);
+    if (!fileRes.ok) {
+      console.error(`[download] Upstream fetch failed ${fileRes.status} for ${url}`);
+      return NextResponse.json({ error: "File fetch failed." }, { status: 502 });
+    }
 
-    return NextResponse.redirect(redirect.toString(), { status: 302 });
+    return new Response(fileRes.body, {
+      status: 200,
+      headers: {
+        "Content-Type":        mime,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        // Forward Content-Length if present so browser shows progress
+        ...(fileRes.headers.get("content-length")
+          ? { "Content-Length": fileRes.headers.get("content-length")! }
+          : {}),
+        // Don't cache — signed URLs are per-request
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (err) {
     console.error(`GET /api/mastering/job/${id}/download:`, err);
     return NextResponse.json({ error: "Download failed." }, { status: 500 });
