@@ -97,6 +97,7 @@ export function MasterGuestWizard({
   const [platforms,  setPlatforms]  = useState(["spotify", "apple_music", "youtube", "wav_master"]);
   const [nlPrompt,       setNlPrompt]       = useState("");
   const [selectedFormat, setSelectedFormat] = useState<string>("wav_24_44");
+  const [emailSent, setEmailSent] = useState(false);
 
   // Direction dropdowns (v2 spec)
   const [vibeDirection,   setVibeDirection]   = useState<string>("");
@@ -1328,15 +1329,32 @@ export function MasterGuestWizard({
                   ))}
                 </div>
 
-                <a
-                  href={`/api/mastering/job/${jobId}/download?format=${selectedFormat}&version=${selected}`}
-                  download
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Trigger file download
+                    const a = document.createElement("a");
+                    a.href = `/api/mastering/job/${jobId}/download?format=${selectedFormat}&version=${selected}`;
+                    a.download = "";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    // Silently email the results link in the background
+                    if (!emailSent) {
+                      setEmailSent(true);
+                      fetch(`/api/mastering/job/${jobId}/email-results`, {
+                        method:  "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body:    JSON.stringify({}),
+                      }).catch(() => {});
+                    }
+                  }}
                   className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all"
                   style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
                 >
                   <Download size={15} />
                   Download {selected} · {selectedFormat === "mp3_320" ? "MP3" : selectedFormat.startsWith("wav") ? "WAV" : selectedFormat.startsWith("flac") ? "FLAC" : "AIFF"}
-                </a>
+                </button>
               </div>
             )}
 
