@@ -185,9 +185,9 @@ export function MasterGuestWizard({
         if (data.status === "COMPLETE") {
           clearTimeout(timeoutId);
           setResult({
-            versions:        data.versions ?? [],
-            exports:         data.exports  ?? [],
-            reportData:      data.reportData!,
+            versions:        Array.isArray(data.versions) ? data.versions : [],
+            exports:         Array.isArray(data.exports)  ? data.exports  : [],
+            reportData:      data.reportData ?? null,
             previewUrl:      data.previewUrl ?? "",
             selectedVersion: null,
           });

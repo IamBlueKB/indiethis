@@ -42,15 +42,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const raw = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
-    const previewResult = JSON.parse(raw) as PreviewResult;
-    const job           = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+    const raw    = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const job    = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+
+    // Python returns preview_url (snake_case); handle both
+    const previewUrl = (parsed.previewUrl ?? parsed.preview_url ?? null) as string | null;
 
     await prisma.masteringJob.update({
       where: { id: jobId },
       data:  {
         status:           "COMPLETE",
-        previewUrl:       previewResult.previewUrl,
+        previewUrl,
         previewExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
       },
     });

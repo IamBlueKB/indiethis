@@ -42,16 +42,37 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const raw = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
-    const masterResult = JSON.parse(raw) as MasterResult;
-    const job          = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+    const raw    = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const job    = await prisma.masteringJob.findUniqueOrThrow({ where: { id: jobId } });
+
+    // Python returns versions as {clean: url, warm: url, punch: url, loud: url}
+    // Frontend expects [{name, url, lufs, truePeak, waveformData}]
+    const versionsRaw = (parsed.versions ?? {}) as Record<string, string>;
+    const versionOrder: [string, string][] = [
+      ["clean", "Clean"],
+      ["warm",  "Warm"],
+      ["punch", "Punch"],
+      ["loud",  "Loud"],
+    ];
+    const versionsArray = versionOrder
+      .filter(([key]) => versionsRaw[key])
+      .map(([key, name]) => ({
+        name,
+        url:          versionsRaw[key],
+        lufs:         0,
+        truePeak:     0,
+        waveformData: [] as number[],
+      }));
+
+    const masterResult = parsed as unknown as MasterResult;
 
     await prisma.masteringJob.update({
       where: { id: jobId },
       data:  {
-        versions:   masterResult.versions as any,
-        exports:    masterResult.exports  as any,
-        reportData: masterResult.report   as any,
+        versions:   versionsArray as any,
+        exports:    (masterResult.exports  ?? []) as any,
+        reportData: (masterResult.report   ?? null) as any,
       },
     });
 
