@@ -42,7 +42,7 @@ interface MasterReport {
 interface JobResult {
   versions:        MasterVersion[];
   exports:         { platform: string; lufs: number; format: string; url: string }[];
-  reportData:      MasterReport;
+  reportData:      MasterReport | null;
   previewUrl:      string;
   selectedVersion: string | null;
 }
