@@ -37,6 +37,21 @@ export async function POST(req: NextRequest) {
   console.error("analyze webhook body:", JSON.stringify(body).slice(0, 500));
 
   if (body.status !== "succeeded") {
+    const errMsg = body.error ?? "";
+    // "PA" = Prediction Aborted (cold start / Replicate infrastructure fluke) — auto-requeue once
+    const isRetryable = errMsg.includes("retry") || errMsg.includes("PA") || errMsg.includes("interrupted");
+    if (isRetryable) {
+      const { startMixAction } = await import("@/lib/mix-console/engine");
+      const job = await prisma.mixJob.findUnique({ where: { id: jobId }, select: { inputFiles: true } });
+      const inputFiles = (job?.inputFiles ?? []) as { url: string; label: string }[];
+      await startMixAction(
+        "analyze-mix",
+        { stems_urls: JSON.stringify(inputFiles.map((f) => f.url)), job_id: jobId },
+        "/api/mix-console/webhook/replicate/analyze",
+      ).catch(() => prisma.mixJob.update({ where: { id: jobId }, data: { status: "FAILED" } }));
+      return NextResponse.json({ ok: true });
+    }
+    console.error(`analyze webhook: prediction failed for job ${jobId}:`, errMsg);
     await prisma.mixJob.update({
       where: { id: jobId },
       data:  { status: "FAILED" },

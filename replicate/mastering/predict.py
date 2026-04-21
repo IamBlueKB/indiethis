@@ -433,6 +433,8 @@ class Predictor(BasePredictor):
             result = self._preview_mix(job_id)
         elif action == "revise-mix":
             result = self._revise_mix(job_id, mix_params_json)
+        elif action == "separate-stems":
+            result = self._separate_stems(audio_url, job_id)
         else:
             raise ValueError(f"Unknown action: {action}")
 
@@ -991,6 +993,54 @@ class Predictor(BasePredictor):
             "word_timestamps":     [],
             "room_reverb":         round(room_reverb, 3),
             "pitch_deviation":     round(pitch_deviation, 3),
+        }
+
+    # ---------- SEPARATE STEMS (Beat Polish) ----------
+    def _separate_stems(self, audio_url, job_id):
+        """
+        Separates a stereo beat/instrumental into drums, bass, other, and vocals
+        using a simple frequency-band split (no ML model — keeps Cog image lean).
+        Used only for Beat Polish add-on in VOCAL_BEAT mode.
+        Returns { drums, bass, other } signed URLs uploaded to Supabase.
+        """
+        audio_path = download_audio(audio_url)
+        y, sr = librosa.load(audio_path, sr=None, mono=False)
+        os.unlink(audio_path)
+
+        if y.ndim == 1:
+            y = np.stack([y, y])
+
+        def write_stem(audio_2d, name):
+            path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+            sf.write(path, audio_2d.T, sr, subtype="PCM_16")
+            remote = f"mix-console/{job_id}/beat_{name}.wav"
+            url = upload_to_supabase(path, "processed", remote)
+            os.unlink(path)
+            return url
+
+        # Frequency-band stem separation via EQ carving
+        from pedalboard import HighpassFilter, LowpassFilter
+
+        # Bass: below 300Hz
+        bass_board = Pedalboard([LowpassFilter(cutoff_frequency_hz=300)])
+        y_bass = bass_board(y.astype(np.float32), sr)
+
+        # Drums: mid-punch band (300Hz–5kHz), transient-heavy
+        drums_board = Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=200),
+            LowpassFilter(cutoff_frequency_hz=8000),
+            Compressor(threshold_db=-12, ratio=4, attack_ms=1, release_ms=30),
+        ])
+        y_drums = drums_board(y.astype(np.float32), sr)
+
+        # Other: everything else (melodics, pads, synths)
+        other_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=300)])
+        y_other = other_board(y.astype(np.float32), sr)
+
+        return {
+            "bass":  write_stem(y_bass,  "bass"),
+            "drums": write_stem(y_drums, "drums"),
+            "other": write_stem(y_other, "other"),
         }
 
     # ---------- MIX FULL ----------

@@ -5,7 +5,7 @@
  * Uses a separate model version from mastering (REPLICATE_MIX_MODEL_VERSION).
  * Stem separation still routes to fal-ai/demucs to keep the Cog image lean.
  *
- * Model: r8.im/iambluekb/indiethis-dsp (same cog, new version after mix actions added)
+ * Model: r8.im/indiethis/indiethis-dsp (same cog, new version after mix actions added)
  * Env:   REPLICATE_API_TOKEN, REPLICATE_MIX_MODEL_VERSION
  */
 
