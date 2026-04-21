@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Upload, Loader2, ChevronRight, ChevronLeft, Check, Download,
@@ -60,13 +61,17 @@ const card = "rounded-2xl border border-[#1A1A1A] p-8";
 
 export default function MixConsoleWizardPage() {
   const { data: session } = useSession();
+  const searchParams      = useSearchParams();
 
   // ── State ──
   const [step, setStep]   = useState<Step>("email");
   const [email, setEmail] = useState("");
 
   const [mode, setMode] = useState<MixMode>("VOCAL_BEAT");
-  const [tier, setTier] = useState<MixTier>("STANDARD");
+  const [tier, setTier] = useState<MixTier>(() => {
+    const t = searchParams.get("tier")?.toUpperCase();
+    return (t === "STANDARD" || t === "PREMIUM" || t === "PRO") ? t : "STANDARD";
+  });
 
   // Upload — VOCAL_BEAT: vocal + beat separately; TRACKED_STEMS: multi
   const [vocalFile,       setVocalFile]       = useState<File | null>(null);

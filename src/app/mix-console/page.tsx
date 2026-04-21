@@ -246,7 +246,7 @@ export default function MixConsolePage() {
                 ))}
               </ul>
               <Link
-                href="/mix-console/wizard"
+                href={`/mix-console/wizard?tier=${plan.tier}`}
                 className="block text-center py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 no-underline"
                 style={
                   plan.highlight
