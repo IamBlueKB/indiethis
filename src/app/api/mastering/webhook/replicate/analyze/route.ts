@@ -67,6 +67,11 @@ export async function POST(req: NextRequest) {
     const raw = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
     const rawAnalysis = JSON.parse(raw) as Record<string, unknown>;
 
+    // Original track waveform — 200-point peak envelope returned by analyze step
+    const originalWaveform = Array.isArray(rawAnalysis.waveform)
+      ? (rawAnalysis.waveform as number[])
+      : null;
+
     // Normalize Python output → AudioAnalysis shape
     // Python returns: { bpm, key, lufs, balance: {sub,low,mid,high}, beat_count, duration }
     // TypeScript expects: { bpm, key, lufs, frequencyBalance: FrequencyBand[], sections: DetectedSection[], durationSec, ... }
@@ -140,6 +145,8 @@ export async function POST(req: NextRequest) {
           high: (balance.high ?? 0) / totalEnergy,
         },
         masterParameters: { ...masterDecision.params, reasoning: masterDecision.reasoning } as any,
+        // Store original track waveform immediately — available on compare screen
+        ...(originalWaveform ? { previewWaveform: originalWaveform as any } : {}),
       },
     });
 

@@ -252,6 +252,9 @@ class Predictor(BasePredictor):
         _, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
         beat_times = librosa.frames_to_time(beats, sr=sr)
 
+        # Waveform — 200-point peak envelope of the full original track
+        waveform = extract_waveform_from_array(y)
+
         os.unlink(audio_path)
 
         return {
@@ -260,7 +263,8 @@ class Predictor(BasePredictor):
             "lufs": float(loudness),
             "balance": balance,
             "beat_count": len(beat_times),
-            "duration": float(len(y) / sr)
+            "duration": float(len(y) / sr),
+            "waveform": waveform,
         }
 
     # ---------- CLASSIFY STEMS ----------
