@@ -191,6 +191,19 @@ export default function MixConsolePage() {
         </div>
       </section>
 
+      {/* ── Signal Flow Graphic ── */}
+      <section className="max-w-4xl mx-auto px-6 pb-16">
+        <h2 className="text-center text-2xl font-bold mb-2">The signal path</h2>
+        <p className="text-center text-sm mb-10" style={{ color: "#666" }}>
+          Every stem runs through an intelligent processing chain.
+        </p>
+        <div className="flex justify-center">
+          <div className="w-full max-w-sm">
+            <SignalFlowGraphic />
+          </div>
+        </div>
+      </section>
+
       {/* ── Pricing ── */}
       <section className="max-w-4xl mx-auto px-6 pb-16">
         <h2 className="text-center text-2xl font-bold mb-2">Simple pricing</h2>
@@ -245,19 +258,6 @@ export default function MixConsolePage() {
               </Link>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ── Signal Flow Graphic ── */}
-      <section className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-center text-2xl font-bold mb-2">The signal path</h2>
-        <p className="text-center text-sm mb-10" style={{ color: "#666" }}>
-          Every stem runs through an intelligent processing chain.
-        </p>
-        <div className="flex justify-center">
-          <div className="w-full max-w-sm">
-            <SignalFlowGraphic />
-          </div>
         </div>
       </section>
 
