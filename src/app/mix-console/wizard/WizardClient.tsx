@@ -215,8 +215,12 @@ export default function MixConsoleWizardClient() {
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ filename: file.name, contentType: file.type, folder: "mix-console" }),
     });
-    const { uploadUrl, accessUrl } = await res.json() as { uploadUrl: string; accessUrl: string };
-    await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+    const text = await res.text();
+    if (!res.ok || !text) throw new Error(`Upload failed (${res.status}): ${text || "empty response"}`);
+    const { uploadUrl, accessUrl } = JSON.parse(text) as { uploadUrl: string; accessUrl: string };
+    if (!uploadUrl || !accessUrl) throw new Error("Upload service returned invalid response. Please try again.");
+    const putRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+    if (!putRes.ok) throw new Error(`File upload failed (${putRes.status}). Please try again.`);
     return accessUrl;
   }
 
@@ -802,14 +806,19 @@ export default function MixConsoleWizardClient() {
                   value: genre,
                   set: setGenre,
                   options: [
-                    { v: "AUTO", l: "Auto-detect" },
-                    { v: "HIP_HOP", l: "Hip-Hop" },
-                    { v: "RNB", l: "R&B" },
-                    { v: "POP", l: "Pop" },
-                    { v: "ROCK", l: "Rock" },
+                    { v: "AUTO",       l: "Auto-detect" },
+                    { v: "HIP_HOP",    l: "Hip-Hop" },
+                    { v: "TRAP",       l: "Trap" },
+                    { v: "RNB",        l: "R&B" },
+                    { v: "POP",        l: "Pop" },
+                    { v: "AFROBEATS",  l: "Afrobeats" },
+                    { v: "LATIN",      l: "Latin" },
+                    { v: "ROCK",       l: "Rock" },
                     { v: "ELECTRONIC", l: "Electronic" },
-                    { v: "ACOUSTIC", l: "Acoustic" },
-                    { v: "LO_FI", l: "Lo-Fi" },
+                    { v: "ACOUSTIC",   l: "Acoustic" },
+                    { v: "LO_FI",      l: "Lo-Fi" },
+                    { v: "GOSPEL",     l: "Gospel" },
+                    { v: "COUNTRY",    l: "Country" },
                   ],
                 },
                 {
