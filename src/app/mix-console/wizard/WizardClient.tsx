@@ -171,7 +171,9 @@ export default function MixConsoleWizardClient() {
     pollRef.current = setInterval(async () => {
       try {
         const res  = await fetch(`/api/mix-console/job/${jobId}`);
-        const data = await res.json() as Record<string, unknown>;
+        const pollText = await res.text();
+        if (!pollText) return;
+        const data = JSON.parse(pollText) as Record<string, unknown>;
         const status = data.status as string;
         setJobStatus(status);
 
@@ -278,7 +280,9 @@ export default function MixConsoleWizardClient() {
           guestEmail:      email,
         }),
       });
-      const resData = await res.json() as { jobId?: string; error?: string };
+      const resText = await res.text();
+      if (!resText) throw new Error("No response from server. Please try again.");
+      const resData = JSON.parse(resText) as { jobId?: string; error?: string };
       if (!res.ok || !resData.jobId) throw new Error(resData.error ?? "Failed to start mix job.");
 
       document.cookie = `indiethis_guest_email=${encodeURIComponent(email)}; path=/; max-age=604800`;

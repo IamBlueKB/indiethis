@@ -28,6 +28,8 @@ import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 
+export const maxDuration = 30;
+
 const MAX_REVISIONS: Record<string, number> = {
   STANDARD: 0,
   PREMIUM:  2,
