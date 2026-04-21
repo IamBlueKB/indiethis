@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import SignalFlowGraphic from "./SignalFlowGraphic";
 
 export const metadata: Metadata = {
   title: "AI Mix Console — IndieThis",
@@ -57,48 +58,6 @@ const PRICING = [
     badge:     null,
   },
 ];
-
-// ─── Competitor comparison ────────────────────────────────────────────────────
-
-const COMPARE_FEATURES = [
-  "Section-aware processing",
-  "Lyric-driven delay throws",
-  "Custom word delay requests",
-  "Vocal classification",
-  "De-reverb",
-  "Breath editing",
-  "Pitch correction",
-  "Reference track matching",
-  "Revision rounds",
-  "Direct mastering handoff",
-];
-
-type CompetitorStatus = "yes" | "partial" | "no";
-
-const COMPETITORS: { name: string; values: CompetitorStatus[] }[] = [
-  {
-    name:   "IndieThis",
-    values: ["yes","yes","yes","yes","yes","yes","yes","yes","yes","yes"],
-  },
-  {
-    name:   "Cryo Mix",
-    values: ["partial","no","no","yes","no","partial","yes","partial","no","no"],
-  },
-  {
-    name:   "LANDR",
-    values: ["no","no","no","no","no","no","yes","partial","no","yes"],
-  },
-  {
-    name:   "RoEx Automix",
-    values: ["partial","no","no","partial","partial","no","yes","no","no","no"],
-  },
-];
-
-function StatusIcon({ value }: { value: CompetitorStatus }) {
-  if (value === "yes")     return <span style={{ color: "#D4A843" }}>✓</span>;
-  if (value === "partial") return <span style={{ color: "#888" }}>½</span>;
-  return <span style={{ color: "#444" }}>✗</span>;
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -289,57 +248,16 @@ export default function MixConsolePage() {
         </div>
       </section>
 
-      {/* ── Competitor Comparison Table ── */}
+      {/* ── Signal Flow Graphic ── */}
       <section className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-center text-2xl font-bold mb-2">How we stack up</h2>
+        <h2 className="text-center text-2xl font-bold mb-2">The signal path</h2>
         <p className="text-center text-sm mb-10" style={{ color: "#666" }}>
-          Features the other tools don&apos;t have.
+          Every stem runs through an intelligent processing chain.
         </p>
-        <div className="overflow-x-auto rounded-2xl" style={{ border: "1px solid #1A1A1A" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: "#111" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1A1A1A" }}>
-                <th
-                  className="text-left text-xs font-semibold py-4 px-5"
-                  style={{ color: "#555", width: "40%" }}
-                >
-                  Feature
-                </th>
-                {COMPETITORS.map((c) => (
-                  <th
-                    key={c.name}
-                    className="text-center text-xs font-bold py-4 px-3"
-                    style={{
-                      color: c.name === "IndieThis" ? "#D4A843" : "#555",
-                      minWidth: 90,
-                    }}
-                  >
-                    {c.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARE_FEATURES.map((feature, fi) => (
-                <tr
-                  key={feature}
-                  style={{
-                    borderBottom: fi < COMPARE_FEATURES.length - 1 ? "1px solid #141414" : "none",
-                    backgroundColor: fi % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
-                  }}
-                >
-                  <td className="py-3.5 px-5 text-sm" style={{ color: "#aaa" }}>
-                    {feature}
-                  </td>
-                  {COMPETITORS.map((c) => (
-                    <td key={c.name} className="py-3.5 px-3 text-center text-base font-bold">
-                      <StatusIcon value={c.values[fi]} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex justify-center">
+          <div className="w-full max-w-sm">
+            <SignalFlowGraphic />
+          </div>
         </div>
       </section>
 
