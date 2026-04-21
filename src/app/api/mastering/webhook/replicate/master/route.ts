@@ -90,7 +90,10 @@ export async function POST(req: NextRequest) {
         warmFilePath:       extractFilePath(versionsRaw["warm"]),
         punchFilePath:      extractFilePath(versionsRaw["punch"]),
         loudFilePath:       extractFilePath(versionsRaw["loud"]),
-        previewWaveform:    (versionWaveforms["original"] ?? null) as any,
+        // Do NOT overwrite previewWaveform here — the analyze step already stored the
+        // true pre-mastered full-track waveform which is used as the grey "original"
+        // in the A/B player. Overwriting with versionWaveforms["original"] (which is
+        // the LUFS-normalised clean clip) makes Clean's grey and gold look identical.
         versionWaveforms:   versionWaveforms as any,
         versionStats:       versionStats as any,
         originalPreviewPath: previewPathsRaw["original"] ?? null,
