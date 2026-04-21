@@ -348,6 +348,7 @@ export default function MixConsoleWizardClient() {
     AWAITING_DIRECTION: ["Analysis complete…"],
     MIXING:             ["Applying vocal chain…", "Cleaning room reverb…", "Section-aware compression…", "Balancing stereo image…"],
     PREVIEWING:         ["Finding highest-energy window…", "Generating 30-second preview…"],
+    REVISING:           ["Applying your feedback…", "Re-processing vocal chain…", "Rebuilding mix with revisions…"],
   };
 
   const STAGE_DOTS = [
@@ -364,6 +365,7 @@ export default function MixConsoleWizardClient() {
     ANALYZING:          40,
     AWAITING_DIRECTION: 55,
     MIXING:             75,
+    REVISING:           78,
     PREVIEWING:         92,
   };
 
