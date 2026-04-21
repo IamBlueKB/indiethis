@@ -37,6 +37,9 @@ function isPublicPath(pathname: string): boolean {
   // AI Mastering — public (guests pay, then process; subscribers redirect to dashboard)
   if (pathname.startsWith("/api/mastering")) return true;
   if (pathname.startsWith("/master")) return true;
+  // AI Mix Console — public (guests + subscribers)
+  if (pathname.startsWith("/api/mix-console")) return true;
+  if (pathname.startsWith("/mix-console")) return true;
   // File upload presign — public so guests can upload audio files
   if (pathname.startsWith("/api/upload/presign")) return true;
   // Public invoice pages — no auth required (artists paying invoices)
