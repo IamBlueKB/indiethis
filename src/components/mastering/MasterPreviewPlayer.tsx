@@ -328,16 +328,22 @@ export default function MasterPreviewPlayer({
 
   // ── Stats for current state ──────────────────────────────────────────────
 
-  const vKey  = (selected?.name ?? "warm").toLowerCase();
+  const vKey     = (selected?.name ?? "warm").toLowerCase();
+  const rawStats = versionStats?.[vKey];
   const stats = isOriginal
     ? { lufs: inputLufs ?? -18, peak: -1.5, range: 12, width: 60 }
-    : (versionStats?.[vKey] ?? { lufs: selected?.lufs ?? -14, peak: -0.3, range: 8, width: 80 });
+    : {
+        lufs:  rawStats?.lufs  ?? selected?.lufs ?? -14,
+        peak:  rawStats?.peak  ?? -0.3,
+        range: rawStats?.range ?? 8,
+        width: rawStats?.width ?? 80,
+      };
 
   const statMeters = [
-    { label: "LUFS",  value: stats.lufs.toFixed(1),  bar: Math.min(100, (stats.lufs + 24) / 24 * 100), gold: !isOriginal },
-    { label: "Peak",  value: stats.peak.toFixed(1),  bar: Math.min(100, (stats.peak + 6)  / 6  * 100), gold: false },
-    { label: "Range", value: String(Math.round(stats.range)), bar: Math.min(100, stats.range / 20 * 100), gold: !isOriginal },
-    { label: "Width", value: `${Math.round(stats.width)}%`,   bar: Math.min(100, stats.width),             gold: false },
+    { label: "LUFS",  value: (stats.lufs  ?? -14).toFixed(1),  bar: Math.min(100, ((stats.lufs ?? -14) + 24) / 24 * 100), gold: !isOriginal },
+    { label: "Peak",  value: (stats.peak  ?? -0.3).toFixed(1), bar: Math.min(100, ((stats.peak ?? -0.3) + 6)  / 6  * 100), gold: false },
+    { label: "Range", value: String(Math.round(stats.range ?? 8)),  bar: Math.min(100, (stats.range ?? 8)  / 20 * 100), gold: !isOriginal },
+    { label: "Width", value: `${Math.round(stats.width ?? 80)}%`,   bar: Math.min(100, stats.width ?? 80),               gold: false },
   ];
 
   // ─── Render ──────────────────────────────────────────────────────────────
