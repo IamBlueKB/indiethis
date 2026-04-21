@@ -1515,6 +1515,7 @@ function StereoDropzone({
 
   return (
     <div
+      onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
@@ -1575,6 +1576,7 @@ function StemsDropzone({ stems, onStems }: { stems: StemFile[]; onStems: (s: Ste
   return (
     <div className="space-y-3">
       <div
+        onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}

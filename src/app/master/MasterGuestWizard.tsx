@@ -612,6 +612,7 @@ export function MasterGuestWizard({
 
             {mode === "MASTER_ONLY" ? (
               <div
+                onDragEnter={(e) => { e.preventDefault(); setStereoDragging(true); }}
                 onDragOver={(e) => { e.preventDefault(); setStereoDragging(true); }}
                 onDragLeave={() => setStereoDragging(false)}
                 onDrop={(e) => { e.preventDefault(); setStereoDragging(false); const f = e.dataTransfer.files[0]; if (f) setStereoFile(f); }}
@@ -633,6 +634,7 @@ export function MasterGuestWizard({
             ) : (
               <div className="space-y-3">
                 <div
+                  onDragEnter={(e) => { e.preventDefault(); setStemsDragging(true); }}
                   onDragOver={(e) => { e.preventDefault(); setStemsDragging(true); }}
                   onDragLeave={() => setStemsDragging(false)}
                   onDrop={(e) => { e.preventDefault(); setStemsDragging(false); if (e.dataTransfer.files) addStemFiles(e.dataTransfer.files); }}
