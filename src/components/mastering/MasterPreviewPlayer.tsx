@@ -163,32 +163,66 @@ export default function MasterPreviewPlayer({
     const masterData: number[] = (versionWaveforms?.[vKey] ?? origData);
     const pts = origData.length;
 
-    // Bar chart waveform — discrete bars with gaps, mirrored top/bottom
-    const BAR_W  = 2;           // px width of each bar
-    const GAP    = 1;           // px gap between bars
-    const SLOT   = BAR_W + GAP; // px per bar slot
-    const numBars = Math.floor(W / SLOT);
-    const midY   = H / 2;
+    const midY = H / 2;
 
-    const drawBars = (data: number[], color: string, alpha: number) => {
+    const drawWave = (data: number[], color: string, lineAlpha: number, fillAlpha: number) => {
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = color;
-      for (let i = 0; i < numBars; i++) {
-        const dataIdx = Math.round((i / numBars) * (pts - 1));
-        const amp = Math.max(1, data[dataIdx] * (midY - 4));
-        const x = i * SLOT;
-        ctx.fillRect(x, midY - amp, BAR_W, amp);  // top half
-        ctx.fillRect(x, midY,       BAR_W, amp);  // bottom half (mirror)
+
+      // Top outline path
+      ctx.beginPath();
+      for (let i = 0; i < pts; i++) {
+        const x   = (i / (pts - 1)) * W;
+        const amp = data[i] * (midY - 4);
+        if (i === 0) ctx.moveTo(x, midY - amp);
+        else         ctx.lineTo(x, midY - amp);
       }
+      // Continue bottom (mirror, reversed) to close the fill shape
+      for (let i = pts - 1; i >= 0; i--) {
+        const x   = (i / (pts - 1)) * W;
+        const amp = data[i] * (midY - 4);
+        ctx.lineTo(x, midY + amp);
+      }
+      ctx.closePath();
+
+      // Fill between top and bottom
+      if (fillAlpha > 0) {
+        ctx.globalAlpha = fillAlpha;
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      // Top edge stroke
+      ctx.beginPath();
+      for (let i = 0; i < pts; i++) {
+        const x   = (i / (pts - 1)) * W;
+        const amp = data[i] * (midY - 4);
+        if (i === 0) ctx.moveTo(x, midY - amp);
+        else         ctx.lineTo(x, midY - amp);
+      }
+      ctx.globalAlpha = lineAlpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // Bottom edge stroke (mirror)
+      ctx.beginPath();
+      for (let i = 0; i < pts; i++) {
+        const x   = (i / (pts - 1)) * W;
+        const amp = data[i] * (midY - 4);
+        if (i === 0) ctx.moveTo(x, midY + amp);
+        else         ctx.lineTo(x, midY + amp);
+      }
+      ctx.stroke();
+
       ctx.restore();
     };
 
-    // Original: grey at 20% — always visible
-    drawBars(origData, "#888", 0.20);
-    // Mastered: gold at 65%, drawn on top — hidden when viewing original
+    // Original: grey at 15% line opacity, no fill
+    drawWave(origData, "#aaa", 0.15, 0);
+    // Mastered: gold at 60% line, 6% fill — hidden when viewing original
     if (!isOriginal) {
-      drawBars(masterData, GOLD, 0.65);
+      drawWave(masterData, GOLD, 0.60, 0.06);
     }
 
     // Playhead
