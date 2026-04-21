@@ -240,15 +240,15 @@ CHAIN_MATRIX = {
     "HIP_HOP": {
         "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.5, "sat": 0.03, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
         "adlib":     {"hp": 300, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
-        "insouts":   {"hp": 200, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 400,  "tp_high": 4000},
-        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 200, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "eq_tilt_low_cut": -3.0, "eq_tilt_high_cut": -2.0},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.3, "pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
         "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.5, "pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
     },
     "TRAP": {
-        "lead":      {"hp": 80,  "comp1_ratio": 5.0,  "comp2_ratio": 2.5, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.5, "sat": 0.04, "reverb_wet": 0.15, "reverb_room": 0.25,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
         "adlib":     {"hp": 300, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
-        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -7.0, "telephone": True,  "blend_db": -7.0,  "tp_low": 400,  "tp_high": 4000},
-        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0,  "eq_tilt_low_cut": -3.0, "eq_tilt_high_cut": -2.0},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.25,"pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
         "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.20, "reverb_room": 0.45,"pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
     },
     "RNB": {
@@ -299,6 +299,7 @@ CHAIN_MATRIX = {
         "insouts":   {"hp": 150, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.10, "reverb_room": 0.25,"pan": 0.2,  "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
         "double":    {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.01, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.20, "detune": 8,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
         "harmony":   {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.25, "reverb_room": 0.55,"pan": 0.40, "detune": 6,  "gain_db": -3.5, "telephone": False, "blend_db": -3.5},
+        "chants":    {"hp": 150, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.20, "reverb_room": 0.4, "pan": 0.50, "detune": 10, "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
     },
     "LATIN": {
         "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.20, "reverb_room": 0.5, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
@@ -337,6 +338,9 @@ ROLE_MAP = {
     "harmony":         "harmony",
     "backing":         "harmony",
     "vocal":           "lead",   # legacy single-vocal label
+    "chants":          "chants",
+    "group_vocals":    "chants",
+    "choir":           "chants",
 }
 
 

@@ -3268,7 +3268,7 @@ model MixJob {
   // Mode + tier
   mode            String    // VOCAL_BEAT | TRACKED_STEMS
   tier            String    // STANDARD | PREMIUM | PRO
-  status          String    // PENDING | UPLOADING | SEPARATING | ANALYZING | AWAITING_DIRECTION | MIXING | PREVIEWING | COMPLETE | REVISING | FAILED
+  status          String    // PENDING | UPLOADING | SEPARATING | ANALYZING | AWAITING_DIRECTION | MIXING | PREVIEWING | QA_CHECK | COMPLETE | REVISING | FAILED
 
   // Input files
   inputFiles      Json      // [{ url, label, role }]
@@ -3276,7 +3276,7 @@ model MixJob {
   referenceFileName  String?
 
   // Configuration
-  genre           String?   // AUTO | HIP_HOP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI
+  genre           String?   // AUTO | HIP_HOP | TRAP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI | AFROBEATS | LATIN | COUNTRY | GOSPEL
   breathEditing   String?   // OFF | SUBTLE | CLEAN | TIGHT
   pitchCorrection String?   // OFF | SUBTLE | TIGHT | HARD
   delayStyle      String?   // OFF | SUBTLE | STANDARD | HEAVY
@@ -3284,6 +3284,7 @@ model MixJob {
   reverbStyle       String?   // DRY | ROOM | PLATE | HALL | CATHEDRAL
   fadeOut           String?   // AUTO | 3S | 5S | 8S | NO
   vocalStylePreset  String?   // AUTO | CLEAN_NATURAL | LOFI_GRITTY | AIRY_SPACIOUS | RAW_UPFRONT
+  beatPolish        Boolean   @default(false)  // Beat Polish add-on (+$19.99)
   customDirection   String?   // Premium/Pro free text
 
   // Direction
@@ -3291,11 +3292,14 @@ model MixJob {
   directionRecommendation   String?   // Claude's suggestion text shown to artist
 
   // Analysis outputs
-  analysisData    Json?     // { bpm, key, sections, stemAnalysis, roomReverb, pitchDeviation }
-  lyrics          String?   // Whisper transcription
-  wordTimestamps  Json?     // [{ word, start, end }]
-  delayThrows     Json?     // [{ word, start, end, type, feedback, section }]
-  vocalClassification Json? // [{ stemIndex, role, confidence }]
+  analysisData        Json?   // { bpm, key, sections, stemAnalysis, roomReverb, pitchDeviation }
+  lyrics              String? // Whisper transcription
+  wordTimestamps      Json?   // [{ word, start, end }]
+  delayThrows         Json?   // [{ word, start, end, type, feedback, section }]
+  vocalClassification Json?   // [{ stemIndex, role, confidence }]
+  inputQualityScore   Int?    // 0–100 quality gate score
+  inputQualityNotes   String? // Human-readable quality warnings shown to artist
+  mainVocalOverlap    Json?   // { overlapPercent, mode: "comp"|"stack"|"claude_decides" }
 
   // Mix parameters (Claude-decided)
   mixParameters   Json?     // Full chain params per stem
@@ -3314,14 +3318,19 @@ model MixJob {
   previewWaveformMixed    Json?   // { clean, polished, aggressive } or { mix }
   previewFilePaths        Json?   // { clean, polished, aggressive } or { mix, original }
 
+  // QA gate results
+  qaCheckResults  Json?     // { clipping, vocalAudibility, stereoBalance, freqBalance, phase, silentGaps }
+  qaPassedAt      DateTime? // Timestamp when QA gate passed
+
   // Revision tracking
   revisionCount   Int       @default(0)
   maxRevisions    Int       @default(0)  // 0=Standard, 2=Premium, 3=Pro
   revisionHistory Json?     // [{ feedback, parametersApplied, timestamp }]
 
   // Payment
-  stripePaymentId String?
-  amount          Int       @default(0)
+  stripePaymentId  String?
+  amount           Int       @default(0)
+  beatPolishAmount Int?      // Additional charge for Beat Polish add-on
 
   // Access token (guests)
   accessToken     MixAccessToken?

@@ -96,6 +96,7 @@ export default function MixConsoleWizardClient() {
   const [vocalStylePreset,  setVocalStylePreset]  = useState("AUTO");
   const [reverbStyle,       setReverbStyle]       = useState("PLATE");
   const [fadeOut,           setFadeOut]           = useState("AUTO");
+  const [beatPolish,        setBeatPolish]        = useState(false);
   const [customDirection,   setCustomDirection]   = useState("");
 
   // Reference track (Premium/Pro)
@@ -272,6 +273,7 @@ export default function MixConsoleWizardClient() {
           delayStyle:      delayStyle     !== "OFF"  ? delayStyle     : undefined,
           mixVibe:          mixVibe             || undefined,
           vocalStylePreset: vocalStylePreset !== "AUTO" ? vocalStylePreset : undefined,
+          beatPolish:       beatPolish || undefined,
           reverbStyle:      reverbStyle        || undefined,
           fadeOut:          fadeOut            || undefined,
           customDirection: customDirection.trim() || undefined,
@@ -923,6 +925,27 @@ export default function MixConsoleWizardClient() {
                 </select>
               </div>
             ))}
+
+            {/* Beat Polish add-on — VOCAL_BEAT only */}
+            {mode === "VOCAL_BEAT" && (
+              <label className="flex items-start gap-3 rounded-xl border border-[#2A2A2A] px-4 py-3 cursor-pointer hover:border-[#3A3A3A] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={beatPolish}
+                  onChange={(e) => setBeatPolish(e.target.checked)}
+                  className="mt-0.5 accent-[#D4A843]"
+                />
+                <div>
+                  <p className="text-sm font-semibold">
+                    Polish your beat around your vocals
+                    <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded-md" style={{ backgroundColor: "#1A1A1A", color: "#D4A843" }}>+$19.99</span>
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "#555" }}>
+                    We'll separate your instrumental into drums, bass, and melodics, then optimize each element to sit perfectly with your vocals.
+                  </p>
+                </div>
+              </label>
+            )}
 
             {/* Custom direction — Premium/Pro */}
             {(tier === "PREMIUM" || tier === "PRO") && (
