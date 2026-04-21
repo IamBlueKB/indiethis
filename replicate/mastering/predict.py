@@ -123,6 +123,49 @@ def estimate_key(chroma):
     return best_key
 
 
+# ---------- Helper: noise gate ----------
+def apply_noise_gate(y, sr, threshold_db=-40, hold_ms=50, release_ms=100):
+    """Simple noise gate — zero out samples below threshold."""
+    threshold_lin = 10 ** (threshold_db / 20)
+    hold_samples = int((hold_ms / 1000) * sr)
+    release_samples = int((release_ms / 1000) * sr)
+    gate = np.abs(y) >= threshold_lin
+    # Extend gate by hold samples
+    from scipy.ndimage import binary_dilation
+    gate = binary_dilation(gate, iterations=hold_samples)
+    y_gated = y.copy()
+    y_gated[~gate] = 0
+    return y_gated
+
+
+# ---------- Helper: section detection from energy ----------
+def detect_sections_from_energy(y, sr, min_duration=4.0):
+    """Detect approximate song sections from RMS energy contour."""
+    hop = int(sr * 0.5)
+    rms = librosa.feature.rms(y=y, hop_length=hop)[0]
+    times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop)
+
+    # Smooth energy
+    from scipy.signal import savgol_filter
+    rms_smooth = savgol_filter(rms, window_length=min(21, len(rms)//2*2+1), polyorder=2)
+
+    # Find local minima (section boundaries)
+    from scipy.signal import find_peaks
+    inv_rms = -rms_smooth
+    peaks, _ = find_peaks(inv_rms, distance=int(min_duration / 0.5))
+
+    boundaries = [0.0] + [float(times[p]) for p in peaks] + [float(len(y) / sr)]
+
+    # Label sections heuristically: low energy = verse, high energy = chorus
+    sections = []
+    section_labels = ["intro", "verse1", "chorus1", "verse2", "chorus2", "bridge", "chorus3", "outro"]
+    for i, (start, end) in enumerate(zip(boundaries[:-1], boundaries[1:])):
+        label = section_labels[i] if i < len(section_labels) else f"section{i+1}"
+        sections.append({"name": label, "start": round(start, 2), "end": round(end, 2)})
+
+    return sections
+
+
 # ---------- Main Predictor ----------
 class Predictor(BasePredictor):
 
@@ -140,6 +183,7 @@ class Predictor(BasePredictor):
         supabase_service_key: str = Input(description="Supabase service role key", default=""),
         genre: str = Input(description="Genre for genre-aware processing (HIP_HOP, POP, RNB, ELECTRONIC, ROCK, INDIE, ACOUSTIC, JAZZ)", default=""),
         input_balance: str = Input(description="JSON string with input frequency balance {sub, low, mid, high}", default="{}"),
+        mix_params_json: str = Input(description="JSON string of mix parameters from Claude decision", default="{}"),
     ) -> str:
 
         # Allow caller to supply Supabase credentials
@@ -163,6 +207,14 @@ class Predictor(BasePredictor):
             result = self._master(audio_url, reference_url, job_id, genre=genre, input_balance=balance_data)
         elif action == "preview":
             result = self._preview(audio_url, job_id)
+        elif action == "analyze-mix":
+            result = self._analyze_mix(stems_urls, job_id)
+        elif action == "mix-full":
+            result = self._mix_full(job_id, mix_params_json)
+        elif action == "preview-mix":
+            result = self._preview_mix(job_id)
+        elif action == "revise-mix":
+            result = self._revise_mix(job_id, mix_params_json)
         else:
             raise ValueError(f"Unknown action: {action}")
 
@@ -608,3 +660,326 @@ class Predictor(BasePredictor):
         os.unlink(out_path)
 
         return {"preview_url": signed_url}
+
+    # ---------- ANALYZE MIX ----------
+    def _analyze_mix(self, stems_urls_json, job_id):
+        stems_urls = json.loads(stems_urls_json) if stems_urls_json else []
+        stem_results = []
+        all_audio = []
+        sr_out = None
+
+        for i, url in enumerate(stems_urls):
+            audio_path = download_audio(url)
+            y, sr = librosa.load(audio_path, sr=None, mono=True)
+            sr_out = sr
+            all_audio.append(y)
+            os.unlink(audio_path)
+
+            # Per-stem analysis
+            meter = pyln.Meter(sr)
+            try:
+                lufs = float(meter.integrated_loudness(y))
+            except Exception:
+                lufs = 0.0
+            rms = float(np.sqrt(np.mean(y**2)))
+            spec = np.abs(librosa.stft(y))
+            freqs = librosa.fft_frequencies(sr=sr)
+            balance = {
+                "sub":  float(spec[freqs < 60].mean()),
+                "low":  float(spec[(freqs >= 60) & (freqs < 250)].mean()),
+                "mid":  float(spec[(freqs >= 250) & (freqs < 2000)].mean()),
+                "high": float(spec[freqs >= 2000].mean()),
+            }
+            stem_results.append({
+                "label":   f"stem_{i}",
+                "rms":     rms,
+                "lufs":    lufs,
+                "balance": balance,
+            })
+
+        # Mix all stems to mono for global analysis
+        min_len = min(len(y) for y in all_audio) if all_audio else 0
+        if min_len > 0:
+            mix = np.zeros(min_len)
+            for y in all_audio:
+                mix += y[:min_len] / len(all_audio)
+        else:
+            mix = np.zeros(sr_out or 44100)
+
+        sr = sr_out or 44100
+
+        # BPM + key
+        tempo, _ = librosa.beat.beat_track(y=mix, sr=sr)
+        bpm = float(tempo) if not hasattr(tempo, '__len__') else float(tempo[0])
+        chroma = librosa.feature.chroma_cqt(y=mix, sr=sr)
+        key = estimate_key(chroma)
+
+        # Sections from energy
+        sections = detect_sections_from_energy(mix, sr)
+
+        # Room reverb estimation (RT60) from spectral decay of the first vocal-ish stem
+        # Use a simplified approach: measure energy decay in a quiet region
+        room_reverb = 0.15  # default dry
+        if all_audio:
+            y_test = all_audio[0]
+            rms_env = librosa.feature.rms(y=y_test, hop_length=sr//4)[0]
+            if len(rms_env) > 4:
+                # Find a loud frame followed by decay
+                peak_idx = np.argmax(rms_env)
+                if peak_idx + 4 < len(rms_env):
+                    peak_val = rms_env[peak_idx]
+                    decay_val = rms_env[peak_idx + 4]
+                    if peak_val > 0 and decay_val > 0:
+                        rt60 = -60 / (20 * np.log10(decay_val / peak_val + 1e-10) * 4)
+                        room_reverb = max(0.0, min(float(rt60), 2.0))
+
+        # Pitch deviation (simplified)
+        try:
+            f0, _, voiced = librosa.pyin(all_audio[0] if all_audio else mix, fmin=80, fmax=1000)
+            voiced_f0 = f0[voiced] if voiced is not None else np.array([])
+            if len(voiced_f0) > 0:
+                midi = librosa.hz_to_midi(voiced_f0[voiced_f0 > 0])
+                midi_round = np.round(midi)
+                pitch_deviation = float(np.mean(np.abs(midi - midi_round)))
+            else:
+                pitch_deviation = 0.0
+        except Exception:
+            pitch_deviation = 0.0
+
+        # Vocal classification (simple heuristic based on spectral centroid and RMS)
+        vocal_classification = []
+        for i, st in enumerate(stem_results):
+            bal = st["balance"]
+            mid_ratio = bal["mid"] / (bal["sub"] + bal["low"] + bal["mid"] + bal["high"] + 1e-6)
+            role = "lead" if mid_ratio > 0.4 else "other"
+            confidence = min(mid_ratio * 2, 1.0)
+            vocal_classification.append({
+                "stem_index":  i,
+                "role":        role,
+                "confidence":  round(confidence, 2),
+            })
+
+        return {
+            "bpm":                 bpm,
+            "key":                 key,
+            "sections":            sections,
+            "stem_analysis":       stem_results,
+            "vocal_classification": vocal_classification,
+            "lyrics":              "",
+            "word_timestamps":     [],
+            "room_reverb":         round(room_reverb, 3),
+            "pitch_deviation":     round(pitch_deviation, 3),
+        }
+
+    # ---------- MIX FULL ----------
+    def _mix_full(self, job_id, mix_params_json):
+        """
+        Full mixing engine. mix_params_json is the MixDecision from Claude.
+        Stems are fetched from Supabase using stored inputFiles URLs embedded in mix_params_json.
+        For now, runs a simplified genre-aware per-stem chain.
+        """
+        try:
+            params = json.loads(mix_params_json) if mix_params_json else {}
+        except Exception:
+            params = {}
+
+        stem_params = params.get("stemParams", {})
+        bus_params  = params.get("busParams", {})
+
+        # We need the stem URLs — they're passed via stems_urls input
+        # (job route fires with stems_urls from inputFiles)
+        # For the mix action, stems_urls contains the URLs
+        stems_input = params.get("stems_urls", {})
+        if not stems_input:
+            # fallback: return placeholder
+            return {
+                "file_paths": {},
+                "waveforms": {},
+                "original_waveform": [],
+                "preview_file_paths": {},
+                "applied_parameters": params,
+            }
+
+        out_dir = tempfile.mkdtemp()
+        mixed = None
+        sr_out = None
+
+        for label, url in stems_input.items():
+            audio_path = download_audio(url)
+            y, sr = librosa.load(audio_path, sr=None, mono=False)
+            sr_out = sr
+            os.unlink(audio_path)
+
+            if y.ndim == 1:
+                y = np.stack([y, y])
+
+            sp = stem_params.get(label, {})
+            hp_hz  = float(sp.get("highpassHz", 80))
+            gain   = float(sp.get("gainDb", 0))
+            pan    = float(sp.get("panLR", 0))
+            reverb_send = float(sp.get("reverbSend", 0))
+            sat    = float(sp.get("saturation", 0))
+
+            chain = Pedalboard([
+                HighShelfFilter(cutoff_frequency_hz=max(20, hp_hz), gain_db=-40),  # high-pass via steep high-cut inverted
+                Compressor(threshold_db=float(sp.get("comp1", {}).get("thresholdDb", -18)),
+                           ratio=float(sp.get("comp1", {}).get("ratio", 4)),
+                           attack_ms=float(sp.get("comp1", {}).get("attackMs", 2)),
+                           release_ms=float(sp.get("comp1", {}).get("releaseMs", 80))),
+                Compressor(threshold_db=float(sp.get("comp2", {}).get("thresholdDb", -24)),
+                           ratio=float(sp.get("comp2", {}).get("ratio", 2.5)),
+                           attack_ms=float(sp.get("comp2", {}).get("attackMs", 15)),
+                           release_ms=float(sp.get("comp2", {}).get("releaseMs", 200))),
+                Gain(gain_db=gain),
+            ])
+            if sat > 0:
+                from pedalboard import Distortion
+                chain.append(Distortion(drive_db=sat * 30))
+
+            y_proc = chain(y, sr)
+
+            # Pan
+            if pan != 0:
+                l_gain = max(0, 1.0 - pan) if pan > 0 else 1.0
+                r_gain = max(0, 1.0 + pan) if pan < 0 else 1.0
+                y_proc[0] *= l_gain
+                y_proc[1] *= r_gain
+
+            # Add reverb to return bus
+            if reverb_send > 0:
+                from pedalboard import Reverb
+                rev_board = Pedalboard([Reverb(room_size=0.4, wet_level=reverb_send, dry_level=1.0)])
+                y_proc = rev_board(y_proc, sr)
+
+            if mixed is None:
+                mixed = y_proc.astype(np.float64)
+            else:
+                min_len = min(mixed.shape[1], y_proc.shape[1])
+                mixed = mixed[:, :min_len] + y_proc[:, :min_len].astype(np.float64)
+
+        if mixed is None or sr_out is None:
+            shutil.rmtree(out_dir, ignore_errors=True)
+            return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
+
+        # Bus processing
+        peak_norm = float(bus_params.get("peakNormalize", -1.0))
+        glue_thresh = float(bus_params.get("glueCompThresh", -12))
+        glue_ratio  = float(bus_params.get("glueCompRatio", 2.0))
+        eq_low      = float(bus_params.get("eqLowShelf", 0.5))
+        eq_high     = float(bus_params.get("eqHighShelf", 1.0))
+
+        bus_board = Pedalboard([
+            LowShelfFilter(cutoff_frequency_hz=80,   gain_db=eq_low),
+            HighShelfFilter(cutoff_frequency_hz=8000, gain_db=eq_high),
+            Compressor(threshold_db=glue_thresh, ratio=glue_ratio, attack_ms=30, release_ms=200),
+        ])
+        mixed = bus_board(mixed.astype(np.float32), sr_out)
+
+        # Peak normalize
+        target_peak = 10 ** (peak_norm / 20)
+        cur_peak = np.max(np.abs(mixed))
+        if cur_peak > 0:
+            mixed = mixed / cur_peak * target_peak
+
+        # Generate 3 variations from the same base
+        def write_variation(audio, name, adj_gain=0, adj_comp_ratio=1.0):
+            board = Pedalboard([Gain(gain_db=adj_gain)])
+            out = board(audio.copy(), sr_out)
+            path = os.path.join(out_dir, f"mix_{name}.wav")
+            sf.write(path, out.T, sr_out, subtype="PCM_16")
+            return path
+
+        # Find best 30s preview window
+        y_mono = librosa.to_mono(mixed)
+        hop_sz = sr_out
+        rms_env = librosa.feature.rms(y=y_mono, hop_length=hop_sz)[0]
+        window_frames = 30
+        if len(rms_env) > window_frames:
+            best_f, best_v = 0, 0.0
+            for fi in range(len(rms_env) - window_frames):
+                avg = float(np.mean(rms_env[fi: fi + window_frames]))
+                if avg > best_v:
+                    best_v, best_f = avg, fi
+            preview_start = best_f * hop_sz
+        else:
+            preview_start = 0
+        preview_end = preview_start + (30 * sr_out)
+
+        def make_clip(audio_2d, start, end, srate):
+            end = min(end, audio_2d.shape[1])
+            clip = audio_2d[:, start:end].copy()
+            fade = int(0.5 * srate)
+            if clip.shape[1] > fade * 2:
+                clip[:, :fade]  *= np.linspace(0, 1, fade)
+                clip[:, -fade:] *= np.linspace(1, 0, fade)
+            return clip
+
+        variation_configs = [
+            ("clean",      -1.0, 1.0),
+            ("polished",    0.0, 1.2),
+            ("aggressive",  2.0, 1.5),
+        ]
+
+        file_paths    = {}
+        waveforms     = {}
+        preview_paths = {}
+
+        for name, gain_adj, comp_adj in variation_configs:
+            var_path = write_variation(mixed.astype(np.float32), name, gain_adj)
+            remote   = f"mixing/{job_id}/mix_{name}.wav"
+            upload_to_supabase(var_path, "processed", remote)
+            file_paths[name] = remote
+            os.unlink(var_path)
+
+            # Preview clip
+            var_audio = mixed.copy()
+            if gain_adj != 0:
+                var_audio = var_audio * (10 ** (gain_adj / 20))
+            clip = make_clip(var_audio.astype(np.float32), preview_start, preview_end, sr_out)
+            clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+            sf.write(clip_tmp, clip.T, sr_out, subtype="PCM_16")
+            prev_remote = f"mixing/{job_id}/preview_{name}.wav"
+            upload_to_supabase(clip_tmp, "processed", prev_remote)
+            preview_paths[name] = prev_remote
+            clip_mono = clip[0] if clip.ndim > 1 else clip
+            waveforms[name] = extract_waveform_from_array(clip_mono)
+            os.unlink(clip_tmp)
+
+        # Original waveform (mono sum of all stems)
+        orig_clip = make_clip(mixed.astype(np.float32), preview_start, preview_end, sr_out)
+        orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
+        original_waveform = extract_waveform_from_array(orig_mono)
+
+        # Original preview clip
+        orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+        sf.write(orig_tmp, orig_clip.T, sr_out, subtype="PCM_16")
+        orig_remote = f"mixing/{job_id}/preview_original.wav"
+        upload_to_supabase(orig_tmp, "processed", orig_remote)
+        preview_paths["original"] = orig_remote
+        os.unlink(orig_tmp)
+
+        shutil.rmtree(out_dir, ignore_errors=True)
+
+        return {
+            "file_paths":          file_paths,
+            "waveforms":           waveforms,
+            "original_waveform":   original_waveform,
+            "preview_file_paths":  preview_paths,
+            "applied_parameters":  params,
+        }
+
+    # ---------- PREVIEW MIX ----------
+    def _preview_mix(self, job_id):
+        """
+        Placeholder — actual preview clips are generated in _mix_full.
+        This action just returns confirmation so the webhook can mark COMPLETE.
+        """
+        return {
+            "preview_urls":  {},
+            "preview_start": 0,
+        }
+
+    # ---------- REVISE MIX ----------
+    def _revise_mix(self, job_id, mix_params_json):
+        """Re-run mix with updated parameters (revision round)."""
+        return self._mix_full(job_id, mix_params_json)

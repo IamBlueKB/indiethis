@@ -166,6 +166,7 @@ model User {
   releases                 Release[]
   masteringJobs            MasteringJob[]
   masteringAlbumGroups     MasteringAlbumGroup[]
+  mixJobs                  MixJob[]
 }
 
 model Studio {
@@ -3248,6 +3249,98 @@ model MasteringAccessToken {
   email     String
   expiresAt DateTime
   createdAt DateTime     @default(now())
+
+  @@index([token])
+  @@index([email])
+}
+
+// ─── AI Mix Console ───────────────────────────────────────────────────────────
+
+model MixJob {
+  id              String    @id @default(cuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id])
+
+  // Guest fields
+  guestEmail      String?
+  guestName       String?
+
+  // Mode + tier
+  mode            String    // VOCAL_BEAT | TRACKED_STEMS
+  tier            String    // STANDARD | PREMIUM | PRO
+  status          String    // PENDING | UPLOADING | SEPARATING | ANALYZING | AWAITING_DIRECTION | MIXING | PREVIEWING | COMPLETE | REVISING | FAILED
+
+  // Input files
+  inputFiles      Json      // [{ url, label, role }]
+  referenceTrackUrl  String?
+  referenceFileName  String?
+
+  // Configuration
+  genre           String?   // AUTO | HIP_HOP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI
+  breathEditing   String?   // OFF | SUBTLE | CLEAN | TIGHT
+  pitchCorrection String?   // OFF | SUBTLE | TIGHT | HARD
+  delayStyle      String?   // OFF | SUBTLE | STANDARD | HEAVY
+  mixVibe         String?   // CLEAN | POLISHED | DARK | BRIGHT | RAW
+  reverbStyle     String?   // DRY | ROOM | PLATE | HALL | CATHEDRAL
+  fadeOut         String?   // AUTO | 3S | 5S | 8S | NO
+  customDirection String?   // Premium/Pro free text
+
+  // Direction
+  directionUsed             String?   // Combined direction applied
+  directionRecommendation   String?   // Claude's suggestion text shown to artist
+
+  // Analysis outputs
+  analysisData    Json?     // { bpm, key, sections, stemAnalysis, roomReverb, pitchDeviation }
+  lyrics          String?   // Whisper transcription
+  wordTimestamps  Json?     // [{ word, start, end }]
+  delayThrows     Json?     // [{ word, start, end, type, feedback, section }]
+  vocalClassification Json? // [{ stemIndex, role, confidence }]
+
+  // Mix parameters (Claude-decided)
+  mixParameters   Json?     // Full chain params per stem
+  sectionMap      Json?     // Section boundaries + per-section overrides
+
+  // Output files — Standard (3 variations)
+  cleanFilePath      String?
+  polishedFilePath   String?
+  aggressiveFilePath String?
+
+  // Output files — Premium/Pro (single AI mix)
+  mixFilePath     String?
+
+  // Preview data
+  previewWaveformOriginal Json?   // [200 floats] — vocal+beat original
+  previewWaveformMixed    Json?   // { clean, polished, aggressive } or { mix }
+  previewFilePaths        Json?   // { clean, polished, aggressive } or { mix, original }
+
+  // Revision tracking
+  revisionCount   Int       @default(0)
+  maxRevisions    Int       @default(0)  // 0=Standard, 2=Premium, 3=Pro
+  revisionHistory Json?     // [{ feedback, parametersApplied, timestamp }]
+
+  // Payment
+  stripePaymentId String?
+  amount          Int       @default(0)
+
+  // Access token (guests)
+  accessToken     MixAccessToken?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([guestEmail])
+  @@index([status])
+}
+
+model MixAccessToken {
+  id        String   @id @default(cuid())
+  jobId     String   @unique
+  job       MixJob   @relation(fields: [jobId], references: [id])
+  token     String   @unique @default(cuid())
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([token])
   @@index([email])

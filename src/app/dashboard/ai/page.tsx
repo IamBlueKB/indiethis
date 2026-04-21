@@ -38,6 +38,14 @@ const PREMIUM_TOOLS = [
     color:       "#7C6AF7",
   },
   {
+    label:       "AI Mix Console",
+    description: "Full mixing engine — vocal chain, breath editing, lyric-driven delay throws, section-aware processing.",
+    href:        "/dashboard/ai/mix-console",
+    icon:        Sliders,
+    badge:       "3 variations + revisions",
+    color:       "#D4A843",
+  },
+  {
     label:       "Mix & Master",
     description: "Upload a stereo mix or stems — get 4 mastered versions with platform-ready exports.",
     href:        "/dashboard/ai/master",

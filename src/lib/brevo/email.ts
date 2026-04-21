@@ -2262,3 +2262,30 @@ export async function sendSessionFollowUpEmail(params: {
   });
 }
 
+export async function sendMixCompleteEmail(params: {
+  artistEmail:  string;
+  artistName:   string;
+  trackTitle:   string;
+  downloadUrl:  string;
+}): Promise<void> {
+  await sendBrandedEmail({
+    to:      { email: params.artistEmail, name: params.artistName },
+    subject: `Mix complete — "${params.trackTitle}" is ready`,
+    primaryContent: `
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 16px;">Your Mix is Ready!</h1>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 16px;">
+        Hi ${params.artistName}, your AI-engineered mix of
+        <strong style="color:#fff;">&ldquo;${params.trackTitle}&rdquo;</strong> is complete and ready to preview.
+      </p>
+      <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        Compare versions, download your favorite, and request a free revision if anything needs adjusting.
+      </p>
+      <a href="${params.downloadUrl}" style="background:#D4A843;color:#0A0A0A;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:14px;">
+        Preview &amp; Download Your Mix &rarr;
+      </a>
+    `,
+    context: "MIX_COMPLETE",
+    tags:    ["ai", "mix-console", "complete"],
+  });
+}
+
