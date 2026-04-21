@@ -281,9 +281,10 @@ export default function MixConsoleWizardClient() {
         }),
       });
       const resText = await res.text();
-      if (!resText) throw new Error("No response from server. Please try again.");
-      const resData = JSON.parse(resText) as { jobId?: string; error?: string };
-      if (!res.ok || !resData.jobId) throw new Error(resData.error ?? "Failed to start mix job.");
+      if (!resText) throw new Error(`Server returned empty body (HTTP ${res.status} ${res.url}). Please try again.`);
+      let resData: { jobId?: string; error?: string };
+      try { resData = JSON.parse(resText); } catch { throw new Error(`Bad JSON from server (HTTP ${res.status}): ${resText.slice(0, 200)}`); }
+      if (!res.ok || !resData.jobId) throw new Error(resData.error ?? `HTTP ${res.status}: Failed to start mix job.`);
 
       document.cookie = `indiethis_guest_email=${encodeURIComponent(email)}; path=/; max-age=604800`;
       setJobId(resData.jobId);
