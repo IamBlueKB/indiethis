@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         warmFilePath:       extractFilePath(versionsRaw["warm"]),
         punchFilePath:      extractFilePath(versionsRaw["punch"]),
         loudFilePath:       extractFilePath(versionsRaw["loud"]),
+        previewWaveform:    (versionWaveforms["original"] ?? null) as any,
         versionWaveforms:   versionWaveforms as any,
         versionStats:       versionStats as any,
         originalPreviewPath: previewPathsRaw["original"] ?? null,
