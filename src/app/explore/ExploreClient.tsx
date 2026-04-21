@@ -1062,14 +1062,23 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       title: "Mix & Master Studio",
       desc: "Professional mixing and mastering with AI. Upload your mix, download a release-ready master.",
       cta: "Master your track",
-      price: "from $11.99",
+      price: "from $7.99",
       link: link("/dashboard/ai/master", "/master"),
       gradient: "linear-gradient(135deg, #1a0a00, #0a0a0a)",
+    },
+    {
+      icon: <Mic2 size={20} style={{ color: "#D4A843" }} />,
+      title: "AI Mix Console",
+      desc: "Full mixing engine with vocal chain, breath editing, delay throws, and section-aware processing.",
+      cta: "Mix your stems",
+      price: "from $9.99",
+      link: link("/dashboard/ai/mix-console", "/mix-console"),
+      gradient: "linear-gradient(135deg, #001a0a, #0a0a0a)",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       {items.map((item) => (
         <div
           key={item.title}
