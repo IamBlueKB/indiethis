@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 const PRICING = [
   {
     name:     "Standard",
+    tier:     "STANDARD",
     price:    "$59.99",
     features: [
       "3 mix variations (Clean / Polished / Aggressive)",
@@ -32,6 +33,7 @@ const PRICING = [
   },
   {
     name:     "Premium",
+    tier:     "PREMIUM",
     price:    "$79.99",
     features: [
       "AI-recommended single mix",
@@ -46,6 +48,7 @@ const PRICING = [
   },
   {
     name:     "Pro",
+    tier:     "PRO",
     price:    "$99.99",
     features: [
       "Everything in Premium",
