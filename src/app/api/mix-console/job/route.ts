@@ -151,39 +151,25 @@ export async function POST(req: NextRequest) {
     // Vercel serverless functions can be killed after the response is sent,
     // so we kick off the Replicate call and return jobId right away.
     // If startMixAction fails, the .catch() marks the job FAILED and the poller surfaces it.
-    if (body.mode === "VOCAL_BEAT") {
-      const beatFileUrl = inputFiles.find((f) => f.label === "beat")!.url;
-      await prisma.mixJob.update({ where: { id: job.id }, data: { status: "SEPARATING" } });
-      startMixAction(
-        "separate-stems",
-        { audio_url: beatFileUrl, job_id: job.id },
-        "/api/mix-console/webhook/replicate/separate",
-      ).catch(async (startErr) => {
-        const msg = startErr instanceof Error ? startErr.message : String(startErr);
-        console.error(`[mix-console] separate-stems failed for job ${job.id}:`, msg);
-        await prisma.mixJob.update({
-          where: { id: job.id },
-          data:  { status: "FAILED", analysisData: { error: msg } as any },
-        });
+    //
+    // VOCAL_BEAT default: beat stays as stereo 2-track — go straight to analyze-mix.
+    // Beat Polish add-on (beatPolish: true) → SEPARATING step first (future feature).
+    await prisma.mixJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
+    startMixAction(
+      "analyze-mix",
+      {
+        stems_urls: JSON.stringify(inputFiles.map((f) => f.url)),
+        job_id:     job.id,
+      },
+      "/api/mix-console/webhook/replicate/analyze",
+    ).catch(async (startErr) => {
+      const msg = startErr instanceof Error ? startErr.message : String(startErr);
+      console.error(`[mix-console] analyze-mix failed for job ${job.id}:`, msg);
+      await prisma.mixJob.update({
+        where: { id: job.id },
+        data:  { status: "FAILED", analysisData: { error: msg } as any },
       });
-    } else {
-      await prisma.mixJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
-      startMixAction(
-        "analyze-mix",
-        {
-          stems_urls: JSON.stringify(inputFiles.map((f) => f.url)),
-          job_id:     job.id,
-        },
-        "/api/mix-console/webhook/replicate/analyze",
-      ).catch(async (startErr) => {
-        const msg = startErr instanceof Error ? startErr.message : String(startErr);
-        console.error(`[mix-console] analyze-mix failed for job ${job.id}:`, msg);
-        await prisma.mixJob.update({
-          where: { id: job.id },
-          data:  { status: "FAILED", analysisData: { error: msg } as any },
-        });
-      });
-    }
+    });
 
     return NextResponse.json({ jobId: job.id, status: "PENDING" });
   } catch (err) {
