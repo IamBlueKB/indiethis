@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       pitchCorrection?:   string;
       delayStyle?:        string;
       mixVibe?:           string;
+      vocalStylePreset?:  string;
       reverbStyle?:       string;
       fadeOut?:           string;
       customDirection?:   string;
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest) {
         pitchCorrection:   body.pitchCorrection  ?? null,
         delayStyle:        body.delayStyle       ?? null,
         mixVibe:           body.mixVibe          ?? null,
+        vocalStylePreset:  body.vocalStylePreset ?? null,
         reverbStyle:       body.reverbStyle      ?? null,
         fadeOut:           body.fadeOut          ?? null,
         customDirection:   body.customDirection  ?? null,

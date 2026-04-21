@@ -123,20 +123,21 @@ export interface BusParams {
 }
 
 export async function decideMixParameters(params: {
-  analysis:        MixAnalysisResult;
-  genre:           string;
-  tier:            string;
-  mixVibe:         string;
-  reverbStyle:     string;
-  delayStyle:      string;
-  breathEditing:   string;
-  pitchCorrection: string;
-  fadeOut:         string;
+  analysis:         MixAnalysisResult;
+  genre:            string;
+  tier:             string;
+  mixVibe:          string;
+  vocalStylePreset: string;
+  reverbStyle:      string;
+  delayStyle:       string;
+  breathEditing:    string;
+  pitchCorrection:  string;
+  fadeOut:          string;
   customDirection?: string;
-  inputFiles:      InputFile[];
+  inputFiles:       InputFile[];
 }): Promise<MixDecision> {
   const {
-    analysis, genre, tier, mixVibe, reverbStyle,
+    analysis, genre, tier, mixVibe, vocalStylePreset, reverbStyle,
     delayStyle, customDirection, inputFiles,
   } = params;
 
@@ -154,7 +155,19 @@ export async function decideMixParameters(params: {
     `${s.name}: ${s.start.toFixed(1)}s – ${s.end.toFixed(1)}s`
   ).join(", ");
 
-  const prompt = `You are a professional mix engineer AI. Return a JSON mix decision for the following track.
+  const prompt = `You are a professional mix engineer AI. You have access to a genre + role chain matrix that handles per-stem DSP (the Python engine will apply it). Your job is to:
+1. Identify the correct genre and confirm/override the role of each stem
+2. Decide section-aware processing adjustments
+3. Pick delay throw words from lyrics (Pro/Premium)
+4. Flag any unusual conditions (heavy room reverb, clipping, loud ad-libs, etc.)
+5. Pass genre + vocalStylePreset so the engine looks up the right chain
+
+The Python engine applies these genre-aware chains automatically per role:
+- lead: full vocal chain, de-esser, two-stage comp, presence EQ
+- adlib: TELEPHONE bandpass (300-3000Hz), aggressive comp, gritty sat, slapback — classic hip-hop lo-fi
+- insouts: lighter telephone tilt, short pre-delay, blend -6dB
+- double: pitch detune ±N cents (genre-dependent), hard pan L/R, blend -4dB
+- harmony: wide pan, lush reverb, detune ±N cents, blend -6 to -8dB
 
 ANALYSIS:
 BPM: ${analysis.bpm.toFixed(1)} | Key: ${analysis.key} | Room reverb RT60: ${analysis.roomReverb.toFixed(2)}s
@@ -165,14 +178,16 @@ STEMS:
 ${stemList}
 
 SETTINGS:
-Genre: ${genre || "auto-detect"} | Tier: ${tier} | Vibe: ${mixVibe} | Reverb: ${reverbStyle} | Delay: ${delayStyle}
+Genre: ${genre || "auto-detect"} | Tier: ${tier} | Vibe: ${mixVibe} | Vocal style: ${vocalStylePreset || "AUTO"} | Reverb: ${reverbStyle} | Delay: ${delayStyle}
 ${customDirection ? `Custom direction: "${customDirection}"` : "No custom direction."}
 
-TASK: Return ONLY valid JSON matching this schema exactly (no markdown, no explanation):
+TASK: Return ONLY valid JSON (no markdown, no explanation):
 {
+  "genre": "HIP_HOP",
+  "vocalStylePreset": "${vocalStylePreset || "AUTO"}",
   "stemParams": {
     "<label>": {
-      "role": "lead|double|adlib|backing|kick|snare|hihat|bass|synth|pad|other",
+      "role": "lead|adlib|insouts|double|harmony|kick|snare|hihat|bass|synth|pad|other",
       "gainDb": 0.0,
       "panLR": 0.0,
       "highpassHz": 80,
@@ -205,14 +220,12 @@ TASK: Return ONLY valid JSON matching this schema exactly (no markdown, no expla
 }
 
 Rules:
-- Include one entry in stemParams per stem label
-- delayThrows: only include if delayStyle != "OFF" AND lyrics are available; use word-level timestamps; dotted_eighth for chorus words, quarter for verse
-- sectionMap: always include for chorus sections with reverbScale 1.4–1.6; adjust per genre
-- Lead vocal: highpassHz 80, two-stage compression, deEssThresh -25 to -30, presence EQ at 3–5kHz
-- Doubles: panLR ±0.3–0.5, gainDb -4, stereoWidth 0.3
-- Ad-libs: panLR ±0.2–0.4, gainDb -6, reverbSend 0.25
-- Bass: monoBelow 120, lowshelf at 80Hz, saturation 0.05
-- Kick: highpassHz 30, peakEQ at 60Hz (+3dB) and 300Hz (-2dB)
+- "genre" must be one of: HIP_HOP | TRAP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI | AFROBEATS | LATIN | COUNTRY | GOSPEL
+- Map vocal_main → role "lead", vocal_adlibs → "adlib", vocal_insouts → "insouts", vocal_doubles → "double", vocal_harmonies → "harmony"
+- delayThrows: only if delayStyle != "OFF" AND lyrics available; use quantized timestamps; dotted_eighth for chorus, quarter for verse
+- sectionMap: chorus gets reverbScale 1.4–1.6; bridge Claude decides; verse stays at 1.0
+- If customDirection says "keep ad-libs clean" — set adlib role params to no telephone (the engine checks direction)
+- bass: monoBelow 120Hz; kick: highpassHz 30, peakEQ at 60Hz; beat: gainDb -2
 - Return ONLY the JSON object, nothing else.`;
 
   const msg = await client.messages.create({

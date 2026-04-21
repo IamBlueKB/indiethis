@@ -3280,10 +3280,11 @@ model MixJob {
   breathEditing   String?   // OFF | SUBTLE | CLEAN | TIGHT
   pitchCorrection String?   // OFF | SUBTLE | TIGHT | HARD
   delayStyle      String?   // OFF | SUBTLE | STANDARD | HEAVY
-  mixVibe         String?   // CLEAN | POLISHED | DARK | BRIGHT | RAW
-  reverbStyle     String?   // DRY | ROOM | PLATE | HALL | CATHEDRAL
-  fadeOut         String?   // AUTO | 3S | 5S | 8S | NO
-  customDirection String?   // Premium/Pro free text
+  mixVibe           String?   // CLEAN | POLISHED | DARK | BRIGHT | RAW
+  reverbStyle       String?   // DRY | ROOM | PLATE | HALL | CATHEDRAL
+  fadeOut           String?   // AUTO | 3S | 5S | 8S | NO
+  vocalStylePreset  String?   // AUTO | CLEAN_NATURAL | LOFI_GRITTY | AIRY_SPACIOUS | RAW_UPFRONT
+  customDirection   String?   // Premium/Pro free text
 
   // Direction
   directionUsed             String?   // Combined direction applied

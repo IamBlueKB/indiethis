@@ -9,7 +9,7 @@ import pyloudnorm as pyln
 import soundfile as sf
 from pedalboard import (
     Pedalboard, Compressor, Limiter, Gain,
-    LowShelfFilter, HighShelfFilter, PeakFilter
+    LowShelfFilter, HighShelfFilter, HighpassFilter, LowpassFilter, PeakFilter
 )
 import matchering as mg
 from supabase import create_client
@@ -164,6 +164,220 @@ def detect_sections_from_energy(y, sr, min_duration=4.0):
         sections.append({"name": label, "start": round(start, 2), "end": round(end, 2)})
 
     return sections
+
+
+# ─── Chain matrix helpers ─────────────────────────────────────────────────────
+
+def normalize_input_lufs(audio, sr, target_lufs=-23.0):
+    """Normalize audio to target LUFS (integrated loudness). Input gain staging."""
+    try:
+        meter = pyln.Meter(sr)
+        # pyloudnorm expects (samples, channels) for stereo
+        if audio.ndim == 2:
+            audio_in = audio.T
+        else:
+            audio_in = audio
+        loudness = meter.integrated_loudness(audio_in)
+        if loudness == float('-inf') or np.isnan(loudness):
+            return audio  # can't measure — return as-is
+        # pyln works on (samples, channels)
+        normalized = pyln.normalize.loudness(audio_in, loudness, target_lufs)
+        if audio.ndim == 2:
+            return normalized.T
+        return normalized
+    except Exception:
+        return audio
+
+
+def detect_sibilance_freq(audio_mono, sr):
+    """Detect dominant sibilant frequency band per vocalist (male vs female)."""
+    try:
+        # High-freq RMS in two candidate bands
+        freqs = np.fft.rfftfreq(2048, d=1.0 / sr)
+        S = np.abs(librosa.stft(audio_mono, n_fft=2048))
+        # Band energies
+        low_sib  = np.mean(S[(freqs >= 4000) & (freqs <= 7000), :])
+        high_sib = np.mean(S[(freqs >= 8000) & (freqs <= 12000), :])
+        if high_sib > low_sib * 1.3:
+            return 10000  # female/bright voice
+        return 5500       # male/darker voice
+    except Exception:
+        return 6000
+
+
+def apply_telephone_filter(audio, sr, low_hz=300, high_hz=3000):
+    """Bandpass filter for telephone/lo-fi ad-lib effect."""
+    board = Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=low_hz),
+        LowpassFilter(cutoff_frequency_hz=high_hz),
+    ])
+    return board(audio, sr)
+
+
+def apply_parallel_saturation(audio, sr, wet=0.08):
+    """Parallel saturation — blend dry + driven signal."""
+    if wet <= 0:
+        return audio
+    from pedalboard import Distortion
+    dry = audio.copy()
+    driven = Pedalboard([Distortion(drive_db=wet * 30)])(audio.copy(), sr)
+    return dry * (1.0 - wet) + driven * wet
+
+
+def apply_detune_cents(audio_mono, sr, cents):
+    """Pitch shift by N cents using librosa. Returns mono array."""
+    if cents == 0:
+        return audio_mono
+    try:
+        semitones = cents / 100.0
+        return librosa.effects.pitch_shift(audio_mono.astype(np.float32), sr=sr, n_steps=semitones)
+    except Exception:
+        return audio_mono
+
+
+# Genre + role chain matrix
+CHAIN_MATRIX = {
+    "HIP_HOP": {
+        "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.5, "sat": 0.03, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 300, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
+        "insouts":   {"hp": 200, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 400,  "tp_high": 4000},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.5, "pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
+    },
+    "TRAP": {
+        "lead":      {"hp": 80,  "comp1_ratio": 5.0,  "comp2_ratio": 2.5, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 300, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
+        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -7.0, "telephone": True,  "blend_db": -7.0,  "tp_low": 400,  "tp_high": 4000},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.20, "reverb_room": 0.45,"pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
+    },
+    "RNB": {
+        "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.6, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.25, "reverb_room": 0.7, "pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "insouts":   {"hp": 150, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.5, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
+        "double":    {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.22, "reverb_room": 0.6, "pan": 0.25, "detune": 7,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.30, "reverb_room": 0.7, "pan": 0.45, "detune": 5,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+    },
+    "POP": {
+        "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.0, "sat": 0.03, "reverb_wet": 0.18, "reverb_room": 0.45,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 120, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.45,"pan": 0.2,  "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "insouts":   {"hp": 150, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.45,"pan": 0.30, "detune": 10, "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 100, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.30, "reverb_room": 0.65,"pan": 0.45, "detune": 5,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+    },
+    "ROCK": {
+        "lead":      {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.07, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 150, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.08, "reverb_room": 0.2, "pan": 0.30, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
+        "insouts":   {"hp": 150, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.07, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
+        "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.06, "reverb_wet": 0.12, "reverb_room": 0.25,"pan": 0.40, "detune": 15, "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.06, "reverb_wet": 0.20, "reverb_room": 0.45,"pan": 0.50, "detune": 8,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+    },
+    "ELECTRONIC": {
+        "lead":      {"hp": 100, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.8, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 200, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.30, "reverb_room": 0.85,"pan": 0.40, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
+        "insouts":   {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.08, "reverb_wet": 0.22, "reverb_room": 0.7, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
+        "double":    {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.25, "reverb_room": 0.8, "pan": 0.30, "detune": 15, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "harmony":   {"hp": 120, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.35, "reverb_room": 0.9, "pan": 0.50, "detune": 5,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
+    },
+    "ACOUSTIC": {
+        "lead":      {"hp": 80,  "comp1_ratio": 2.0,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.12, "reverb_room": 0.35,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 100, "comp1_ratio": 2.5,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.15, "reverb_room": 0.35,"pan": 0.2,  "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "insouts":   {"hp": 100, "comp1_ratio": 2.5,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.12, "reverb_room": 0.3, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
+        "double":    {"hp": 80,  "comp1_ratio": 2.5,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.15, "reverb_room": 0.35,"pan": 0.30, "detune": 5,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "harmony":   {"hp": 80,  "comp1_ratio": 2.5,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.15, "reverb_room": 0.35,"pan": 0.30, "detune": 5,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+    },
+    "LO_FI": {
+        "lead":      {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.06, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 400,  "tp_high": 2500},
+        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.07, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -7.0, "telephone": True,  "blend_db": -7.0,  "tp_low": 400,  "tp_high": 2500},
+        "double":    {"hp": 120, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.20, "detune": 10, "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 120, "comp1_ratio": 3.5,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.35, "detune": 7,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+    },
+    "AFROBEATS": {
+        "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 120, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.0,  "reverb_wet": 0.10, "reverb_room": 0.25,"pan": 0.25, "detune": 0,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 150, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.10, "reverb_room": 0.25,"pan": 0.2,  "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "double":    {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.01, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.20, "detune": 8,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.25, "reverb_room": 0.55,"pan": 0.40, "detune": 6,  "gain_db": -3.5, "telephone": False, "blend_db": -3.5},
+    },
+    "LATIN": {
+        "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.20, "reverb_room": 0.5, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 120, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.20, "detune": 0,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 150, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.12, "reverb_room": 0.35,"pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "double":    {"hp": 100, "comp1_ratio": 3.5,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.5, "pan": 0.25, "detune": 8,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.25, "reverb_room": 0.55,"pan": 0.40, "detune": 6,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+    },
+    "GOSPEL": {
+        "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.75,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.28, "reverb_room": 0.75,"pan": 0.15, "detune": 0,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.22, "reverb_room": 0.65,"pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "double":    {"hp": 100, "comp1_ratio": 3.5,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.25, "reverb_room": 0.75,"pan": 0.30, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.35, "reverb_room": 0.8, "pan": 0.50, "detune": 4,  "gain_db": -2.5, "telephone": False, "blend_db": -2.5},
+    },
+    "COUNTRY": {
+        "lead":      {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.20, "detune": 0,  "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
+        "insouts":   {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.12, "reverb_room": 0.35,"pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "double":    {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.30, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+        "harmony":   {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.30, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+    },
+}
+
+
+# Role label normalizer — map incoming labels to matrix keys
+ROLE_MAP = {
+    "vocal_main":      "lead",
+    "vocal_adlibs":    "adlib",
+    "vocal_insouts":   "insouts",
+    "vocal_doubles":   "double",
+    "vocal_harmonies": "harmony",
+    "lead":            "lead",
+    "adlib":           "adlib",
+    "double":          "double",
+    "harmony":         "harmony",
+    "backing":         "harmony",
+    "vocal":           "lead",   # legacy single-vocal label
+}
+
+
+def get_chain_params(genre, role_label, vocal_style_preset=None):
+    """Look up chain params from matrix. Apply vocal style preset overrides."""
+    genre_key = (genre or "HIP_HOP").upper().replace(" ", "_").replace("-", "_").replace("&", "").replace("B", "B")
+    if genre_key == "RNB" or genre_key == "R_B":
+        genre_key = "RNB"
+    genre_chains = CHAIN_MATRIX.get(genre_key, CHAIN_MATRIX["HIP_HOP"])
+    role_key = ROLE_MAP.get(role_label, "lead")
+    chain = dict(genre_chains.get(role_key, genre_chains["lead"]))  # copy
+
+    if not vocal_style_preset or vocal_style_preset.upper() in ("AUTO", "NONE", ""):
+        return chain
+
+    preset = vocal_style_preset.upper()
+
+    if preset == "CLEAN_NATURAL":
+        chain["comp1_ratio"] = max(1.5, chain["comp1_ratio"] - 1.0)
+        chain["sat"] = 0.0
+        chain["reverb_wet"] = chain["reverb_wet"] * 0.7
+        chain["telephone"] = False
+
+    elif preset == "LOFI_GRITTY":
+        chain["sat"] = min(0.15, chain.get("sat", 0) + 0.05)
+        if role_label in ("vocal_adlibs", "adlib"):
+            chain["telephone"] = True
+            chain["tp_low"]  = chain.get("tp_low",  300)
+            chain["tp_high"] = chain.get("tp_high", 3000)
+
+    elif preset == "AIRY_SPACIOUS":
+        chain["reverb_wet"]  = min(0.5, chain["reverb_wet"] * 1.5)
+        chain["reverb_room"] = min(0.9, chain["reverb_room"] + 0.2)
+        chain["telephone"] = False
+
+    elif preset == "RAW_UPFRONT":
+        chain["reverb_wet"]  = chain["reverb_wet"] * 0.5
+        chain["comp1_ratio"] = min(8.0, chain["comp1_ratio"] + 1.0)
+        chain["pan"]         = chain["pan"] * 0.7
+
+    return chain
 
 
 # ---------- Main Predictor ----------
@@ -778,191 +992,235 @@ class Predictor(BasePredictor):
     # ---------- MIX FULL ----------
     def _mix_full(self, job_id, mix_params_json):
         """
-        Full mixing engine. mix_params_json is the MixDecision from Claude.
-        Stems are fetched from Supabase using stored inputFiles URLs embedded in mix_params_json.
-        For now, runs a simplified genre-aware per-stem chain.
+        Full mixing engine using genre + role chain matrix.
+        Implements: input gain staging, role-aware DSP chains, parallel saturation,
+        telephone filter for ad-libs, pitch detune for doubles/harmonies, quality gate.
         """
         try:
             params = json.loads(mix_params_json) if mix_params_json else {}
         except Exception:
             params = {}
 
-        stem_params = params.get("stemParams", {})
-        bus_params  = params.get("busParams", {})
+        genre             = params.get("genre", "HIP_HOP")
+        vocal_style_preset = params.get("vocalStylePreset", "AUTO")
+        stems_input       = params.get("stems_urls", {})  # {label: url}
 
-        # We need the stem URLs — they're passed via stems_urls input
-        # (job route fires with stems_urls from inputFiles)
-        # For the mix action, stems_urls contains the URLs
-        stems_input = params.get("stems_urls", {})
         if not stems_input:
-            # fallback: return placeholder
-            return {
-                "file_paths": {},
-                "waveforms": {},
-                "original_waveform": [],
-                "preview_file_paths": {},
-                "applied_parameters": params,
-            }
-
-        out_dir = tempfile.mkdtemp()
-        mixed = None
-        sr_out = None
-
-        for label, url in stems_input.items():
-            audio_path = download_audio(url)
-            y, sr = librosa.load(audio_path, sr=None, mono=False)
-            sr_out = sr
-            os.unlink(audio_path)
-
-            if y.ndim == 1:
-                y = np.stack([y, y])
-
-            sp = stem_params.get(label, {})
-            hp_hz  = float(sp.get("highpassHz", 80))
-            gain   = float(sp.get("gainDb", 0))
-            pan    = float(sp.get("panLR", 0))
-            reverb_send = float(sp.get("reverbSend", 0))
-            sat    = float(sp.get("saturation", 0))
-
-            chain = Pedalboard([
-                HighShelfFilter(cutoff_frequency_hz=max(20, hp_hz), gain_db=-40),  # high-pass via steep high-cut inverted
-                Compressor(threshold_db=float(sp.get("comp1", {}).get("thresholdDb", -18)),
-                           ratio=float(sp.get("comp1", {}).get("ratio", 4)),
-                           attack_ms=float(sp.get("comp1", {}).get("attackMs", 2)),
-                           release_ms=float(sp.get("comp1", {}).get("releaseMs", 80))),
-                Compressor(threshold_db=float(sp.get("comp2", {}).get("thresholdDb", -24)),
-                           ratio=float(sp.get("comp2", {}).get("ratio", 2.5)),
-                           attack_ms=float(sp.get("comp2", {}).get("attackMs", 15)),
-                           release_ms=float(sp.get("comp2", {}).get("releaseMs", 200))),
-                Gain(gain_db=gain),
-            ])
-            if sat > 0:
-                from pedalboard import Distortion
-                chain.append(Distortion(drive_db=sat * 30))
-
-            y_proc = chain(y, sr)
-
-            # Pan
-            if pan != 0:
-                l_gain = max(0, 1.0 - pan) if pan > 0 else 1.0
-                r_gain = max(0, 1.0 + pan) if pan < 0 else 1.0
-                y_proc[0] *= l_gain
-                y_proc[1] *= r_gain
-
-            # Add reverb to return bus
-            if reverb_send > 0:
-                from pedalboard import Reverb
-                rev_board = Pedalboard([Reverb(room_size=0.4, wet_level=reverb_send, dry_level=1.0)])
-                y_proc = rev_board(y_proc, sr)
-
-            if mixed is None:
-                mixed = y_proc.astype(np.float64)
-            else:
-                min_len = min(mixed.shape[1], y_proc.shape[1])
-                mixed = mixed[:, :min_len] + y_proc[:, :min_len].astype(np.float64)
-
-        if mixed is None or sr_out is None:
-            shutil.rmtree(out_dir, ignore_errors=True)
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-        # Bus processing
-        peak_norm = float(bus_params.get("peakNormalize", -1.0))
-        glue_thresh = float(bus_params.get("glueCompThresh", -12))
-        glue_ratio  = float(bus_params.get("glueCompRatio", 2.0))
-        eq_low      = float(bus_params.get("eqLowShelf", 0.5))
-        eq_high     = float(bus_params.get("eqHighShelf", 1.0))
+        out_dir = tempfile.mkdtemp()
+        mixed   = None
+        sr_out  = None
 
-        bus_board = Pedalboard([
-            LowShelfFilter(cutoff_frequency_hz=80,   gain_db=eq_low),
-            HighShelfFilter(cutoff_frequency_hz=8000, gain_db=eq_high),
-            Compressor(threshold_db=glue_thresh, ratio=glue_ratio, attack_ms=30, release_ms=200),
-        ])
-        mixed = bus_board(mixed.astype(np.float32), sr_out)
+        try:
+            for label, url in stems_input.items():
+                audio_path = download_audio(url)
+                y, sr = librosa.load(audio_path, sr=None, mono=False)
+                sr_out = sr
+                os.unlink(audio_path)
 
-        # Peak normalize
-        target_peak = 10 ** (peak_norm / 20)
-        cur_peak = np.max(np.abs(mixed))
-        if cur_peak > 0:
-            mixed = mixed / cur_peak * target_peak
+                if y.ndim == 1:
+                    y = np.stack([y, y])
 
-        # Generate 3 variations from the same base
-        def write_variation(audio, name, adj_gain=0, adj_comp_ratio=1.0):
-            board = Pedalboard([Gain(gain_db=adj_gain)])
-            out = board(audio.copy(), sr_out)
-            path = os.path.join(out_dir, f"mix_{name}.wav")
-            sf.write(path, out.T, sr_out, subtype="PCM_16")
-            return path
+                is_beat = label == "beat"
+                chain_p = get_chain_params(genre, label, vocal_style_preset) if not is_beat else None
 
-        # Find best 30s preview window
-        y_mono = librosa.to_mono(mixed)
-        hop_sz = sr_out
-        rms_env = librosa.feature.rms(y=y_mono, hop_length=hop_sz)[0]
-        window_frames = 30
-        if len(rms_env) > window_frames:
+                # ── 1. Input gain staging: normalize all stems to -23 LUFS ──
+                y = normalize_input_lufs(y, sr, target_lufs=-23.0)
+
+                if is_beat:
+                    # Beat: light side-chain style ducking only — no vocal chain
+                    # Apply mild high-shelf cut to carve space for vocals (2-5kHz -2dB)
+                    beat_board = Pedalboard([
+                        PeakFilter(cutoff_frequency_hz=3000, gain_db=-2.0, q=0.8),
+                    ])
+                    y_proc = beat_board(y.astype(np.float32), sr)
+                    # Beat sits -2dB below final sum by default
+                    y_proc = y_proc * (10 ** (-2.0 / 20))
+
+                else:
+                    # ── 2. Pre-processing: noise gate ──
+                    y_mono_gate = (y[0] + y[1]) / 2
+                    y_mono_gated = apply_noise_gate(y_mono_gate, sr, threshold_db=-42)
+                    diff = y_mono_gated - y_mono_gate
+                    y[0] += diff
+                    y[1] += diff
+
+                    # ── 3. De-esser (per-vocalist frequency detection) ──
+                    y_mono_for_ds = (y[0] + y[1]) / 2
+                    sib_freq = detect_sibilance_freq(y_mono_for_ds, sr)
+                    # Apply a gentle peak cut at sibilance frequency
+                    de_ess_board = Pedalboard([PeakFilter(cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
+                    y = de_ess_board(y.astype(np.float32), sr)
+
+                    hp_hz   = float(chain_p.get("hp", 80))
+                    sat_wet = float(chain_p.get("sat", 0.0))
+                    rev_wet = float(chain_p.get("reverb_wet", 0.0))
+                    rev_room= float(chain_p.get("reverb_room", 0.4))
+                    pan     = float(chain_p.get("pan", 0.0))
+                    detune  = float(chain_p.get("detune", 0))
+                    gain_db = float(chain_p.get("gain_db", 0.0))
+                    do_tel  = bool(chain_p.get("telephone", False))
+                    tp_low  = float(chain_p.get("tp_low", 300))
+                    tp_high = float(chain_p.get("tp_high", 3000))
+                    comp1_r = float(chain_p.get("comp1_ratio", 4.0))
+                    comp2_r = float(chain_p.get("comp2_ratio", 0.0))
+
+                    # ── 4. High-pass filter ──
+                    hp_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=max(20, hp_hz))])
+                    y = hp_board(y.astype(np.float32), sr)
+
+                    # ── 5. Telephone bandpass (ad-libs, ins/outs) ──
+                    if do_tel:
+                        y = apply_telephone_filter(y, sr, low_hz=tp_low, high_hz=tp_high)
+
+                    # ── 6. Compression (parallel if ratio > 5:1) ──
+                    def apply_comp(audio, ratio, thresh_db=-18, attack_ms=2, release_ms=80):
+                        if ratio <= 0:
+                            return audio
+                        board = Pedalboard([Compressor(threshold_db=thresh_db, ratio=ratio, attack_ms=attack_ms, release_ms=release_ms)])
+                        if ratio > 5.0:
+                            # Parallel compression
+                            dry = audio.copy()
+                            compressed = board(audio.copy(), sr)
+                            return dry * 0.5 + compressed * 0.5
+                        return board(audio, sr)
+
+                    y = apply_comp(y, comp1_r, thresh_db=-18, attack_ms=2, release_ms=80)
+                    if comp2_r > 0:
+                        y = apply_comp(y, comp2_r, thresh_db=-24, attack_ms=15, release_ms=200)
+
+                    # ── 7. Parallel saturation ──
+                    y = apply_parallel_saturation(y, sr, wet=sat_wet)
+
+                    # ── 8. Pitch detune for doubles/harmonies ──
+                    if detune > 0 and y.ndim == 2:
+                        y_left  = apply_detune_cents(y[0], sr, +detune)
+                        y_right = apply_detune_cents(y[1], sr, -detune)
+                        min_len = min(len(y_left), len(y_right))
+                        y = np.stack([y_left[:min_len], y_right[:min_len]])
+
+                    # ── 9. Pan ──
+                    if pan != 0:
+                        l_gain = max(0.0, 1.0 - pan) if pan > 0 else 1.0
+                        r_gain = max(0.0, 1.0 + pan) if pan < 0 else 1.0
+                        if y.ndim == 2:
+                            y[0] = y[0] * l_gain
+                            y[1] = y[1] * r_gain
+
+                    # ── 10. Reverb ──
+                    if rev_wet > 0:
+                        from pedalboard import Reverb
+                        rev_board = Pedalboard([Reverb(room_size=rev_room, wet_level=rev_wet, dry_level=1.0)])
+                        y = rev_board(y.astype(np.float32), sr)
+
+                    # ── 11. Gain blend offset ──
+                    if gain_db != 0:
+                        y = y * (10 ** (gain_db / 20))
+
+                    y_proc = y.astype(np.float64)
+
+                # Sum into mix
+                if mixed is None:
+                    mixed = y_proc
+                else:
+                    min_len = min(mixed.shape[1], y_proc.shape[1])
+                    mixed = mixed[:, :min_len] + y_proc[:, :min_len]
+
+            if mixed is None or sr_out is None:
+                shutil.rmtree(out_dir, ignore_errors=True)
+                return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
+
+            # ── Bus processing ──
+            bus_board = Pedalboard([
+                LowShelfFilter(cutoff_frequency_hz=80,    gain_db=0.5),
+                HighShelfFilter(cutoff_frequency_hz=8000, gain_db=1.0),
+                Compressor(threshold_db=-12, ratio=2.0, attack_ms=30, release_ms=200),
+            ])
+            mixed = bus_board(mixed.astype(np.float32), sr_out)
+
+            # ── Quality gate: clipping check + vocal audibility ──
+            peak = float(np.max(np.abs(mixed)))
+            if peak > 0.99:
+                mixed = mixed / peak * 0.99  # de-clip
+            # Peak normalize to -1 dBFS
+            target_peak = 10 ** (-1.0 / 20)
+            cur_peak = np.max(np.abs(mixed))
+            if cur_peak > 0:
+                mixed = mixed / cur_peak * target_peak
+
+            # ── Find best 30s preview window ──
+            y_mono_mix = librosa.to_mono(mixed)
+            hop_sz     = sr_out
+            rms_env    = librosa.feature.rms(y=y_mono_mix, hop_length=hop_sz)[0]
+            window_frames = 30
             best_f, best_v = 0, 0.0
-            for fi in range(len(rms_env) - window_frames):
-                avg = float(np.mean(rms_env[fi: fi + window_frames]))
-                if avg > best_v:
-                    best_v, best_f = avg, fi
+            if len(rms_env) > window_frames:
+                for fi in range(len(rms_env) - window_frames):
+                    avg = float(np.mean(rms_env[fi: fi + window_frames]))
+                    if avg > best_v:
+                        best_v, best_f = avg, fi
             preview_start = best_f * hop_sz
-        else:
-            preview_start = 0
-        preview_end = preview_start + (30 * sr_out)
+            preview_end   = preview_start + (30 * sr_out)
 
-        def make_clip(audio_2d, start, end, srate):
-            end = min(end, audio_2d.shape[1])
-            clip = audio_2d[:, start:end].copy()
-            fade = int(0.5 * srate)
-            if clip.shape[1] > fade * 2:
-                clip[:, :fade]  *= np.linspace(0, 1, fade)
-                clip[:, -fade:] *= np.linspace(1, 0, fade)
-            return clip
+            def make_clip(audio_2d, start, end, srate):
+                end  = min(end, audio_2d.shape[1])
+                clip = audio_2d[:, start:end].copy()
+                fade = int(0.5 * srate)
+                if clip.shape[1] > fade * 2:
+                    clip[:, :fade]  *= np.linspace(0, 1, fade)
+                    clip[:, -fade:] *= np.linspace(1, 0, fade)
+                return clip
 
-        variation_configs = [
-            ("clean",      -1.0, 1.0),
-            ("polished",    0.0, 1.2),
-            ("aggressive",  2.0, 1.5),
-        ]
+            # ── Generate 3 variations ──
+            variation_configs = [
+                ("clean",      -1.0),
+                ("polished",    0.0),
+                ("aggressive",  2.0),
+            ]
+            file_paths    = {}
+            waveforms     = {}
+            preview_paths = {}
 
-        file_paths    = {}
-        waveforms     = {}
-        preview_paths = {}
+            for name, gain_adj in variation_configs:
+                var_audio = mixed.copy()
+                if gain_adj != 0:
+                    var_audio = var_audio * (10 ** (gain_adj / 20))
+                # Clip guard
+                vp = float(np.max(np.abs(var_audio)))
+                if vp > 0.99:
+                    var_audio = var_audio / vp * 0.99
 
-        for name, gain_adj, comp_adj in variation_configs:
-            var_path = write_variation(mixed.astype(np.float32), name, gain_adj)
-            remote   = f"mixing/{job_id}/mix_{name}.wav"
-            upload_to_supabase(var_path, "processed", remote)
-            file_paths[name] = remote
-            os.unlink(var_path)
+                var_path = os.path.join(out_dir, f"mix_{name}.wav")
+                sf.write(var_path, var_audio.T, sr_out, subtype="PCM_16")
+                remote = f"mixing/{job_id}/mix_{name}.wav"
+                upload_to_supabase(var_path, "processed", remote)
+                file_paths[name] = remote
+                os.unlink(var_path)
 
-            # Preview clip
-            var_audio = mixed.copy()
-            if gain_adj != 0:
-                var_audio = var_audio * (10 ** (gain_adj / 20))
-            clip = make_clip(var_audio.astype(np.float32), preview_start, preview_end, sr_out)
-            clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-            sf.write(clip_tmp, clip.T, sr_out, subtype="PCM_16")
-            prev_remote = f"mixing/{job_id}/preview_{name}.wav"
-            upload_to_supabase(clip_tmp, "processed", prev_remote)
-            preview_paths[name] = prev_remote
-            clip_mono = clip[0] if clip.ndim > 1 else clip
-            waveforms[name] = extract_waveform_from_array(clip_mono)
-            os.unlink(clip_tmp)
+                clip = make_clip(var_audio, preview_start, preview_end, sr_out)
+                clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+                sf.write(clip_tmp, clip.T, sr_out, subtype="PCM_16")
+                prev_remote = f"mixing/{job_id}/preview_{name}.wav"
+                upload_to_supabase(clip_tmp, "processed", prev_remote)
+                preview_paths[name] = prev_remote
+                clip_mono = clip[0] if clip.ndim > 1 else clip
+                waveforms[name] = extract_waveform_from_array(clip_mono)
+                os.unlink(clip_tmp)
 
-        # Original waveform (mono sum of all stems)
-        orig_clip = make_clip(mixed.astype(np.float32), preview_start, preview_end, sr_out)
-        orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
-        original_waveform = extract_waveform_from_array(orig_mono)
+            # ── Original waveform ──
+            orig_clip = make_clip(mixed.astype(np.float32), preview_start, preview_end, sr_out)
+            orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
+            original_waveform = extract_waveform_from_array(orig_mono)
+            orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+            sf.write(orig_tmp, orig_clip.T, sr_out, subtype="PCM_16")
+            orig_remote = f"mixing/{job_id}/preview_original.wav"
+            upload_to_supabase(orig_tmp, "processed", orig_remote)
+            preview_paths["original"] = orig_remote
+            os.unlink(orig_tmp)
 
-        # Original preview clip
-        orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-        sf.write(orig_tmp, orig_clip.T, sr_out, subtype="PCM_16")
-        orig_remote = f"mixing/{job_id}/preview_original.wav"
-        upload_to_supabase(orig_tmp, "processed", orig_remote)
-        preview_paths["original"] = orig_remote
-        os.unlink(orig_tmp)
-
-        shutil.rmtree(out_dir, ignore_errors=True)
+        finally:
+            shutil.rmtree(out_dir, ignore_errors=True)
 
         return {
             "file_paths":          file_paths,

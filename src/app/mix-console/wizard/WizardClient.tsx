@@ -74,12 +74,12 @@ export default function MixConsoleWizardClient() {
   });
 
   // Upload — VOCAL_BEAT: vocal layers + beat; TRACKED_STEMS: multi
-  const [vocalFiles,      setVocalFiles]      = useState<{ key: string; label: string; file: File | null }[]>([
-    { key: "main",      label: "Main Vocal",  file: null },
-    { key: "adlibs",    label: "Ad-libs",     file: null },
-    { key: "insouts",   label: "Ins & Outs",  file: null },
-    { key: "doubles",   label: "Doubles",     file: null },
-    { key: "harmonies", label: "Harmonies",   file: null },
+  const [vocalFiles,      setVocalFiles]      = useState<{ key: string; label: string; files: File[] }[]>([
+    { key: "main",      label: "Main Vocal",  files: [] },
+    { key: "adlibs",    label: "Ad-libs",     files: [] },
+    { key: "insouts",   label: "Ins & Outs",  files: [] },
+    { key: "doubles",   label: "Doubles",     files: [] },
+    { key: "harmonies", label: "Harmonies",   files: [] },
   ]);
   const [beatFile,        setBeatFile]        = useState<File | null>(null);
   const [stemFiles,       setStemFiles]       = useState<{ file: File; label: string }[]>([]);
@@ -88,14 +88,15 @@ export default function MixConsoleWizardClient() {
   const [stemsDragging,   setStemsDragging]   = useState(false);
 
   // Configure
-  const [genre,           setGenre]           = useState("AUTO");
-  const [breathEditing,   setBreathEditing]   = useState("SUBTLE");
-  const [pitchCorrection, setPitchCorrection] = useState("SUBTLE");
-  const [delayStyle,      setDelayStyle]      = useState("STANDARD");
-  const [mixVibe,         setMixVibe]         = useState("POLISHED");
-  const [reverbStyle,     setReverbStyle]     = useState("PLATE");
-  const [fadeOut,         setFadeOut]         = useState("AUTO");
-  const [customDirection, setCustomDirection] = useState("");
+  const [genre,             setGenre]             = useState("AUTO");
+  const [breathEditing,     setBreathEditing]     = useState("SUBTLE");
+  const [pitchCorrection,   setPitchCorrection]   = useState("SUBTLE");
+  const [delayStyle,        setDelayStyle]        = useState("STANDARD");
+  const [mixVibe,           setMixVibe]           = useState("POLISHED");
+  const [vocalStylePreset,  setVocalStylePreset]  = useState("AUTO");
+  const [reverbStyle,       setReverbStyle]       = useState("PLATE");
+  const [fadeOut,           setFadeOut]           = useState("AUTO");
+  const [customDirection,   setCustomDirection]   = useState("");
 
   // Reference track (Premium/Pro)
   const [refUrl,          setRefUrl]          = useState<string | null>(null);
@@ -227,15 +228,19 @@ export default function MixConsoleWizardClient() {
       let inputFiles: InputFile[] = [];
 
       if (mode === "VOCAL_BEAT") {
-        const mainVocal = vocalFiles.find((v) => v.key === "main")?.file;
-        if (!mainVocal || !beatFile) throw new Error("Please upload your main vocal and beat.");
-        const filesToUpload: { file: File; label: string }[] = [
-          { file: mainVocal, label: "vocal_main" },
-          ...vocalFiles
-            .filter((v) => v.key !== "main" && v.file !== null)
-            .map((v) => ({ file: v.file as File, label: `vocal_${v.key}` })),
-          { file: beatFile, label: "beat" },
-        ];
+        const mainSlot = vocalFiles.find((v) => v.key === "main");
+        if (!mainSlot || mainSlot.files.length === 0 || !beatFile) throw new Error("Please upload your main vocal and beat.");
+        // Expand each slot: multiple files in a slot get indexed labels (vocal_adlibs_0, vocal_adlibs_1, etc.)
+        const filesToUpload: { file: File; label: string }[] = [];
+        for (const slot of vocalFiles) {
+          slot.files.forEach((f, idx) => {
+            const label = slot.files.length === 1
+              ? `vocal_${slot.key}`
+              : `vocal_${slot.key}_${idx}`;
+            filesToUpload.push({ file: f, label });
+          });
+        }
+        filesToUpload.push({ file: beatFile, label: "beat" });
         const uploaded = await Promise.all(
           filesToUpload.map(async (s) => ({ url: await uploadFile(s.file), label: s.label }))
         );
@@ -259,9 +264,10 @@ export default function MixConsoleWizardClient() {
           breathEditing:   breathEditing  !== "OFF"  ? breathEditing  : undefined,
           pitchCorrection: pitchCorrection !== "OFF"  ? pitchCorrection : undefined,
           delayStyle:      delayStyle     !== "OFF"  ? delayStyle     : undefined,
-          mixVibe:         mixVibe        || undefined,
-          reverbStyle:     reverbStyle    || undefined,
-          fadeOut:         fadeOut        || undefined,
+          mixVibe:          mixVibe             || undefined,
+          vocalStylePreset: vocalStylePreset !== "AUTO" ? vocalStylePreset : undefined,
+          reverbStyle:      reverbStyle        || undefined,
+          fadeOut:          fadeOut            || undefined,
           customDirection: customDirection.trim() || undefined,
           referenceTrackUrl: refUrl       || undefined,
           referenceFileName: refFileName  || undefined,
@@ -568,70 +574,80 @@ export default function MixConsoleWizardClient() {
                   </div>
                   <div className="grid grid-cols-1 gap-2">
                     {vocalFiles.map((vSlot) => {
-                      const isMain    = vSlot.key === "main";
+                      const isMain     = vSlot.key === "main";
                       const isDragging = vocalDragging === vSlot.key;
-                      const hasFile   = vSlot.file !== null;
+                      const hasFiles   = vSlot.files.length > 0;
                       return (
-                        <div
-                          key={vSlot.key}
-                          onDragEnter={(e) => { e.preventDefault(); setVocalDragging(vSlot.key); }}
-                          onDragOver={(e)  => { e.preventDefault(); setVocalDragging(vSlot.key); }}
-                          onDragLeave={() => setVocalDragging(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setVocalDragging(null);
-                            const f = e.dataTransfer.files[0];
-                            if (f) setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, file: f } : v));
-                          }}
-                          onClick={() => vocalInputRefs.current[vSlot.key]?.click()}
-                          className={cn(
-                            "rounded-xl border border-dashed px-4 py-3 flex items-center gap-3 cursor-pointer transition-all",
-                            hasFile    ? "border-[#D4A843]" :
-                            isDragging ? "border-[#D4A843]" :
-                            isMain     ? "border-[#333] hover:border-[#555]" :
-                                         "border-[#222] hover:border-[#333]",
-                          )}
-                          style={isDragging ? { backgroundColor: "rgba(212,168,67,0.05)" } : undefined}
-                        >
-                          <input
-                            ref={(el) => { vocalInputRefs.current[vSlot.key] = el; }}
-                            type="file"
-                            accept=".wav,.aif,.aiff,.flac,.mp3"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, file: f } : v));
-                            }}
-                          />
+                        <div key={vSlot.key} className="space-y-1">
+                          {/* Drop zone row */}
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: hasFile ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.04)" }}
+                            onDragEnter={(e) => { e.preventDefault(); setVocalDragging(vSlot.key); }}
+                            onDragOver={(e)  => { e.preventDefault(); setVocalDragging(vSlot.key); }}
+                            onDragLeave={() => setVocalDragging(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setVocalDragging(null);
+                              const dropped = Array.from(e.dataTransfer.files);
+                              if (dropped.length) setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, files: [...v.files, ...dropped] } : v));
+                            }}
+                            onClick={() => vocalInputRefs.current[vSlot.key]?.click()}
+                            className={cn(
+                              "rounded-xl border border-dashed px-4 py-3 flex items-center gap-3 cursor-pointer transition-all",
+                              hasFiles   ? "border-[#D4A843]" :
+                              isDragging ? "border-[#D4A843]" :
+                              isMain     ? "border-[#333] hover:border-[#555]" :
+                                           "border-[#222] hover:border-[#333]",
+                            )}
+                            style={isDragging ? { backgroundColor: "rgba(212,168,67,0.05)" } : undefined}
                           >
-                            {hasFile
-                              ? <Check size={13} style={{ color: "#D4A843" }} />
-                              : <Upload size={13} style={{ color: isMain ? "#888" : "#444" }} />
-                            }
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold" style={{ color: hasFile ? "#D4A843" : isMain ? "#ccc" : "#666" }}>
-                              {vSlot.label}
-                              {isMain && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>REQUIRED</span>}
-                            </p>
-                            <p className="text-[10px] truncate mt-0.5" style={{ color: "#555" }}>
-                              {hasFile ? vSlot.file!.name : "Drop file or click to browse"}
-                            </p>
-                          </div>
-                          {hasFile && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, file: null } : v));
+                            <input
+                              ref={(el) => { vocalInputRefs.current[vSlot.key] = el; }}
+                              type="file"
+                              accept=".wav,.aif,.aiff,.flac,.mp3"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => {
+                                const picked = Array.from(e.target.files ?? []);
+                                if (picked.length) setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, files: [...v.files, ...picked] } : v));
                               }}
-                              className="shrink-0 hover:text-red-400 transition-colors"
-                              style={{ color: "#444" }}
+                            />
+                            <div
+                              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: hasFiles ? "rgba(212,168,67,0.15)" : "rgba(255,255,255,0.04)" }}
                             >
-                              <X size={13} />
-                            </button>
+                              {hasFiles
+                                ? <Check size={13} style={{ color: "#D4A843" }} />
+                                : <Upload size={13} style={{ color: isMain ? "#888" : "#444" }} />
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold" style={{ color: hasFiles ? "#D4A843" : isMain ? "#ccc" : "#666" }}>
+                                {vSlot.label}
+                                {isMain && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.15)", color: "#D4A843" }}>REQUIRED</span>}
+                              </p>
+                              <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>
+                                {hasFiles ? `${vSlot.files.length} file${vSlot.files.length > 1 ? "s" : ""} · click to add more` : "Drop files or click to browse · multiple takes OK"}
+                              </p>
+                            </div>
+                          </div>
+                          {/* File chips */}
+                          {hasFiles && (
+                            <div className="flex flex-wrap gap-1 pl-1">
+                              {vSlot.files.map((f, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
+                                  {f.name.length > 24 ? f.name.slice(0, 21) + "…" : f.name}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setVocalFiles((prev) => prev.map((v) => v.key === vSlot.key ? { ...v, files: v.files.filter((_, i) => i !== idx) } : v));
+                                    }}
+                                    className="hover:text-red-400 transition-colors ml-0.5"
+                                  >
+                                    <X size={9} />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </div>
                       );
@@ -757,7 +773,7 @@ export default function MixConsoleWizardClient() {
               onClick={() => setStep("configure")}
               disabled={
                 mode === "VOCAL_BEAT"
-                  ? !vocalFiles.find((v) => v.key === "main")?.file || !beatFile
+                  ? (vocalFiles.find((v) => v.key === "main")?.files.length ?? 0) === 0 || !beatFile
                   : stemFiles.length < 2
               }
               className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all"
@@ -839,6 +855,18 @@ export default function MixConsoleWizardClient() {
                     { v: "DARK",     l: "Dark & moody" },
                     { v: "BRIGHT",   l: "Bright & airy" },
                     { v: "RAW",      l: "Raw & gritty" },
+                  ],
+                },
+                {
+                  label: "Vocal Style",
+                  value: vocalStylePreset,
+                  set: setVocalStylePreset,
+                  options: [
+                    { v: "AUTO",          l: "Auto (genre-based)" },
+                    { v: "CLEAN_NATURAL", l: "Clean & natural" },
+                    { v: "LOFI_GRITTY",   l: "Lo-fi & gritty" },
+                    { v: "AIRY_SPACIOUS", l: "Airy & spacious" },
+                    { v: "RAW_UPFRONT",   l: "Raw & upfront" },
                   ],
                 },
                 {

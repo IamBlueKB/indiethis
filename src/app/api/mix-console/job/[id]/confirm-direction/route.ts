@@ -37,6 +37,8 @@ export async function POST(
         userId:         true,
         guestEmail:     true,
         mixParameters:  true,
+        inputFiles:     true,
+        genre:          true,
       },
     });
 
@@ -68,12 +70,26 @@ export async function POST(
       },
     });
 
+    // Build stems_urls dict from inputFiles: { label: url, ... }
+    const inputFiles = (job.inputFiles ?? []) as { url: string; label: string }[];
+    const stemsUrlsObj: Record<string, string> = {};
+    for (const f of inputFiles) {
+      stemsUrlsObj[f.label] = f.url;
+    }
+
+    // Embed stems_urls + genre into mix params so the Python engine can access both
+    const mixParams = {
+      ...(job.mixParameters as Record<string, unknown> ?? {}),
+      stems_urls: stemsUrlsObj,
+      genre:      job.genre ?? "HIP_HOP",
+    };
+
     // Fire full mix action — Replicate posts result to /api/mix-console/webhook/replicate/mix
     await startMixAction(
       "mix-full",
       {
         job_id:          id,
-        mix_params_json: JSON.stringify(job.mixParameters ?? {}),
+        mix_params_json: JSON.stringify(mixParams),
       },
       "/api/mix-console/webhook/replicate/mix",
     );
