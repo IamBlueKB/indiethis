@@ -92,9 +92,11 @@ export async function POST(req: NextRequest) {
     // Validate files per mode
     const inputFiles = body.inputFiles ?? [];
     if (body.mode === "VOCAL_BEAT") {
-      if (inputFiles.length !== 2) {
+      const hasBeat  = inputFiles.some((f) => f.label === "beat");
+      const hasMain  = inputFiles.some((f) => f.label === "vocal_main");
+      if (!hasMain || !hasBeat) {
         return NextResponse.json(
-          { error: "VOCAL_BEAT mode requires exactly 2 files (vocal + beat)." },
+          { error: "VOCAL_BEAT mode requires at least a main vocal and a beat." },
           { status: 400 },
         );
       }
@@ -144,8 +146,8 @@ export async function POST(req: NextRequest) {
     // Fire first pipeline action — returns instantly; Replicate posts result to webhook
     try {
       if (body.mode === "VOCAL_BEAT") {
-        // First file is vocal, second is beat — separate the beat into stems
-        const beatFileUrl = inputFiles[1].url;
+        // Beat is labeled "beat" — find it regardless of position
+        const beatFileUrl = inputFiles.find((f) => f.label === "beat")!.url;
         await prisma.mixJob.update({ where: { id: job.id }, data: { status: "SEPARATING" } });
         await startMixAction(
           "separate-stems",

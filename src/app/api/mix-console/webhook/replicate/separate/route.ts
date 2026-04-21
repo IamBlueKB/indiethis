@@ -55,18 +55,27 @@ export async function POST(req: NextRequest) {
     const drumsUrl  = parsed.drums_url as string | undefined;
     const otherUrl  = parsed.other_url as string | undefined;
 
-    // Load job to get the artist's original vocal (always first file in VOCAL_BEAT mode)
+    // Load job — grab all vocal_* files (main, adlibs, insouts, doubles, harmonies)
     const job = await prisma.mixJob.findUniqueOrThrow({ where: { id: jobId } });
     const existingFiles = job.inputFiles as Array<{ url: string; label: string; role?: string }>;
-    const originalVocalUrl = existingFiles[0]?.url;
+    const vocalInputs   = existingFiles.filter((f) => f.label.startsWith("vocal_"));
 
-    if (!originalVocalUrl) {
-      throw new Error("No original vocal URL found in inputFiles[0]");
+    if (vocalInputs.length === 0) {
+      throw new Error("No vocal files found in inputFiles");
     }
 
-    // Build combined stems array: artist vocal + separated beat stems
+    // Map vocal label → role for the mix engine
+    const vocalRoleMap: Record<string, string> = {
+      vocal_main:      "lead",
+      vocal_adlibs:    "adlib",
+      vocal_insouts:   "adlib",
+      vocal_doubles:   "double",
+      vocal_harmonies: "harmony",
+    };
+
+    // Build combined stems array: all artist vocals + separated beat stems
     const updatedInputFiles = [
-      { url: originalVocalUrl,   label: existingFiles[0]?.label ?? "vocal", role: "lead" },
+      ...vocalInputs.map((v) => ({ url: v.url, label: v.label, role: vocalRoleMap[v.label] ?? "lead" })),
       ...(bassUrl  ? [{ url: bassUrl,  label: "bass",  role: "bass"  }] : []),
       ...(drumsUrl ? [{ url: drumsUrl, label: "drums", role: "drums" }] : []),
       ...(otherUrl ? [{ url: otherUrl, label: "other", role: "other" }] : []),
