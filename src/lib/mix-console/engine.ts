@@ -124,26 +124,35 @@ export async function startMixAction(
   const secret     = WEBHOOK_SECRET ? `?secret=${encodeURIComponent(WEBHOOK_SECRET)}` : "";
   const webhookUrl = `${APP_URL}${webhookPath}${secret}`;
 
+  const payload = {
+    version:               MIX_VERSION,
+    input: {
+      action,
+      ...inputs,
+      supabase_url:         SUPABASE_URL,
+      supabase_service_key: SUPABASE_SERVICE_KEY,
+    },
+    webhook:               webhookUrl,
+    webhook_events_filter: ["completed"],
+  };
+  console.error("[mix-engine] startMixAction payload:", JSON.stringify({
+    version:    payload.version,
+    action,
+    inputKeys:  Object.keys(payload.input),
+    webhook:    webhookUrl,
+  }));
+
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+    if (attempt > 0) await new Promise(r => setTimeout(r, 5000 * attempt));
     try {
-      const prediction = await replicate.predictions.create({
-        version:               MIX_VERSION,
-        input: {
-          action,
-          ...inputs,
-          supabase_url:         SUPABASE_URL,
-          supabase_service_key: SUPABASE_SERVICE_KEY,
-        },
-        webhook:               webhookUrl,
-        webhook_events_filter: ["completed"],
-      });
+      const prediction = await replicate.predictions.create(payload);
       return prediction.id;
     } catch (err: unknown) {
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("429")) throw err;
+      console.error(`[mix-engine] attempt ${attempt} failed:`, msg);
+      if (!msg.includes("429") && !msg.includes("500")) throw err;
     }
   }
   throw lastError;
