@@ -1065,131 +1065,223 @@ class Predictor(BasePredictor):
     # ---------- MIX FULL ----------
     def _mix_full(self, job_id, mix_params_json):
         """
-        Full mixing engine using genre + role chain matrix.
-        Implements: input gain staging, role-aware DSP chains, parallel saturation,
-        telephone filter for ad-libs, pitch detune for doubles/harmonies, quality gate.
+        Full mixing engine.
+        - Smart role-based gain staging (beat → -12 LUFS reference, main vocal → -18 LUFS)
+        - Applies Claude's per-stem stemParams (EQ, comp thresholds, reverb) with chain
+          matrix as fallback for any missing values
+        - Beat gets vocal-pocket carve + light glue comp, not just a gain trim
+        - Bus uses Claude's busParams when available
         """
         try:
             params = json.loads(mix_params_json) if mix_params_json else {}
         except Exception:
             params = {}
 
-        genre             = params.get("genre", "HIP_HOP")
+        genre              = params.get("genre", "HIP_HOP")
         vocal_style_preset = params.get("vocalStylePreset", "AUTO")
-        stems_input       = params.get("stems_urls", {})  # {label: url}
+        stems_input        = params.get("stems_urls", {})     # {label: url}
+        stem_params_map    = params.get("stemParams", {})     # Claude's per-stem decisions
+        bus_params_ai      = params.get("busParams", {})      # Claude's bus decisions
 
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
+
+        # ── Role → target LUFS offset relative to main vocal (-18 LUFS) ──────────
+        BEAT_TARGET_LUFS       = -12.0   # beat is the loudest element — it's the foundation
+        MAIN_VOCAL_TARGET_LUFS = -18.0   # main vocal sits 6 dB below beat
+        SUPPORTING_LUFS_OFFSET = {       # offset from main vocal target
+            "vocal_adlibs":   -6.0,
+            "vocal_insouts":  -7.0,
+            "vocal_doubles":  -4.0,
+            "vocal_harmonies":-8.0,
+            "adlib":          -6.0,
+            "insouts":        -7.0,
+            "double":         -4.0,
+            "harmony":        -8.0,
+            "backing":        -8.0,
+        }
+
+        def measure_lufs(y_stereo, sr):
+            try:
+                meter = pyln.Meter(sr)
+                y_mono = (y_stereo[0] + y_stereo[1]) / 2 if y_stereo.ndim > 1 else y_stereo
+                lufs = float(meter.integrated_loudness(y_mono))
+                return lufs if np.isfinite(lufs) else -30.0
+            except Exception:
+                return -30.0
+
+        def stage_gain(y, current_lufs, target_lufs):
+            """Apply a fixed gain to reach target_lufs from current_lufs."""
+            diff_db = target_lufs - current_lufs
+            return y * (10 ** (diff_db / 20))
+
+        def is_main_vocal(label):
+            return label in ("vocal_main", "lead") or (
+                label.startswith("vocal_") and
+                not any(k in label for k in ("adlib", "double", "harmoni", "insout"))
+            )
+
+        # ── Step 1: load all stems + measure LUFS ────────────────────────────────
+        loaded = {}   # label → (y_stereo float32, sr)
+        lufs   = {}   # label → float
+
+        for label, url in stems_input.items():
+            audio_path = download_audio(url)
+            y, sr = librosa.load(audio_path, sr=None, mono=False)
+            os.unlink(audio_path)
+            if y.ndim == 1:
+                y = np.stack([y, y])
+            loaded[label] = (y.astype(np.float32), sr)
+            lufs[label]   = measure_lufs(y, sr)
 
         out_dir = tempfile.mkdtemp()
         mixed   = None
         sr_out  = None
 
+        def apply_comp_inner(audio, ratio, thresh_db, attack_ms, release_ms, sr):
+            if ratio <= 0:
+                return audio
+            board = Pedalboard([Compressor(
+                threshold_db=thresh_db, ratio=ratio,
+                attack_ms=attack_ms,   release_ms=release_ms,
+            )])
+            if ratio > 5.0:
+                dry        = audio.copy()
+                compressed = board(audio.copy(), sr)
+                return dry * 0.5 + compressed * 0.5
+            return board(audio, sr)
+
         try:
-            for label, url in stems_input.items():
-                audio_path = download_audio(url)
-                y, sr = librosa.load(audio_path, sr=None, mono=False)
+            for label, (y, sr) in loaded.items():
                 sr_out = sr
-                os.unlink(audio_path)
+                current_lufs = lufs[label]
+                sp           = stem_params_map.get(label, {})   # Claude's params for this stem
+                chain_p      = get_chain_params(genre, label, vocal_style_preset)
 
-                if y.ndim == 1:
-                    y = np.stack([y, y])
+                # ── 1. Role-aware gain staging ────────────────────────────────────
+                if label == "beat":
+                    target_lufs_stem = BEAT_TARGET_LUFS
+                elif is_main_vocal(label):
+                    target_lufs_stem = MAIN_VOCAL_TARGET_LUFS
+                else:
+                    offset           = SUPPORTING_LUFS_OFFSET.get(label, -6.0)
+                    target_lufs_stem = MAIN_VOCAL_TARGET_LUFS + offset
 
-                is_beat = label == "beat"
-                chain_p = get_chain_params(genre, label, vocal_style_preset) if not is_beat else None
+                y = stage_gain(y, current_lufs, target_lufs_stem)
 
-                # ── 1. Input gain staging: normalize all stems to -23 LUFS ──
-                y = normalize_input_lufs(y, sr, target_lufs=-23.0)
-
-                if is_beat:
-                    # Beat: light side-chain style ducking only — no vocal chain
-                    # Apply mild high-shelf cut to carve space for vocals (2-5kHz -2dB)
+                # ── 2. Per-stem processing ────────────────────────────────────────
+                if label == "beat":
+                    # Beat: carve vocal pocket in the mids, light glue comp
                     beat_board = Pedalboard([
-                        PeakFilter(cutoff_frequency_hz=3000, gain_db=-2.0, q=0.8),
+                        HighpassFilter(cutoff_frequency_hz=30),
+                        PeakFilter(cutoff_frequency_hz=2500, gain_db=-2.5, q=0.8),  # vocal pocket
+                        PeakFilter(cutoff_frequency_hz=5000, gain_db=-1.0, q=1.0),  # presence carve
+                        Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200),
                     ])
-                    y_proc = beat_board(y.astype(np.float32), sr)
-                    # Beat sits -2dB below final sum by default
-                    y_proc = y_proc * (10 ** (-2.0 / 20))
+                    y_proc = beat_board(y, sr)
 
                 else:
-                    # ── 2. Pre-processing: noise gate ──
-                    y_mono_gate = (y[0] + y[1]) / 2
-                    y_mono_gated = apply_noise_gate(y_mono_gate, sr, threshold_db=-42)
-                    diff = y_mono_gated - y_mono_gate
-                    y[0] += diff
-                    y[1] += diff
+                    # ── Vocal stem chain ──────────────────────────────────────────
+                    # Merge Claude's params with chain matrix (Claude takes priority)
+                    hp_hz    = float(sp.get("highpassHz",  chain_p.get("hp",          80)))
+                    sat_wet  = float(sp.get("saturation",  chain_p.get("sat",         0.02)))
+                    rev_wet  = float(sp.get("reverbSend",  chain_p.get("reverb_wet",  0.12)))
+                    rev_room = float(chain_p.get("reverb_room", 0.35))
+                    pan      = float(sp.get("panLR",       chain_p.get("pan",         0.0)))
+                    detune   = float(chain_p.get("detune", 0))
+                    do_tel   = bool(chain_p.get("telephone", False))
+                    tp_low   = float(chain_p.get("tp_low",  300))
+                    tp_high  = float(chain_p.get("tp_high", 3000))
 
-                    # ── 3. De-esser (per-vocalist frequency detection) ──
-                    y_mono_for_ds = (y[0] + y[1]) / 2
-                    sib_freq = detect_sibilance_freq(y_mono_for_ds, sr)
-                    # Apply a gentle peak cut at sibilance frequency
-                    de_ess_board = Pedalboard([PeakFilter(cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
+                    # Gain fine-tune (on top of LUFS staging)
+                    gain_fine = float(sp.get("gainDb", 0.0))
+
+                    # Compression — Claude's comp1/comp2 override matrix ratios
+                    c1           = sp.get("comp1", {})
+                    c2           = sp.get("comp2", {})
+                    comp1_thresh = float(c1.get("thresholdDb", -18))
+                    comp1_ratio  = float(c1.get("ratio",       chain_p.get("comp1_ratio", 4.0)))
+                    comp1_atk    = float(c1.get("attackMs",    2))
+                    comp1_rel    = float(c1.get("releaseMs",   80))
+                    comp2_ratio  = float(c2.get("ratio",       chain_p.get("comp2_ratio", 0.0)))
+
+                    # a. Noise gate
+                    y_mono_g  = (y[0] + y[1]) / 2
+                    y_gated   = apply_noise_gate(y_mono_g, sr, threshold_db=-42)
+                    diff      = y_gated - y_mono_g
+                    y         = np.stack([y[0] + diff, y[1] + diff])
+
+                    # b. De-esser
+                    sib_freq     = detect_sibilance_freq((y[0] + y[1]) / 2, sr)
+                    de_ess_board = Pedalboard([PeakFilter(
+                        cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
                     y = de_ess_board(y.astype(np.float32), sr)
 
-                    hp_hz   = float(chain_p.get("hp", 80))
-                    sat_wet = float(chain_p.get("sat", 0.0))
-                    rev_wet = float(chain_p.get("reverb_wet", 0.0))
-                    rev_room= float(chain_p.get("reverb_room", 0.4))
-                    pan     = float(chain_p.get("pan", 0.0))
-                    detune  = float(chain_p.get("detune", 0))
-                    gain_db = float(chain_p.get("gain_db", 0.0))
-                    do_tel  = bool(chain_p.get("telephone", False))
-                    tp_low  = float(chain_p.get("tp_low", 300))
-                    tp_high = float(chain_p.get("tp_high", 3000))
-                    comp1_r = float(chain_p.get("comp1_ratio", 4.0))
-                    comp2_r = float(chain_p.get("comp2_ratio", 0.0))
-
-                    # ── 4. High-pass filter ──
-                    hp_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=max(20, hp_hz))])
+                    # c. HP filter
+                    hp_board = Pedalboard([HighpassFilter(
+                        cutoff_frequency_hz=max(20, hp_hz))])
                     y = hp_board(y.astype(np.float32), sr)
 
-                    # ── 5. Telephone bandpass (ad-libs, ins/outs) ──
+                    # d. EQ from Claude stemParams
+                    eq_points = sp.get("eq", [])
+                    if eq_points:
+                        eq_fx = []
+                        for ep in eq_points:
+                            t = ep.get("type", "peak")
+                            f = float(ep.get("freq",   1000))
+                            g = float(ep.get("gainDb", 0))
+                            q = float(ep.get("q",      1.0))
+                            if abs(g) < 0.1:
+                                continue
+                            if t == "peak":
+                                eq_fx.append(PeakFilter(
+                                    cutoff_frequency_hz=f, gain_db=g, q=q))
+                            elif t == "highshelf":
+                                eq_fx.append(HighShelfFilter(
+                                    cutoff_frequency_hz=f, gain_db=g))
+                            elif t == "lowshelf":
+                                eq_fx.append(LowShelfFilter(
+                                    cutoff_frequency_hz=f, gain_db=g))
+                        if eq_fx:
+                            eq_board = Pedalboard(eq_fx)
+                            y = eq_board(y.astype(np.float32), sr)
+
+                    # e. Telephone bandpass (ad-libs, ins/outs)
                     if do_tel:
                         y = apply_telephone_filter(y, sr, low_hz=tp_low, high_hz=tp_high)
 
-                    # ── 6. Compression (parallel if ratio > 5:1) ──
-                    def apply_comp(audio, ratio, thresh_db=-18, attack_ms=2, release_ms=80):
-                        if ratio <= 0:
-                            return audio
-                        board = Pedalboard([Compressor(threshold_db=thresh_db, ratio=ratio, attack_ms=attack_ms, release_ms=release_ms)])
-                        if ratio > 5.0:
-                            # Parallel compression
-                            dry = audio.copy()
-                            compressed = board(audio.copy(), sr)
-                            return dry * 0.5 + compressed * 0.5
-                        return board(audio, sr)
+                    # f. Compression
+                    y = apply_comp_inner(y, comp1_ratio, comp1_thresh, comp1_atk, comp1_rel, sr)
+                    if comp2_ratio > 0:
+                        y = apply_comp_inner(y, comp2_ratio, -24, 15, 200, sr)
 
-                    y = apply_comp(y, comp1_r, thresh_db=-18, attack_ms=2, release_ms=80)
-                    if comp2_r > 0:
-                        y = apply_comp(y, comp2_r, thresh_db=-24, attack_ms=15, release_ms=200)
-
-                    # ── 7. Parallel saturation ──
+                    # g. Saturation
                     y = apply_parallel_saturation(y, sr, wet=sat_wet)
 
-                    # ── 8. Pitch detune for doubles/harmonies ──
+                    # h. Detune (doubles / harmonies)
                     if detune > 0 and y.ndim == 2:
                         y_left  = apply_detune_cents(y[0], sr, +detune)
                         y_right = apply_detune_cents(y[1], sr, -detune)
                         min_len = min(len(y_left), len(y_right))
-                        y = np.stack([y_left[:min_len], y_right[:min_len]])
+                        y       = np.stack([y_left[:min_len], y_right[:min_len]])
 
-                    # ── 9. Pan ──
-                    if pan != 0:
+                    # i. Pan
+                    if pan != 0 and y.ndim == 2:
                         l_gain = max(0.0, 1.0 - pan) if pan > 0 else 1.0
                         r_gain = max(0.0, 1.0 + pan) if pan < 0 else 1.0
-                        if y.ndim == 2:
-                            y[0] = y[0] * l_gain
-                            y[1] = y[1] * r_gain
+                        y[0]   = y[0] * l_gain
+                        y[1]   = y[1] * r_gain
 
-                    # ── 10. Reverb ──
+                    # j. Reverb
                     if rev_wet > 0:
                         from pedalboard import Reverb
-                        rev_board = Pedalboard([Reverb(room_size=rev_room, wet_level=rev_wet, dry_level=1.0)])
+                        rev_board = Pedalboard([Reverb(
+                            room_size=rev_room, wet_level=rev_wet, dry_level=1.0)])
                         y = rev_board(y.astype(np.float32), sr)
 
-                    # ── 11. Gain blend offset ──
-                    if gain_db != 0:
-                        y = y * (10 ** (gain_db / 20))
+                    # k. Fine-tune gain (role blend offset)
+                    if gain_fine != 0:
+                        y = y * (10 ** (gain_fine / 20))
 
                     y_proc = y.astype(np.float64)
 
@@ -1198,27 +1290,30 @@ class Predictor(BasePredictor):
                     mixed = y_proc
                 else:
                     min_len = min(mixed.shape[1], y_proc.shape[1])
-                    mixed = mixed[:, :min_len] + y_proc[:, :min_len]
+                    mixed   = mixed[:, :min_len] + y_proc[:, :min_len]
 
             if mixed is None or sr_out is None:
                 shutil.rmtree(out_dir, ignore_errors=True)
                 return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-            # ── Bus processing ──
+            # ── Bus processing: use Claude's busParams where available ────────────
+            bus_low_shelf  = float(bus_params_ai.get("eqLowShelf",     0.5))
+            bus_high_shelf = float(bus_params_ai.get("eqHighShelf",    1.0))
+            bus_thresh     = float(bus_params_ai.get("glueCompThresh", -12))
+            bus_ratio      = float(bus_params_ai.get("glueCompRatio",   2.0))
+            bus_normalize  = float(bus_params_ai.get("peakNormalize",  -1.0))
+
             bus_board = Pedalboard([
-                LowShelfFilter(cutoff_frequency_hz=80,    gain_db=0.5),
-                HighShelfFilter(cutoff_frequency_hz=8000, gain_db=1.0),
-                Compressor(threshold_db=-12, ratio=2.0, attack_ms=30, release_ms=200),
+                LowShelfFilter(cutoff_frequency_hz=100,  gain_db=bus_low_shelf),
+                HighShelfFilter(cutoff_frequency_hz=8000, gain_db=bus_high_shelf),
+                Compressor(threshold_db=bus_thresh, ratio=bus_ratio,
+                           attack_ms=30, release_ms=200),
             ])
             mixed = bus_board(mixed.astype(np.float32), sr_out)
 
-            # ── Quality gate: clipping check + vocal audibility ──
-            peak = float(np.max(np.abs(mixed)))
-            if peak > 0.99:
-                mixed = mixed / peak * 0.99  # de-clip
-            # Peak normalize to -1 dBFS
-            target_peak = 10 ** (-1.0 / 20)
-            cur_peak = np.max(np.abs(mixed))
+            # ── Clip guard + normalize to target peak ─────────────────────────────
+            target_peak = 10 ** (bus_normalize / 20)
+            cur_peak    = float(np.max(np.abs(mixed)))
             if cur_peak > 0:
                 mixed = mixed / cur_peak * target_peak
 
