@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       const inputFiles = (job?.inputFiles ?? []) as { url: string; label: string }[];
       await startMixAction(
         "analyze-mix",
-        { stems_urls: JSON.stringify(inputFiles.map((f) => f.url)), job_id: jobId },
+        { stems_json: JSON.stringify(inputFiles.map((f) => f.url)), job_id: jobId },
         "/api/mix-console/webhook/replicate/analyze",
       ).catch(() => prisma.mixJob.update({ where: { id: jobId }, data: { status: "FAILED" } }));
       return NextResponse.json({ ok: true });
@@ -61,7 +61,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const raw    = Array.isArray(body.output) ? body.output[body.output.length - 1] : body.output;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Sanitize non-standard JSON floats Python may emit (Infinity, -Infinity, NaN)
+    const sanitized = raw
+      .replace(/-Infinity/g, "-99")
+      .replace(/\bInfinity\b/g, "999")
+      .replace(/\bNaN\b/g, "0");
+    const parsed = JSON.parse(sanitized) as Record<string, unknown>;
 
     // Load job to get user preferences for Claude decisions
     const job = await prisma.mixJob.findUniqueOrThrow({ where: { id: jobId } });

@@ -926,8 +926,10 @@ class Predictor(BasePredictor):
             meter = pyln.Meter(sr)
             try:
                 lufs = float(meter.integrated_loudness(y))
+                if not np.isfinite(lufs):
+                    lufs = -99.0  # silent/near-silent stem
             except Exception:
-                lufs = 0.0
+                lufs = -99.0
             rms  = float(np.sqrt(np.mean(y ** 2)))
             spec  = np.abs(librosa.stft(y))
             freqs = librosa.fft_frequencies(sr=sr)
