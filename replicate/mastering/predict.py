@@ -1171,13 +1171,29 @@ class Predictor(BasePredictor):
 
                 # ── 2. Per-stem processing ────────────────────────────────────────
                 if label == "beat":
-                    # Beat: carve vocal pocket in the mids, light glue comp
-                    beat_board = Pedalboard([
+                    # Beat: HP + default vocal-pocket carve + light glue comp
+                    beat_fx = [
                         HighpassFilter(cutoff_frequency_hz=30),
                         PeakFilter(cutoff_frequency_hz=2500, gain_db=-2.5, q=0.8),  # vocal pocket
                         PeakFilter(cutoff_frequency_hz=5000, gain_db=-1.0, q=1.0),  # presence carve
-                        Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200),
-                    ])
+                    ]
+                    # Apply Claude's EQ decisions for the beat (e.g. 250-500Hz mud cut)
+                    beat_eq_points = sp.get("eq", [])
+                    for ep in beat_eq_points:
+                        t = ep.get("type", "peak")
+                        f = float(ep.get("freq",   1000))
+                        g = float(ep.get("gainDb", 0))
+                        q = float(ep.get("q",      1.0))
+                        if abs(g) < 0.1:
+                            continue
+                        if t == "peak":
+                            beat_fx.append(PeakFilter(cutoff_frequency_hz=f, gain_db=g, q=q))
+                        elif t == "highshelf":
+                            beat_fx.append(HighShelfFilter(cutoff_frequency_hz=f, gain_db=g))
+                        elif t == "lowshelf":
+                            beat_fx.append(LowShelfFilter(cutoff_frequency_hz=f, gain_db=g))
+                    beat_fx.append(Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200))
+                    beat_board = Pedalboard(beat_fx)
                     y_proc = beat_board(y, sr)
 
                 else:
