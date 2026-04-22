@@ -200,7 +200,7 @@ export async function separateBeatStems(beatUrl: string): Promise<SeparatedStems
 export async function generateFreshSignedUrl(filePath: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/sign/processed/${encodeURIComponent(filePath)}`,
+      `${SUPABASE_URL}/storage/v1/object/sign/processed/${filePath}`,
       {
         method:  "POST",
         headers: {
