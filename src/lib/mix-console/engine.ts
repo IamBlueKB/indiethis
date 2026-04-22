@@ -213,7 +213,9 @@ export async function generateFreshSignedUrl(filePath: string): Promise<string |
     );
     if (!res.ok) return null;
     const data = await res.json() as { signedURL?: string };
-    return data.signedURL ?? null;
+    // signedURL is a relative path like /object/sign/processed/...
+    // Prepend Supabase base so the browser/fetch gets a full URL
+    return data.signedURL ? `${SUPABASE_URL}/storage/v1${data.signedURL}` : null;
   } catch {
     return null;
   }
