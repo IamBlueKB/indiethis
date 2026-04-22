@@ -419,6 +419,273 @@ def apply_multiband_compressor(audio_stereo, sr):
         return audio_stereo
 
 
+def apply_stereo_widener(audio_stereo, sr, width=1.3):
+    """
+    M/S stereo widener. width > 1 = wider, width < 1 = narrower.
+    Encodes to Mid/Side, scales Side channel, decodes back to L/R.
+    Safe: clips to ±1.0 after decode.
+    """
+    try:
+        if audio_stereo.ndim < 2 or audio_stereo.shape[0] < 2:
+            return audio_stereo
+        L, R   = audio_stereo[0].astype(np.float32), audio_stereo[1].astype(np.float32)
+        mid    = (L + R) * 0.5
+        side   = (L - R) * 0.5
+        side   = side * float(np.clip(width, 0.0, 3.0))
+        L_out  = np.clip(mid + side, -1.0, 1.0)
+        R_out  = np.clip(mid - side, -1.0, 1.0)
+        return np.stack([L_out, R_out])
+    except Exception as e:
+        print(f"stereo_widener failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_sidechain_compression(beat_stereo, vocal_stereo, sr, threshold_db=-20.0, ratio=4.0, attack_ms=5, release_ms=80, reduction_db=3.0):
+    """
+    Approximate sidechain compression: duck the beat whenever the main vocal
+    is loud (above threshold). Uses vocal RMS envelope as the gain-reduction key.
+    beat_stereo and vocal_stereo must be the same length.
+    """
+    try:
+        if beat_stereo.shape[1] != vocal_stereo.shape[1]:
+            min_len = min(beat_stereo.shape[1], vocal_stereo.shape[1])
+            beat_stereo  = beat_stereo[:,  :min_len]
+            vocal_stereo = vocal_stereo[:, :min_len]
+
+        # Build RMS envelope from vocal (key signal)
+        hop    = int(sr * 0.005)   # 5 ms hop
+        key_mono = (vocal_stereo[0] + vocal_stereo[1]) / 2
+        rms_frames = librosa.feature.rms(y=key_mono, hop_length=hop)[0]
+        rms_samples = np.interp(
+            np.arange(beat_stereo.shape[1]),
+            np.linspace(0, beat_stereo.shape[1], len(rms_frames)),
+            rms_frames,
+        ).astype(np.float32)
+
+        threshold_lin = float(10 ** (threshold_db / 20))
+        max_reduction = float(10 ** (-abs(reduction_db) / 20))   # e.g. -3 dB → 0.708
+
+        # Gain reduction: 1.0 when vocal quiet, max_reduction when vocal loud
+        gain = np.where(
+            rms_samples > threshold_lin,
+            np.clip(1.0 - (1.0 - max_reduction) * (rms_samples - threshold_lin) / (threshold_lin + 1e-9), max_reduction, 1.0),
+            1.0,
+        ).astype(np.float32)
+
+        # Smooth gain with attack/release envelopes
+        atk_coef = float(np.exp(-1.0 / (sr * attack_ms  / 1000)))
+        rel_coef  = float(np.exp(-1.0 / (sr * release_ms / 1000)))
+        smoothed  = np.zeros_like(gain)
+        smoothed[0] = gain[0]
+        for i in range(1, len(gain)):
+            coef         = atk_coef if gain[i] < smoothed[i-1] else rel_coef
+            smoothed[i]  = coef * smoothed[i-1] + (1 - coef) * gain[i]
+
+        return beat_stereo * smoothed[np.newaxis, :]
+    except Exception as e:
+        print(f"sidechain_compression failed: {e}", flush=True)
+        return beat_stereo
+
+
+def apply_chorus(audio_stereo, sr, rate_hz=1.2, depth_ms=8.0, wet=0.4, voices=2):
+    """
+    Stereo chorus — layers modulated delay copies over the dry signal.
+    rate_hz: LFO speed. depth_ms: max delay swing. wet: blend (0–1).
+    Good for doubles, harmonies, and widening lead vocals.
+    """
+    try:
+        n_samples = audio_stereo.shape[1]
+        t         = np.arange(n_samples) / float(sr)
+        out       = audio_stereo.copy().astype(np.float32)
+
+        for v in range(voices):
+            phase_offset = (v / max(voices, 1)) * np.pi  # spread voices evenly
+            lfo          = np.sin(2 * np.pi * rate_hz * t + phase_offset).astype(np.float32)
+            delay_s      = (depth_ms / 1000.0) * (0.5 + 0.5 * lfo)  # 0 … depth_ms
+            delay_samp   = (delay_s * sr).astype(np.int32)
+
+            for ch in range(audio_stereo.shape[0]):
+                src   = audio_stereo[ch]
+                delayed = np.zeros(n_samples, dtype=np.float32)
+                for i in range(n_samples):
+                    j = i - delay_samp[i]
+                    if j >= 0:
+                        delayed[i] = src[j]
+                # Alternate pan per voice (L for even, R for odd)
+                ch_gain = 1.0 if ch == v % 2 else 0.6
+                out[ch] += delayed * wet * ch_gain
+
+        # Renormalize to avoid clipping
+        peak = float(np.max(np.abs(out)))
+        if peak > 1.0:
+            out = out / peak
+        return out
+    except Exception as e:
+        print(f"chorus failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_flanger(audio_stereo, sr, rate_hz=0.4, depth_ms=4.0, feedback=0.4, wet=0.5):
+    """
+    Stereo flanger — very short swept delay with feedback creates comb filter sweep.
+    Effective on electronic/psychedelic vocals, synth layers, and special fx stems.
+    """
+    try:
+        n_samples  = audio_stereo.shape[1]
+        t          = np.arange(n_samples) / float(sr)
+        lfo        = np.sin(2 * np.pi * rate_hz * t).astype(np.float32)
+        delay_s    = (depth_ms / 1000.0) * (0.5 + 0.5 * lfo)
+        delay_samp = np.clip((delay_s * sr).astype(np.int32), 1, int(depth_ms * sr / 1000) + 1)
+
+        out = np.zeros_like(audio_stereo, dtype=np.float32)
+        for ch in range(audio_stereo.shape[0]):
+            src      = audio_stereo[ch].astype(np.float32)
+            buf      = np.zeros(int(depth_ms * sr / 1000) + 2, dtype=np.float32)
+            buf_idx  = 0
+            ch_out   = np.zeros(n_samples, dtype=np.float32)
+            for i in range(n_samples):
+                buf[buf_idx % len(buf)] = src[i]
+                rd_idx   = (buf_idx - delay_samp[i]) % len(buf)
+                delayed  = buf[rd_idx]
+                ch_out[i] = src[i] + delayed * wet
+                buf[buf_idx % len(buf)] += delayed * feedback  # feedback into buffer
+                buf_idx += 1
+            out[ch] = np.clip(ch_out, -1.0, 1.0)
+        return out
+    except Exception as e:
+        print(f"flanger failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_tpdf_dither(audio_stereo, bit_depth=16):
+    """
+    TPDF (Triangular Probability Density Function) dither.
+    Must be applied to float32 audio BEFORE converting to PCM_16.
+    Reduces quantization distortion — call this right before sf.write(...PCM_16).
+    """
+    try:
+        lsb = 2.0 / (2 ** bit_depth)   # 1 LSB in normalized float range
+        # Two uniform random signals → triangular distribution
+        r1 = np.random.uniform(-lsb / 2, lsb / 2, audio_stereo.shape).astype(np.float32)
+        r2 = np.random.uniform(-lsb / 2, lsb / 2, audio_stereo.shape).astype(np.float32)
+        return np.clip(audio_stereo.astype(np.float32) + r1 + r2, -1.0, 1.0)
+    except Exception as e:
+        print(f"tpdf_dither failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_dynamic_eq(audio_stereo, sr,
+                     bands=None):
+    """
+    Dynamic EQ — per-band gain is triggered by the signal level in that band.
+    When a band's RMS exceeds the threshold, gain reduction (or boost) is applied.
+    Default bands: cut boxiness (350Hz), tame harshness (3kHz), reduce mud (200Hz).
+    bands: list of dicts {freq, gain_db, threshold_db, ratio, attack_ms, release_ms, q}
+    """
+    try:
+        if bands is None:
+            bands = [
+                {"freq": 200,  "gain_db": -3.0, "threshold_db": -20, "ratio": 3.0, "attack_ms": 10,  "release_ms": 150, "q": 1.0},
+                {"freq": 350,  "gain_db": -2.5, "threshold_db": -22, "ratio": 2.5, "attack_ms": 15,  "release_ms": 200, "q": 1.2},
+                {"freq": 3000, "gain_db": -3.0, "threshold_db": -24, "ratio": 3.0, "attack_ms": 5,   "release_ms": 100, "q": 1.5},
+            ]
+
+        out = audio_stereo.astype(np.float32).copy()
+
+        for band in bands:
+            freq        = float(band.get("freq",         1000))
+            target_gain = float(band.get("gain_db",      -3.0))
+            thresh_db   = float(band.get("threshold_db", -20))
+            ratio       = float(band.get("ratio",         3.0))
+            attack_ms   = float(band.get("attack_ms",    10))
+            release_ms  = float(band.get("release_ms",  150))
+            q           = float(band.get("q",             1.0))
+
+            # Isolate band via narrow PeakFilter → measure RMS envelope
+            band_board  = Pedalboard([PeakFilter(cutoff_frequency_hz=freq, gain_db=0, q=q)])
+            band_signal = band_board(out.copy(), sr)
+            band_mono   = (band_signal[0] + band_signal[1]) / 2
+
+            hop   = int(sr * 0.005)
+            rms_f = librosa.feature.rms(y=band_mono, hop_length=hop)[0]
+            rms_s = np.interp(
+                np.arange(out.shape[1]),
+                np.linspace(0, out.shape[1], len(rms_f)),
+                rms_f,
+            ).astype(np.float32)
+
+            thresh_lin = float(10 ** (thresh_db / 20))
+            # Gain reduction amount 0→1 based on how far above threshold
+            over  = np.clip((rms_s - thresh_lin) / (thresh_lin + 1e-9), 0.0, 1.0)
+            gain_reduction_db = target_gain * (over * (1.0 - 1.0 / ratio))
+
+            # Smooth with attack / release
+            atk_c = float(np.exp(-1.0 / (sr * attack_ms  / 1000)))
+            rel_c = float(np.exp(-1.0 / (sr * release_ms / 1000)))
+            smooth_gr = np.zeros_like(gain_reduction_db)
+            smooth_gr[0] = gain_reduction_db[0]
+            for i in range(1, len(smooth_gr)):
+                coef = atk_c if abs(gain_reduction_db[i]) > abs(smooth_gr[i-1]) else rel_c
+                smooth_gr[i] = coef * smooth_gr[i-1] + (1 - coef) * gain_reduction_db[i]
+
+            # Apply dynamic gain via PeakFilter at each sample — approximate with
+            # short-segment batch (5 ms chunks) to keep CPU reasonable
+            chunk_s = hop
+            for ci in range(0, out.shape[1], chunk_s):
+                ce   = min(ci + chunk_s, out.shape[1])
+                g_db = float(np.mean(smooth_gr[ci:ce]))
+                if abs(g_db) < 0.05:
+                    continue
+                seg_board = Pedalboard([PeakFilter(cutoff_frequency_hz=freq, gain_db=g_db, q=q)])
+                out[:, ci:ce] = seg_board(out[:, ci:ce].copy(), sr)
+
+        return np.clip(out, -1.0, 1.0)
+    except Exception as e:
+        print(f"dynamic_eq failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_ms_widener_master(audio_stereo, sr, width=1.3, mono_below_hz=120):
+    """
+    M/S stereo widener for mastering.
+    - Monos bass below mono_below_hz (bass energy centered = tight, punchy low end)
+    - Widens mids/highs by scaling the Side channel
+    Safe: hard clip to ±1.0 after decode.
+    """
+    try:
+        if audio_stereo.ndim < 2 or audio_stereo.shape[0] < 2:
+            return audio_stereo
+        y = audio_stereo.astype(np.float32)
+
+        # ── Full-band M/S encode ──────────────────────────────────────────────
+        L, R  = y[0], y[1]
+        mid   = (L + R) * 0.5
+        side  = (L - R) * 0.5
+
+        # ── Scale side channel (widen) ────────────────────────────────────────
+        side_wide = side * float(np.clip(width, 0.0, 3.0))
+
+        # ── Bass mono: isolate low-freq mid and zero low-freq side ────────────
+        bass_board   = Pedalboard([LowpassFilter(cutoff_frequency_hz=float(mono_below_hz))])
+        treble_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=float(mono_below_hz))])
+
+        mid_bass     = bass_board(mid[np.newaxis, :].copy(), sr)[0]
+        mid_treble   = treble_board(mid[np.newaxis, :].copy(), sr)[0]
+        side_treble  = treble_board(side_wide[np.newaxis, :].copy(), sr)[0]
+        # side_bass = 0 (mono bass — intentionally dropped)
+
+        # ── Reconstruct: bass is mono mid only, treble is widened M/S ────────
+        mid_out  = mid_bass + mid_treble
+        side_out = side_treble          # no low-freq side = mono bass
+
+        L_out = np.clip(mid_out + side_out, -1.0, 1.0)
+        R_out = np.clip(mid_out - side_out, -1.0, 1.0)
+        return np.stack([L_out, R_out])
+    except Exception as e:
+        print(f"ms_widener_master failed: {e}", flush=True)
+        return audio_stereo
+
+
 # Genre + role chain matrix
 CHAIN_MATRIX = {
     "HIP_HOP": {
@@ -806,7 +1073,7 @@ class Predictor(BasePredictor):
 
         # Write as 16-bit PCM WAV — half the size of float32 (keeps files under Supabase 50 MB limit)
         def write_wav(path, audio, samplerate):
-            sf.write(path, audio.T, samplerate, subtype="PCM_16")
+            sf.write(path, apply_tpdf_dither(audio.astype(np.float32)).T, samplerate, subtype="PCM_16")
 
         meter = pyln.Meter(sr)
 
@@ -901,11 +1168,26 @@ class Predictor(BasePredictor):
             loud_gain      = 4.0
             loud_threshold = -0.1
 
-        # ── Step 1: Noise floor reduction on the clean source ──────────────────
-        # Runs before any mastering chain so the limiter doesn't amplify hiss.
+        # ═══════════════════════════════════════════════════════════════════════
+        # MASTERING CHAIN
+        #
+        # Shared pre-chain (applied once to y_clean):
+        #   1. Noise reduction  — remove hiss before anything amplifies it
+        #   2. Dynamic EQ       — tame resonant spikes (freq-aware, not static)
+        #
+        # Per-variation (each variation gets its own settings):
+        #   3. Multiband comp   — frequency-specific compression character
+        #   4. Stereo widener   — M/S width + bass mono below 120Hz
+        #   5. Transient shaper — punch amount varies per variation
+        #   6. Bus EQ           — tonal color (warm/punch/loud character)
+        #   7. Limiter          — hard ceiling at -1dBFS (always last before dither)
+        #   8. Dither           — TPDF inside write_wav on every PCM_16 export
+        # ═══════════════════════════════════════════════════════════════════════
+
+        # ── 1. Noise floor reduction (shared) ─────────────────────────────────
         try:
             import noisereduce as nr
-            y_clean_nr = np.stack([
+            y_clean = np.stack([
                 nr.reduce_noise(y=y_clean[0].astype(np.float32), sr=sr,
                                 stationary=True, prop_decrease=0.7,
                                 time_mask_smooth_ms=80, freq_mask_smooth_hz=300),
@@ -913,74 +1195,171 @@ class Predictor(BasePredictor):
                                 stationary=True, prop_decrease=0.7,
                                 time_mask_smooth_ms=80, freq_mask_smooth_hz=300),
             ]).astype(np.float32)
-            y_clean = y_clean_nr
+            print("master: noise reduction applied", flush=True)
         except Exception as e:
             print(f"master noise_reduce skipped: {e}", flush=True)
 
-        # ── Step 2: Multiband compression on clean source ───────────────────────
-        # Applied once before the 4 version chains — each version inherits a
-        # pre-controlled frequency spectrum.
-        y_clean = apply_multiband_compressor(y_clean.astype(np.float32), sr)
-
-        # ── Step 3: Transient shaper on clean source ────────────────────────────
-        # Adds punch to drums without raising the overall level — makes the
-        # difference between a flat master and one that hits.
-        y_clean = apply_transient_shaper(y_clean.astype(np.float32), sr,
-                                         attack_boost_db=2.0, sustain_cut_db=-1.0)
-
-        write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16
-        remote_clean = f"mastering/{job_id}/master_clean.wav"
-        lufs_data = {}
-        true_peak_data = {}
-        lufs_data["clean"]      = measure_lufs(y_clean)
-        true_peak_data["clean"] = measure_true_peak(y_clean)
-        versions["clean"] = upload_to_supabase(clean_path, "processed", remote_clean)
-
-        warm_fx = [
-            LowShelfFilter(cutoff_frequency_hz=200, gain_db=warm_low_gain),
-            HighShelfFilter(cutoff_frequency_hz=8000, gain_db=warm_high_gain),
-            Compressor(threshold_db=warm_threshold, ratio=warm_comp_ratio, attack_ms=20, release_ms=200),
-            Limiter(threshold_db=-0.5),
+        # ── 2. Dynamic EQ (shared) ────────────────────────────────────────────
+        dyn_eq_bands = [
+            {"freq": 200,  "gain_db": -3.0, "threshold_db": -20, "ratio": 3.0, "attack_ms": 10,  "release_ms": 150, "q": 1.0},
+            {"freq": 350,  "gain_db": -2.5, "threshold_db": -22, "ratio": 2.5, "attack_ms": 15,  "release_ms": 200, "q": 1.2},
+            {"freq": 3000, "gain_db": -3.0, "threshold_db": -24, "ratio": 3.0, "attack_ms": 5,   "release_ms": 100, "q": 1.5},
         ]
-        if extra_high_boost > 0:
-            warm_fx.insert(1, HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
-        warm_board = Pedalboard(warm_fx)
-        y_warm = warm_board(y_clean, sr)
+        if g == "HIP_HOP":
+            dyn_eq_bands.append({"freq": 60,   "gain_db":  1.5, "threshold_db": -28, "ratio": 1.5, "attack_ms": 20, "release_ms": 300, "q": 0.8})
+        elif g == "ROCK":
+            dyn_eq_bands.append({"freq": 4000, "gain_db": -2.0, "threshold_db": -22, "ratio": 2.5, "attack_ms": 8,  "release_ms": 80,  "q": 1.5})
+        y_clean = apply_dynamic_eq(y_clean.astype(np.float32), sr, bands=dyn_eq_bands)
+        print("master: dynamic EQ applied", flush=True)
+
+        # ── Helper: build one variation ────────────────────────────────────────
+        def build_variation(
+            base,                    # y_clean (shared pre-chain output)
+            # Multiband comp settings (band: thresh, ratio, atk, rel)
+            mb_sub,  mb_low,  mb_mid,  mb_air,
+            # Stereo widener
+            ms_width,
+            # Transient shaper
+            ts_attack_db, ts_sustain_db,
+            # Bus EQ Pedalboard effects list
+            bus_fx,
+        ):
+            """Run steps 3–7 for one mastering variation. Returns float32 stereo array."""
+            y = base.astype(np.float32).copy()
+
+            # 3. Multiband compression — per-variation band settings
+            try:
+                y_f = y.copy()
+                b_sub  = Pedalboard([LowpassFilter(cutoff_frequency_hz=120)])(y_f.copy(), sr)
+                b_low  = Pedalboard([HighpassFilter(cutoff_frequency_hz=120),
+                                     LowpassFilter(cutoff_frequency_hz=500)])(y_f.copy(), sr)
+                b_mid  = Pedalboard([HighpassFilter(cutoff_frequency_hz=500),
+                                     LowpassFilter(cutoff_frequency_hz=3000)])(y_f.copy(), sr)
+                b_air  = Pedalboard([HighpassFilter(cutoff_frequency_hz=3000)])(y_f.copy(), sr)
+                def comp_band(band_sig, cfg):
+                    return Pedalboard([Compressor(
+                        threshold_db=cfg[0], ratio=cfg[1],
+                        attack_ms=cfg[2], release_ms=cfg[3]
+                    )])(band_sig, sr)
+                y = comp_band(b_sub, mb_sub) + comp_band(b_low, mb_low) + \
+                    comp_band(b_mid, mb_mid) + comp_band(b_air, mb_air)
+            except Exception as mb_err:
+                print(f"variation multiband skipped: {mb_err}", flush=True)
+
+            # 4. Stereo widener (M/S) — mono bass below 120Hz
+            y = apply_ms_widener_master(y.astype(np.float32), sr,
+                                        width=ms_width, mono_below_hz=120)
+
+            # 5. Transient shaper
+            y = apply_transient_shaper(y.astype(np.float32), sr,
+                                       attack_boost_db=ts_attack_db,
+                                       sustain_cut_db=ts_sustain_db)
+
+            # 6. Bus EQ character
+            if bus_fx:
+                y = Pedalboard(bus_fx)(y.astype(np.float32), sr)
+
+            # 7. Limiter — always last before dither
+            y = Pedalboard([Limiter(threshold_db=-1.0)])(y.astype(np.float32), sr)
+
+            return y
+
+        # ── Per-variation settings ─────────────────────────────────────────────
+        #
+        # Multiband configs: (threshold_db, ratio, attack_ms, release_ms) per band
+        # Bands: sub(<120Hz), low(120-500Hz), mid(500-3kHz), air(>3kHz)
+        #
+        #                  sub band              low band              mid band              air band
+        VAR_MB = {
+            "clean":  [(-22, 2.0, 15, 180), (-20, 1.8, 20, 200), (-22, 1.5, 25, 250), (-26, 1.5, 15, 120)],
+            "warm":   [(-18, 3.0, 10, 150), (-18, 2.5, 15, 180), (-22, 2.0, 20, 220), (-28, 1.8, 12, 100)],
+            "punch":  [(-14, 4.0,  5,  80), (-16, 3.5, 10, 100), (-18, 3.0, 15, 150), (-24, 2.5, 8,  80)],
+            "loud":   [(-10, 5.0,  3,  50), (-12, 4.5,  5,  60), (-14, 4.0,  8, 100), (-20, 3.5, 5,  60)],
+        }
+        # Stereo widener: clean stays tighter, punch/loud are wider
+        VAR_WIDTH = {"clean": 1.15, "warm": 1.20, "punch": 1.30, "loud": 1.35}
+
+        # Transient shaper: clean = gentle, punch/loud = aggressive
+        VAR_TS = {
+            "clean":  (1.0, -0.5),
+            "warm":   (1.5, -0.8),
+            "punch":  (3.5, -1.5),
+            "loud":   (4.0, -2.0),
+        }
+
+        # Bus EQ per variation
+        def _warm_bus():
+            fx = [
+                LowShelfFilter(cutoff_frequency_hz=200, gain_db=warm_low_gain),
+                HighShelfFilter(cutoff_frequency_hz=8000, gain_db=warm_high_gain),
+                Compressor(threshold_db=warm_threshold, ratio=warm_comp_ratio, attack_ms=20, release_ms=200),
+            ]
+            if extra_high_boost > 0:
+                fx.insert(2, HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+            return fx
+
+        def _punch_bus():
+            fx = [
+                PeakFilter(cutoff_frequency_hz=2500, gain_db=3.0, q=1.2),
+                LowShelfFilter(cutoff_frequency_hz=60,  gain_db=2.0),
+                Compressor(threshold_db=-12, ratio=punch_ratio, attack_ms=punch_attack, release_ms=60),
+            ]
+            if extra_high_boost > 0:
+                fx.insert(2, HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+            return fx
+
+        def _loud_bus():
+            fx = [
+                Compressor(threshold_db=-8, ratio=6, attack_ms=2, release_ms=30),
+                Gain(gain_db=loud_gain),
+            ]
+            if extra_high_boost > 0:
+                fx.append(HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
+            return fx
+
+        VAR_BUS_FX = {
+            "clean": [],
+            "warm":  _warm_bus(),
+            "punch": _punch_bus(),
+            "loud":  _loud_bus(),
+        }
+
+        # ── Build all four variations ──────────────────────────────────────────
+        lufs_data      = {}
+        true_peak_data = {}
+        y_versions     = {}
+
+        for vname in ("clean", "warm", "punch", "loud"):
+            mb  = VAR_MB[vname]
+            ts  = VAR_TS[vname]
+            print(f"master: building {vname} variation", flush=True)
+            y_var = build_variation(
+                y_clean,
+                mb_sub=mb[0], mb_low=mb[1], mb_mid=mb[2], mb_air=mb[3],
+                ms_width=VAR_WIDTH[vname],
+                ts_attack_db=ts[0], ts_sustain_db=ts[1],
+                bus_fx=VAR_BUS_FX[vname],
+            )
+            y_versions[vname] = y_var
+            lufs_data[vname]      = measure_lufs(y_var)
+            true_peak_data[vname] = measure_true_peak(y_var)
+
+        y_clean_limited = y_versions["clean"]
+        y_warm          = y_versions["warm"]
+        y_punch         = y_versions["punch"]
+        y_loud          = y_versions["loud"]
+
+        write_wav(clean_path, y_clean_limited, sr)
+        remote_clean = f"mastering/{job_id}/master_clean.wav"
+        versions["clean"] = upload_to_supabase(clean_path, "processed", remote_clean)
         warm_path = os.path.join(out_dir, "warm.wav")
         write_wav(warm_path, y_warm, sr)
-        lufs_data["warm"]      = measure_lufs(y_warm)
-        true_peak_data["warm"] = measure_true_peak(y_warm)
         versions["warm"] = upload_to_supabase(warm_path, "processed", f"mastering/{job_id}/master_warm.wav")
-
-        punch_fx = [
-            PeakFilter(cutoff_frequency_hz=2500, gain_db=3, q=1.2),
-            LowShelfFilter(cutoff_frequency_hz=60, gain_db=2),
-            Compressor(threshold_db=-12, ratio=punch_ratio, attack_ms=punch_attack, release_ms=60),
-            Limiter(threshold_db=-0.3),
-        ]
-        if extra_high_boost > 0:
-            punch_fx.append(HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
-        punch_board = Pedalboard(punch_fx)
-        y_punch = punch_board(y_clean, sr)
         punch_path = os.path.join(out_dir, "punch.wav")
         write_wav(punch_path, y_punch, sr)
-        lufs_data["punch"]      = measure_lufs(y_punch)
-        true_peak_data["punch"] = measure_true_peak(y_punch)
         versions["punch"] = upload_to_supabase(punch_path, "processed", f"mastering/{job_id}/master_punch.wav")
-
-        loud_fx = [
-            Compressor(threshold_db=-8, ratio=6, attack_ms=2, release_ms=30),
-            Gain(gain_db=loud_gain),
-            Limiter(threshold_db=loud_threshold),
-        ]
-        if extra_high_boost > 0:
-            loud_fx.append(HighShelfFilter(cutoff_frequency_hz=10000, gain_db=extra_high_boost))
-        loud_board = Pedalboard(loud_fx)
-        y_loud = loud_board(y_clean, sr)
         loud_path = os.path.join(out_dir, "loud.wav")
         write_wav(loud_path, y_loud, sr)
-        lufs_data["loud"]      = measure_lufs(y_loud)
-        true_peak_data["loud"] = measure_true_peak(y_loud)
         versions["loud"] = upload_to_supabase(loud_path, "processed", f"mastering/{job_id}/master_loud.wav")
 
         # ---- Per-version preview clips + waveforms + full stats ----
@@ -1011,8 +1390,8 @@ class Predictor(BasePredictor):
             return clip
 
         v_audio_map = {
-            "original": y_clean,
-            "clean":    y_clean,
+            "original": y_clean_limited,
+            "clean":    y_clean_limited,
             "warm":     y_warm,
             "punch":    y_punch,
             "loud":     y_loud,
@@ -1024,7 +1403,7 @@ class Predictor(BasePredictor):
         for vname, vaudio in v_audio_map.items():
             clip = make_clip(vaudio, preview_start, preview_end, sr)
             clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-            sf.write(clip_tmp, clip.T, sr, subtype="PCM_16")
+            sf.write(clip_tmp, apply_tpdf_dither(clip).T, sr, subtype="PCM_16")
             remote_p = f"mastering/{job_id}/preview_{vname}.wav"
             upload_to_supabase(clip_tmp, "processed", remote_p)
             preview_paths[vname] = remote_p
@@ -1035,7 +1414,7 @@ class Predictor(BasePredictor):
         # Full per-version stats
         version_stats: dict = {}
         for vname, vaudio in {
-            "clean": y_clean, "warm": y_warm, "punch": y_punch, "loud": y_loud
+            "clean": y_clean_limited, "warm": y_warm, "punch": y_punch, "loud": y_loud
         }.items():
             version_stats[vname] = {
                 "lufs":         lufs_data.get(vname, 0),
@@ -1349,9 +1728,11 @@ class Predictor(BasePredictor):
             loaded[label] = (y.astype(np.float32), sr)
             lufs[label]   = measure_lufs(y, sr)
 
-        out_dir = tempfile.mkdtemp()
-        mixed   = None
-        sr_out  = None
+        out_dir  = tempfile.mkdtemp()
+        mixed    = None
+        sr_out   = None
+        beat_bus = None   # processed beat — used for sidechain key
+        vocal_bus = None  # summed processed vocals — used as sidechain key
 
         def apply_comp_inner(audio, ratio, thresh_db, attack_ms, release_ms, sr):
             if ratio <= 0:
@@ -1513,6 +1894,22 @@ class Predictor(BasePredictor):
                             room_size=rev_room, wet_level=rev_wet, dry_level=1.0)])
                         y = rev_board(y.astype(np.float32), sr)
 
+                    # j2. Chorus — doubles and harmonies get thickened; lead gets light chorus
+                    chorus_wet = float(sp.get("chorusWet", 0.0))
+                    if chorus_wet == 0.0:
+                        # Auto-assign by role if Claude didn't specify
+                        if label in ("vocal_doubles", "double"):
+                            chorus_wet = 0.35
+                        elif label in ("vocal_harmonies", "harmony", "backing"):
+                            chorus_wet = 0.25
+                    if chorus_wet > 0.05:
+                        y = apply_chorus(y.astype(np.float32), sr, wet=chorus_wet)
+
+                    # j3. Flanger — only when Claude explicitly sets flangerWet > 0
+                    flanger_wet = float(sp.get("flangerWet", 0.0))
+                    if flanger_wet > 0.05:
+                        y = apply_flanger(y.astype(np.float32), sr, wet=flanger_wet)
+
                     # k. Fine-tune gain (role blend offset)
                     if gain_fine != 0:
                         y = y * (10 ** (gain_fine / 20))
@@ -1550,6 +1947,17 @@ class Predictor(BasePredictor):
 
                     y_proc = y.astype(np.float64)
 
+                # Track beat and vocal buses separately for sidechain
+                if label == "beat":
+                    beat_bus = y_proc.copy().astype(np.float32)
+                elif label not in ("beat",):
+                    # Accumulate vocal/supporting stems into vocal_bus
+                    if vocal_bus is None:
+                        vocal_bus = y_proc.copy().astype(np.float32)
+                    else:
+                        min_vl = min(vocal_bus.shape[1], y_proc.shape[1])
+                        vocal_bus = vocal_bus[:, :min_vl] + y_proc[:, :min_vl].astype(np.float32)
+
                 # Sum into mix
                 if mixed is None:
                     mixed = y_proc
@@ -1561,6 +1969,30 @@ class Predictor(BasePredictor):
                 shutil.rmtree(out_dir, ignore_errors=True)
                 return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
+            # ── Sidechain compression: duck beat under vocals ─────────────────────
+            # Re-apply the sidechain-ducked beat into the mix by subtracting the
+            # original beat bus and adding the ducked version.
+            if beat_bus is not None and vocal_bus is not None:
+                try:
+                    min_sc = min(beat_bus.shape[1], vocal_bus.shape[1])
+                    beat_ducked = apply_sidechain_compression(
+                        beat_bus[:, :min_sc].astype(np.float32),
+                        vocal_bus[:, :min_sc].astype(np.float32),
+                        sr_out,
+                        threshold_db=-22.0,
+                        ratio=4.0,
+                        attack_ms=5,
+                        release_ms=80,
+                        reduction_db=2.5,
+                    )
+                    # Replace beat contribution in mix:
+                    # mixed = (mixed - original_beat) + ducked_beat
+                    min_m = min(mixed.shape[1], beat_bus.shape[1], beat_ducked.shape[1])
+                    mixed[:, :min_m] -= beat_bus[:, :min_m]
+                    mixed[:, :min_m] += beat_ducked[:, :min_m]
+                except Exception as sc_err:
+                    print(f"sidechain_compression skipped: {sc_err}", flush=True)
+
             # ── Bus processing ────────────────────────────────────────────────────
             bus_low_shelf  = float(bus_params_ai.get("eqLowShelf",     0.5))
             bus_high_shelf = float(bus_params_ai.get("eqHighShelf",    1.0))
@@ -1571,6 +2003,9 @@ class Predictor(BasePredictor):
             # Multiband compression first — tighten each frequency range independently
             mixed = apply_multiband_compressor(mixed.astype(np.float32), sr_out)
 
+            # Dynamic EQ — knock down boxiness/harshness only when they spike
+            mixed = apply_dynamic_eq(mixed.astype(np.float32), sr_out)
+
             # Then bus EQ + glue comp
             bus_board = Pedalboard([
                 LowShelfFilter(cutoff_frequency_hz=100,  gain_db=bus_low_shelf),
@@ -1579,6 +2014,11 @@ class Predictor(BasePredictor):
                            attack_ms=30, release_ms=200),
             ])
             mixed = bus_board(mixed.astype(np.float32), sr_out)
+
+            # ── Stereo widener on bus (M/S) ───────────────────────────────────────
+            # Gentle default width — wide enough to feel open, safe enough to mono-check.
+            bus_width = float(bus_params_ai.get("stereoWidth", 1.25))
+            mixed = apply_stereo_widener(mixed.astype(np.float32), sr_out, width=bus_width)
 
             # ── Clip guard + normalize to target peak ─────────────────────────────
             target_peak = 10 ** (bus_normalize / 20)
@@ -1656,7 +2096,7 @@ class Predictor(BasePredictor):
                     var_audio = var_audio / vp * 0.99
 
                 var_path = os.path.join(out_dir, f"mix_{name}.wav")
-                sf.write(var_path, var_audio.T, sr_out, subtype="PCM_16")
+                sf.write(var_path, apply_tpdf_dither(var_audio).T, sr_out, subtype="PCM_16")
                 remote = f"mixing/{job_id}/mix_{name}.wav"
                 upload_to_supabase(var_path, "processed", remote)
                 file_paths[name] = remote
@@ -1664,7 +2104,7 @@ class Predictor(BasePredictor):
 
                 clip = make_clip(var_audio, preview_start, preview_end, sr_out)
                 clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-                sf.write(clip_tmp, clip.T, sr_out, subtype="PCM_16")
+                sf.write(clip_tmp, apply_tpdf_dither(clip).T, sr_out, subtype="PCM_16")
                 prev_remote = f"mixing/{job_id}/preview_{name}.wav"
                 upload_to_supabase(clip_tmp, "processed", prev_remote)
                 preview_paths[name] = prev_remote
@@ -1677,7 +2117,7 @@ class Predictor(BasePredictor):
             orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
             original_waveform = extract_waveform_from_array(orig_mono)
             orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-            sf.write(orig_tmp, orig_clip.T, sr_out, subtype="PCM_16")
+            sf.write(orig_tmp, apply_tpdf_dither(orig_clip).T, sr_out, subtype="PCM_16")
             orig_remote = f"mixing/{job_id}/preview_original.wav"
             upload_to_supabase(orig_tmp, "processed", orig_remote)
             preview_paths["original"] = orig_remote
