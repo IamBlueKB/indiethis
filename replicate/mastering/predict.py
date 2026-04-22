@@ -395,7 +395,7 @@ class Predictor(BasePredictor):
         action: str = Input(description="One of: analyze, classify-stems, mix, master, preview, health"),
         audio_url: str = Input(description="Signed URL to input audio", default=""),
         reference_url: str = Input(description="Signed URL to reference track for mastering", default=""),
-        stems_urls: str = Input(description="JSON string of stem name to URL mapping", default="{}"),
+        stems_json: str = Input(description="JSON string of stem name to URL mapping", default="{}"),
         job_id: str = Input(description="Unique job ID for organizing outputs", default=""),
         supabase_url: str = Input(description="Supabase project URL", default=""),
         supabase_service_key: str = Input(description="Supabase service role key", default=""),
@@ -415,10 +415,10 @@ class Predictor(BasePredictor):
         elif action == "analyze":
             result = self._analyze(audio_url)
         elif action == "classify-stems":
-            stems = json.loads(stems_urls)
+            stems = json.loads(stems_json)
             result = self._classify_stems(stems)
         elif action == "mix":
-            stems = json.loads(stems_urls)
+            stems = json.loads(stems_json)
             result = self._mix(stems, job_id)
         elif action == "master":
             balance_data = json.loads(input_balance) if input_balance and input_balance != "{}" else {}
@@ -426,7 +426,7 @@ class Predictor(BasePredictor):
         elif action == "preview":
             result = self._preview(audio_url, job_id)
         elif action == "analyze-mix":
-            result = self._analyze_mix(stems_urls, job_id)
+            result = self._analyze_mix(stems_json, job_id)
         elif action == "mix-full":
             result = self._mix_full(job_id, mix_params_json)
         elif action == "preview-mix":
@@ -887,30 +887,53 @@ class Predictor(BasePredictor):
 
     # ---------- ANALYZE MIX ----------
     def _analyze_mix(self, stems_urls_json, job_id):
+        import sys
+        print("analyze-mix: starting", flush=True)
+        sys.stdout.flush()
+
         stems_urls = json.loads(stems_urls_json) if stems_urls_json else []
+        ANALYSIS_SR   = 22050   # sufficient for BPM/key/pitch — cuts RAM ~75%
+        ANALYSIS_SECS = 30.0    # max 30s per stem on load — prevents OOM on 6-stem jobs
+
+        # ── Per-stem analysis — load, analyze, delete immediately ─────────────
         stem_results = []
-        all_audio = []
-        sr_out = None
+        mix_accum    = None
 
         for i, url in enumerate(stems_urls):
+            print(f"analyze-mix: loading stem {i}", flush=True)
             audio_path = download_audio(url)
-            y, sr = librosa.load(audio_path, sr=None, mono=True)
-            sr_out = sr
-            all_audio.append(y)
-            os.unlink(audio_path)
+            try:
+                y, sr = librosa.load(
+                    audio_path,
+                    sr=ANALYSIS_SR,
+                    mono=True,
+                    duration=ANALYSIS_SECS,
+                    res_type="kaiser_fast",
+                )
+            except Exception:
+                y, sr = np.zeros(ANALYSIS_SR), ANALYSIS_SR
+            finally:
+                os.unlink(audio_path)
 
-            # Per-stem analysis
+            # Accumulate mono mix for global analysis
+            if mix_accum is None:
+                mix_accum = y.copy()
+            else:
+                min_len = min(len(mix_accum), len(y))
+                mix_accum = mix_accum[:min_len] + y[:min_len]
+
+            # Per-stem metrics
             meter = pyln.Meter(sr)
             try:
                 lufs = float(meter.integrated_loudness(y))
             except Exception:
                 lufs = 0.0
-            rms = float(np.sqrt(np.mean(y**2)))
-            spec = np.abs(librosa.stft(y))
+            rms  = float(np.sqrt(np.mean(y ** 2)))
+            spec  = np.abs(librosa.stft(y))
             freqs = librosa.fft_frequencies(sr=sr)
             balance = {
                 "sub":  float(spec[freqs < 60].mean()),
-                "low":  float(spec[(freqs >= 60) & (freqs < 250)].mean()),
+                "low":  float(spec[(freqs >= 60)  & (freqs < 250)].mean()),
                 "mid":  float(spec[(freqs >= 250) & (freqs < 2000)].mean()),
                 "high": float(spec[freqs >= 2000].mean()),
             }
@@ -921,56 +944,50 @@ class Predictor(BasePredictor):
                 "balance": balance,
             })
 
-        # Mix all stems to mono for global analysis
-        min_len = min(len(y) for y in all_audio) if all_audio else 0
-        if min_len > 0:
-            mix = np.zeros(min_len)
-            for y in all_audio:
-                mix += y[:min_len] / len(all_audio)
-        else:
-            mix = np.zeros(sr_out or 44100)
+            del y, spec  # free immediately before next stem
 
-        sr = sr_out or 44100
+        sr = ANALYSIS_SR
+        mix = (mix_accum / max(len(stems_urls), 1)) if mix_accum is not None else np.zeros(sr)
+
+        print("analyze-mix: running global analysis", flush=True)
 
         # BPM + key
         tempo, _ = librosa.beat.beat_track(y=mix, sr=sr)
-        bpm = float(tempo) if not hasattr(tempo, '__len__') else float(tempo[0])
+        bpm = float(tempo) if not hasattr(tempo, "__len__") else float(tempo[0])
         chroma = librosa.feature.chroma_cqt(y=mix, sr=sr)
         key = estimate_key(chroma)
 
         # Sections from energy
         sections = detect_sections_from_energy(mix, sr)
 
-        # Room reverb estimation (RT60) from spectral decay of the first vocal-ish stem
-        # Use a simplified approach: measure energy decay in a quiet region
-        room_reverb = 0.15  # default dry
-        if all_audio:
-            y_test = all_audio[0]
-            rms_env = librosa.feature.rms(y=y_test, hop_length=sr//4)[0]
+        # Room reverb — simplified RT60 from RMS envelope decay
+        room_reverb = 0.15
+        try:
+            rms_env = librosa.feature.rms(y=mix, hop_length=sr // 4)[0]
             if len(rms_env) > 4:
-                # Find a loud frame followed by decay
-                peak_idx = np.argmax(rms_env)
+                peak_idx  = int(np.argmax(rms_env))
                 if peak_idx + 4 < len(rms_env):
-                    peak_val = rms_env[peak_idx]
+                    peak_val  = rms_env[peak_idx]
                     decay_val = rms_env[peak_idx + 4]
                     if peak_val > 0 and decay_val > 0:
                         rt60 = -60 / (20 * np.log10(decay_val / peak_val + 1e-10) * 4)
                         room_reverb = max(0.0, min(float(rt60), 2.0))
+        except Exception:
+            pass
 
-        # Pitch deviation (simplified)
+        # Pitch deviation — pyin on the mix (already 30s at 22050 Hz, safe)
         try:
-            f0, _, voiced = librosa.pyin(all_audio[0] if all_audio else mix, fmin=80, fmax=1000)
+            f0, _, voiced = librosa.pyin(mix, fmin=80, fmax=1000)
             voiced_f0 = f0[voiced] if voiced is not None else np.array([])
             if len(voiced_f0) > 0:
                 midi = librosa.hz_to_midi(voiced_f0[voiced_f0 > 0])
-                midi_round = np.round(midi)
-                pitch_deviation = float(np.mean(np.abs(midi - midi_round)))
+                pitch_deviation = float(np.mean(np.abs(midi - np.round(midi))))
             else:
                 pitch_deviation = 0.0
         except Exception:
             pitch_deviation = 0.0
 
-        # Vocal classification (simple heuristic based on spectral centroid and RMS)
+        # Vocal classification
         vocal_classification = []
         for i, st in enumerate(stem_results):
             bal = st["balance"]
