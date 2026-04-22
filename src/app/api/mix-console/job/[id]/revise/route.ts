@@ -56,6 +56,7 @@ export async function POST(
         analysisData:    true,
         inputFiles:      true,
         revisionHistory: true,
+        pitchCorrection: true,
       },
     });
     if (!job) {
@@ -118,11 +119,15 @@ export async function POST(
       stemsUrlsObj[f.label] = f.url;
     }
 
-    // Merge revised Claude params with stems + genre so _mix_full has everything
+    // Merge revised Claude params with stems + genre + job settings + analysis data
+    const analysisData = (job.analysisData ?? {}) as Record<string, unknown>;
     const fullMixParams = {
       ...revised,
-      stems_urls: stemsUrlsObj,
-      genre:      job.genre ?? "HIP_HOP",
+      stems_urls:      stemsUrlsObj,
+      genre:           job.genre ?? "HIP_HOP",
+      pitchCorrection: job.pitchCorrection ?? "OFF",
+      roomReverb:      (analysisData.room_reverb as number) ?? 0,
+      bpm:             (analysisData.bpm         as number) ?? 120,
     };
 
     // Fire revise-mix action on Replicate

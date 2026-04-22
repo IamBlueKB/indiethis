@@ -225,14 +225,198 @@ def apply_parallel_saturation(audio, sr, wet=0.08):
 
 
 def apply_detune_cents(audio_mono, sr, cents):
-    """Pitch shift by N cents using librosa. Returns mono array."""
+    """Pitch shift by N cents — pyrubberband primary, librosa fallback."""
     if cents == 0:
         return audio_mono
     try:
-        semitones = cents / 100.0
-        return librosa.effects.pitch_shift(audio_mono.astype(np.float32), sr=sr, n_steps=semitones)
+        import pyrubberband as pyrb
+        return pyrb.pitch_shift(audio_mono.astype(np.float32), sr, cents / 100.0)
     except Exception:
+        try:
+            return librosa.effects.pitch_shift(audio_mono.astype(np.float32), sr=sr, n_steps=cents / 100.0)
+        except Exception:
+            return audio_mono
+
+
+def apply_de_reverb(audio_stereo, sr, strength=0.6):
+    """
+    Spectral de-reverb using noisereduce.
+    strength: 0–1 (proportion of noise reduction to apply).
+    Works on stereo — processes L and R independently.
+    """
+    try:
+        import noisereduce as nr
+        out = audio_stereo.copy()
+        for ch in range(audio_stereo.shape[0]):
+            out[ch] = nr.reduce_noise(
+                y=audio_stereo[ch].astype(np.float32),
+                sr=sr,
+                stationary=False,
+                prop_decrease=float(np.clip(strength, 0.1, 0.95)),
+                time_mask_smooth_ms=100,
+                freq_mask_smooth_hz=500,
+            ).astype(np.float32)
+        return out
+    except Exception as e:
+        print(f"de_reverb failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_pitch_correction(audio_mono, sr, strength=0.5):
+    """
+    Snap pitch toward nearest semitone using pyworld vocoder.
+    strength 0.0 = no correction, 1.0 = hard snap.
+    Returns mono float32 array same length as input.
+    """
+    try:
+        import pyworld as pw
+        y64 = audio_mono.astype(np.float64)
+        _f0, t = pw.dio(y64, sr, f0_floor=60.0, f0_ceil=800.0)
+        f0    = pw.stonemask(y64, _f0, t, sr)
+        sp    = pw.cheaptrick(y64, f0, t, sr)
+        ap    = pw.d4c(y64, f0, t, sr)
+
+        voiced = f0 > 50
+        f0_corrected = f0.copy()
+        if np.any(voiced):
+            # Convert voiced frames to MIDI, round to nearest semitone, convert back
+            midi            = 12 * np.log2(np.maximum(f0[voiced], 1e-6) / 440.0) + 69
+            midi_quantized  = np.round(midi)
+            f0_quantized    = 440.0 * (2.0 ** ((midi_quantized - 69) / 12.0))
+            f0_corrected[voiced] = (
+                f0[voiced] * (1.0 - strength) + f0_quantized * strength
+            )
+
+        y_out = pw.synthesize(f0_corrected, sp, ap, float(sr)).astype(np.float32)
+        # Preserve original length
+        tgt_len = len(audio_mono)
+        if len(y_out) >= tgt_len:
+            return y_out[:tgt_len]
+        return np.pad(y_out, (0, tgt_len - len(y_out)))
+    except Exception as e:
+        print(f"pitch_correction failed: {e}", flush=True)
         return audio_mono
+
+
+def apply_delay_throw(audio_stereo, sr, start_s, end_s, bpm, throw_type="dotted_eighth", feedback_count=3, wet=0.35):
+    """
+    Apply a synced delay throw to a word region [start_s, end_s].
+    The delayed repeats ring out after end_s, attenuating with each repeat.
+    bpm is used to calculate musically synced delay time.
+    """
+    if audio_stereo.ndim != 2:
+        return audio_stereo
+
+    beat_s = 60.0 / max(float(bpm), 60.0)
+    if throw_type == "dotted_eighth":
+        delay_s = beat_s * 0.75
+    elif throw_type == "quarter":
+        delay_s = beat_s
+    elif throw_type == "half":
+        delay_s = beat_s * 2.0
+    else:
+        delay_s = beat_s * 0.75
+
+    delay_samples = int(delay_s * sr)
+    start_sample  = int(start_s * sr)
+    end_sample    = min(int(end_s * sr), audio_stereo.shape[1])
+
+    if delay_samples <= 0 or start_sample >= audio_stereo.shape[1]:
+        return audio_stereo
+
+    output = audio_stereo.copy().astype(np.float64)
+    region = audio_stereo[:, start_sample:end_sample].astype(np.float64)
+    reg_len = region.shape[1]
+
+    for repeat in range(1, min(feedback_count + 1, 6)):
+        offset   = start_sample + repeat * delay_samples
+        if offset >= output.shape[1]:
+            break
+        gain     = (0.55 ** repeat) * wet
+        end_pos  = min(offset + reg_len, output.shape[1])
+        seg_len  = end_pos - offset
+        output[:, offset:end_pos] += region[:, :seg_len] * gain
+
+    return np.clip(output, -1.0, 1.0).astype(np.float32)
+
+
+def apply_transient_shaper(audio_stereo, sr, attack_boost_db=3.0, sustain_cut_db=-2.0):
+    """
+    Transient shaper: boosts attack transients and optionally cuts sustain.
+    Uses dual envelope follower (fast vs. slow) to detect transients.
+    """
+    try:
+        y_mono = (audio_stereo[0] + audio_stereo[1]) / 2 if audio_stereo.ndim > 1 else audio_stereo
+        abs_y  = np.abs(y_mono)
+        n      = len(abs_y)
+
+        fast_a = float(np.exp(-1.0 / (sr * 0.001)))   # 1 ms attack
+        fast_r = float(np.exp(-1.0 / (sr * 0.050)))   # 50 ms release
+        slow_a = float(np.exp(-1.0 / (sr * 0.050)))   # 50 ms attack
+        slow_r = float(np.exp(-1.0 / (sr * 0.500)))   # 500 ms release
+
+        fast_env = np.zeros(n, dtype=np.float32)
+        slow_env = np.zeros(n, dtype=np.float32)
+
+        for i in range(1, n):
+            c = abs_y[i]
+            fast_env[i] = fast_a * fast_env[i-1] + (1 - fast_a) * c if c > fast_env[i-1] else fast_r * fast_env[i-1]
+            slow_env[i] = slow_a * slow_env[i-1] + (1 - slow_a) * c if c > slow_env[i-1] else slow_r * slow_env[i-1]
+
+        transient      = np.clip(fast_env - slow_env, 0, None)
+        peak_t         = np.max(transient)
+        transient_norm = transient / peak_t if peak_t > 1e-6 else transient
+
+        attack_lin  = 10 ** (attack_boost_db  / 20)
+        sustain_lin = 10 ** (sustain_cut_db   / 20)
+        gain        = sustain_lin + (attack_lin - sustain_lin) * transient_norm
+
+        if audio_stereo.ndim > 1:
+            return audio_stereo * gain[np.newaxis, :]
+        return audio_stereo * gain
+    except Exception as e:
+        print(f"transient_shaper failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_multiband_compressor(audio_stereo, sr):
+    """
+    4-band compressor: sub (<120 Hz), low-mid (120–500 Hz),
+    mid-high (500–3 kHz), air (>3 kHz).
+    Gentle default settings — glues without pumping.
+    """
+    try:
+        audio_f = audio_stereo.astype(np.float32)
+        crossovers = [120, 500, 3000]
+
+        # Split into 4 bands
+        b_sub  = Pedalboard([LowpassFilter(cutoff_frequency_hz=120)])(audio_f.copy(), sr)
+        b_low  = Pedalboard([HighpassFilter(cutoff_frequency_hz=120),
+                             LowpassFilter(cutoff_frequency_hz=500)])(audio_f.copy(), sr)
+        b_mid  = Pedalboard([HighpassFilter(cutoff_frequency_hz=500),
+                             LowpassFilter(cutoff_frequency_hz=3000)])(audio_f.copy(), sr)
+        b_air  = Pedalboard([HighpassFilter(cutoff_frequency_hz=3000)])(audio_f.copy(), sr)
+
+        band_configs = [
+            # (band_signal, threshold, ratio, attack, release)
+            (b_sub,  -20, 3.0,  10, 150),
+            (b_low,  -18, 2.5,  15, 200),
+            (b_mid,  -20, 2.0,  20, 250),
+            (b_air,  -24, 2.0,  10, 100),
+        ]
+
+        result = None
+        for band_sig, thresh, ratio, atk, rel in band_configs:
+            comp_board = Pedalboard([
+                Compressor(threshold_db=thresh, ratio=ratio, attack_ms=atk, release_ms=rel)
+            ])
+            compressed = comp_board(band_sig, sr)
+            result = compressed if result is None else result + compressed
+
+        return result if result is not None else audio_stereo
+    except Exception as e:
+        print(f"multiband_compressor failed: {e}", flush=True)
+        return audio_stereo
 
 
 # Genre + role chain matrix
@@ -1082,6 +1266,10 @@ class Predictor(BasePredictor):
         stems_input        = params.get("stems_urls", {})     # {label: url}
         stem_params_map    = params.get("stemParams", {})     # Claude's per-stem decisions
         bus_params_ai      = params.get("busParams", {})      # Claude's bus decisions
+        delay_throws       = params.get("delayThrows", [])    # Claude's delay throw list
+        pitch_correction   = params.get("pitchCorrection", "OFF")   # OFF | SUBTLE | TIGHT | HARD
+        room_reverb_rt60   = float(params.get("roomReverb", 0.0))   # RT60 from analysis
+        bpm_global         = float(params.get("bpm", 120.0))        # for delay sync
 
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
@@ -1171,7 +1359,7 @@ class Predictor(BasePredictor):
 
                 # ── 2. Per-stem processing ────────────────────────────────────────
                 if label == "beat":
-                    # Beat: HP + default vocal-pocket carve + light glue comp
+                    # Beat: HP + default vocal-pocket carve + Claude's EQ + light glue comp
                     beat_fx = [
                         HighpassFilter(cutoff_frequency_hz=30),
                         PeakFilter(cutoff_frequency_hz=2500, gain_db=-2.5, q=0.8),  # vocal pocket
@@ -1195,6 +1383,9 @@ class Predictor(BasePredictor):
                     beat_fx.append(Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200))
                     beat_board = Pedalboard(beat_fx)
                     y_proc = beat_board(y, sr)
+
+                    # Transient shaper on beat — tighten attack, pull back sustain slightly
+                    y_proc = apply_transient_shaper(y_proc, sr, attack_boost_db=2.5, sustain_cut_db=-1.5)
 
                 else:
                     # ── Vocal stem chain ──────────────────────────────────────────
@@ -1299,6 +1490,37 @@ class Predictor(BasePredictor):
                     if gain_fine != 0:
                         y = y * (10 ** (gain_fine / 20))
 
+                    # l. De-reverb — only on vocal stems when room reverb detected
+                    if room_reverb_rt60 > 0.25:
+                        # Scale strength 0.3–0.85 based on RT60 (0.25s → 0.3, 2.0s → 0.85)
+                        dereverb_strength = float(np.clip(
+                            0.3 + (room_reverb_rt60 - 0.25) / 2.0 * 0.55, 0.3, 0.85
+                        ))
+                        y = apply_de_reverb(y.astype(np.float32), sr, strength=dereverb_strength)
+
+                    # m. Pitch correction — main vocal only
+                    if pitch_correction != "OFF" and is_main_vocal(label):
+                        strength_map = {"SUBTLE": 0.3, "TIGHT": 0.65, "HARD": 0.92}
+                        pc_strength  = strength_map.get(pitch_correction.upper(), 0.3)
+                        # Process each channel mono (pyworld is mono-only)
+                        y_l = apply_pitch_correction(y[0], sr, strength=pc_strength)
+                        y_r = apply_pitch_correction(y[1], sr, strength=pc_strength)
+                        min_len = min(len(y_l), len(y_r), y.shape[1])
+                        y = np.stack([y_l[:min_len], y_r[:min_len]])
+
+                    # n. Delay throws — main vocal only, from Claude's analysis
+                    if delay_throws and is_main_vocal(label):
+                        for throw in delay_throws:
+                            y = apply_delay_throw(
+                                y.astype(np.float32), sr,
+                                start_s=float(throw.get("start", 0)),
+                                end_s=float(throw.get("end", 0.5)),
+                                bpm=bpm_global,
+                                throw_type=str(throw.get("type", "dotted_eighth")),
+                                feedback_count=int(throw.get("feedback", 3)),
+                                wet=0.35,
+                            )
+
                     y_proc = y.astype(np.float64)
 
                 # Sum into mix
@@ -1312,13 +1534,17 @@ class Predictor(BasePredictor):
                 shutil.rmtree(out_dir, ignore_errors=True)
                 return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-            # ── Bus processing: use Claude's busParams where available ────────────
+            # ── Bus processing ────────────────────────────────────────────────────
             bus_low_shelf  = float(bus_params_ai.get("eqLowShelf",     0.5))
             bus_high_shelf = float(bus_params_ai.get("eqHighShelf",    1.0))
             bus_thresh     = float(bus_params_ai.get("glueCompThresh", -12))
             bus_ratio      = float(bus_params_ai.get("glueCompRatio",   2.0))
             bus_normalize  = float(bus_params_ai.get("peakNormalize",  -1.0))
 
+            # Multiband compression first — tighten each frequency range independently
+            mixed = apply_multiband_compressor(mixed.astype(np.float32), sr_out)
+
+            # Then bus EQ + glue comp
             bus_board = Pedalboard([
                 LowShelfFilter(cutoff_frequency_hz=100,  gain_db=bus_low_shelf),
                 HighShelfFilter(cutoff_frequency_hz=8000, gain_db=bus_high_shelf),

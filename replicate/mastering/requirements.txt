@@ -8,3 +8,7 @@ numpy==1.24.3
 scipy==1.11.4
 soundfile==0.12.1
 supabase==1.2.0
+noisereduce==3.0.2
+pyworld==0.3.4
+pyrubberband==0.3.0
+praat-parselmouth==0.4.3

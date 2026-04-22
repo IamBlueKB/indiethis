@@ -32,13 +32,15 @@ export async function POST(
     const job = await prisma.mixJob.findUnique({
       where:  { id },
       select: {
-        id:             true,
-        status:         true,
-        userId:         true,
-        guestEmail:     true,
-        mixParameters:  true,
-        inputFiles:     true,
-        genre:          true,
+        id:               true,
+        status:           true,
+        userId:           true,
+        guestEmail:       true,
+        mixParameters:    true,
+        inputFiles:       true,
+        genre:            true,
+        analysisData:     true,
+        pitchCorrection:  true,
       },
     });
 
@@ -77,11 +79,15 @@ export async function POST(
       stemsUrlsObj[f.label] = f.url;
     }
 
-    // Embed stems_urls + genre into mix params so the Python engine can access both
+    // Embed stems_urls + genre + job settings + analysis data so Python has everything
+    const analysisData = (job as any).analysisData as Record<string, unknown> | null ?? {};
     const mixParams = {
       ...(job.mixParameters as Record<string, unknown> ?? {}),
-      stems_urls: stemsUrlsObj,
-      genre:      job.genre ?? "HIP_HOP",
+      stems_urls:       stemsUrlsObj,
+      genre:            job.genre ?? "HIP_HOP",
+      pitchCorrection:  (job as any).pitchCorrection ?? "OFF",
+      roomReverb:       (analysisData.room_reverb  as number) ?? 0,
+      bpm:              (analysisData.bpm           as number) ?? 120,
     };
 
     // Fire full mix action — Replicate posts result to /api/mix-console/webhook/replicate/mix
