@@ -124,29 +124,29 @@ export async function startMixAction(
   const secret     = WEBHOOK_SECRET ? `?secret=${encodeURIComponent(WEBHOOK_SECRET)}` : "";
   const webhookUrl = `${APP_URL}${webhookPath}${secret}`;
 
-  const payload = {
-    version:               MIX_VERSION,
-    input: {
-      action,
-      ...inputs,
-      supabase_url:         SUPABASE_URL,
-      supabase_service_key: SUPABASE_SERVICE_KEY,
-    },
-    webhook:               webhookUrl,
-    webhook_events_filter: ["completed"],
+  const replicateInput = {
+    action,
+    ...inputs,
+    supabase_url:         SUPABASE_URL,
+    supabase_service_key: SUPABASE_SERVICE_KEY,
   };
   console.error("[mix-engine] startMixAction payload:", JSON.stringify({
-    version:    payload.version,
+    version:   MIX_VERSION,
     action,
-    inputKeys:  Object.keys(payload.input),
-    webhook:    webhookUrl,
+    inputKeys: Object.keys(replicateInput),
+    webhook:   webhookUrl,
   }));
 
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, 5000 * attempt));
     try {
-      const prediction = await replicate.predictions.create(payload);
+      const prediction = await replicate.predictions.create({
+        version:               MIX_VERSION,
+        input:                 replicateInput,
+        webhook:               webhookUrl,
+        webhook_events_filter: ["completed"],
+      });
       return prediction.id;
     } catch (err: unknown) {
       lastError = err;
