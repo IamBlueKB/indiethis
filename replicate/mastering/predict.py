@@ -1245,20 +1245,47 @@ class Predictor(BasePredictor):
                     clip[:, -fade:] *= np.linspace(1, 0, fade)
                 return clip
 
-            # ── Generate 3 variations ──
+            # ── Generate 3 meaningfully different variations ──
             variation_configs = [
-                ("clean",      -1.0),
-                ("polished",    0.0),
-                ("aggressive",  2.0),
+                ("clean",      "transparent"),
+                ("polished",   "radio"),
+                ("aggressive", "punchy"),
             ]
             file_paths    = {}
             waveforms     = {}
             preview_paths = {}
 
-            for name, gain_adj in variation_configs:
-                var_audio = mixed.copy()
-                if gain_adj != 0:
-                    var_audio = var_audio * (10 ** (gain_adj / 20))
+            for name, style in variation_configs:
+                var_audio = mixed.copy().astype(np.float32)
+
+                if style == "transparent":
+                    # Clean: very light bus glue, -1 dB ceiling — closest to raw mix
+                    var_board = Pedalboard([
+                        Compressor(threshold_db=-16, ratio=1.5, attack_ms=30, release_ms=250),
+                        Gain(gain_db=-1.0),
+                        Limiter(threshold_db=-1.0),
+                    ])
+                elif style == "radio":
+                    # Polished: glue comp + subtle warmth low shelf + air high shelf → radio-ready
+                    var_board = Pedalboard([
+                        LowShelfFilter(cutoff_frequency_hz=200,  gain_db=0.5),
+                        HighShelfFilter(cutoff_frequency_hz=8000, gain_db=2.0),
+                        Compressor(threshold_db=-12, ratio=2.5, attack_ms=20, release_ms=200),
+                        Gain(gain_db=0.5),
+                        Limiter(threshold_db=-0.5),
+                    ])
+                else:
+                    # Aggressive: heavy parallel comp + mid presence + sub punch + louder
+                    var_board = Pedalboard([
+                        PeakFilter(cutoff_frequency_hz=2500, gain_db=2.5, q=1.2),
+                        LowShelfFilter(cutoff_frequency_hz=80,  gain_db=1.0),
+                        Compressor(threshold_db=-10, ratio=4.0, attack_ms=5,  release_ms=60),
+                        Gain(gain_db=2.0),
+                        Limiter(threshold_db=-0.2),
+                    ])
+
+                var_audio = var_board(var_audio, sr_out)
+
                 # Clip guard
                 vp = float(np.max(np.abs(var_audio)))
                 if vp > 0.99:

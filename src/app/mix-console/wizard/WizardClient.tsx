@@ -137,6 +137,8 @@ export default function MixConsoleWizardClient() {
   const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef      = useRef<HTMLAudioElement | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  // Compare step: tracks which source ("original" | "mixed" | null) is playing
+  const [comparePlayingSource, setComparePlayingSource] = useState<"original" | "mixed" | null>(null);
 
   // ── Auto-advance email if logged in ──
   useEffect(() => {
@@ -1380,7 +1382,12 @@ export default function MixConsoleWizardClient() {
                 {standardVersions.map((v) => (
                   <button
                     key={v.key}
-                    onClick={() => setSelectedVersion(v.key)}
+                    onClick={() => {
+                      setSelectedVersion(v.key);
+                      // Stop any playing audio when switching version
+                      audioRef.current?.pause();
+                      setComparePlayingSource(null);
+                    }}
                     className={cn(
                       "w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all",
                       selectedVersion === v.key
@@ -1416,27 +1423,51 @@ export default function MixConsoleWizardClient() {
                         <div className="flex rounded-lg overflow-hidden border border-[#2A2A2A]">
                           <button
                             onClick={() => {
-                              setAudioPlaying(false);
-                              audioRef.current?.pause();
-                              // Play original
-                              if (originalUrl) {
-                                audioRef.current = new Audio(originalUrl);
-                                audioRef.current.play().catch(() => {});
-                                audioRef.current.onended = () => setAudioPlaying(false);
-                                setAudioPlaying(true);
+                              if (comparePlayingSource === "original") {
+                                // Already playing original — pause it
+                                audioRef.current?.pause();
+                                setComparePlayingSource(null);
+                              } else {
+                                // Start playing original
+                                audioRef.current?.pause();
+                                const a = new Audio(originalUrl);
+                                a.play().catch(() => {});
+                                a.onended = () => setComparePlayingSource(null);
+                                audioRef.current = a;
+                                setComparePlayingSource("original");
                               }
                             }}
                             className="flex-1 py-2 text-xs font-semibold transition-colors"
-                            style={{ backgroundColor: "#1A1A1A", color: "#777" }}
+                            style={{
+                              backgroundColor: comparePlayingSource === "original" ? "#333" : "#1A1A1A",
+                              color: comparePlayingSource === "original" ? "#D4A843" : "#777",
+                            }}
                           >
-                            Original
+                            {comparePlayingSource === "original" ? "⏸ Original" : "▶ Original"}
                           </button>
                           <button
-                            onClick={() => togglePreviewPlay(previewUrl)}
+                            onClick={() => {
+                              if (comparePlayingSource === "mixed") {
+                                // Already playing mixed — pause it
+                                audioRef.current?.pause();
+                                setComparePlayingSource(null);
+                              } else {
+                                // Start playing mixed
+                                audioRef.current?.pause();
+                                const a = new Audio(previewUrl);
+                                a.play().catch(() => {});
+                                a.onended = () => setComparePlayingSource(null);
+                                audioRef.current = a;
+                                setComparePlayingSource("mixed");
+                              }
+                            }}
                             className="flex-1 py-2 text-xs font-semibold transition-colors"
-                            style={{ backgroundColor: "#D4A843", color: "#0A0A0A" }}
+                            style={{
+                              backgroundColor: "#D4A843",
+                              color: "#0A0A0A",
+                            }}
                           >
-                            {audioPlaying ? "⏸ Mixed" : "▶ Mixed"}
+                            {comparePlayingSource === "mixed" ? "⏸ Mixed" : "▶ Mixed"}
                           </button>
                         </div>
                       )}
