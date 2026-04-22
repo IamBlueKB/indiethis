@@ -11,6 +11,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
+import { generateFreshSignedUrl } from "@/lib/mix-console/engine";
+
+async function signPaths(paths: Record<string, string>): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  await Promise.all(
+    Object.entries(paths).map(async ([key, filePath]) => {
+      if (!filePath) { out[key] = filePath; return; }
+      const signed = await generateFreshSignedUrl(filePath);
+      out[key] = signed ?? filePath;
+    }),
+  );
+  return out;
+}
 
 export async function GET(
   req: NextRequest,
@@ -37,7 +50,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 
-    return NextResponse.json(job);
+    // If job is COMPLETE, convert previewFilePaths storage paths → signed URLs
+    let responseJob: typeof job & { previewFilePaths?: unknown } = job;
+    if (job.status === "COMPLETE" && job.previewFilePaths) {
+      const paths = job.previewFilePaths as Record<string, string>;
+      const signed = await signPaths(paths);
+      responseJob = { ...job, previewFilePaths: signed };
+    }
+
+    return NextResponse.json(responseJob);
   } catch (err) {
     console.error(`GET /api/mix-console/job/${id}:`, err);
     return NextResponse.json({ error: "Failed to fetch job." }, { status: 500 });
