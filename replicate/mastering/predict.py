@@ -901,7 +901,34 @@ class Predictor(BasePredictor):
             loud_gain      = 4.0
             loud_threshold = -0.1
 
-        write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16 (matchering may write float)
+        # ── Step 1: Noise floor reduction on the clean source ──────────────────
+        # Runs before any mastering chain so the limiter doesn't amplify hiss.
+        try:
+            import noisereduce as nr
+            y_clean_nr = np.stack([
+                nr.reduce_noise(y=y_clean[0].astype(np.float32), sr=sr,
+                                stationary=True, prop_decrease=0.7,
+                                time_mask_smooth_ms=80, freq_mask_smooth_hz=300),
+                nr.reduce_noise(y=y_clean[1].astype(np.float32), sr=sr,
+                                stationary=True, prop_decrease=0.7,
+                                time_mask_smooth_ms=80, freq_mask_smooth_hz=300),
+            ]).astype(np.float32)
+            y_clean = y_clean_nr
+        except Exception as e:
+            print(f"master noise_reduce skipped: {e}", flush=True)
+
+        # ── Step 2: Multiband compression on clean source ───────────────────────
+        # Applied once before the 4 version chains — each version inherits a
+        # pre-controlled frequency spectrum.
+        y_clean = apply_multiband_compressor(y_clean.astype(np.float32), sr)
+
+        # ── Step 3: Transient shaper on clean source ────────────────────────────
+        # Adds punch to drums without raising the overall level — makes the
+        # difference between a flat master and one that hits.
+        y_clean = apply_transient_shaper(y_clean.astype(np.float32), sr,
+                                         attack_boost_db=2.0, sustain_cut_db=-1.0)
+
+        write_wav(clean_path, y_clean, sr)  # rewrite clean as PCM_16
         remote_clean = f"mastering/{job_id}/master_clean.wav"
         lufs_data = {}
         true_peak_data = {}
