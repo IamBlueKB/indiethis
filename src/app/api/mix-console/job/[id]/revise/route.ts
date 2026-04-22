@@ -41,7 +41,23 @@ export async function POST(
       return NextResponse.json({ error: "Feedback must be under 1000 characters." }, { status: 400 });
     }
 
-    const job = await prisma.mixJob.findUnique({ where: { id } });
+    const job = await prisma.mixJob.findUnique({
+      where:  { id },
+      select: {
+        id:              true,
+        status:          true,
+        userId:          true,
+        guestEmail:      true,
+        tier:            true,
+        genre:           true,
+        revisionCount:   true,
+        maxRevisions:    true,
+        mixParameters:   true,
+        analysisData:    true,
+        inputFiles:      true,
+        revisionHistory: true,
+      },
+    });
     if (!job) {
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
     }
@@ -95,12 +111,26 @@ export async function POST(
       },
     });
 
+    // Rebuild stems_urls dict from inputFiles (same as confirm-direction)
+    const inputFiles = (job.inputFiles ?? []) as { url: string; label: string }[];
+    const stemsUrlsObj: Record<string, string> = {};
+    for (const f of inputFiles) {
+      stemsUrlsObj[f.label] = f.url;
+    }
+
+    // Merge revised Claude params with stems + genre so _mix_full has everything
+    const fullMixParams = {
+      ...revised,
+      stems_urls: stemsUrlsObj,
+      genre:      job.genre ?? "HIP_HOP",
+    };
+
     // Fire revise-mix action on Replicate
     await startMixAction(
       "revise-mix",
       {
         job_id:          id,
-        mix_params_json: JSON.stringify(revised),
+        mix_params_json: JSON.stringify(fullMixParams),
       },
       "/api/mix-console/webhook/replicate/revise",
     );
