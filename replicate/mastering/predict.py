@@ -44,7 +44,7 @@ def upload_to_supabase(local_path, bucket, remote_path):
     with open(local_path, "rb") as f:
         client.storage.from_(bucket).upload(
             remote_path, f,
-            file_options={"content-type": "audio/wav"}
+            file_options={"content-type": "audio/wav", "upsert": "true"}
         )
     res = client.storage.from_(bucket).create_signed_url(remote_path, 3600)
     return res["signedURL"]
@@ -2258,6 +2258,11 @@ class Predictor(BasePredictor):
             bus_ratio      = float(bus_params_ai.get("glueCompRatio",   2.0))
             bus_normalize  = float(bus_params_ai.get("peakNormalize",  -1.0))
 
+            # ── Pre-bus normalization — stem summing can hit +12dB; tame before chain ──
+            pre_peak = float(np.max(np.abs(mixed)))
+            if pre_peak > 0.85:
+                mixed = mixed / pre_peak * 0.85  # bring to -1.4dBFS before bus
+
             # Multiband compression first — tighten each frequency range independently
             mixed = apply_multiband_compressor(mixed.astype(np.float32), sr_out)
 
@@ -2284,11 +2289,11 @@ class Predictor(BasePredictor):
 
             # ── Parallel compression (NY style) — density without killing transients
             mixed = apply_parallel_compression(mixed.astype(np.float32), sr_out,
-                                               threshold_db=-22, ratio=6.0,
-                                               attack_ms=2, release_ms=60, wet=0.25)
+                                               threshold_db=-22, ratio=4.0,
+                                               attack_ms=5, release_ms=100, wet=0.15)
 
             # ── Soft clipper before limiter — rounds peaks harmonically ──────────
-            mixed = apply_soft_clipper(mixed.astype(np.float32), threshold=0.88)
+            mixed = apply_soft_clipper(mixed.astype(np.float32), threshold=0.92)
 
             # ── Clip guard + normalize to target peak ─────────────────────────────
             target_peak = 10 ** (bus_normalize / 20)
