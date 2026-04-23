@@ -1071,7 +1071,7 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       title: "AI Mix Console",
       desc: "Full mixing engine with vocal chain, breath editing, delay throws, and section-aware processing.",
       cta: "Mix your stems",
-      price: "from $9.99",
+      price: "from $59.99",
       link: link("/dashboard/ai/mix-console", "/mix-console"),
       gradient: "linear-gradient(135deg, #001a0a, #0a0a0a)",
     },
