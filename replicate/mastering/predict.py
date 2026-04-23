@@ -1937,9 +1937,9 @@ class Predictor(BasePredictor):
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-        # ── Role → target LUFS offset relative to main vocal (-18 LUFS) ──────────
-        BEAT_TARGET_LUFS       = -12.0   # beat is the loudest element — it's the foundation
-        MAIN_VOCAL_TARGET_LUFS = -18.0   # main vocal sits 6 dB below beat
+        # ── Role → target LUFS — vocal is the featured element, beat sits below ────
+        BEAT_TARGET_LUFS       = -18.0   # beat sits 4 dB below vocal
+        MAIN_VOCAL_TARGET_LUFS = -14.0   # lead vocal is loudest element in modern hip-hop/pop
         SUPPORTING_LUFS_OFFSET = {       # offset from main vocal target
             "vocal_adlibs":   -6.0,
             "vocal_insouts":  -7.0,
@@ -1985,6 +1985,20 @@ class Predictor(BasePredictor):
             y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
             loaded[label] = (y.astype(np.float32), sr)
             lufs[label]   = measure_lufs(y, sr)
+
+        # ── Capture dry sum for "original" preview (raw stems before any processing) ──
+        dry_sum = None
+        for label, (y_raw, sr_raw) in loaded.items():
+            if dry_sum is None:
+                dry_sum = y_raw.astype(np.float32).copy()
+                sr_out  = sr_raw
+            else:
+                min_l  = min(dry_sum.shape[1], y_raw.shape[1])
+                dry_sum = dry_sum[:, :min_l] + y_raw[:, :min_l].astype(np.float32)
+        if dry_sum is not None:
+            dp = float(np.max(np.abs(dry_sum)))
+            if dp > 0:
+                dry_sum = dry_sum / dp * 0.85  # peak-normalize to -1.4 dBFS
 
         out_dir  = tempfile.mkdtemp()
         mixed    = None
@@ -2183,11 +2197,12 @@ class Predictor(BasePredictor):
                     if gain_fine != 0:
                         y = y * (10 ** (gain_fine / 20))
 
-                    # l. De-reverb — only on vocal stems when room reverb detected
-                    if room_reverb_rt60 > 0.25:
-                        # Scale strength 0.3–0.85 based on RT60 (0.25s → 0.3, 2.0s → 0.85)
+                    # l. De-reverb — only on vocal stems with significant room reverb
+                    # Threshold raised to 0.5s RT60 — below that noisereduce causes more
+                    # spectral artifacts than the reverb it removes; cap at 0.6 max strength
+                    if room_reverb_rt60 > 0.5:
                         dereverb_strength = float(np.clip(
-                            0.3 + (room_reverb_rt60 - 0.25) / 2.0 * 0.55, 0.3, 0.85
+                            0.25 + (room_reverb_rt60 - 0.5) / 2.0 * 0.35, 0.25, 0.6
                         ))
                         y = apply_de_reverb(y.astype(np.float32), sr, strength=dereverb_strength)
 
@@ -2402,8 +2417,9 @@ class Predictor(BasePredictor):
                 waveforms[name] = extract_waveform_from_array(clip_mono)
                 os.unlink(clip_tmp)
 
-            # ── Original waveform ──
-            orig_clip = make_clip(mixed.astype(np.float32), preview_start, preview_end, sr_out)
+            # ── Original waveform — use raw dry sum (pre-processing), NOT processed mix ──
+            orig_source = dry_sum if dry_sum is not None else mixed.astype(np.float32)
+            orig_clip = make_clip(orig_source, preview_start, preview_end, sr_out)
             orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
             original_waveform = extract_waveform_from_array(orig_mono)
             orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
