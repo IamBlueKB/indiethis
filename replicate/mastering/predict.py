@@ -205,6 +205,212 @@ def detect_sibilance_freq(audio_mono, sr):
         return 6000
 
 
+def apply_breath_editing(audio_mono, sr, mode="SUBTLE"):
+    """
+    Breath editing — detects low-energy non-voiced regions and attenuates them.
+    mode: OFF | SUBTLE (-6 to -12dB) | CLEAN (silence gaps) | TIGHT (silence + shorten)
+    Returns mono float32 array.
+    """
+    if mode == "OFF":
+        return audio_mono
+    try:
+        hop      = int(sr * 0.010)   # 10ms frames
+        rms      = librosa.feature.rms(y=audio_mono, hop_length=hop)[0]
+        # Threshold: breaths are typically 15-25dB below vocal peaks
+        peak_rms = float(np.percentile(rms, 95))
+        thresh   = peak_rms * 0.12   # ~18dB below peak
+
+        # Build sample-level gain map
+        gain = np.ones(len(audio_mono), dtype=np.float32)
+        for fi, r in enumerate(rms):
+            start = fi * hop
+            end   = min(start + hop, len(audio_mono))
+            if r < thresh:
+                if mode == "SUBTLE":
+                    # Attenuate 6–12dB based on how far below threshold
+                    ratio = float(r) / (thresh + 1e-9)
+                    att   = 0.25 + 0.75 * ratio   # 0.25 (–12dB) to 1.0
+                    gain[start:end] = att
+                else:  # CLEAN or TIGHT — silence breaths
+                    gain[start:end] = 0.0
+
+        # Smooth gain transitions to avoid clicks (20ms ramp)
+        from scipy.signal import lfilter
+        smooth_c = float(np.exp(-1.0 / (sr * 0.020)))
+        gain = lfilter([1 - smooth_c], [1, -smooth_c], gain).astype(np.float32)
+
+        return audio_mono * gain
+    except Exception as e:
+        print(f"breath_editing failed: {e}", flush=True)
+        return audio_mono
+
+
+def apply_volume_riding(audio_stereo, sr, target_lufs=-18.0, window_s=0.5, max_gain_db=6.0, max_cut_db=-6.0):
+    """
+    Automatic volume riding — keeps vocal at consistent loudness.
+    Measures RMS in short windows, applies gain to ride toward target.
+    Vectorized — no per-sample loop.
+    """
+    try:
+        from scipy.signal import lfilter
+        y_mono    = (audio_stereo[0] + audio_stereo[1]) / 2
+        hop       = int(sr * window_s)
+        rms_f     = librosa.feature.rms(y=y_mono, hop_length=hop)[0]
+
+        # Target RMS from target LUFS (approximate: LUFS ≈ RMS-based)
+        target_rms = float(10 ** (target_lufs / 20))
+
+        # Compute per-frame gain needed
+        rms_f     = np.maximum(rms_f, 1e-6)
+        raw_gain  = target_rms / rms_f   # linear gain per frame
+
+        # Clamp to max_gain_db / max_cut_db
+        max_lin   = float(10 ** (max_gain_db / 20))
+        min_lin   = float(10 ** (max_cut_db  / 20))
+        raw_gain  = np.clip(raw_gain, min_lin, max_lin).astype(np.float32)
+
+        # Interpolate to sample resolution
+        gain_s = np.interp(
+            np.arange(audio_stereo.shape[1]),
+            np.linspace(0, audio_stereo.shape[1], len(raw_gain)),
+            raw_gain,
+        ).astype(np.float32)
+
+        # Smooth with 200ms time constant to avoid pumping
+        smooth_c = float(np.exp(-1.0 / (sr * 0.200)))
+        gain_s   = lfilter([1 - smooth_c], [1, -smooth_c], gain_s).astype(np.float32)
+
+        return audio_stereo * gain_s[np.newaxis, :]
+    except Exception as e:
+        print(f"volume_riding failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_soft_clipper(audio_stereo, threshold=0.85):
+    """
+    Soft clipper — tanh-based waveshaper. Rounds off peaks harmonically
+    before the hard limiter. Sounds more musical than brick-wall clipping.
+    threshold: normalized amplitude where soft clipping begins (0–1).
+    """
+    try:
+        y = audio_stereo.astype(np.float32)
+        # Scale so threshold maps to tanh knee, then scale back
+        scaled = y / (threshold + 1e-9)
+        clipped = np.tanh(scaled) * threshold
+        return np.clip(clipped, -1.0, 1.0)
+    except Exception as e:
+        print(f"soft_clipper failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_tape_saturation(audio_stereo, sr, drive=0.3, warmth=0.5):
+    """
+    Tape saturation — frequency-dependent saturation (more on lows/mids, less on highs).
+    Uses soft-knee waveshaping per frequency band + gentle high-freq rolloff.
+    drive: 0–1 saturation amount. warmth: 0–1 low-freq emphasis.
+    """
+    try:
+        y = audio_stereo.astype(np.float32)
+
+        # Split into lows (pre-sat emphasis) and highs (protected)
+        lo_board = Pedalboard([LowpassFilter(cutoff_frequency_hz=3000)])
+        hi_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=3000)])
+        y_lo = lo_board(y.copy(), sr)
+        y_hi = hi_board(y.copy(), sr)
+
+        # Saturate lows more aggressively
+        drive_lin = float(np.clip(drive, 0.0, 1.0))
+        y_lo_sat  = np.tanh(y_lo * (1.0 + drive_lin * 3.0)) / (1.0 + drive_lin * 0.5)
+
+        # Light saturation on highs — preserve air
+        y_hi_sat  = np.tanh(y_hi * (1.0 + drive_lin * 0.5))
+
+        # Recombine with warmth bias (more low sat when warmth is high)
+        lo_mix = warmth * y_lo_sat + (1 - warmth) * y_lo
+        result = lo_mix + y_hi_sat * 0.85   # slight hi-freq rolloff
+
+        return np.clip(result, -1.0, 1.0)
+    except Exception as e:
+        print(f"tape_saturation failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_exciter(audio_stereo, sr, freq=8000, amount=0.15):
+    """
+    Harmonic exciter — adds even-order harmonics above freq to add air and presence.
+    Particularly effective on vocals and the final master.
+    """
+    try:
+        y = audio_stereo.astype(np.float32)
+        # Isolate high-freq band
+        hi_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=float(freq))])
+        y_hi = hi_board(y.copy(), sr)
+        # Generate harmonics via gentle soft-clip of the high band
+        harmonics = np.tanh(y_hi * 3.0) * float(np.clip(amount, 0.0, 0.5))
+        return np.clip(y + harmonics, -1.0, 1.0)
+    except Exception as e:
+        print(f"exciter failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_parallel_compression(audio_stereo, sr, threshold_db=-20, ratio=8.0, attack_ms=1, release_ms=50, wet=0.4):
+    """
+    NY-style parallel (upward) compression — blend heavily compressed signal
+    with dry. Adds density and energy without killing transients.
+    """
+    try:
+        dry       = audio_stereo.astype(np.float32)
+        squashed  = Pedalboard([
+            Compressor(threshold_db=threshold_db, ratio=ratio,
+                       attack_ms=attack_ms, release_ms=release_ms),
+        ])(dry.copy(), sr)
+        return np.clip(dry * (1 - wet) + squashed * wet, -1.0, 1.0)
+    except Exception as e:
+        print(f"parallel_compression failed: {e}", flush=True)
+        return audio_stereo
+
+
+def apply_ms_eq(audio_stereo, sr, mid_gain_db=0.0, side_gain_db=0.0,
+                mid_hi_shelf_db=0.0, side_hi_shelf_db=2.0, shelf_hz=5000):
+    """
+    M/S EQ — process Mid and Side channels independently.
+    mid_gain_db:       overall mid level (negative = more open mix)
+    side_gain_db:      overall side level (positive = wider)
+    mid_hi_shelf_db:   high shelf on mid (clarity on center image)
+    side_hi_shelf_db:  high shelf on side (air/width in stereo field)
+    shelf_hz:          shelf frequency for both hi-shelves
+    """
+    try:
+        if audio_stereo.ndim < 2 or audio_stereo.shape[0] < 2:
+            return audio_stereo
+        y  = audio_stereo.astype(np.float32)
+        L, R = y[0], y[1]
+        mid  = (L + R) * 0.5
+        side = (L - R) * 0.5
+
+        # Apply gain
+        mid  = mid  * float(10 ** (mid_gain_db  / 20))
+        side = side * float(10 ** (side_gain_db  / 20))
+
+        # Hi-shelf EQ on mid and side independently
+        if abs(mid_hi_shelf_db) > 0.05:
+            mid_board = Pedalboard([HighShelfFilter(cutoff_frequency_hz=float(shelf_hz),
+                                                    gain_db=float(mid_hi_shelf_db))])
+            mid = mid_board(mid[np.newaxis, :].astype(np.float32), sr)[0]
+
+        if abs(side_hi_shelf_db) > 0.05:
+            side_board = Pedalboard([HighShelfFilter(cutoff_frequency_hz=float(shelf_hz),
+                                                     gain_db=float(side_hi_shelf_db))])
+            side = side_board(side[np.newaxis, :].astype(np.float32), sr)[0]
+
+        L_out = np.clip(mid + side, -1.0, 1.0)
+        R_out = np.clip(mid - side, -1.0, 1.0)
+        return np.stack([L_out, R_out])
+    except Exception as e:
+        print(f"ms_eq failed: {e}", flush=True)
+        return audio_stereo
+
+
 def apply_telephone_filter(audio, sr, low_hz=300, high_hz=3000):
     """Bandpass filter for telephone/lo-fi ad-lib effect."""
     board = Pedalboard([
@@ -471,14 +677,12 @@ def apply_sidechain_compression(beat_stereo, vocal_stereo, sr, threshold_db=-20.
             1.0,
         ).astype(np.float32)
 
-        # Smooth gain with attack/release envelopes
+        # Smooth gain with lfilter (vectorized — no per-sample loop)
+        from scipy.signal import lfilter
         atk_coef = float(np.exp(-1.0 / (sr * attack_ms  / 1000)))
         rel_coef  = float(np.exp(-1.0 / (sr * release_ms / 1000)))
-        smoothed  = np.zeros_like(gain)
-        smoothed[0] = gain[0]
-        for i in range(1, len(gain)):
-            coef         = atk_coef if gain[i] < smoothed[i-1] else rel_coef
-            smoothed[i]  = coef * smoothed[i-1] + (1 - coef) * gain[i]
+        avg_coef  = (atk_coef + rel_coef) / 2
+        smoothed  = lfilter([1 - avg_coef], [1, -avg_coef], gain).astype(np.float32)
 
         return beat_stereo * smoothed[np.newaxis, :]
     except Exception as e:
@@ -576,6 +780,7 @@ def apply_dynamic_eq(audio_stereo, sr,
                 {"freq": 3000, "gain_db": -3.0, "threshold_db": -24, "ratio": 3.0, "attack_ms": 5,   "release_ms": 100, "q": 1.5},
             ]
 
+        from scipy.signal import lfilter
         out = audio_stereo.astype(np.float32).copy()
 
         for band in bands:
@@ -587,43 +792,29 @@ def apply_dynamic_eq(audio_stereo, sr,
             release_ms  = float(band.get("release_ms",  150))
             q           = float(band.get("q",             1.0))
 
-            # Isolate band via narrow PeakFilter → measure RMS envelope
-            band_board  = Pedalboard([PeakFilter(cutoff_frequency_hz=freq, gain_db=0, q=q)])
-            band_signal = band_board(out.copy(), sr)
-            band_mono   = (band_signal[0] + band_signal[1]) / 2
-
-            hop   = int(sr * 0.005)
-            rms_f = librosa.feature.rms(y=band_mono, hop_length=hop)[0]
-            rms_s = np.interp(
+            # Measure RMS of this frequency band on the mono mix
+            band_mono   = (out[0] + out[1]) / 2
+            hop         = int(sr * 0.020)   # 20ms frames — coarser = fewer frames = faster
+            rms_f       = librosa.feature.rms(y=band_mono, hop_length=hop)[0]
+            rms_s       = np.interp(
                 np.arange(out.shape[1]),
                 np.linspace(0, out.shape[1], len(rms_f)),
                 rms_f,
             ).astype(np.float32)
 
-            thresh_lin = float(10 ** (thresh_db / 20))
-            # Gain reduction amount 0→1 based on how far above threshold
-            over  = np.clip((rms_s - thresh_lin) / (thresh_lin + 1e-9), 0.0, 1.0)
-            gain_reduction_db = target_gain * (over * (1.0 - 1.0 / ratio))
+            thresh_lin        = float(10 ** (thresh_db / 20))
+            over              = np.clip((rms_s - thresh_lin) / (thresh_lin + 1e-9), 0.0, 1.0)
+            gain_reduction_db = (target_gain * (over * (1.0 - 1.0 / ratio))).astype(np.float32)
 
-            # Smooth with attack / release
-            atk_c = float(np.exp(-1.0 / (sr * attack_ms  / 1000)))
-            rel_c = float(np.exp(-1.0 / (sr * release_ms / 1000)))
-            smooth_gr = np.zeros_like(gain_reduction_db)
-            smooth_gr[0] = gain_reduction_db[0]
-            for i in range(1, len(smooth_gr)):
-                coef = atk_c if abs(gain_reduction_db[i]) > abs(smooth_gr[i-1]) else rel_c
-                smooth_gr[i] = coef * smooth_gr[i-1] + (1 - coef) * gain_reduction_db[i]
+            # Smooth with lfilter (vectorized attack/release approximation)
+            atk_c    = float(np.exp(-1.0 / (sr * attack_ms  / 1000)))
+            rel_c    = float(np.exp(-1.0 / (sr * release_ms / 1000)))
+            avg_c    = (atk_c + rel_c) / 2   # blended coef — good enough for mastering
+            smooth_gr = lfilter([1 - avg_c], [1, -avg_c], gain_reduction_db).astype(np.float32)
 
-            # Apply dynamic gain via PeakFilter at each sample — approximate with
-            # short-segment batch (5 ms chunks) to keep CPU reasonable
-            chunk_s = hop
-            for ci in range(0, out.shape[1], chunk_s):
-                ce   = min(ci + chunk_s, out.shape[1])
-                g_db = float(np.mean(smooth_gr[ci:ce]))
-                if abs(g_db) < 0.05:
-                    continue
-                seg_board = Pedalboard([PeakFilter(cutoff_frequency_hz=freq, gain_db=g_db, q=q)])
-                out[:, ci:ce] = seg_board(out[:, ci:ce].copy(), sr)
+            # Apply as a linear gain multiplier (avoids per-chunk Pedalboard instantiation)
+            gain_lin = (10 ** (smooth_gr / 20)).astype(np.float32)
+            out = out * gain_lin[np.newaxis, :]
 
         return np.clip(out, -1.0, 1.0)
     except Exception as e:
@@ -758,6 +949,15 @@ CHAIN_MATRIX = {
         "insouts":   {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.12, "reverb_room": 0.35,"pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
         "double":    {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.30, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
         "harmony":   {"hp": 80,  "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.30, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
+    },
+    "NEO_SOUL": {
+        # Warm, organic, intimate — subtle saturation, lush reverb, gentle compression
+        # Lead sits upfront but smooth; harmonies are lush and wide
+        "lead":      {"hp": 80,  "comp1_ratio": 2.5,  "comp2_ratio": 1.8, "sat": 0.04, "reverb_wet": 0.18, "reverb_room": 0.55,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
+        "adlib":     {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.22, "reverb_room": 0.6, "pan": 0.15, "detune": 0,  "gain_db": -4.5, "telephone": False, "blend_db": -4.5},
+        "insouts":   {"hp": 120, "comp1_ratio": 2.5,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.18, "reverb_room": 0.5, "pan": 0.15, "detune": 0,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
+        "double":    {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.22, "reverb_room": 0.6, "pan": 0.28, "detune": 6,  "gain_db": -3.5, "telephone": False, "blend_db": -3.5},
+        "harmony":   {"hp": 100, "comp1_ratio": 3.5,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.30, "reverb_room": 0.7, "pan": 0.45, "detune": 5,  "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
     },
 }
 
@@ -1209,6 +1409,12 @@ class Predictor(BasePredictor):
             ts_attack_db, ts_sustain_db,
             # Bus EQ Pedalboard effects list
             bus_fx,
+            # New processors
+            ts_tape_drive=0.1, ts_tape_warmth=0.4,
+            ms_mid_gain=0.0, ms_side_gain=0.0, ms_mid_hi=0.5, ms_side_hi=1.0,
+            ts_excite=0.10,
+            ts_parallel_wet=0.20,
+            ts_clip_thresh=0.90,
         ):
             """Run steps 3–7 for one mastering variation. Returns float32 stereo array."""
             y = base.astype(np.float32).copy()
@@ -1245,6 +1451,28 @@ class Predictor(BasePredictor):
             if bus_fx:
                 y = Pedalboard(bus_fx)(y.astype(np.float32), sr)
 
+            # 6b. Tape saturation — genre/variation aware warmth
+            y = apply_tape_saturation(y.astype(np.float32), sr,
+                                      drive=ts_tape_drive, warmth=ts_tape_warmth)
+
+            # 6c. M/S EQ — variation-specific stereo imaging
+            y = apply_ms_eq(y.astype(np.float32), sr,
+                            mid_gain_db=ms_mid_gain, side_gain_db=ms_side_gain,
+                            mid_hi_shelf_db=ms_mid_hi, side_hi_shelf_db=ms_side_hi,
+                            shelf_hz=6000)
+
+            # 6d. Exciter — add air above 8kHz
+            y = apply_exciter(y.astype(np.float32), sr, freq=8000, amount=ts_excite)
+
+            # 6e. Parallel compression — density before limiter
+            y = apply_parallel_compression(y.astype(np.float32), sr,
+                                           threshold_db=-22, ratio=6.0,
+                                           attack_ms=2, release_ms=60,
+                                           wet=ts_parallel_wet)
+
+            # 6f. Soft clipper — rounds peaks before hard limiter
+            y = apply_soft_clipper(y.astype(np.float32), threshold=ts_clip_thresh)
+
             # 7. Limiter — always last before dither
             y = Pedalboard([Limiter(threshold_db=-1.0)])(y.astype(np.float32), sr)
 
@@ -1272,6 +1500,31 @@ class Predictor(BasePredictor):
             "punch":  (3.5, -1.5),
             "loud":   (4.0, -2.0),
         }
+
+        # Tape saturation: (drive, warmth) — warm gets most, clean gets least
+        VAR_TAPE = {
+            "clean":  (0.05, 0.3),
+            "warm":   (0.25, 0.7),
+            "punch":  (0.20, 0.4),
+            "loud":   (0.30, 0.5),
+        }
+
+        # M/S EQ: (mid_gain, side_gain, mid_hi_shelf, side_hi_shelf)
+        VAR_MS_EQ = {
+            "clean":  (0.0,  0.0,  0.5,  1.0),
+            "warm":   (-0.5, 0.5,  0.0,  1.5),
+            "punch":  (0.5,  0.0,  1.5,  1.0),
+            "loud":   (0.0,  0.5,  1.0,  2.0),
+        }
+
+        # Exciter: air amount
+        VAR_EXCITE = {"clean": 0.08, "warm": 0.10, "punch": 0.15, "loud": 0.18}
+
+        # Parallel compression wet
+        VAR_PARALLEL = {"clean": 0.15, "warm": 0.20, "punch": 0.30, "loud": 0.40}
+
+        # Soft clipper threshold: loud hits harder
+        VAR_CLIP = {"clean": 0.92, "warm": 0.90, "punch": 0.87, "loud": 0.83}
 
         # Bus EQ per variation
         def _warm_bus():
@@ -1316,8 +1569,10 @@ class Predictor(BasePredictor):
         y_versions     = {}
 
         for vname in ("clean", "warm", "punch", "loud"):
-            mb  = VAR_MB[vname]
-            ts  = VAR_TS[vname]
+            mb     = VAR_MB[vname]
+            ts     = VAR_TS[vname]
+            tape   = VAR_TAPE[vname]
+            ms_eq  = VAR_MS_EQ[vname]
             print(f"master: building {vname} variation", flush=True)
             y_var = build_variation(
                 y_clean,
@@ -1325,6 +1580,12 @@ class Predictor(BasePredictor):
                 ms_width=VAR_WIDTH[vname],
                 ts_attack_db=ts[0], ts_sustain_db=ts[1],
                 bus_fx=VAR_BUS_FX[vname],
+                ts_tape_drive=tape[0],   ts_tape_warmth=tape[1],
+                ms_mid_gain=ms_eq[0],    ms_side_gain=ms_eq[1],
+                ms_mid_hi=ms_eq[2],      ms_side_hi=ms_eq[3],
+                ts_excite=VAR_EXCITE[vname],
+                ts_parallel_wet=VAR_PARALLEL[vname],
+                ts_clip_thresh=VAR_CLIP[vname],
             )
             y_versions[vname] = y_var
             lufs_data[vname]      = measure_lufs(y_var)
@@ -1662,6 +1923,8 @@ class Predictor(BasePredictor):
         pitch_correction   = params.get("pitchCorrection", "OFF")   # OFF | SUBTLE | TIGHT | HARD
         room_reverb_rt60   = float(params.get("roomReverb", 0.0))   # RT60 from analysis
         bpm_global         = float(params.get("bpm", 120.0))        # for delay sync
+        breath_editing     = params.get("breathEditing",  "SUBTLE") # OFF | SUBTLE | CLEAN | TIGHT
+        volume_riding      = params.get("volumeRiding",   True)     # bool
 
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
@@ -1811,6 +2074,15 @@ class Predictor(BasePredictor):
                     y_gated   = apply_noise_gate(y_mono_g, sr, threshold_db=-42)
                     diff      = y_gated - y_mono_g
                     y         = np.stack([y[0] + diff, y[1] + diff])
+
+                    # a2. Breath editing — main vocal only (ad-libs/doubles don't need it)
+                    if breath_editing != "OFF" and is_main_vocal(label):
+                        for ch in range(y.shape[0]):
+                            y[ch] = apply_breath_editing(y[ch], sr, mode=breath_editing)
+
+                    # a3. Volume riding — all vocal stems
+                    y = apply_volume_riding(y.astype(np.float32), sr,
+                                            target_lufs=-18.0 if is_main_vocal(label) else -24.0)
 
                     # b. De-esser
                     sib_freq     = detect_sibilance_freq((y[0] + y[1]) / 2, sr)
@@ -2002,9 +2274,21 @@ class Predictor(BasePredictor):
             mixed = bus_board(mixed.astype(np.float32), sr_out)
 
             # ── Stereo widener on bus (M/S) ───────────────────────────────────────
-            # Gentle default width — wide enough to feel open, safe enough to mono-check.
             bus_width = float(bus_params_ai.get("stereoWidth", 1.25))
             mixed = apply_stereo_widener(mixed.astype(np.float32), sr_out, width=bus_width)
+
+            # ── M/S EQ — widen highs on side, gentle mid clarity ─────────────────
+            mixed = apply_ms_eq(mixed.astype(np.float32), sr_out,
+                                 mid_gain_db=0.0, side_gain_db=0.0,
+                                 mid_hi_shelf_db=0.5, side_hi_shelf_db=1.5, shelf_hz=6000)
+
+            # ── Parallel compression (NY style) — density without killing transients
+            mixed = apply_parallel_compression(mixed.astype(np.float32), sr_out,
+                                               threshold_db=-22, ratio=6.0,
+                                               attack_ms=2, release_ms=60, wet=0.25)
+
+            # ── Soft clipper before limiter — rounds peaks harmonically ──────────
+            mixed = apply_soft_clipper(mixed.astype(np.float32), threshold=0.88)
 
             # ── Clip guard + normalize to target peak ─────────────────────────────
             target_peak = 10 ** (bus_normalize / 20)

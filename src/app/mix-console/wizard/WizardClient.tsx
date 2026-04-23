@@ -148,6 +148,122 @@ export default function MixConsoleWizardClient() {
     }
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Scroll to top on every step change ──
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [step]);
+
+  // ── Genre presets — auto-configure other params when genre changes ──
+  useEffect(() => {
+    if (genre === "AUTO") return;
+    switch (genre) {
+      case "HIP_HOP":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("STANDARD");
+        setMixVibe("POLISHED");
+        setVocalStylePreset("AUTO");
+        setReverbStyle("PLATE");
+        setBreathEditing("SUBTLE");
+        break;
+      case "TRAP":
+        setPitchCorrection("HARD");
+        setDelayStyle("HEAVY");
+        setMixVibe("DARK");
+        setVocalStylePreset("RAW_UPFRONT");
+        setReverbStyle("ROOM");
+        setBreathEditing("TIGHT");
+        break;
+      case "RNB":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("SUBTLE");
+        setMixVibe("POLISHED");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("PLATE");
+        setBreathEditing("SUBTLE");
+        break;
+      case "POP":
+        setPitchCorrection("TIGHT");
+        setDelayStyle("SUBTLE");
+        setMixVibe("BRIGHT");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("PLATE");
+        setBreathEditing("TIGHT");
+        break;
+      case "AFROBEATS":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("STANDARD");
+        setMixVibe("BRIGHT");
+        setVocalStylePreset("AUTO");
+        setReverbStyle("ROOM");
+        setBreathEditing("SUBTLE");
+        break;
+      case "LATIN":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("SUBTLE");
+        setMixVibe("BRIGHT");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("HALL");
+        setBreathEditing("SUBTLE");
+        break;
+      case "ROCK":
+        setPitchCorrection("OFF");
+        setDelayStyle("STANDARD");
+        setMixVibe("RAW");
+        setVocalStylePreset("RAW_UPFRONT");
+        setReverbStyle("ROOM");
+        setBreathEditing("OFF");
+        break;
+      case "ELECTRONIC":
+        setPitchCorrection("HARD");
+        setDelayStyle("HEAVY");
+        setMixVibe("BRIGHT");
+        setVocalStylePreset("AIRY_SPACIOUS");
+        setReverbStyle("HALL");
+        setBreathEditing("CLEAN");
+        break;
+      case "ACOUSTIC":
+        setPitchCorrection("OFF");
+        setDelayStyle("OFF");
+        setMixVibe("CLEAN");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("ROOM");
+        setBreathEditing("SUBTLE");
+        break;
+      case "LO_FI":
+        setPitchCorrection("OFF");
+        setDelayStyle("SUBTLE");
+        setMixVibe("DARK");
+        setVocalStylePreset("LOFI_GRITTY");
+        setReverbStyle("ROOM");
+        setBreathEditing("OFF");
+        break;
+      case "GOSPEL":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("SUBTLE");
+        setMixVibe("POLISHED");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("CATHEDRAL");
+        setBreathEditing("SUBTLE");
+        break;
+      case "COUNTRY":
+        setPitchCorrection("OFF");
+        setDelayStyle("OFF");
+        setMixVibe("CLEAN");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("HALL");
+        setBreathEditing("SUBTLE");
+        break;
+      case "NEO_SOUL":
+        setPitchCorrection("SUBTLE");
+        setDelayStyle("SUBTLE");
+        setMixVibe("POLISHED");
+        setVocalStylePreset("CLEAN_NATURAL");
+        setReverbStyle("PLATE");
+        setBreathEditing("SUBTLE");
+        break;
+    }
+  }, [genre]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Tip rotation ──
   useEffect(() => {
     if (step !== "processing") return;
@@ -830,6 +946,7 @@ export default function MixConsoleWizardClient() {
                     { v: "LO_FI",      l: "Lo-Fi" },
                     { v: "GOSPEL",     l: "Gospel" },
                     { v: "COUNTRY",    l: "Country" },
+                    { v: "NEO_SOUL",   l: "Neo Soul" },
                   ],
                 },
                 {

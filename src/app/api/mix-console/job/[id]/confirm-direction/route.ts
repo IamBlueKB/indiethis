@@ -41,6 +41,7 @@ export async function POST(
         genre:            true,
         analysisData:     true,
         pitchCorrection:  true,
+        breathEditing:    true,
       },
     });
 
@@ -86,6 +87,7 @@ export async function POST(
       stems_urls:       stemsUrlsObj,
       genre:            job.genre ?? "HIP_HOP",
       pitchCorrection:  (job as any).pitchCorrection ?? "OFF",
+      breathEditing:    (job as any).breathEditing   ?? "SUBTLE",
       roomReverb:       (analysisData.room_reverb  as number) ?? 0,
       bpm:              (analysisData.bpm           as number) ?? 120,
     };
