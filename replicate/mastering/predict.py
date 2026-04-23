@@ -125,16 +125,17 @@ def estimate_key(chroma):
 
 # ---------- Helper: noise gate ----------
 def apply_noise_gate(y, sr, threshold_db=-40, hold_ms=50, release_ms=100):
-    """Simple noise gate — zero out samples below threshold."""
-    threshold_lin = 10 ** (threshold_db / 20)
-    hold_samples = int((hold_ms / 1000) * sr)
-    release_samples = int((release_ms / 1000) * sr)
-    gate = np.abs(y) >= threshold_lin
-    # Extend gate by hold samples
-    from scipy.ndimage import binary_dilation
-    gate = binary_dilation(gate, iterations=hold_samples)
-    y_gated = y.copy()
-    y_gated[~gate] = 0
+    """Simple noise gate — vectorized, no scipy binary_dilation (too slow)."""
+    threshold_lin = float(10 ** (threshold_db / 20))
+    hold_samples  = int((hold_ms  / 1000) * sr)
+    gate = (np.abs(y) >= threshold_lin).astype(np.float32)
+    # Vectorized hold: convolve gate with a box filter of length hold_samples
+    # This extends each open region forward by hold_samples without looping
+    if hold_samples > 1:
+        kernel = np.ones(hold_samples, dtype=np.float32) / hold_samples
+        gate   = np.convolve(gate, kernel, mode="same")
+        gate   = (gate > 0).astype(np.float32)
+    y_gated = y * gate
     return y_gated
 
 
@@ -220,21 +221,22 @@ def apply_breath_editing(audio_mono, sr, mode="SUBTLE"):
         peak_rms = float(np.percentile(rms, 95))
         thresh   = peak_rms * 0.12   # ~18dB below peak
 
-        # Build sample-level gain map
-        gain = np.ones(len(audio_mono), dtype=np.float32)
-        for fi, r in enumerate(rms):
-            start = fi * hop
-            end   = min(start + hop, len(audio_mono))
-            if r < thresh:
-                if mode == "SUBTLE":
-                    # Attenuate 6–12dB based on how far below threshold
-                    ratio = float(r) / (thresh + 1e-9)
-                    att   = 0.25 + 0.75 * ratio   # 0.25 (–12dB) to 1.0
-                    gain[start:end] = att
-                else:  # CLEAN or TIGHT — silence breaths
-                    gain[start:end] = 0.0
+        # Build frame-level gain (vectorized — no Python loop)
+        below = rms < thresh
+        if mode == "SUBTLE":
+            ratio_f = np.clip(rms / (thresh + 1e-9), 0.0, 1.0)
+            gain_f  = np.where(below, 0.25 + 0.75 * ratio_f, 1.0).astype(np.float32)
+        else:  # CLEAN or TIGHT
+            gain_f  = np.where(below, 0.0, 1.0).astype(np.float32)
 
-        # Smooth gain transitions to avoid clicks (20ms ramp)
+        # Interpolate frame gains to sample resolution
+        gain = np.interp(
+            np.arange(len(audio_mono)),
+            np.linspace(0, len(audio_mono), len(gain_f)),
+            gain_f,
+        ).astype(np.float32)
+
+        # Smooth to avoid clicks
         from scipy.signal import lfilter
         smooth_c = float(np.exp(-1.0 / (sr * 0.020)))
         gain = lfilter([1 - smooth_c], [1, -smooth_c], gain).astype(np.float32)
@@ -867,14 +869,14 @@ def apply_ms_widener_master(audio_stereo, sr, width=1.3, mono_below_hz=120):
 CHAIN_MATRIX = {
     "HIP_HOP": {
         "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.5, "sat": 0.03, "reverb_wet": 0.15, "reverb_room": 0.3, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
-        "adlib":     {"hp": 300, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
+        "adlib":     {"hp": 300, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
         "insouts":   {"hp": 200, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.12, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "eq_tilt_low_cut": -3.0, "eq_tilt_high_cut": -2.0},
         "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.3, "pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
         "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.5, "pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
     },
     "TRAP": {
         "lead":      {"hp": 80,  "comp1_ratio": 4.0,  "comp2_ratio": 2.5, "sat": 0.04, "reverb_wet": 0.15, "reverb_room": 0.25,"pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
-        "adlib":     {"hp": 300, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
+        "adlib":     {"hp": 300, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "tp_low": 300,  "tp_high": 3000},
         "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.15, "detune": 0,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0,  "eq_tilt_low_cut": -3.0, "eq_tilt_high_cut": -2.0},
         "double":    {"hp": 100, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.20, "reverb_room": 0.25,"pan": 0.35, "detune": 12, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
         "harmony":   {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.20, "reverb_room": 0.45,"pan": 0.5,  "detune": 8,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0},
@@ -902,8 +904,8 @@ CHAIN_MATRIX = {
     },
     "ELECTRONIC": {
         "lead":      {"hp": 100, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.03, "reverb_wet": 0.25, "reverb_room": 0.8, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
-        "adlib":     {"hp": 200, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.30, "reverb_room": 0.85,"pan": 0.40, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
-        "insouts":   {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.08, "reverb_wet": 0.22, "reverb_room": 0.7, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
+        "adlib":     {"hp": 200, "comp1_ratio": 6.0,  "comp2_ratio": 0.0, "sat": 0.12, "reverb_wet": 0.30, "reverb_room": 0.85,"pan": 0.40, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
+        "insouts":   {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.08, "reverb_wet": 0.22, "reverb_room": 0.7, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "tp_low": 500,  "tp_high": 4000},
         "double":    {"hp": 120, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.25, "reverb_room": 0.8, "pan": 0.30, "detune": 15, "gain_db": -4.0, "telephone": False, "blend_db": -4.0},
         "harmony":   {"hp": 120, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.02, "reverb_wet": 0.35, "reverb_room": 0.9, "pan": 0.50, "detune": 5,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0},
     },
@@ -916,8 +918,8 @@ CHAIN_MATRIX = {
     },
     "LO_FI": {
         "lead":      {"hp": 100, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.06, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.0,  "detune": 0,  "gain_db": 0.0,  "telephone": False, "blend_db": 0.0},
-        "adlib":     {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": True,  "blend_db": -6.0,  "tp_low": 400,  "tp_high": 2500},
-        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.07, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -7.0, "telephone": True,  "blend_db": -7.0,  "tp_low": 400,  "tp_high": 2500},
+        "adlib":     {"hp": 200, "comp1_ratio": 5.0,  "comp2_ratio": 0.0, "sat": 0.10, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.25, "detune": 0,  "gain_db": -6.0, "telephone": False, "blend_db": -6.0,  "tp_low": 400,  "tp_high": 2500},
+        "insouts":   {"hp": 200, "comp1_ratio": 4.0,  "comp2_ratio": 0.0, "sat": 0.07, "reverb_wet": 0.10, "reverb_room": 0.2, "pan": 0.2,  "detune": 0,  "gain_db": -7.0, "telephone": False, "blend_db": -7.0,  "tp_low": 400,  "tp_high": 2500},
         "double":    {"hp": 120, "comp1_ratio": 3.0,  "comp2_ratio": 0.0, "sat": 0.05, "reverb_wet": 0.15, "reverb_room": 0.4, "pan": 0.20, "detune": 10, "gain_db": -3.0, "telephone": False, "blend_db": -3.0},
         "harmony":   {"hp": 120, "comp1_ratio": 3.5,  "comp2_ratio": 0.0, "sat": 0.04, "reverb_wet": 0.18, "reverb_room": 0.4, "pan": 0.35, "detune": 7,  "gain_db": -5.0, "telephone": False, "blend_db": -5.0},
     },
@@ -2053,7 +2055,8 @@ class Predictor(BasePredictor):
                     rev_room = float(chain_p.get("reverb_room", 0.35))
                     pan      = float(sp.get("panLR",       chain_p.get("pan",         0.0)))
                     detune   = float(chain_p.get("detune", 0))
-                    do_tel   = bool(chain_p.get("telephone", False))
+                    # Claude can explicitly request telephone via stemParams; chain default is always False
+                    do_tel   = bool(sp.get("telephone", chain_p.get("telephone", False)))
                     tp_low   = float(chain_p.get("tp_low",  300))
                     tp_high  = float(chain_p.get("tp_high", 3000))
 

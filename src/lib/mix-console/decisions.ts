@@ -90,6 +90,7 @@ export interface StemParams {
   saturation:     number;       // 0–1 drive
   stereoWidth:    number;       // 0–1
   monoBelow:      number;       // Hz
+  telephone?:     boolean;      // bandpass lo-fi effect — only set true when creatively intentional
 }
 
 export interface EQPoint {
@@ -164,8 +165,8 @@ export async function decideMixParameters(params: {
 
 The Python engine applies these genre-aware chains automatically per role:
 - lead: full vocal chain, de-esser, two-stage comp, presence EQ
-- adlib: TELEPHONE bandpass (300-3000Hz), aggressive comp, gritty sat, slapback — classic hip-hop lo-fi
-- insouts: lighter telephone tilt, short pre-delay, blend -6dB
+- adlib: aggressive comp, gritty sat, slapback — blends behind the lead; set telephone=true only if the creative vibe calls for it (lo-fi aesthetic, intentional phone-call effect, etc.)
+- insouts: lighter comp, short pre-delay, blend -6dB
 - double: pitch detune ±N cents (genre-dependent), hard pan L/R, blend -4dB
 - harmony: wide pan, lush reverb, detune ±N cents, blend -6 to -8dB
 
@@ -199,7 +200,8 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
       "delaySend": 0.0,
       "saturation": 0.02,
       "stereoWidth": 0.0,
-      "monoBelow": 120
+      "monoBelow": 120,
+      "telephone": false
     }
   },
   "sectionMap": [
@@ -222,9 +224,9 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
 Rules:
 - "genre" must be one of: HIP_HOP | TRAP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI | AFROBEATS | LATIN | COUNTRY | GOSPEL | NEO_SOUL
 - Map vocal_main → role "lead", vocal_adlibs → "adlib", vocal_insouts → "insouts", vocal_doubles → "double", vocal_harmonies → "harmony"
+- telephone: NEVER set true by default — only use it when you have a specific creative reason based on the track (e.g., artist explicitly wants a lo-fi/phone effect, LO_FI genre + LOFI_GRITTY vibe, customDirection requests it). RNB, POP, GOSPEL, COUNTRY, AFROBEATS, LATIN, NEO_SOUL, ACOUSTIC ad-libs should almost never have telephone=true.
 - delayThrows: only if delayStyle != "OFF" AND lyrics available; use quantized timestamps; dotted_eighth for chorus, quarter for verse
 - sectionMap: chorus gets reverbScale 1.4–1.6; bridge Claude decides; verse stays at 1.0
-- If customDirection says "keep ad-libs clean" — set adlib role params to no telephone (the engine checks direction)
 - bass: monoBelow 120Hz; kick: highpassHz 30, peakEQ at 60Hz; beat: gainDb -2
 - Return ONLY the JSON object, nothing else.`;
 
