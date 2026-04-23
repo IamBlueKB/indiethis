@@ -278,8 +278,11 @@ def apply_volume_riding(audio_stereo, sr, target_lufs=-18.0, window_s=0.5, max_g
         # Smooth with 200ms time constant to avoid pumping
         smooth_c = float(np.exp(-1.0 / (sr * 0.200)))
         gain_s   = lfilter([1 - smooth_c], [1, -smooth_c], gain_s).astype(np.float32)
+        # Guard: ensure gain is finite before applying
+        gain_s   = np.nan_to_num(gain_s, nan=1.0, posinf=1.0, neginf=1.0)
+        gain_s   = np.clip(gain_s, min_lin, max_lin)
 
-        return audio_stereo * gain_s[np.newaxis, :]
+        return np.nan_to_num(audio_stereo * gain_s[np.newaxis, :], nan=0.0, posinf=0.0, neginf=0.0)
     except Exception as e:
         print(f"volume_riding failed: {e}", flush=True)
         return audio_stereo
@@ -2259,6 +2262,8 @@ class Predictor(BasePredictor):
             bus_normalize  = float(bus_params_ai.get("peakNormalize",  -1.0))
 
             # ── Pre-bus normalization — stem summing can hit +12dB; tame before chain ──
+            # Also sanitize any NaN/Inf that leaked from numpy processors
+            mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
             pre_peak = float(np.max(np.abs(mixed)))
             if pre_peak > 0.85:
                 mixed = mixed / pre_peak * 0.85  # bring to -1.4dBFS before bus
@@ -2270,6 +2275,7 @@ class Predictor(BasePredictor):
             mixed = apply_dynamic_eq(mixed.astype(np.float32), sr_out)
 
             # Then bus EQ + glue comp
+            mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
             bus_board = Pedalboard([
                 LowShelfFilter(cutoff_frequency_hz=100,  gain_db=bus_low_shelf),
                 HighShelfFilter(cutoff_frequency_hz=8000, gain_db=bus_high_shelf),
