@@ -1937,9 +1937,9 @@ class Predictor(BasePredictor):
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-        # ── Role → target LUFS — vocal is the featured element, beat sits below ────
-        BEAT_TARGET_LUFS       = -18.0   # beat sits 4 dB below vocal
-        MAIN_VOCAL_TARGET_LUFS = -14.0   # lead vocal is loudest element in modern hip-hop/pop
+        # ── Role → target LUFS — equal starting point; EQ/comp creates vocal presence ─
+        BEAT_TARGET_LUFS       = -16.0   # beat and vocal start equal
+        MAIN_VOCAL_TARGET_LUFS = -16.0   # vocal sits in the mix via EQ/comp, not raw level
         SUPPORTING_LUFS_OFFSET = {       # offset from main vocal target
             "vocal_adlibs":   -6.0,
             "vocal_insouts":  -7.0,
