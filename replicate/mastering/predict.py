@@ -456,7 +456,7 @@ def apply_de_reverb(audio_stereo, sr, strength=0.6):
         import noisereduce as nr
         out = audio_stereo.copy()
         for ch in range(audio_stereo.shape[0]):
-            out[ch] = nr.reduce_noise(
+            result = nr.reduce_noise(
                 y=audio_stereo[ch].astype(np.float32),
                 sr=sr,
                 stationary=False,
@@ -464,6 +464,7 @@ def apply_de_reverb(audio_stereo, sr, strength=0.6):
                 time_mask_smooth_ms=100,
                 freq_mask_smooth_hz=500,
             ).astype(np.float32)
+            out[ch] = np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0)
         return out
     except Exception as e:
         print(f"de_reverb failed: {e}", flush=True)
@@ -1249,7 +1250,10 @@ class Predictor(BasePredictor):
             meter = pyln.Meter(sr)
             loudness = meter.integrated_loudness(y[0])
             target_lufs = -14.0
+            if not np.isfinite(loudness) or loudness < -70.0:
+                loudness = -23.0   # treat near-silent as -23 LUFS — safe fallback
             gain_db = target_lufs - loudness
+            gain_db = float(np.clip(gain_db, -30.0, 30.0))  # never more than ±30 dB gain
             y_norm = y * (10 ** (gain_db / 20))
             y_norm = np.clip(y_norm, -1, 1)
             clean_path = os.path.join(out_dir, "clean.wav")
@@ -1867,6 +1871,8 @@ class Predictor(BasePredictor):
 
         if y.ndim == 1:
             y = np.stack([y, y])
+        # Sanitize before all Pedalboard calls
+        y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
         def write_stem(audio_2d, name):
             path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
@@ -1976,6 +1982,7 @@ class Predictor(BasePredictor):
             os.unlink(audio_path)
             if y.ndim == 1:
                 y = np.stack([y, y])
+            y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
             loaded[label] = (y.astype(np.float32), sr)
             lufs[label]   = measure_lufs(y, sr)
 
@@ -2015,6 +2022,7 @@ class Predictor(BasePredictor):
                     target_lufs_stem = MAIN_VOCAL_TARGET_LUFS + offset
 
                 y = stage_gain(y, current_lufs, target_lufs_stem)
+                y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
                 # ── 2. Per-stem processing ────────────────────────────────────────
                 if label == "beat":
@@ -2041,7 +2049,7 @@ class Predictor(BasePredictor):
                             beat_fx.append(LowShelfFilter(cutoff_frequency_hz=f, gain_db=g))
                     beat_fx.append(Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200))
                     beat_board = Pedalboard(beat_fx)
-                    y_proc = beat_board(y, sr)
+                    y_proc = beat_board(np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0), sr)
 
                     # Transient shaper on beat — tighten attack, pull back sustain slightly
                     y_proc = apply_transient_shaper(y_proc, sr, attack_boost_db=2.5, sustain_cut_db=-1.5)
@@ -2206,6 +2214,7 @@ class Predictor(BasePredictor):
                                 wet=0.35,
                             )
 
+                    y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
                     y_proc = y.astype(np.float64)
 
                 # Track beat and vocal buses separately for sidechain
@@ -2341,7 +2350,7 @@ class Predictor(BasePredictor):
             preview_paths = {}
 
             for name, style in variation_configs:
-                var_audio = mixed.copy().astype(np.float32)
+                var_audio = np.nan_to_num(mixed.copy().astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
                 if style == "transparent":
                     # Clean: very light bus glue, -1 dB ceiling — closest to raw mix
