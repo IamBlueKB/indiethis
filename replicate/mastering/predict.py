@@ -125,18 +125,15 @@ def estimate_key(chroma):
 
 # ---------- Helper: noise gate ----------
 def apply_noise_gate(y, sr, threshold_db=-40, hold_ms=50, release_ms=100):
-    """Simple noise gate — vectorized, no scipy binary_dilation (too slow)."""
+    """Simple noise gate — O(n) vectorized via uniform_filter1d (no loops, no np.convolve)."""
+    from scipy.ndimage import uniform_filter1d
     threshold_lin = float(10 ** (threshold_db / 20))
-    hold_samples  = int((hold_ms  / 1000) * sr)
+    hold_samples  = max(1, int((hold_ms / 1000) * sr))
     gate = (np.abs(y) >= threshold_lin).astype(np.float32)
-    # Vectorized hold: convolve gate with a box filter of length hold_samples
-    # This extends each open region forward by hold_samples without looping
+    # uniform_filter1d is O(n) regardless of hold_samples — safe for large arrays
     if hold_samples > 1:
-        kernel = np.ones(hold_samples, dtype=np.float32) / hold_samples
-        gate   = np.convolve(gate, kernel, mode="same")
-        gate   = (gate > 0).astype(np.float32)
-    y_gated = y * gate
-    return y_gated
+        gate = (uniform_filter1d(gate, size=hold_samples, mode="constant") > 0).astype(np.float32)
+    return y * gate
 
 
 # ---------- Helper: section detection from energy ----------
