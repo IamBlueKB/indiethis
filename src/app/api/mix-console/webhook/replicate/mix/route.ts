@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     const waveforms     = (parsed.waveforms           as Record<string, number[]>) ?? {};
     const originalWave  = (parsed.original_waveform   as number[]) ?? null;
     const previewPaths  = (parsed.preview_file_paths  as Record<string, string>) ?? null;
+    const qaResults     = (parsed.qa_results          as Record<string, unknown>) ?? null;
 
     await prisma.mixJob.update({
       where: { id: jobId },
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
         previewWaveformMixed:    waveforms               as any,
         previewWaveformOriginal: originalWave            as any,
         previewFilePaths:        previewPaths            as any,
+        qaCheckResults:          qaResults               as any,
         status:                  "PREVIEWING",
       },
     });

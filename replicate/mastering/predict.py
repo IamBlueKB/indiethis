@@ -12,8 +12,84 @@ from pedalboard import (
     LowShelfFilter, HighShelfFilter, HighpassFilter, LowpassFilter, PeakFilter
 )
 import matchering as mg
+from scipy.signal import butter, sosfiltfilt
 from supabase import create_client
 from cog import BasePredictor, Input
+
+
+# ─── DSP helpers: Linkwitz-Riley crossover + signal analysis ────────────────
+
+def _lr4_crossover(y: np.ndarray, cutoff_hz: float, sr: int):
+    """
+    Linkwitz-Riley 4th-order crossover. Returns (low_band, high_band) that
+    sum PHASE-FLAT back to y (unlike single-pole LP+HP which notches at cutoff).
+    Implemented as two cascaded Butterworth 2nd-order sections with zero-phase
+    filtering (sosfiltfilt). Shapes preserved.
+    """
+    if y.ndim == 1:
+        y2 = y[np.newaxis, :]
+    else:
+        y2 = y
+    nyq = 0.5 * sr
+    wn  = max(1e-4, min(0.999, cutoff_hz / nyq))
+    sos_lp = butter(2, wn, btype="low",  output="sos")
+    sos_hp = butter(2, wn, btype="high", output="sos")
+    # LR4 = Butterworth^2 (squared magnitude response)
+    low  = sosfiltfilt(sos_lp, sosfiltfilt(sos_lp, y2, axis=-1), axis=-1)
+    high = sosfiltfilt(sos_hp, sosfiltfilt(sos_hp, y2, axis=-1), axis=-1)
+    if y.ndim == 1:
+        return low[0].astype(np.float32), high[0].astype(np.float32)
+    return low.astype(np.float32), high.astype(np.float32)
+
+
+def _stereo_correlation(y: np.ndarray) -> float:
+    """Pearson correlation between L and R. Near 1.0 means effectively mono."""
+    if y.ndim != 2 or y.shape[0] < 2:
+        return 1.0
+    l = y[0].astype(np.float64)
+    r = y[1].astype(np.float64)
+    if np.std(l) < 1e-9 or np.std(r) < 1e-9:
+        return 1.0
+    return float(np.clip(np.corrcoef(l, r)[0, 1], -1.0, 1.0))
+
+
+def _measure_frequency_balance(y: np.ndarray, sr: int) -> dict:
+    """Return sub/low/mid/high RMS energy (normalized so sum = 1.0)."""
+    mono = y if y.ndim == 1 else y.mean(axis=0)
+    mono = np.nan_to_num(mono.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    S = np.abs(librosa.stft(mono, n_fft=2048, hop_length=512))
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    bands = {"sub": (20, 60), "low": (60, 250), "mid": (250, 4000), "high": (4000, 20000)}
+    out = {}
+    total = 1e-12
+    for name, (lo, hi) in bands.items():
+        mask = (freqs >= lo) & (freqs < hi)
+        e = float(np.sqrt(np.mean(S[mask] ** 2))) if mask.any() else 0.0
+        out[name] = e
+        total += e
+    return {k: round(v / total, 4) for k, v in out.items()}
+
+
+def _measure_output_quality(mixed: np.ndarray, sr: int) -> dict:
+    """
+    Post-render verification. Runs once per mix variation to surface objective
+    metrics the webhook can compare against reference/genre targets.
+    """
+    mono = mixed if mixed.ndim == 1 else mixed.mean(axis=0)
+    mono = np.nan_to_num(mono.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    meter = pyln.Meter(sr)
+    try:
+        lufs = float(meter.integrated_loudness(mono))
+    except Exception:
+        lufs = -99.0
+    peak = float(np.max(np.abs(mixed))) if mixed.size else 0.0
+    crest = float(peak / (np.sqrt(np.mean(mono ** 2)) + 1e-9)) if mono.size else 0.0
+    return {
+        "lufs":    round(lufs, 2),
+        "peakDb":  round(20.0 * np.log10(peak + 1e-12), 2) if peak > 0 else -99.0,
+        "crest":   round(crest, 2),
+        "balance": _measure_frequency_balance(mixed, sr),
+    }
 
 
 # ---------- Supabase setup ----------
@@ -2196,24 +2272,35 @@ class Predictor(BasePredictor):
                         y[1]   = y[1] * r_gain
 
                     # i2. Stem stereo width (M/S widening per stem)
+                    # GUARD: skip widening on effectively-mono sources (correlation > 0.98).
+                    # Widening a near-mono signal amplifies tiny L/R differences (noise,
+                    # quantization error) producing comb-filter / "warbly" artifacts.
                     stem_width = float(sp.get("stereoWidth", 0.0))
                     if stem_width > 0.05 and y.ndim == 2:
-                        mid_s  = (y[0] + y[1]) / 2
-                        side_s = (y[0] - y[1]) / 2 * (1.0 + float(np.clip(stem_width, 0.0, 2.0)))
-                        y = np.stack([mid_s + side_s, mid_s - side_s]).astype(np.float32)
+                        corr = _stereo_correlation(y)
+                        if corr < 0.98:
+                            mid_s  = (y[0] + y[1]) / 2
+                            side_s = (y[0] - y[1]) / 2 * (1.0 + float(np.clip(stem_width, 0.0, 2.0)))
+                            y = np.stack([mid_s + side_s, mid_s - side_s]).astype(np.float32)
+                        else:
+                            print(f"  stem {idx} ({label}): stereoWidth skipped (corr={corr:.3f}, signal is mono)", flush=True)
 
-                    # i3. Stem mono below hz — tighten low end of stem (e.g. mono bass below 120Hz)
+                    # i3. Stem mono below hz — tighten low end via LR4 crossover
+                    # OLD IMPLEMENTATION used single-pole LP + HP which do NOT sum flat
+                    # (-3dB notch + phase cancellation at the cutoff). NEW: Linkwitz-Riley
+                    # 4th-order crossover which sums PHASE-FLAT — no more cutoff-frequency
+                    # phasing. Result: bass/kick tightens without a hollow notch.
                     mono_hz = float(sp.get("monoBelow", 0.0))
                     if mono_hz > 0 and y.ndim == 2:
-                        from pedalboard import LowpassFilter, HighpassFilter
-                        lp_board = Pedalboard([LowpassFilter(cutoff_frequency_hz=mono_hz)])
-                        hp_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=mono_hz)])
-                        low_band = lp_board(y.copy().astype(np.float32), sr)
-                        low_mono = (low_band[0] + low_band[1]) / 2
-                        low_band[0] = low_mono
-                        low_band[1] = low_mono
-                        high_band = hp_board(y.copy().astype(np.float32), sr)
-                        y = (low_band + high_band).astype(np.float32)
+                        try:
+                            low_band, high_band = _lr4_crossover(y.astype(np.float32), mono_hz, sr)
+                            low_mono = (low_band[0] + low_band[1]) / 2
+                            low_band[0] = low_mono
+                            low_band[1] = low_mono
+                            y = (low_band + high_band).astype(np.float32)
+                            y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+                        except Exception as mb_err:
+                            print(f"  stem {idx} ({label}): monoBelow skipped: {mb_err}", flush=True)
 
                     # j. Reverb — send/return with HPF on reverb tail (felt, not heard)
                     # Cap wet: 0.12 lead, 0.20 supporting — never pour water on the vocal
@@ -2478,6 +2565,7 @@ class Predictor(BasePredictor):
             waveforms     = {}
             preview_paths = {}
 
+            qa_results: dict = {}
             for name, style in variation_configs:
                 var_audio = np.nan_to_num(mixed.copy().astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -2508,11 +2596,20 @@ class Predictor(BasePredictor):
                     ])
 
                 var_audio = var_board(var_audio, sr_out)
+                var_audio = np.nan_to_num(var_audio.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
                 # Clip guard
                 vp = float(np.max(np.abs(var_audio)))
                 if vp > 0.99:
                     var_audio = var_audio / vp * 0.99
+
+                # Post-render quality measurement — surfaced to webhook for display
+                # and for future feedback-loop refinement
+                try:
+                    qa_results[name] = _measure_output_quality(var_audio, sr_out)
+                    print(f"qa[{name}]: {qa_results[name]}", flush=True)
+                except Exception as qa_err:
+                    print(f"qa measurement failed for {name}: {qa_err}", flush=True)
 
                 var_path = os.path.join(out_dir, f"mix_{name}.wav")
                 sf.write(var_path, apply_tpdf_dither(var_audio).T, sr_out, subtype="PCM_16")
@@ -2552,6 +2649,7 @@ class Predictor(BasePredictor):
             "original_waveform":   original_waveform,
             "preview_file_paths":  preview_paths,
             "applied_parameters":  params,
+            "qa_results":          qa_results,
         }
 
     # ---------- PREVIEW MIX ----------
