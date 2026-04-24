@@ -2043,11 +2043,8 @@ class Predictor(BasePredictor):
                     # Beat: HP + default vocal-pocket carve + Claude's EQ + light glue comp
                     beat_fx = [
                         HighpassFilter(cutoff_frequency_hz=30),
-                        PeakFilter(cutoff_frequency_hz=350,  gain_db=-2.0, q=0.9),  # mud cut — creates clean low-mid space
-                        PeakFilter(cutoff_frequency_hz=3000, gain_db=-3.5, q=0.8),  # vocal pocket — cut where vocal lives
-                        PeakFilter(cutoff_frequency_hz=5000, gain_db=-2.0, q=1.0),  # presence carve — let vocal air through
+                        # Claude specifies all creative EQ via stemParams — no hardcoded carves here
                     ]
-                    # Apply Claude's EQ decisions for the beat (e.g. 250-500Hz mud cut)
                     beat_eq_points = sp.get("eq", [])
                     for ep in beat_eq_points:
                         t = ep.get("type", "peak")
@@ -2111,17 +2108,16 @@ class Predictor(BasePredictor):
                         y = apply_volume_riding(y.astype(np.float32), sr,
                                                 target_lufs=-16.0, max_gain_db=3.0, max_cut_db=-3.0)
 
-                    # b. De-esser
-                    sib_freq     = detect_sibilance_freq((y[0] + y[1]) / 2, sr)
-                    de_ess_board = Pedalboard([PeakFilter(
-                        cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
-                    y = de_ess_board(y.astype(np.float32), sr)
+                    # b. De-esser — only if Claude specified a threshold (deEssThresh < 0)
+                    de_ess_thresh_val = float(sp.get("deEssThresh", 0))
+                    if de_ess_thresh_val < 0:
+                        sib_freq     = detect_sibilance_freq((y[0] + y[1]) / 2, sr)
+                        de_ess_board = Pedalboard([PeakFilter(
+                            cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
+                        y = de_ess_board(y.astype(np.float32), sr)
 
-                    # c. HP filter + vocal mud cut (below 100Hz and 250-400Hz)
-                    hp_board = Pedalboard([
-                        HighpassFilter(cutoff_frequency_hz=max(20, hp_hz)),
-                        PeakFilter(cutoff_frequency_hz=300, gain_db=-2.5, q=0.8),  # mud cut — creates space for beat
-                    ])
+                    # c. HP filter (structural only — Claude's eq array handles all creative EQ)
+                    hp_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=max(20, hp_hz))])
                     y = hp_board(y.astype(np.float32), sr)
 
                     # d. EQ from Claude stemParams

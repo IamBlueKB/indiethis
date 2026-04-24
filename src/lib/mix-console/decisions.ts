@@ -156,19 +156,29 @@ export async function decideMixParameters(params: {
     `${s.name}: ${s.start.toFixed(1)}s – ${s.end.toFixed(1)}s`
   ).join(", ");
 
-  const prompt = `You are a professional mix engineer AI. You have access to a genre + role chain matrix that handles per-stem DSP (the Python engine will apply it). Your job is to:
-1. Identify the correct genre and confirm/override the role of each stem
-2. Decide section-aware processing adjustments
-3. Pick delay throw words from lyrics (Pro/Premium)
-4. Flag any unusual conditions (heavy room reverb, clipping, loud ad-libs, etc.)
-5. Pass genre + vocalStylePreset so the engine looks up the right chain
+  const prompt = `You are a professional mix engineer AI. The Python engine is a faithful executor — it applies exactly what you specify in stemParams. You are responsible for every creative decision. Use these professional standards as your benchmark.
 
-The Python engine applies these genre-aware chains automatically per role:
-- lead: full vocal chain, de-esser, two-stage comp, presence EQ
-- adlib: aggressive comp, gritty sat, slapback — blends behind the lead; set telephone=true only if the creative vibe calls for it (lo-fi aesthetic, intentional phone-call effect, etc.)
-- insouts: lighter comp, short pre-delay, blend -6dB
-- double: pitch detune ±N cents (genre-dependent), hard pan L/R, blend -4dB
-- harmony: wide pan, lush reverb, detune ±N cents, blend -6 to -8dB
+MIX TARGETS — use these as your decision benchmarks:
+
+Vocal-to-beat ratio: lead vocal should sit 2-4dB above the beat's mid-range (2-5kHz). Measure by comparing vocal RMS in the 2-5kHz band against beat RMS in the same band. If the difference is less than 2dB, boost vocal presence or cut beat in that range. If more than 5dB, the vocal is too exposed — reduce vocal gain or boost beat.
+
+Frequency carving: always cut the beat 2-3dB in the vocal's dominant frequency range (detected from spectral centroid, typically 2-5kHz). Always high-pass the vocal at 80-100Hz. Always cut 250-400Hz on both vocal and beat by 1-2dB — this is where mud lives.
+
+Compression: set threshold so the compressor only engages on the loudest 30% of the signal. Target 3-4dB of gain reduction on peaks, no more. If the input crest factor (peak-to-RMS) is already below 8dB, the vocal is already compressed — reduce ratio by 1 point or skip compression entirely.
+
+Reverb: never exceed 15% wet. High-pass the reverb return at 500Hz. Pre-delay 25-35ms to preserve consonant clarity. If the input RT60 is already above 0.4s (room reverb detected), reduce wet to 8% maximum and apply de-reverb first. Room RT60 = ${analysis.roomReverb.toFixed(2)}s.
+
+Saturation: if the input signal is already clipping or has crest factor below 6dB, skip saturation entirely. Never apply saturation and heavy compression to the same stem — pick one.
+
+Stereo width: lead vocal mono center. Doubles pan L30-40/R30-40 with ±8-15 cents detune. Harmonies pan L45-50/R45-50. Ad-libs alternate L15-25/R15-25 per phrase. Beat stays at its original stereo width unless Beat Polish is active.
+
+Overall mix target: -14 to -12 LUFS integrated. True peak at -1dBFS. Loudness range (LRA) 6-10 LU. If the mix measures outside these ranges after bus processing, adjust the bus gain — do not re-process individual stems.
+
+Beat processing: the beat should lose no more than 2dB of overall energy from frequency carving and side-chain ducking combined. If the beat sounds thinner than the original after processing, the carving is too aggressive — narrow the Q and reduce the cut depth.
+
+De-esser: detect the sibilant peak frequency per vocalist (male 4-7kHz, female 8-12kHz). Only attenuate when sibilance exceeds the surrounding frequency energy by more than 6dB. If you can hear the de-esser working (lisping, dulled S sounds), the threshold is too low.
+
+The golden rule: A/B the processed stem against the raw input. If the raw input sounds better in any way — more natural, more present, more clear — reduce or remove the processing that's hurting it. Less processing done well always beats more processing done poorly.
 
 ANALYSIS:
 BPM: ${analysis.bpm.toFixed(1)} | Key: ${analysis.key} | Room reverb RT60: ${analysis.roomReverb.toFixed(2)}s
@@ -192,11 +202,14 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
       "gainDb": 0.0,
       "panLR": 0.0,
       "highpassHz": 80,
-      "eq": [{"type":"peak","freq":3000,"gainDb":2.5,"q":1.0}],
-      "comp1": {"thresholdDb":-18,"ratio":4,"attackMs":2,"releaseMs":80},
-      "comp2": {"thresholdDb":-24,"ratio":2.5,"attackMs":15,"releaseMs":200},
+      "eq": [
+        {"type":"peak","freq":300,"gainDb":-2.5,"q":0.8},
+        {"type":"peak","freq":3500,"gainDb":2.5,"q":1.2}
+      ],
+      "comp1": {"thresholdDb":-18,"ratio":3.0,"attackMs":10,"releaseMs":120},
+      "comp2": {"thresholdDb":-24,"ratio":1.8,"attackMs":30,"releaseMs":250},
       "deEssThresh": -30,
-      "reverbSend": 0.15,
+      "reverbSend": 0.10,
       "delaySend": 0.0,
       "saturation": 0.02,
       "stereoWidth": 0.0,
@@ -205,15 +218,15 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
     }
   },
   "sectionMap": [
-    {"sectionName":"chorus1","reverbScale":1.5,"compScale":1.2,"gainDb":0.5}
+    {"sectionName":"chorus1","reverbScale":1.5,"compScale":1.0,"gainDb":0.5}
   ],
   "delayThrows": [
     {"word":"tonight","start":42.3,"end":42.8,"type":"dotted_eighth","feedback":3,"section":"chorus1"}
   ],
   "busParams": {
-    "glueCompThresh": -12,
+    "glueCompThresh": -13,
     "glueCompRatio": 2.0,
-    "eqLowShelf": 0.5,
+    "eqLowShelf": 1.0,
     "eqHighShelf": 1.0,
     "stereoWidenHz": 120,
     "peakNormalize": -1.0
@@ -224,10 +237,12 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
 Rules:
 - "genre" must be one of: HIP_HOP | TRAP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI | AFROBEATS | LATIN | COUNTRY | GOSPEL | NEO_SOUL
 - Map vocal_main → role "lead", vocal_adlibs → "adlib", vocal_insouts → "insouts", vocal_doubles → "double", vocal_harmonies → "harmony"
-- telephone: NEVER set true by default — only use it when you have a specific creative reason based on the track (e.g., artist explicitly wants a lo-fi/phone effect, LO_FI genre + LOFI_GRITTY vibe, customDirection requests it). RNB, POP, GOSPEL, COUNTRY, AFROBEATS, LATIN, NEO_SOUL, ACOUSTIC ad-libs should almost never have telephone=true.
+- Beat MUST have the 350Hz, 3000Hz, 5000Hz cuts in eq. Lead vocal MUST have the 300Hz cut. These are non-negotiable.
+- telephone: NEVER set true by default — only use it when you have a specific creative reason (lo-fi aesthetic, intentional phone effect, customDirection requests it). RNB, POP, GOSPEL, COUNTRY, AFROBEATS, LATIN, NEO_SOUL, ACOUSTIC ad-libs should almost never have telephone=true.
 - delayThrows: only if delayStyle != "OFF" AND lyrics available; use quantized timestamps; dotted_eighth for chorus, quarter for verse
 - sectionMap: chorus gets reverbScale 1.4–1.6; bridge Claude decides; verse stays at 1.0
-- bass: monoBelow 120Hz; kick: highpassHz 30, peakEQ at 60Hz; beat: gainDb -2
+- bass: monoBelow 80; kick: highpassHz 30, peakEQ boost at 60Hz; beat: set gainDb so beat does not overpower vocal
+- deEssThresh: always -28 to -32 for lead vocals; 0 for non-vocal stems
 - Return ONLY the JSON object, nothing else.`;
 
   const msg = await client.messages.create({
