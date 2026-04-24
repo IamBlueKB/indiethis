@@ -1,31 +1,25 @@
-const CACHE_NAME = 'indiethis-v1';
-const PRECACHE_URLS = ['/', '/explore', '/pricing'];
+// Kill-switch service worker — unregisters itself and clears all caches.
+// Replaces an older sw.js that was intercepting POST requests and returning
+// stale/405 responses (breaking /api/mix-console/.../revise in particular).
+// Cache name bumped so the browser activates THIS version over the old one.
+const CACHE_NAME = 'indiethis-killswitch-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    // Nuke every cache
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+    // Unregister this SW so it never runs again
+    await self.registration.unregister();
+    // Reload every client so they fetch fresh, un-intercepted responses
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((c) => c.navigate(c.url));
+  })());
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
-});
+// Never intercept fetches — pass everything through the network.
+self.addEventListener('fetch', () => {});
