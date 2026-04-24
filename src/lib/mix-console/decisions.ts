@@ -344,8 +344,9 @@ Rules:
   // Strip any accidental markdown fences
   const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
 
+  let firstPass: MixDecision;
   try {
-    return JSON.parse(cleaned) as MixDecision;
+    firstPass = JSON.parse(cleaned) as MixDecision;
   } catch {
     console.error("decideMixParameters: failed to parse Claude response:", raw.slice(0, 500));
     return {
@@ -362,6 +363,102 @@ Rules:
       },
       warnings: ["Failed to parse mix parameters from AI — using defaults."],
     };
+  }
+
+  // ─── Two-pass critic (Premium/Pro only) ────────────────────────────────
+  // Second Claude call acts as a senior mix engineer reviewing the first pass.
+  // It can overwrite specific params if the first pass made engineering errors
+  // (e.g. lead vocal stereoWidth > 0 — should always be mono center, delay throws
+  // on wrong words, comp ratios too hot, monoBelow on stems that shouldn't have it).
+  const tierUp = String(params.tier || "").toUpperCase();
+  if (tierUp === "PREMIUM" || tierUp === "PRO") {
+    try {
+      const refined = await runMixCritic({
+        firstPass,
+        analysis:        params.analysis,
+        genre:           params.genre,
+        tier:            params.tier,
+        referenceAnalysis: params.referenceAnalysis,
+      });
+      if (refined) return refined;
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      console.error(`[mix-decisions:critic] skipped — ${m.slice(0, 160)}`);
+    }
+  }
+
+  return firstPass;
+}
+
+// ─── Two-pass critic ────────────────────────────────────────────────────────
+
+async function runMixCritic(params: {
+  firstPass:  MixDecision;
+  analysis:   MixAnalysisResult;
+  genre:      string;
+  tier:       string;
+  referenceAnalysis?: {
+    lufs:     number;
+    bpm:      number;
+    key:      string;
+    balance:  { sub: number; low: number; mid: number; high: number };
+    fileName: string;
+  } | null;
+}): Promise<MixDecision | null> {
+  const { firstPass, analysis, genre, tier, referenceAnalysis } = params;
+
+  const stemSummary = analysis.stemAnalysis
+    .map(s => `${s.label} (${s.role ?? "?"}): ${s.lufs.toFixed(1)} LUFS, balance sub/low/mid/high = ${s.balance.sub.toFixed(2)}/${s.balance.low.toFixed(2)}/${s.balance.mid.toFixed(2)}/${s.balance.high.toFixed(2)}`)
+    .join("\n");
+
+  const prompt = `You are a senior mix engineer reviewing another engineer's first-pass mix decisions.
+Your job: catch mistakes, tighten weak choices, and return a CORRECTED JSON — same schema as input.
+
+DO NOT rewrite everything. Only change params that are objectively wrong or suboptimal. If the first pass is solid, return it unchanged.
+
+Common first-pass mistakes to look for:
+- Lead vocal with stereoWidth > 0 (it must be mono-center, width = 0)
+- Lead vocal WITHOUT the 300Hz cut (mandatory), OR beat WITHOUT the 350Hz/3kHz/5kHz cuts (mandatory)
+- monoBelow set on a stem that doesn't need low-end mono collapse (e.g. a stereo pad, a harmony — only bass/kick/beat get monoBelow below 100Hz; vocals get monoBelow around 120Hz)
+- telephone: true on a stem that shouldn't have it (almost nothing should unless creatively intentional)
+- deEssThresh = 0 on vocal stems (should be -28 to -32 for lead vocals)
+- comp ratios > 6 on anything except limiter (likely too crushing)
+- chorusWet > 0 on lead vocal (should almost always be 0 — doubles/harmonies get chorus, not lead)
+- deReverbStrength > 0 when RT60 is low (< 0.3s — de-reverb does nothing useful on already-dry sources)
+- delayThrows with word timestamps that don't exist in the lyrics
+- sectionMap gainDb out of range (verse should be 0, chorus +0.5 to +2, bridge Claude decides)
+- busParams.stereoWidth < 1.0 (narrower than input — rarely desired) or > 1.6 (too wide, mono-compatibility risk)
+- Reference LUFS not reflected in busParams glueCompRatio + EQ shelves
+
+Context:
+Genre: ${genre || "auto"} | Tier: ${tier}
+BPM ${analysis.bpm.toFixed(1)}, Key ${analysis.key}
+Room RT60: ${analysis.roomReverb.toFixed(2)}s
+Pitch deviation: ${analysis.pitchDeviation.toFixed(2)} semitones
+
+Per-stem analysis:
+${stemSummary}
+${referenceAnalysis ? `\nReference "${referenceAnalysis.fileName}": ${referenceAnalysis.lufs.toFixed(1)} LUFS, balance ${JSON.stringify(referenceAnalysis.balance)}` : ""}
+
+First-pass mix decision to review:
+${JSON.stringify(firstPass, null, 2).slice(0, 6000)}
+
+Return ONLY the corrected JSON (same schema). Preserve first-pass choices you agree with. If you fix something, prefer minimal targeted edits over wholesale rewrites. If there are truly no issues, return the first-pass JSON unchanged.`;
+
+  const raw = await callMixDecisionClaude({
+    tier,
+    prompt,
+    label: "critic",
+  });
+  const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
+  try {
+    const refined = JSON.parse(cleaned) as MixDecision;
+    // Sanity: critic must return a complete object. If shape looks broken, keep first pass.
+    if (!refined.stemParams || !refined.busParams) return null;
+    return refined;
+  } catch {
+    console.error("critic: parse failed:", raw.slice(0, 300));
+    return null;
   }
 }
 
