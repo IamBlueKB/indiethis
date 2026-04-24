@@ -42,10 +42,22 @@ def upload_to_supabase(local_path, bucket, remote_path):
     if not client:
         raise RuntimeError("Supabase not configured")
     with open(local_path, "rb") as f:
-        client.storage.from_(bucket).upload(
-            remote_path, f,
-            file_options={"content-type": "audio/wav", "upsert": "true"}
-        )
+        try:
+            # x-upsert is the correct Supabase Storage header for overwrite
+            client.storage.from_(bucket).upload(
+                remote_path, f,
+                file_options={"content-type": "audio/wav", "x-upsert": "true"}
+            )
+        except Exception as up_err:
+            # Fallback: if file already exists use update() to overwrite
+            if "Duplicate" in str(up_err) or "already exists" in str(up_err):
+                f.seek(0)
+                client.storage.from_(bucket).update(
+                    remote_path, f,
+                    file_options={"content-type": "audio/wav"}
+                )
+            else:
+                raise
     res = client.storage.from_(bucket).create_signed_url(remote_path, 3600)
     return res["signedURL"]
 
@@ -1805,18 +1817,25 @@ class Predictor(BasePredictor):
         # Sections from energy
         sections = detect_sections_from_energy(mix, sr)
 
-        # Room reverb — simplified RT60 from RMS envelope decay
+        # Room reverb — estimate from tail decay after the loudest moment
+        # Strategy: find the loudest 1s window, then measure how quickly
+        # RMS drops in the 2s after it ends. If it drops fast = dry, slow = reverby.
         room_reverb = 0.15
         try:
-            rms_env = librosa.feature.rms(y=mix, hop_length=sr // 4)[0]
-            if len(rms_env) > 4:
-                peak_idx  = int(np.argmax(rms_env))
-                if peak_idx + 4 < len(rms_env):
-                    peak_val  = rms_env[peak_idx]
-                    decay_val = rms_env[peak_idx + 4]
-                    if peak_val > 0 and decay_val > 0:
-                        rt60 = -60 / (20 * np.log10(decay_val / peak_val + 1e-10) * 4)
-                        room_reverb = max(0.0, min(float(rt60), 2.0))
+            hop = sr // 4  # 250ms frames
+            rms_env = librosa.feature.rms(y=mix, hop_length=hop)[0]
+            if len(rms_env) > 12:
+                peak_idx = int(np.argmax(rms_env))
+                tail_start = min(peak_idx + 2, len(rms_env) - 5)
+                tail_end   = min(tail_start + 4, len(rms_env))
+                tail = rms_env[tail_start:tail_end]
+                peak_val = rms_env[peak_idx]
+                if peak_val > 1e-4 and len(tail) >= 2:
+                    # Normalized tail level: 0 = instant silence, 1 = no decay
+                    tail_ratio = float(np.mean(tail)) / float(peak_val)
+                    # Map tail_ratio 0.0–0.7 → rt60 0.1–0.6s (realistic studio range)
+                    rt60 = float(np.clip(tail_ratio * 0.85, 0.05, 0.6))
+                    room_reverb = rt60
         except Exception:
             pass
 
@@ -1933,6 +1952,9 @@ class Predictor(BasePredictor):
         bpm_global         = float(params.get("bpm", 120.0))        # for delay sync
         breath_editing     = params.get("breathEditing",  "SUBTLE") # OFF | SUBTLE | CLEAN | TIGHT
         volume_riding      = params.get("volumeRiding",   True)     # bool
+        section_map        = params.get("sectionMap", [])           # Claude's section gain overrides [{label, gainDb, start, end}]
+        sections_data      = params.get("sections", [])             # analysis sections [{start, end, type}]
+        fade_out           = params.get("fadeOut", "AUTO")          # AUTO | 3S | 5S | 8S | NO
 
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
@@ -2083,14 +2105,17 @@ class Predictor(BasePredictor):
                     # Gain fine-tune (on top of LUFS staging)
                     gain_fine = float(sp.get("gainDb", 0.0))
 
-                    # Compression — Claude's comp1/comp2 override matrix ratios
+                    # Compression — all 4 comp1 + comp2 params from Claude
                     c1           = sp.get("comp1", {})
                     c2           = sp.get("comp2", {})
                     comp1_thresh = float(c1.get("thresholdDb", -18))
-                    comp1_ratio  = float(c1.get("ratio",       chain_p.get("comp1_ratio", 3.0)))  # was 4.0 — softer default
-                    comp1_atk    = float(c1.get("attackMs",    8))   # was 2ms — 8ms lets transients through
-                    comp1_rel    = float(c1.get("releaseMs",   120))  # was 80ms — 120ms more musical
+                    comp1_ratio  = float(c1.get("ratio",       chain_p.get("comp1_ratio", 3.0)))
+                    comp1_atk    = float(c1.get("attackMs",    8))
+                    comp1_rel    = float(c1.get("releaseMs",   120))
+                    comp2_thresh = float(c2.get("thresholdDb", -24))
                     comp2_ratio  = float(c2.get("ratio",       chain_p.get("comp2_ratio", 0.0)))
+                    comp2_atk    = float(c2.get("attackMs",    15))
+                    comp2_rel    = float(c2.get("releaseMs",   200))
 
                     # a. Noise gate
                     y_mono_g  = (y[0] + y[1]) / 2
@@ -2151,7 +2176,7 @@ class Predictor(BasePredictor):
                     # f. Compression
                     y = apply_comp_inner(y, comp1_ratio, comp1_thresh, comp1_atk, comp1_rel, sr)
                     if comp2_ratio > 0:
-                        y = apply_comp_inner(y, comp2_ratio, -24, 15, 200, sr)
+                        y = apply_comp_inner(y, comp2_ratio, comp2_thresh, comp2_atk, comp2_rel, sr)
 
                     # g. Saturation
                     y = apply_parallel_saturation(y, sr, wet=sat_wet)
@@ -2169,6 +2194,26 @@ class Predictor(BasePredictor):
                         r_gain = max(0.0, 1.0 + pan) if pan < 0 else 1.0
                         y[0]   = y[0] * l_gain
                         y[1]   = y[1] * r_gain
+
+                    # i2. Stem stereo width (M/S widening per stem)
+                    stem_width = float(sp.get("stereoWidth", 0.0))
+                    if stem_width > 0.05 and y.ndim == 2:
+                        mid_s  = (y[0] + y[1]) / 2
+                        side_s = (y[0] - y[1]) / 2 * (1.0 + float(np.clip(stem_width, 0.0, 2.0)))
+                        y = np.stack([mid_s + side_s, mid_s - side_s]).astype(np.float32)
+
+                    # i3. Stem mono below hz — tighten low end of stem (e.g. mono bass below 120Hz)
+                    mono_hz = float(sp.get("monoBelow", 0.0))
+                    if mono_hz > 0 and y.ndim == 2:
+                        from pedalboard import LowpassFilter, HighpassFilter
+                        lp_board = Pedalboard([LowpassFilter(cutoff_frequency_hz=mono_hz)])
+                        hp_board = Pedalboard([HighpassFilter(cutoff_frequency_hz=mono_hz)])
+                        low_band = lp_board(y.copy().astype(np.float32), sr)
+                        low_mono = (low_band[0] + low_band[1]) / 2
+                        low_band[0] = low_mono
+                        low_band[1] = low_mono
+                        high_band = hp_board(y.copy().astype(np.float32), sr)
+                        y = (low_band + high_band).astype(np.float32)
 
                     # j. Reverb — send/return with HPF on reverb tail (felt, not heard)
                     # Cap wet: 0.12 lead, 0.20 supporting — never pour water on the vocal
@@ -2204,14 +2249,13 @@ class Predictor(BasePredictor):
                     if gain_fine != 0:
                         y = y * (10 ** (gain_fine / 20))
 
-                    # l. De-reverb — only on vocal stems with significant room reverb
-                    # Threshold raised to 0.5s RT60 — below that noisereduce causes more
-                    # spectral artifacts than the reverb it removes; cap at 0.6 max strength
-                    if room_reverb_rt60 > 0.5:
-                        dereverb_strength = float(np.clip(
-                            0.25 + (room_reverb_rt60 - 0.5) / 2.0 * 0.35, 0.25, 0.6
-                        ))
-                        y = apply_de_reverb(y.astype(np.float32), sr, strength=dereverb_strength)
+                    # l. De-reverb — Claude-controlled only via stemParams.deReverbStrength
+                    # 0 = skip (default), 0.1–0.6 = apply at that strength
+                    # Claude sets this only when RT60 is high AND the vocal clearly needs it
+                    de_reverb_strength = float(sp.get("deReverbStrength", 0.0))
+                    if de_reverb_strength > 0.05:
+                        de_reverb_strength = float(np.clip(de_reverb_strength, 0.1, 0.6))
+                        y = apply_de_reverb(y.astype(np.float32), sr, strength=de_reverb_strength)
 
                     # m. Pitch correction — main vocal only
                     if pitch_correction != "OFF" and is_main_vocal(label):
@@ -2260,6 +2304,45 @@ class Predictor(BasePredictor):
             if mixed is None or sr_out is None:
                 shutil.rmtree(out_dir, ignore_errors=True)
                 return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
+
+            # ── sectionMap: sample-accurate gain envelope on full mix ─────────────
+            # Claude specifies per-section gainDb offsets (e.g. chorus +1.5, verse -1.0)
+            if section_map and sections_data and sr_out:
+                try:
+                    total_samples = mixed.shape[1]
+                    gain_env = np.ones(total_samples, dtype=np.float32)
+                    # Build label→gainDb lookup from Claude's sectionMap
+                    label_gain: dict = {}
+                    for sm in section_map:
+                        lbl = str(sm.get("label", "")).lower()
+                        gdb = float(sm.get("gainDb", 0.0))
+                        if lbl and gdb != 0.0:
+                            label_gain[lbl] = gdb
+                    if label_gain:
+                        for sec in sections_data:
+                            sec_label = str(sec.get("type", sec.get("label", ""))).lower()
+                            if sec_label not in label_gain:
+                                continue
+                            gdb = label_gain[sec_label]
+                            s_start = max(0, int(float(sec.get("start", 0)) * sr_out))
+                            s_end   = min(total_samples, int(float(sec.get("end",   0)) * sr_out))
+                            if s_end > s_start:
+                                gain_env[s_start:s_end] = float(10 ** (gdb / 20))
+                        # 50ms crossfade at every gain boundary to prevent clicks
+                        xfade_samples = max(1, int(0.050 * sr_out))
+                        prev_g = gain_env[0]
+                        for i in range(1, total_samples):
+                            if gain_env[i] != prev_g:
+                                xf_end = min(i + xfade_samples, total_samples)
+                                xf_len = xf_end - i
+                                if xf_len > 1:
+                                    ramp = np.linspace(prev_g, gain_env[i], xf_len, dtype=np.float32)
+                                    gain_env[i:xf_end] = ramp
+                                prev_g = gain_env[xf_end - 1] if xf_end < total_samples else gain_env[-1]
+                        mixed = mixed * gain_env[np.newaxis, :]
+                        mixed = np.nan_to_num(mixed.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+                except Exception as sm_err:
+                    print(f"sectionMap gain envelope skipped: {sm_err}", flush=True)
 
             # ── Sidechain compression: duck beat under vocals ─────────────────────
             # Re-apply the sidechain-ducked beat into the mix by subtracting the
@@ -2349,6 +2432,18 @@ class Predictor(BasePredictor):
             cur_peak    = float(np.max(np.abs(mixed)))
             if cur_peak > 0:
                 mixed = mixed / cur_peak * target_peak
+
+            # ── Fade out ─────────────────────────────────────────────────────────
+            if fade_out != "NO":
+                try:
+                    fade_secs_map = {"AUTO": 3, "3S": 3, "5S": 5, "8S": 8}
+                    fade_secs     = fade_secs_map.get(str(fade_out).upper(), 3)
+                    fade_samples  = min(int(fade_secs * sr_out), mixed.shape[1] // 3)
+                    if fade_samples > 0:
+                        fade_curve = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
+                        mixed[:, -fade_samples:] *= fade_curve
+                except Exception as fo_err:
+                    print(f"fadeOut skipped: {fo_err}", flush=True)
 
             # ── Find best 30s preview window ──
             y_mono_mix = librosa.to_mono(mixed)

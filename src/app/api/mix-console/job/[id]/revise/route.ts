@@ -58,6 +58,8 @@ export async function POST(
         revisionHistory: true,
         pitchCorrection: true,
         breathEditing:   true,
+        fadeOut:         true,
+        sectionMap:      true,
       },
     });
     if (!job) {
@@ -122,6 +124,7 @@ export async function POST(
 
     // Merge revised Claude params with stems + genre + job settings + analysis data
     const analysisData = (job.analysisData ?? {}) as Record<string, unknown>;
+    const prevParams   = (job.mixParameters ?? {}) as Record<string, unknown>;
     const fullMixParams = {
       ...revised,
       stems_urls:      stemsUrlsObj,
@@ -130,6 +133,12 @@ export async function POST(
       breathEditing:   (job as any).breathEditing ?? "SUBTLE",
       roomReverb:      (analysisData.room_reverb as number) ?? 0,
       bpm:             (analysisData.bpm         as number) ?? 120,
+      // Preserve section-level decisions across revisions — Claude's revise
+      // prompt adjusts stemParams/busParams, not section structure. Prefer a
+      // revised value if Claude emitted one, else carry forward the initial.
+      sectionMap:      (revised as any).sectionMap ?? job.sectionMap ?? prevParams.sectionMap ?? [],
+      sections:        (analysisData.sections as unknown[]) ?? [],
+      fadeOut:         (revised as any).fadeOut    ?? job.fadeOut    ?? prevParams.fadeOut    ?? "AUTO",
     };
 
     // Fire revise-mix action on Replicate

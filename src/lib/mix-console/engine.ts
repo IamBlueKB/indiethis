@@ -14,6 +14,7 @@ import { fal }   from "@fal-ai/client";
 
 const replicate          = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
 const MIX_VERSION        = process.env.REPLICATE_MIX_MODEL_VERSION ?? process.env.REPLICATE_MASTERING_MODEL_VERSION ?? "";
+console.error(`[mix-engine] token=${(process.env.REPLICATE_API_TOKEN ?? "").slice(0, 8)}... version=${MIX_VERSION.slice(0, 8)}...`);
 const SUPABASE_URL        = process.env.SUPABASE_URL ?? "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? "";
 const APP_URL             = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
@@ -137,9 +138,10 @@ export async function startMixAction(
     webhook:   webhookUrl,
   }));
 
+  // Retry up to 4x on 429/500 — parse retry_after from Replicate's response
+  // Total budget: ~50s max (fits inside maxDuration=60 callers)
   let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 5000 * attempt));
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const prediction = await replicate.predictions.create({
         version:               MIX_VERSION,
@@ -151,8 +153,15 @@ export async function startMixAction(
     } catch (err: unknown) {
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[mix-engine] attempt ${attempt} failed:`, msg);
-      if (!msg.includes("429") && !msg.includes("500")) throw err;
+      const is429 = msg.includes("429");
+      const is500 = msg.includes("500");
+      if (!is429 && !is500) throw err;
+      if (attempt >= 3) break;
+      // Parse retry_after from Replicate error body, default 6s
+      const retryAfterMatch = msg.match(/"retry_after"\s*:\s*(\d+)/);
+      const waitMs = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 1) * 1000 : 6000;
+      console.error(`[mix-engine] attempt ${attempt} throttled — waiting ${waitMs}ms`);
+      await new Promise(r => setTimeout(r, waitMs));
     }
   }
   throw lastError;
@@ -197,6 +206,38 @@ export async function separateBeatStems(beatUrl: string): Promise<SeparatedStems
  * Generate a fresh 1-hour signed URL for a file stored in Supabase processed bucket.
  * Used by the download route to avoid expired URL errors.
  */
+/**
+ * Synchronous engine call — runs and waits for the result (no webhook).
+ * Used for lightweight actions like analyzing a reference track.
+ */
+export async function runMixEngineSync(
+  action:  string,
+  inputs:  Record<string, string> = {},
+): Promise<Record<string, unknown>> {
+  if (!MIX_VERSION) throw new Error("REPLICATE_MIX_MODEL_VERSION not set");
+  const replicateInput = { action, ...inputs, supabase_url: SUPABASE_URL, supabase_service_key: SUPABASE_SERVICE_KEY };
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const prediction = await replicate.predictions.create({ version: MIX_VERSION, input: replicateInput });
+      const result = await replicate.wait(prediction);
+      if (result.status === "failed") throw new Error(`Engine action="${action}" failed: ${result.error ?? "unknown"}`);
+      const raw = result.output as string;
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("429") && !msg.includes("500")) throw err;
+      if (attempt >= 3) break;
+      const retryAfterMatch = msg.match(/"retry_after"\s*:\s*(\d+)/);
+      const waitMs = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 1) * 1000 : 6000;
+      console.error(`[mix-engine-sync] attempt ${attempt} throttled — waiting ${waitMs}ms`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  throw lastError;
+}
+
 export async function generateFreshSignedUrl(filePath: string): Promise<string | null> {
   try {
     const res = await fetch(

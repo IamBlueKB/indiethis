@@ -74,23 +74,27 @@ export interface MixDecision {
   busParams: BusParams;
   /** Any warnings (e.g., word not found in lyrics) */
   warnings: string[];
+  /** Claude's notes on how the reference track influenced the mix (shown to artist) */
+  referenceNotes?: string;
 }
 
 export interface StemParams {
-  role:           string;
-  gainDb:         number;
-  panLR:          number;   // -1 (L) to 1 (R)
-  highpassHz:     number;
-  eq:             EQPoint[];
-  comp1:          CompParams;   // fast transient
-  comp2:          CompParams;   // slow leveling
-  deEssThresh:    number;       // dB; 0 = skip
-  reverbSend:     number;       // 0–1 wet level
-  delaySend:      number;       // 0–1 mix
-  saturation:     number;       // 0–1 drive
-  stereoWidth:    number;       // 0–1
-  monoBelow:      number;       // Hz
-  telephone?:     boolean;      // bandpass lo-fi effect — only set true when creatively intentional
+  role:              string;
+  gainDb:            number;
+  panLR:             number;    // -1 (L) to 1 (R)
+  highpassHz:        number;
+  eq:                EQPoint[];
+  comp1:             CompParams;    // fast transient
+  comp2:             CompParams;    // slow leveling
+  deEssThresh:       number;        // dB; 0 = skip
+  deReverbStrength?: number;        // 0–0.6; 0 = skip (Claude controls)
+  reverbSend:        number;        // 0–1 wet level
+  saturation:        number;        // 0–1 drive
+  stereoWidth:       number;        // 0–1 per-stem M/S widening
+  monoBelow:         number;        // Hz — mono below this frequency
+  chorusWet?:        number;        // 0–1 chorus (doubles/harmonies)
+  flangerWet?:       number;        // 0–1 flanger (creative use only)
+  telephone?:        boolean;       // bandpass lo-fi effect — only set true when creatively intentional
 }
 
 export interface EQPoint {
@@ -119,27 +123,34 @@ export interface BusParams {
   glueCompRatio:   number;
   eqLowShelf:      number;   // dB
   eqHighShelf:     number;   // dB
-  stereoWidenHz:   number;   // mono below this Hz
+  stereoWidth:     number;   // M/S width multiplier (1.0 = no change, 1.25 = wider)
   peakNormalize:   number;   // target dBFS (e.g. -1)
 }
 
 export async function decideMixParameters(params: {
-  analysis:         MixAnalysisResult;
-  genre:            string;
-  tier:             string;
-  mixVibe:          string;
-  vocalStylePreset: string;
-  reverbStyle:      string;
-  delayStyle:       string;
-  breathEditing:    string;
-  pitchCorrection:  string;
-  fadeOut:          string;
-  customDirection?: string;
-  inputFiles:       InputFile[];
+  analysis:          MixAnalysisResult;
+  genre:             string;
+  tier:              string;
+  mixVibe:           string;
+  vocalStylePreset:  string;
+  reverbStyle:       string;
+  delayStyle:        string;
+  breathEditing:     string;
+  pitchCorrection:   string;
+  fadeOut:           string;
+  customDirection?:  string;
+  inputFiles:        InputFile[];
+  referenceAnalysis?: {
+    lufs:     number;
+    bpm:      number;
+    key:      string;
+    balance:  { sub: number; low: number; mid: number; high: number };
+    fileName: string;
+  } | null;
 }): Promise<MixDecision> {
   const {
     analysis, genre, tier, mixVibe, vocalStylePreset, reverbStyle,
-    delayStyle, customDirection, inputFiles,
+    delayStyle, customDirection, inputFiles, referenceAnalysis,
   } = params;
 
   const stemList = inputFiles.map((f, i) => {
@@ -166,7 +177,8 @@ Frequency carving: always cut the beat 2-3dB in the vocal's dominant frequency r
 
 Compression: set threshold so the compressor only engages on the loudest 30% of the signal. Target 3-4dB of gain reduction on peaks, no more. If the input crest factor (peak-to-RMS) is already below 8dB, the vocal is already compressed — reduce ratio by 1 point or skip compression entirely.
 
-Reverb: never exceed 15% wet. High-pass the reverb return at 500Hz. Pre-delay 25-35ms to preserve consonant clarity. If the input RT60 is already above 0.4s (room reverb detected), reduce wet to 8% maximum and apply de-reverb first. Room RT60 = ${analysis.roomReverb.toFixed(2)}s.
+Reverb: never exceed 15% wet. High-pass the reverb return at 500Hz. Pre-delay 25-35ms to preserve consonant clarity. Room RT60 estimate = ${analysis.roomReverb.toFixed(2)}s — if above 0.4s, reduce reverbSend to 0.06–0.08 maximum (the room already has natural reverb, adding more muddies it).
+De-reverb: you control this via deReverbStrength in stemParams. Default is 0 (off). Only set it above 0 when RT60 is clearly above 0.4s AND the vocal sounds like it was recorded in a room. Use 0.2–0.35 for moderate room reverb, 0.4–0.6 for heavy room reverb. Never apply de-reverb to a vocal that sounds dry — it will cause smearing artifacts.
 
 Saturation: if the input signal is already clipping or has crest factor below 6dB, skip saturation entirely. Never apply saturation and heavy compression to the same stem — pick one.
 
@@ -191,6 +203,11 @@ ${stemList}
 SETTINGS:
 Genre: ${genre || "auto-detect"} | Tier: ${tier} | Vibe: ${mixVibe} | Vocal style: ${vocalStylePreset || "AUTO"} | Reverb: ${reverbStyle} | Delay: ${delayStyle}
 ${customDirection ? `Custom direction: "${customDirection}"` : "No custom direction."}
+${referenceAnalysis ? `
+REFERENCE TRACK: "${referenceAnalysis.fileName}"
+LUFS: ${referenceAnalysis.lufs.toFixed(1)} | BPM: ${referenceAnalysis.bpm.toFixed(1)} | Key: ${referenceAnalysis.key}
+Frequency balance: sub=${referenceAnalysis.balance.sub.toFixed(3)} low=${referenceAnalysis.balance.low.toFixed(3)} mid=${referenceAnalysis.balance.mid.toFixed(3)} high=${referenceAnalysis.balance.high.toFixed(3)}
+Use this as your loudness and tonal target. Match the overall LUFS via busParams.peakNormalize and glueCompThresh. Match the frequency balance by adjusting eqLowShelf/eqHighShelf and per-stem EQ. If the reference is brighter (high > 0.05), boost high shelf. If it's bassier (sub > 0.3), boost low shelf. The artist wants their mix to sound like this reference.` : "No reference track provided."}
 
 TASK: Return ONLY valid JSON (no markdown, no explanation):
 {
@@ -209,11 +226,13 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
       "comp1": {"thresholdDb":-18,"ratio":3.0,"attackMs":10,"releaseMs":120},
       "comp2": {"thresholdDb":-24,"ratio":1.8,"attackMs":30,"releaseMs":250},
       "deEssThresh": -30,
+      "deReverbStrength": 0.0,
       "reverbSend": 0.10,
-      "delaySend": 0.0,
       "saturation": 0.02,
       "stereoWidth": 0.0,
       "monoBelow": 120,
+      "chorusWet": 0.0,
+      "flangerWet": 0.0,
       "telephone": false
     }
   },
@@ -228,9 +247,10 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
     "glueCompRatio": 2.0,
     "eqLowShelf": 1.0,
     "eqHighShelf": 1.0,
-    "stereoWidenHz": 120,
+    "stereoWidth": 1.25,
     "peakNormalize": -1.0
   },
+  "referenceNotes": "",
   "warnings": []
 }
 
@@ -243,6 +263,12 @@ Rules:
 - sectionMap: chorus gets reverbScale 1.4–1.6; bridge Claude decides; verse stays at 1.0
 - bass: monoBelow 80; kick: highpassHz 30, peakEQ boost at 60Hz; beat: set gainDb so beat does not overpower vocal
 - deEssThresh: always -28 to -32 for lead vocals; 0 for non-vocal stems
+- stereoWidth (stem-level): 0 for lead vocal (mono center), 0.2–0.4 for doubles, 0.3–0.5 for harmonies, 0 for beat
+- monoBelow: 120 for all vocal stems; 80 for bass/kick/beat
+- chorusWet: 0.25–0.40 for doubles/harmonies if genre calls for thickness; 0 otherwise
+- deReverbStrength: 0 unless RT60 is clearly above 0.4s AND vocal sounds roomy; use 0.2–0.35 moderate, 0.4–0.6 heavy
+- busParams.stereoWidth: 1.0–1.5 (1.0 = no change, 1.25 = slightly wider, 1.5 = wide)
+- referenceNotes: if a reference track was provided, write 1-2 sentences explaining what you took from it (loudness target, tonal changes made). If no reference, leave as empty string.
 - Return ONLY the JSON object, nothing else.`;
 
   const msg = await client.messages.create({
@@ -269,7 +295,7 @@ Rules:
         glueCompRatio:  2,
         eqLowShelf:     0.5,
         eqHighShelf:    1.0,
-        stereoWidenHz:  120,
+        stereoWidth:    1.25,
         peakNormalize:  -1,
       },
       warnings: ["Failed to parse mix parameters from AI — using defaults."],

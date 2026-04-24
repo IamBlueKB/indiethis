@@ -92,6 +92,7 @@ model User {
   onboardingTourCompleted  Boolean                @default(false)
   albumNudgeSent            Boolean                @default(false)  // true once album-mastering nudge email sent
   videoStudioCreditUsedAt   DateTime?                               // when subscriber used their monthly free video (null = not used this month)
+  convertedFromGuestAt      DateTime?                               // set when a guest account is linked on first dashboard login
   aiGenerations            AIGeneration[]
   artistWithdrawals        ArtistWithdrawal[]
   accounts                 Account[]
@@ -3290,6 +3291,7 @@ model MixJob {
   // Direction
   directionUsed             String?   // Combined direction applied
   directionRecommendation   String?   // Claude's suggestion text shown to artist
+  referenceNotes            String?   // Claude's reasoning about how reference influenced the mix
 
   // Analysis outputs
   analysisData        Json?   // { bpm, key, sections, stemAnalysis, roomReverb, pitchDeviation }
@@ -3335,12 +3337,16 @@ model MixJob {
   // Access token (guests)
   accessToken     MixAccessToken?
 
+  // Guest file retention — cleared when guest converts to subscriber
+  expiresAt       DateTime?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([userId])
   @@index([guestEmail])
   @@index([status])
+  @@index([expiresAt])
 }
 
 model MixAccessToken {

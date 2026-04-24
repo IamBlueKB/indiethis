@@ -17,7 +17,7 @@ import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(
   req: NextRequest,
@@ -42,6 +42,11 @@ export async function POST(
         analysisData:     true,
         pitchCorrection:  true,
         breathEditing:    true,
+        fadeOut:          true,
+        mixVibe:          true,
+        reverbStyle:      true,
+        delayStyle:       true,
+        beatPolish:       true,
       },
     });
 
@@ -80,16 +85,22 @@ export async function POST(
       stemsUrlsObj[f.label] = f.url;
     }
 
-    // Embed stems_urls + genre + job settings + analysis data so Python has everything
-    const analysisData = (job as any).analysisData as Record<string, unknown> | null ?? {};
+    // Embed stems_urls + genre + all job settings + analysis data so Python has everything
+    const analysisData = (job.analysisData as Record<string, unknown>) ?? {};
     const mixParams = {
       ...(job.mixParameters as Record<string, unknown> ?? {}),
       stems_urls:       stemsUrlsObj,
-      genre:            job.genre ?? "HIP_HOP",
-      pitchCorrection:  (job as any).pitchCorrection ?? "OFF",
-      breathEditing:    (job as any).breathEditing   ?? "SUBTLE",
-      roomReverb:       (analysisData.room_reverb  as number) ?? 0,
-      bpm:              (analysisData.bpm           as number) ?? 120,
+      genre:            job.genre        ?? "HIP_HOP",
+      pitchCorrection:  job.pitchCorrection ?? "OFF",
+      breathEditing:    job.breathEditing   ?? "SUBTLE",
+      fadeOut:          job.fadeOut         ?? "AUTO",
+      mixVibe:          job.mixVibe         ?? "CLEAN",
+      reverbStyle:      job.reverbStyle     ?? "ROOM",
+      delayStyle:       job.delayStyle      ?? "STANDARD",
+      beatPolish:       job.beatPolish      ?? false,
+      roomReverb:       (analysisData.room_reverb as number) ?? 0,
+      bpm:              (analysisData.bpm          as number) ?? 120,
+      sections:         (analysisData.sections     as unknown[]) ?? [],
     };
 
     // Fire full mix action — Replicate posts result to /api/mix-console/webhook/replicate/mix

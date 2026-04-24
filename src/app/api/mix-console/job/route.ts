@@ -28,7 +28,7 @@ import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const MAX_REVISIONS: Record<string, number> = {
   STANDARD: 0,
@@ -146,6 +146,10 @@ export async function POST(req: NextRequest) {
         stripePaymentId:   body.stripePaymentId  ?? null,
         amount:            chargedAmount,
         maxRevisions:      MAX_REVISIONS[body.tier] ?? 0,
+        // Guest files expire after 30 days; cleared permanently on account conversion
+        expiresAt:         !session?.user?.id
+          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          : null,
       },
     });
 
@@ -159,36 +163,40 @@ export async function POST(req: NextRequest) {
       // Beat Polish: separate beat stems first
       const beatFileUrl = inputFiles.find((f) => f.label === "beat")!.url;
       await prisma.mixJob.update({ where: { id: job.id }, data: { status: "SEPARATING" } });
-      startMixAction(
-        "separate-stems",
-        { audio_url: beatFileUrl, job_id: job.id },
-        "/api/mix-console/webhook/replicate/separate",
-      ).catch(async (startErr) => {
+      try {
+        await startMixAction(
+          "separate-stems",
+          { audio_url: beatFileUrl, job_id: job.id },
+          "/api/mix-console/webhook/replicate/separate",
+        );
+      } catch (startErr) {
         const msg = startErr instanceof Error ? startErr.message : String(startErr);
         console.error(`[mix-console] separate-stems failed for job ${job.id}:`, msg);
         await prisma.mixJob.update({
           where: { id: job.id },
           data:  { status: "FAILED", analysisData: { error: msg } as any },
         });
-      });
+      }
     } else {
       // Default: straight to analysis
       await prisma.mixJob.update({ where: { id: job.id }, data: { status: "ANALYZING" } });
-      startMixAction(
-        "analyze-mix",
-        {
-          stems_urls: JSON.stringify(inputFiles.map((f) => f.url)),
-          job_id:     job.id,
-        },
-        "/api/mix-console/webhook/replicate/analyze",
-      ).catch(async (startErr) => {
+      try {
+        await startMixAction(
+          "analyze-mix",
+          {
+            stems_json: JSON.stringify(inputFiles.map((f) => f.url)),
+            job_id:     job.id,
+          },
+          "/api/mix-console/webhook/replicate/analyze",
+        );
+      } catch (startErr) {
         const msg = startErr instanceof Error ? startErr.message : String(startErr);
         console.error(`[mix-console] analyze-mix failed for job ${job.id}:`, msg);
         await prisma.mixJob.update({
           where: { id: job.id },
           data:  { status: "FAILED", analysisData: { error: msg } as any },
         });
-      });
+      }
     }
 
     return NextResponse.json({ jobId: job.id, status: "PENDING" });

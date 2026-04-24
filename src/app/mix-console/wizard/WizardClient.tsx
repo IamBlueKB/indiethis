@@ -12,7 +12,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Upload, Loader2, ChevronRight, ChevronLeft, Check, Download,
-  X, Zap, Mic, Sliders,
+  X, Zap, Mic, Sliders, Music,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -499,6 +499,8 @@ export default function MixConsoleWizardClient() {
   const revisionCount     = (jobData?.revisionCount     as number) ?? 0;
   const maxRevisions      = (jobData?.maxRevisions      as number) ?? 0;
   const directionRec      = (jobData?.directionRecommendation as string | null) ?? null;
+  const referenceNotes    = (jobData?.referenceNotes    as string | null) ?? null;
+  const referenceFileName = (jobData?.referenceFileName as string | null) ?? null;
 
   // Versions available for Standard
   const standardVersions = [
@@ -1111,11 +1113,31 @@ export default function MixConsoleWizardClient() {
                     </button>
                   </div>
                 ) : (
-                  <label className={cn(
-                    "flex items-center gap-3 rounded-xl border border-[#2A2A2A] px-4 py-3 cursor-pointer",
-                    "hover:border-[#444] transition-colors",
-                    refUploading && "opacity-60 pointer-events-none",
-                  )}>
+                  <label
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl border border-[#2A2A2A] px-4 py-3 cursor-pointer",
+                      "hover:border-[#444] transition-colors",
+                      refUploading && "opacity-60 pointer-events-none",
+                    )}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = "#D4A843"; }}
+                    onDragLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = "";
+                      const file = e.dataTransfer.files?.[0];
+                      if (!file) return;
+                      setRefUploading(true);
+                      try {
+                        const url = await uploadFile(file);
+                        setRefUrl(url);
+                        setRefFileName(file.name);
+                      } catch {
+                        setError("Failed to upload reference track.");
+                      } finally {
+                        setRefUploading(false);
+                      }
+                    }}
+                  >
                     <input
                       type="file"
                       accept="audio/*,.mp3,.wav,.flac,.aiff,.aif"
@@ -1137,7 +1159,7 @@ export default function MixConsoleWizardClient() {
                     />
                     {refUploading
                       ? <><Loader2 size={14} className="animate-spin shrink-0" style={{ color: "#D4A843" }} /><span className="text-xs" style={{ color: "#777" }}>Uploading…</span></>
-                      : <><Upload size={14} className="shrink-0" style={{ color: "#555" }} /><span className="text-xs" style={{ color: "#777" }}>Upload a commercial reference track (WAV or MP3)</span></>
+                      : <><Upload size={14} className="shrink-0" style={{ color: "#555" }} /><span className="text-xs" style={{ color: "#777" }}>Drop or click to upload a reference track (WAV or MP3)</span></>
                     }
                   </label>
                 )}
@@ -1351,6 +1373,16 @@ export default function MixConsoleWizardClient() {
               </div>
             )}
 
+            {/* Reference track notes */}
+            {referenceNotes && (
+              <div className="rounded-xl border border-[#2A2A2A] px-4 py-3 space-y-1">
+                <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#D4A843" }}>
+                  <Music size={11} />Reference applied
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: "#999" }}>{referenceNotes}</p>
+              </div>
+            )}
+
             {/* Modify textarea */}
             {directionMode === "modify" && (
               <div className="rounded-2xl border border-[#2A2A2A] focus-within:border-[#D4A843] transition-colors p-0.5">
@@ -1522,6 +1554,15 @@ export default function MixConsoleWizardClient() {
                   </button>
                 ))}
               </div>
+            )}
+
+            {/* Reference track applied notice */}
+            {referenceFileName && (
+              <p className="text-[11px] text-center" style={{ color: "#555" }}>
+                <Check size={10} className="inline mr-1" style={{ color: "#D4A843" }} />
+                Reference: {referenceFileName}
+                {referenceNotes ? ` · ${referenceNotes}` : ""}
+              </p>
             )}
 
             {/* Preview player */}

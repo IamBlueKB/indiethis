@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db as prisma } from "@/lib/db";
 import { decideMixParameters, generateMixRecommendation } from "@/lib/mix-console/decisions";
+import { runMixEngineSync } from "@/lib/mix-console/engine";
 import type { MixAnalysisResult, InputFile } from "@/lib/mix-console/engine";
 
 export const maxDuration = 60;
@@ -73,6 +74,31 @@ export async function POST(req: NextRequest) {
 
     const inputFiles = job.inputFiles as unknown as InputFile[];
 
+    // Analyze reference track if provided — get LUFS + frequency balance for Claude
+    let referenceAnalysis: {
+      lufs: number; bpm: number; key: string;
+      balance: { sub: number; low: number; mid: number; high: number };
+      fileName: string;
+    } | null = null;
+
+    if (job.referenceTrackUrl) {
+      try {
+        const refParsed = await runMixEngineSync("analyze", {
+          audio_url: job.referenceTrackUrl,
+        });
+        referenceAnalysis = {
+          lufs:     (refParsed.lufs    as number)  ?? -14,
+          bpm:      (refParsed.bpm     as number)  ?? 120,
+          key:      (refParsed.key     as string)  ?? "unknown",
+          balance:  (refParsed.balance as { sub: number; low: number; mid: number; high: number }) ?? { sub: 0, low: 0, mid: 0, high: 0 },
+          fileName: job.referenceFileName ?? "reference track",
+        };
+        console.log(`Reference track analyzed for job ${jobId}:`, referenceAnalysis);
+      } catch (refErr) {
+        console.error(`Reference track analysis failed for job ${jobId}:`, refErr);
+      }
+    }
+
     // Shape analysis into the typed structure Claude functions expect
     const analysis: MixAnalysisResult = {
       bpm:                 (parsed.bpm               as number)  ?? 120,
@@ -108,6 +134,7 @@ export async function POST(req: NextRequest) {
         fadeOut:           job.fadeOut            ?? "AUTO",
         customDirection:   job.customDirection    ?? undefined,
         inputFiles,
+        referenceAnalysis,
       }),
     ]);
 
@@ -123,6 +150,7 @@ export async function POST(req: NextRequest) {
         mixParameters:          decision                                as any,
         sectionMap:             (decision.sectionMap         as any)    ?? null,
         delayThrows:            (decision.delayThrows        as any)    ?? null,
+        referenceNotes:         decision.referenceNotes                 ?? null,
       },
     });
 
