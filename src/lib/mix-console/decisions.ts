@@ -18,6 +18,56 @@ import type {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+// ─── Tier-aware model selection ──────────────────────────────────────────────
+// Standard tier  → Sonnet, no extended thinking (fast + cheap)
+// Premium / Pro  → Opus with 8k thinking budget (deep reasoning on every param)
+// Costs scale with what the user paid for.
+function mixDecisionModel(tier: string): {
+  model:    string;
+  thinking: { type: "enabled"; budget_tokens: number } | undefined;
+} {
+  const t = tier?.toUpperCase();
+  if (t === "PREMIUM" || t === "PRO") {
+    return { model: "claude-opus-4-5", thinking: { type: "enabled", budget_tokens: 8000 } };
+  }
+  return { model: "claude-sonnet-4-5", thinking: undefined };
+}
+
+/**
+ * Call Claude with the tier-appropriate model. If the primary call errors
+ * (Opus timeout, 529 overload, etc.), fall back to Sonnet without thinking so
+ * the user still gets a mix instead of FAILED.
+ */
+async function callMixDecisionClaude(opts: {
+  tier:    string;
+  prompt:  string;
+  label:   string;  // for logging
+}): Promise<string> {
+  const { tier, prompt, label } = opts;
+  const cfg = mixDecisionModel(tier);
+  try {
+    const msg = await client.messages.create({
+      model:       cfg.model,
+      max_tokens:  16000,
+      ...(cfg.thinking ? { thinking: cfg.thinking } : {}),
+      messages:    [{ role: "user", content: prompt }],
+    });
+    const textBlock = msg.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
+    return textBlock?.text ?? "{}";
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[mix-decisions:${label}] ${cfg.model} failed — falling back to Sonnet. error=${msg.slice(0, 200)}`);
+    // Fallback: Sonnet without thinking, smaller max_tokens
+    const fb = await client.messages.create({
+      model:      "claude-sonnet-4-5",
+      max_tokens: 8000,
+      messages:   [{ role: "user", content: prompt }],
+    });
+    const fbText = fb.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
+    return fbText?.text ?? "{}";
+  }
+}
+
 // ─── Recommendation (Haiku — cheap, artist-facing) ───────────────────────────
 
 export async function generateMixRecommendation(params: {
@@ -285,16 +335,11 @@ Rules:
 - referenceNotes: if a reference track was provided, write 1-2 sentences explaining what you took from it (loudness target, tonal changes made). If no reference, leave as empty string.
 - Return ONLY the JSON object, nothing else.`;
 
-  const msg = await client.messages.create({
-    model:       "claude-opus-4-5",
-    max_tokens:  16000,
-    thinking:    { type: "enabled", budget_tokens: 8000 },
-    messages:    [{ role: "user", content: prompt }],
+  const raw = await callMixDecisionClaude({
+    tier:   params.tier,
+    prompt,
+    label:  "decideMixParameters",
   });
-
-  // Extended thinking returns multiple content blocks — find the text block
-  const textBlock = msg.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
-  const raw = textBlock?.text ?? "{}";
 
   // Strip any accidental markdown fences
   const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
@@ -327,8 +372,9 @@ export async function reviseParameters(params: {
   feedback:       string;
   analysis:       MixAnalysisResult;
   genre:          string;
+  tier:           string;
 }): Promise<MixDecision> {
-  const { previousParams, feedback, analysis, genre } = params;
+  const { previousParams, feedback, analysis, genre, tier } = params;
 
   const prompt = `You are a professional mix engineer AI. The artist gave revision feedback on a mix.
 Adjust the mix parameters to address the feedback. Return ONLY updated JSON, same schema as before.
@@ -344,15 +390,11 @@ BPM: ${analysis.bpm.toFixed(1)}, Key: ${analysis.key}
 Return ONLY the updated JSON object with the same structure. Make targeted changes to address the feedback.
 Do not change things the artist didn't mention.`;
 
-  const msg = await client.messages.create({
-    model:       "claude-opus-4-5",
-    max_tokens:  16000,
-    thinking:    { type: "enabled", budget_tokens: 8000 },
-    messages:    [{ role: "user", content: prompt }],
+  const raw = await callMixDecisionClaude({
+    tier,
+    prompt,
+    label: "reviseParameters",
   });
-
-  const textBlock = msg.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
-  const raw     = textBlock?.text ?? "{}";
   const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
 
   try {

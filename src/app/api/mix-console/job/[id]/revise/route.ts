@@ -104,6 +104,7 @@ export async function POST(
       feedback:       body.feedback.trim(),
       analysis:       job.analysisData as any,
       genre:          job.genre ?? "",
+      tier:           job.tier,
     });
 
     // Build revision history entry
