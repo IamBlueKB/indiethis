@@ -60,6 +60,7 @@ export async function POST(
         breathEditing:   true,
         fadeOut:         true,
         sectionMap:      true,
+        cleanFilePath:   true,
       },
     });
     if (!job) {
@@ -73,10 +74,21 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 
-    // Must be complete before requesting a revision
-    if (job.status !== "COMPLETE") {
+    // Must have a rendered mix before requesting a revision.
+    // We check file existence instead of strict status === "COMPLETE" because the
+    // status field can be out of sync (e.g. analyze webhook retried after mix
+    // completed and reset status back to AWAITING_DIRECTION). If mix files exist,
+    // the artist has a mix to revise — that's what matters.
+    if (!job.cleanFilePath) {
       return NextResponse.json(
-        { error: "Job must be complete before requesting a revision." },
+        { error: "No mix has been rendered yet. Wait for the mix to finish before requesting a revision." },
+        { status: 409 },
+      );
+    }
+    // Block if a revision is already in-flight
+    if (job.status === "REVISING" || job.status === "MIXING") {
+      return NextResponse.json(
+        { error: "A mix or revision is already in progress. Wait for it to finish." },
         { status: 409 },
       );
     }

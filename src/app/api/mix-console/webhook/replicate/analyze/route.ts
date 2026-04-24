@@ -37,6 +37,24 @@ export async function POST(req: NextRequest) {
   if (!jobId) return NextResponse.json({ error: "No job_id" }, { status: 400 });
   console.error("analyze webhook body:", JSON.stringify(body).slice(0, 500));
 
+  // Guard: if this job has already progressed past analyze (mix files exist, or
+  // status is downstream of AWAITING_DIRECTION), do NOT reprocess and do NOT
+  // overwrite status. Replicate occasionally retries webhooks and can otherwise
+  // reset a completed job back to AWAITING_DIRECTION, breaking revisions.
+  const progress = await prisma.mixJob.findUnique({
+    where:  { id: jobId },
+    select: { status: true, cleanFilePath: true },
+  });
+  if (progress?.cleanFilePath) {
+    console.log(`analyze webhook: job ${jobId} already has mix files — ignoring duplicate webhook`);
+    return NextResponse.json({ ok: true, ignored: "mix already rendered" });
+  }
+  const downstream = new Set(["MIXING", "PREVIEWING", "COMPLETE", "REVISING"]);
+  if (progress?.status && downstream.has(progress.status)) {
+    console.log(`analyze webhook: job ${jobId} status=${progress.status} — ignoring duplicate webhook`);
+    return NextResponse.json({ ok: true, ignored: "status downstream" });
+  }
+
   if (body.status !== "succeeded") {
     const errMsg = body.error ?? "";
     // "PA" = Prediction Aborted (cold start / Replicate infrastructure fluke) — auto-requeue once
