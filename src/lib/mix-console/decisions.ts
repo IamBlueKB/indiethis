@@ -30,31 +30,45 @@ export async function generateMixRecommendation(params: {
   const { analysis, genre, tier, customDirection, inputFiles } = params;
 
   const stemLabels = inputFiles.map(f => f.label).join(", ");
-  const hasReverb  = analysis.roomReverb > 0.2;
+  const rt60       = analysis.roomReverb;
+  const reverbState =
+    rt60 < 0.15 ? "very dry — no de-reverb needed"
+    : rt60 < 0.30 ? "slightly live — mild de-reverb"
+    : rt60 < 0.50 ? "roomy — moderate de-reverb"
+    : "wet/live — heavy de-reverb";
   const sections   = analysis.sections.map(s => s.name).join(", ");
   const hasLyrics  = analysis.lyrics?.length > 20;
 
-  const prompt = `You are an AI mix engineer. Summarize in 2–3 sentences what you'll do for this mix.
-Be specific and confident. Mention concrete issues you detected and what you'll fix.
-No fluff. No "Great!" or "Sure!". Start with the most important thing you detected.
+  // Per-stem energy + balance for Haiku to ground recommendations in real numbers
+  const stemSummary = analysis.stemAnalysis
+    .map(s => `${s.label} (${s.role ?? "?"}): ${s.lufs.toFixed(1)} LUFS, sub/low/mid/high = ${s.balance.sub.toFixed(2)}/${s.balance.low.toFixed(2)}/${s.balance.mid.toFixed(2)}/${s.balance.high.toFixed(2)}`)
+    .join("\n");
 
-Artist's files: ${stemLabels}
-Genre: ${genre || "Auto-detect"}
-Tier: ${tier}
-Room reverb RT60: ${analysis.roomReverb.toFixed(2)}s (${hasReverb ? "needs de-reverb" : "already dry"})
-BPM: ${analysis.bpm.toFixed(1)}, Key: ${analysis.key}
-Song sections detected: ${sections || "none"}
-Vocal pitch deviation: ${analysis.pitchDeviation.toFixed(2)} semitones
-Lyrics available: ${hasLyrics ? "yes" : "no"}
-Vocal classification: ${analysis.vocalClassification.map(v => `stem ${v.stemIndex}: ${v.role}`).join(", ") || "single vocal"}
-${customDirection ? `Artist direction: "${customDirection}"` : ""}
+  const prompt = `You are an AI mix engineer talking to the artist about THIS specific track. 2–3 sentences, confident, no fluff, no greetings.
 
-Respond in 2–3 sentences. Example tone: "Your vocals were recorded in a live room — I'll apply spectral de-reverb first. The vocal sits 6dB quieter than the beat during verses, so I'll carve a pocket with dynamic EQ on the instrumental. I spotted delay throw opportunities on 'tonight' and 'away' in the chorus."`;
+Ground every claim in the numbers below. Do NOT invent values. If a number is small, do not exaggerate it.
+Vary your opening — do NOT start with "Your vocals were recorded in a live room". Different tracks → different openings. Lead with whatever is actually most notable for THIS track (could be loudness imbalance, tonal issue, reverb, pitch drift, or a creative opportunity).
+
+Files: ${stemLabels}
+Genre: ${genre || "Auto-detect"} | Tier: ${tier}
+BPM ${analysis.bpm.toFixed(1)}, Key ${analysis.key}
+Sections: ${sections || "none detected"}
+Room reverb RT60: ${rt60.toFixed(2)}s — ${reverbState}
+Vocal pitch deviation: ${analysis.pitchDeviation.toFixed(2)} semitones ${analysis.pitchDeviation > 0.3 ? "(tune it)" : "(already in tune)"}
+Lyrics: ${hasLyrics ? "available for delay throws" : "not transcribed"}
+Vocal roles: ${analysis.vocalClassification.map(v => `stem ${v.stemIndex}=${v.role}`).join(", ") || "single vocal"}
+
+Per-stem analysis:
+${stemSummary || "(none)"}
+${customDirection ? `\nArtist direction: "${customDirection}" — address this specifically.` : ""}
+
+Write 2–3 sentences about what's actually going on in THIS mix. Reference at least one concrete measured value. No examples, no templates — write it fresh.`;
 
   const msg = await client.messages.create({
-    model:      "claude-haiku-4-5",
-    max_tokens: 200,
-    messages:   [{ role: "user", content: prompt }],
+    model:       "claude-haiku-4-5",
+    max_tokens:  400,
+    temperature: 1.0,
+    messages:    [{ role: "user", content: prompt }],
   });
 
   const text = (msg.content[0] as { type: string; text: string }).text ?? "";
