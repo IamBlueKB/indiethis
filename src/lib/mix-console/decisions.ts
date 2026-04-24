@@ -272,12 +272,15 @@ Rules:
 - Return ONLY the JSON object, nothing else.`;
 
   const msg = await client.messages.create({
-    model:      "claude-sonnet-4-5",
-    max_tokens: 4000,
-    messages:   [{ role: "user", content: prompt }],
+    model:       "claude-opus-4-5",
+    max_tokens:  16000,
+    thinking:    { type: "enabled", budget_tokens: 8000 },
+    messages:    [{ role: "user", content: prompt }],
   });
 
-  const raw = (msg.content[0] as { type: string; text: string }).text ?? "{}";
+  // Extended thinking returns multiple content blocks — find the text block
+  const textBlock = msg.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
+  const raw = textBlock?.text ?? "{}";
 
   // Strip any accidental markdown fences
   const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
@@ -328,12 +331,14 @@ Return ONLY the updated JSON object with the same structure. Make targeted chang
 Do not change things the artist didn't mention.`;
 
   const msg = await client.messages.create({
-    model:      "claude-sonnet-4-5",
-    max_tokens: 4000,
-    messages:   [{ role: "user", content: prompt }],
+    model:       "claude-opus-4-5",
+    max_tokens:  16000,
+    thinking:    { type: "enabled", budget_tokens: 8000 },
+    messages:    [{ role: "user", content: prompt }],
   });
 
-  const raw     = (msg.content[0] as { type: string; text: string }).text ?? "{}";
+  const textBlock = msg.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
+  const raw     = textBlock?.text ?? "{}";
   const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
 
   try {

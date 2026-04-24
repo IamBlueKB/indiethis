@@ -1729,13 +1729,16 @@ export default function MixConsoleWizardClient() {
                             headers: { "Content-Type": "application/json" },
                             body:    JSON.stringify({ feedback: revisionFeedback }),
                           });
-                          if (!res.ok) throw new Error("Revision request failed.");
+                          if (!res.ok) {
+                            const body = await res.json().catch(() => ({} as { error?: string }));
+                            throw new Error(body?.error || `Revision request failed (${res.status}).`);
+                          }
                           setRevisionFeedback("");
                           setRevisionOpen(false);
                           setJobStatus("REVISING");
                           setStep("processing");
-                        } catch {
-                          setError("Failed to submit revision. Please try again.");
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : "Failed to submit revision. Please try again.");
                         } finally {
                           setRevisionLoading(false);
                         }

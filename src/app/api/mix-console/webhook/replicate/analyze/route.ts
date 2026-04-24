@@ -12,7 +12,7 @@ import { decideMixParameters, generateMixRecommendation } from "@/lib/mix-consol
 import { runMixEngineSync } from "@/lib/mix-console/engine";
 import type { MixAnalysisResult, InputFile } from "@/lib/mix-console/engine";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function verifySecret(req: NextRequest): boolean {
   const secret = process.env.REPLICATE_WEBHOOK_SECRET;

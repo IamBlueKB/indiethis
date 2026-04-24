@@ -21,7 +21,7 @@ import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 import { reviseParameters } from "@/lib/mix-console/decisions";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(
   req: NextRequest,
