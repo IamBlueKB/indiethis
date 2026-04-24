@@ -1937,9 +1937,9 @@ class Predictor(BasePredictor):
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
 
-        # ── Role → target LUFS — equal starting point; EQ/comp creates vocal presence ─
-        BEAT_TARGET_LUFS       = -16.0   # beat and vocal start equal
-        MAIN_VOCAL_TARGET_LUFS = -16.0   # vocal sits in the mix via EQ/comp, not raw level
+        # ── Role → target LUFS — beat is foundation, vocal sits 2dB above ──────────
+        BEAT_TARGET_LUFS       = -16.0   # beat: full foundation level
+        MAIN_VOCAL_TARGET_LUFS = -14.0   # vocal: 2dB above beat; EQ carving creates 2–4dB mid presence
         SUPPORTING_LUFS_OFFSET = {       # offset from main vocal target
             "vocal_adlibs":   -6.0,
             "vocal_insouts":  -7.0,
@@ -2043,8 +2043,9 @@ class Predictor(BasePredictor):
                     # Beat: HP + default vocal-pocket carve + Claude's EQ + light glue comp
                     beat_fx = [
                         HighpassFilter(cutoff_frequency_hz=30),
-                        PeakFilter(cutoff_frequency_hz=2500, gain_db=-2.5, q=0.8),  # vocal pocket
-                        PeakFilter(cutoff_frequency_hz=5000, gain_db=-1.0, q=1.0),  # presence carve
+                        PeakFilter(cutoff_frequency_hz=350,  gain_db=-2.0, q=0.9),  # mud cut — creates clean low-mid space
+                        PeakFilter(cutoff_frequency_hz=3000, gain_db=-3.5, q=0.8),  # vocal pocket — cut where vocal lives
+                        PeakFilter(cutoff_frequency_hz=5000, gain_db=-2.0, q=1.0),  # presence carve — let vocal air through
                     ]
                     # Apply Claude's EQ decisions for the beat (e.g. 250-500Hz mud cut)
                     beat_eq_points = sp.get("eq", [])
@@ -2089,9 +2090,9 @@ class Predictor(BasePredictor):
                     c1           = sp.get("comp1", {})
                     c2           = sp.get("comp2", {})
                     comp1_thresh = float(c1.get("thresholdDb", -18))
-                    comp1_ratio  = float(c1.get("ratio",       chain_p.get("comp1_ratio", 4.0)))
-                    comp1_atk    = float(c1.get("attackMs",    2))
-                    comp1_rel    = float(c1.get("releaseMs",   80))
+                    comp1_ratio  = float(c1.get("ratio",       chain_p.get("comp1_ratio", 3.0)))  # was 4.0 — softer default
+                    comp1_atk    = float(c1.get("attackMs",    8))   # was 2ms — 8ms lets transients through
+                    comp1_rel    = float(c1.get("releaseMs",   120))  # was 80ms — 120ms more musical
                     comp2_ratio  = float(c2.get("ratio",       chain_p.get("comp2_ratio", 0.0)))
 
                     # a. Noise gate
@@ -2105,9 +2106,10 @@ class Predictor(BasePredictor):
                         for ch in range(y.shape[0]):
                             y[ch] = apply_breath_editing(y[ch], sr, mode=breath_editing)
 
-                    # a3. Volume riding — all vocal stems
-                    y = apply_volume_riding(y.astype(np.float32), sr,
-                                            target_lufs=-18.0 if is_main_vocal(label) else -24.0)
+                    # a3. Volume riding — main vocal only, gentle (3dB max swing)
+                    if is_main_vocal(label):
+                        y = apply_volume_riding(y.astype(np.float32), sr,
+                                                target_lufs=-16.0, max_gain_db=3.0, max_cut_db=-3.0)
 
                     # b. De-esser
                     sib_freq     = detect_sibilance_freq((y[0] + y[1]) / 2, sr)
@@ -2115,9 +2117,11 @@ class Predictor(BasePredictor):
                         cutoff_frequency_hz=sib_freq, gain_db=-3.0, q=2.5)])
                     y = de_ess_board(y.astype(np.float32), sr)
 
-                    # c. HP filter
-                    hp_board = Pedalboard([HighpassFilter(
-                        cutoff_frequency_hz=max(20, hp_hz))])
+                    # c. HP filter + vocal mud cut (below 100Hz and 250-400Hz)
+                    hp_board = Pedalboard([
+                        HighpassFilter(cutoff_frequency_hz=max(20, hp_hz)),
+                        PeakFilter(cutoff_frequency_hz=300, gain_db=-2.5, q=0.8),  # mud cut — creates space for beat
+                    ])
                     y = hp_board(y.astype(np.float32), sr)
 
                     # d. EQ from Claude stemParams
@@ -2170,12 +2174,19 @@ class Predictor(BasePredictor):
                         y[0]   = y[0] * l_gain
                         y[1]   = y[1] * r_gain
 
-                    # j. Reverb
+                    # j. Reverb — send/return with HPF on reverb tail (felt, not heard)
+                    # Cap wet: 0.12 lead, 0.20 supporting — never pour water on the vocal
                     if rev_wet > 0:
                         from pedalboard import Reverb
-                        rev_board = Pedalboard([Reverb(
-                            room_size=rev_room, wet_level=rev_wet, dry_level=1.0)])
-                        y = rev_board(y.astype(np.float32), sr)
+                        rev_wet_capped = min(rev_wet, 0.12 if is_main_vocal(label) else 0.20)
+                        dry_sig  = y.astype(np.float32).copy()
+                        # Pure reverb return (no dry signal in this board)
+                        wet_board = Pedalboard([Reverb(room_size=rev_room, wet_level=1.0, dry_level=0.0)])
+                        wet_sig   = wet_board(dry_sig.copy(), sr)
+                        # HP the reverb return at 500Hz — keeps low end tight and clean
+                        hp_rev    = Pedalboard([HighpassFilter(cutoff_frequency_hz=500)])
+                        wet_sig   = hp_rev(wet_sig, sr)
+                        y = dry_sig + wet_sig * rev_wet_capped
 
                     # j2. Chorus — doubles and harmonies get thickened; lead gets light chorus
                     chorus_wet = float(sp.get("chorusWet", 0.0))
@@ -2325,7 +2336,19 @@ class Predictor(BasePredictor):
             # ── Soft clipper before limiter — rounds peaks harmonically ──────────
             mixed = apply_soft_clipper(mixed.astype(np.float32), threshold=0.92)
 
-            # ── Clip guard + normalize to target peak ─────────────────────────────
+            # ── LUFS normalization to -13 LUFS (mix-ready, leaves room for mastering) ─
+            try:
+                mix_meter   = pyln.Meter(sr_out)
+                mix_mono    = (mixed[0] + mixed[1]) / 2
+                mix_lufs    = float(mix_meter.integrated_loudness(mix_mono))
+                if np.isfinite(mix_lufs) and mix_lufs < -5.0:   # sane range check
+                    lufs_target = -13.0
+                    lufs_gain   = float(np.clip(lufs_target - mix_lufs, -20.0, 12.0))
+                    mixed = mixed * (10 ** (lufs_gain / 20))
+            except Exception as lufs_err:
+                print(f"bus LUFS norm skipped: {lufs_err}", flush=True)
+
+            # ── Clip guard + normalize to target peak (-1 dBFS) ───────────────────
             target_peak = 10 ** (bus_normalize / 20)
             cur_peak    = float(np.max(np.abs(mixed)))
             if cur_peak > 0:
