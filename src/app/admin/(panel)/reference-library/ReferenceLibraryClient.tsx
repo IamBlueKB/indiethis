@@ -189,42 +189,47 @@ function LibraryTab() {
         })),
     };
 
-    const res = await fetch("/api/admin/reference-library/process", {
-      method:  "POST",
-      headers: { "content-type": "application/json" },
-      body:    JSON.stringify(payload),
-    });
-    if (!res.ok || !res.body) {
-      setLogs(l => [...l, `error: ${res.status}`]);
-      setProcessing(false);
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const evt = JSON.parse(line);
-          if (evt.type === "progress") setProgress(evt);
-          if (evt.type === "track_ok")     setLogs(l => [...l, `✓ ${evt.genre} · sep ${(evt.separation * 100).toFixed(0)}%`]);
-          if (evt.type === "track_failed") setLogs(l => [...l, `✗ #${evt.index} — ${evt.error}`]);
-          if (evt.type === "genre_recomputed") setLogs(l => [...l, `↻ recomputed ${evt.genre}`]);
-          if (evt.type === "done") setLogs(l => [...l, `done — ${evt.ok} ok / ${evt.fail} failed`]);
-        } catch {/* ignore parse errors */}
+    try {
+      const res = await fetch("/api/admin/reference-library/process", {
+        method:  "POST",
+        headers: { "content-type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      if (!res.ok || !res.body) {
+        setLogs(l => [...l, `error: ${res.status}`]);
+        return;
       }
-    }
 
-    setProcessing(false);
-    setPending([]);
-    await loadGenres();
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const evt = JSON.parse(line);
+            if (evt.type === "progress") setProgress(evt);
+            if (evt.type === "track_ok")     setLogs(l => [...l, `✓ ${evt.genre} · sep ${(evt.separation * 100).toFixed(0)}%`]);
+            if (evt.type === "track_failed") setLogs(l => [...l, `✗ #${evt.index} — ${evt.error}`]);
+            if (evt.type === "genre_recomputed") setLogs(l => [...l, `↻ recomputed ${evt.genre}`]);
+            if (evt.type === "done") setLogs(l => [...l, `done — ${evt.ok} ok / ${evt.fail} failed`]);
+          } catch {/* ignore parse errors */}
+        }
+      }
+
+      setPending([]);
+      await loadGenres();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLogs(l => [...l, `stream error: ${msg}`]);
+    } finally {
+      setProcessing(false);
+    }
   }
 
   async function resetGenre(genre: string) {
@@ -336,7 +341,16 @@ function LibraryTab() {
       <div className="rounded-xl border border-[#2A2A2A]" style={{ background: "#0F0F0F" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#222]">
           <h2 className="text-sm font-semibold">Genre Profiles</h2>
-          <button onClick={loadGenres} className="flex items-center gap-1.5 text-xs" style={{ color: "#999" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setProcessing(false);
+              setProgress(null);
+              void loadGenres();
+            }}
+            className="flex items-center gap-1.5 text-xs"
+            style={{ color: "#999" }}
+          >
             <RefreshCw size={12}/> Refresh
           </button>
         </div>

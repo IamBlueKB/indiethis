@@ -5,7 +5,9 @@
  * during processing and uses this to update the wizard state.
  *
  * Access control: authenticated owner (userId match) OR guest with
- * matching `indiethis_guest_email` cookie.
+ * matching `indiethis_guest_email` cookie OR a valid MixAccessToken
+ * passed as `?access_token=` (used by the email-linked results page
+ * when the guest returns on a different device without the cookie).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -34,6 +36,7 @@ export async function GET(
   try {
     const session    = await auth();
     const guestEmail = req.cookies.get("indiethis_guest_email")?.value ?? null;
+    const tokenParam = req.nextUrl.searchParams.get("access_token") ?? null;
 
     const job = await prisma.mixJob.findUnique({
       where: { id },
@@ -43,10 +46,17 @@ export async function GET(
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
     }
 
-    // Access control: owner or matching guest email cookie
+    // Access control: owner | matching guest email cookie | valid MixAccessToken
     const isOwner = session?.user?.id && job.userId === session.user.id;
     const isGuest = guestEmail && job.guestEmail === guestEmail;
-    if (!isOwner && !isGuest) {
+    let isAuthorized = !!(isOwner || isGuest);
+
+    if (!isAuthorized && tokenParam) {
+      const t = await prisma.mixAccessToken.findUnique({ where: { token: tokenParam } });
+      if (t?.jobId === id && t.expiresAt > new Date()) isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 

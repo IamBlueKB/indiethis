@@ -1,16 +1,21 @@
 /**
  * /mix-console/results?token=xxx
  *
- * Guest tokenized results page. Validates MixAccessToken and renders
- * the compare/export UI for users who arrive via email link.
+ * Guest tokenized results page. Validates MixAccessToken, loads the full
+ * MixJob row, normalizes it into the MixResultsData shape, and renders
+ * MixResultsClient. The same client component is reused by the subscriber
+ * route at /dashboard/ai/mix-console/[id].
  */
 
-import { notFound } from "next/navigation";
-import { db as prisma } from "@/lib/db";
-import { MixResultsClient } from "./MixResultsClient";
+import { db as prisma }       from "@/lib/db";
+import { MixResultsClient }   from "./MixResultsClient";
+import { ProcessingState }    from "./ProcessingState";
+import { mixJobToResultsData } from "./load-mix-data";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Your Mix Results — IndieThis",
+  title:       "Your Mix Results — IndieThis",
   description: "Your AI-mixed track is ready. Compare versions and download.",
 };
 
@@ -36,9 +41,8 @@ export default async function MixResultsPage({
     );
   }
 
-  // Validate token
   const accessToken = await prisma.mixAccessToken.findUnique({
-    where: { token },
+    where:   { token },
     include: { job: true },
   });
 
@@ -74,36 +78,20 @@ export default async function MixResultsPage({
   if (job.status !== "COMPLETE") {
     return (
       <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
-        <div className="max-w-md mx-auto px-6 py-20 text-center">
-          <p className="text-4xl mb-4">⚙️</p>
-          <h1 className="text-xl font-bold mb-2">Still processing</h1>
-          <p className="text-sm" style={{ color: "#666" }}>
-            Your mix isn&apos;t ready yet. Check back shortly — we&apos;ll also email you when it&apos;s done.
-          </p>
-        </div>
+        <ProcessingState
+          jobId={job.id}
+          initialStatus={job.status}
+          accessToken={token}
+        />
       </div>
     );
   }
 
-  // Serialize job to plain object for client component
-  const jobData = {
-    id:                 job.id,
-    mode:               job.mode,
-    tier:               job.tier,
-    status:             job.status,
-    previewFilePaths:   job.previewFilePaths   as Record<string, string> | null,
-    cleanFilePath:      job.cleanFilePath,
-    polishedFilePath:   job.polishedFilePath,
-    aggressiveFilePath: job.aggressiveFilePath,
-    mixFilePath:        job.mixFilePath,
-    revisionCount:      job.revisionCount,
-    maxRevisions:       job.maxRevisions,
-    createdAt:          job.createdAt.toISOString(),
-  };
+  const data = mixJobToResultsData(job);
 
   return (
     <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
-      <MixResultsClient jobData={jobData} accessToken={token} />
+      <MixResultsClient data={data} accessToken={token} />
     </div>
   );
 }
