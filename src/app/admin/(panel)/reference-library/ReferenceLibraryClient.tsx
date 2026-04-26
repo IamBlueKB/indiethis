@@ -128,13 +128,30 @@ function LibraryTab() {
   }
 
   async function uploadOne(t: PendingTrack): Promise<string> {
-    const fd = new FormData();
-    fd.append("file", t.file);
-    fd.append("kind", "reference");
-    const r = await fetch("/api/admin/reference-library/upload", { method: "POST", body: fd });
-    if (!r.ok) throw new Error(`upload failed: ${r.status}`);
-    const j = await r.json();
-    return j.url as string;
+    // 1. Ask the server for a presigned PUT URL (skips Vercel's 4.5MB body limit)
+    const presignRes = await fetch("/api/admin/reference-library/presign", {
+      method:  "POST",
+      headers: { "content-type": "application/json" },
+      body:    JSON.stringify({
+        filename:    t.file.name,
+        contentType: t.file.type || "application/octet-stream",
+        kind:        "reference",
+      }),
+    });
+    if (!presignRes.ok) throw new Error(`presign failed: ${presignRes.status}`);
+    const { uploadUrl, accessUrl } = await presignRes.json() as {
+      uploadUrl: string; accessUrl: string;
+    };
+
+    // 2. PUT bytes directly to S3
+    const putRes = await fetch(uploadUrl, {
+      method:  "PUT",
+      headers: { "content-type": t.file.type || "application/octet-stream" },
+      body:    t.file,
+    });
+    if (!putRes.ok) throw new Error(`s3 upload failed: ${putRes.status}`);
+
+    return accessUrl;
   }
 
   async function startBatch() {
