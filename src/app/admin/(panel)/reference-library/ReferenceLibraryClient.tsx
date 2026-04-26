@@ -92,6 +92,7 @@ function LibraryTab() {
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState<{ index: number; total: number; track: string } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
 
   async function loadGenres() {
     const r = await fetch("/api/admin/reference-library/genres");
@@ -239,11 +240,25 @@ function LibraryTab() {
         </div>
 
         <label
-          className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#333] py-8 cursor-pointer hover:border-[#555] transition-colors"
-          style={{ background: "#0A0A0A" }}
+          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+          onDragOver={(e)  => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); }}
+          onDrop={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            setDragOver(false);
+            const dropped = e.dataTransfer?.files;
+            if (dropped && dropped.length > 0) onFiles(dropped);
+          }}
+          className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 cursor-pointer transition-colors"
+          style={{
+            background:  dragOver ? "#1A1308" : "#0A0A0A",
+            borderColor: dragOver ? "#D4A843" : "#333",
+          }}
         >
           <Upload size={20} style={{ color: "#D4A843" }} />
-          <p className="text-xs mt-2" style={{ color: "#999" }}>Drop or click to add audio files</p>
+          <p className="text-xs mt-2" style={{ color: "#999" }}>
+            {dragOver ? "Drop to add" : "Drop or click to add audio files"}
+          </p>
           <input
             type="file" multiple accept="audio/*"
             className="hidden"
