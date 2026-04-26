@@ -186,17 +186,20 @@ export async function separateBeatStems(beatUrl: string): Promise<SeparatedStems
       audio_url: beatUrl,
       stems: ["vocals", "drums", "bass", "other"],
     },
-  }) as any;
+  }) as { data?: Record<string, unknown> };
 
-  const raw: Record<string, unknown> = result?.stems ?? result ?? {};
+  // fal v2 client always returns { data, requestId }. Stem URLs live at
+  // data.{vocals,drums,bass,other}.url — there is NO `stems` wrapper.
+  // Older shape `result.stems.X` was wrong and silently produced empty URLs.
+  const data: Record<string, unknown> = result?.data ?? {};
   const toUrl = (v: unknown): string =>
     typeof v === "string" ? v : (v as { url?: string })?.url ?? "";
 
   return {
-    vocals: toUrl(raw.vocals),
-    bass:   toUrl(raw.bass),
-    drums:  toUrl(raw.drums),
-    other:  toUrl(raw.other),
+    vocals: toUrl(data.vocals),
+    bass:   toUrl(data.bass),
+    drums:  toUrl(data.drums),
+    other:  toUrl(data.other),
   };
 }
 

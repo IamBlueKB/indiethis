@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db }              from "@/lib/db";
+import { toStringArray }   from "@/lib/revenue-report/json-fields";
 import { NextResponse }    from "next/server";
 
 export async function POST() {
@@ -15,7 +16,7 @@ export async function POST() {
     dayOfMonth: config.dayOfMonth,
   });
 
-  const enabledSections = JSON.parse(config.enabledSections as string) as string[];
+  const enabledSections = toStringArray(config.enabledSections);
 
   return NextResponse.json({ report, enabledSections });
 }

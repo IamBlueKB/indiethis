@@ -1,5 +1,6 @@
 import { db }                 from "@/lib/db";
 import { requireAdminAccess } from "@/lib/require-admin-access";
+import { toStringArray }      from "@/lib/revenue-report/json-fields";
 import RevenueReportContent   from "./RevenueReportContent";
 
 export default async function RevenueReportPage() {
@@ -27,8 +28,8 @@ export default async function RevenueReportPage() {
 
   const config = rawConfig ? {
     ...rawConfig,
-    recipients:      JSON.parse(rawConfig.recipients as string) as string[],
-    enabledSections: JSON.parse(rawConfig.enabledSections as string) as string[],
+    recipients:      toStringArray(rawConfig.recipients),
+    enabledSections: toStringArray(rawConfig.enabledSections),
   } : null;
 
   const [logs, totalLogs] = logsResult;

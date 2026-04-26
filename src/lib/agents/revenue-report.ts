@@ -13,6 +13,7 @@ import { db }              from "@/lib/db";
 import { sendEmail }       from "@/lib/brevo/email";
 import { buildEmailTemplate } from "@/lib/brevo/email-template";
 import { logAgentAction, AT } from "@/lib/agents";
+import { toStringArray }   from "@/lib/revenue-report/json-fields";
 
 const AGENT = "REVENUE_REPORT";
 
@@ -757,8 +758,8 @@ export async function runRevenueReportAgent(): Promise<{ sent: boolean; recipien
   const config = await db.revenueReportConfig.findFirst();
   if (!config) return { sent: false, recipients: 0 };
 
-  const recipients       = JSON.parse(config.recipients as string) as string[];
-  const enabledSections  = JSON.parse(config.enabledSections as string) as string[];
+  const recipients       = toStringArray(config.recipients);
+  const enabledSections  = toStringArray(config.enabledSections);
 
   // Always check alerts
   await checkAlerts(recipients);

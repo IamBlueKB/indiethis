@@ -271,7 +271,8 @@ export async function POST(req: NextRequest) {
     const { checkAlerts, runRevenueReportAgent } = await import("@/lib/agents/revenue-report");
     const rrConfig = await db.revenueReportConfig.findFirst();
     if (rrConfig) {
-      const recipients = JSON.parse(rrConfig.recipients as string) as string[];
+      const { toStringArray } = await import("@/lib/revenue-report/json-fields");
+      const recipients = toStringArray(rrConfig.recipients);
       // Always check alerts on every cron tick
       await checkAlerts(recipients);
 

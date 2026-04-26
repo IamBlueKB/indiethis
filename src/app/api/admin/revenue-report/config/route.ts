@@ -1,5 +1,6 @@
 import { getAdminSession } from "@/lib/admin-auth";
 import { db }              from "@/lib/db";
+import { toStringArray }   from "@/lib/revenue-report/json-fields";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
@@ -11,8 +12,8 @@ export async function GET() {
 
   return NextResponse.json({
     ...config,
-    recipients:      JSON.parse(config.recipients as string),
-    enabledSections: JSON.parse(config.enabledSections as string),
+    recipients:      toStringArray(config.recipients),
+    enabledSections: toStringArray(config.enabledSections),
   });
 }
 
@@ -46,7 +47,7 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json({
     ...updated,
-    recipients:      JSON.parse(updated.recipients as string),
-    enabledSections: JSON.parse(updated.enabledSections as string),
+    recipients:      toStringArray(updated.recipients),
+    enabledSections: toStringArray(updated.enabledSections),
   });
 }
