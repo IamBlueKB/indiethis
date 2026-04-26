@@ -74,21 +74,80 @@ def _measure_output_quality(mixed: np.ndarray, sr: int) -> dict:
     """
     Post-render verification. Runs once per mix variation to surface objective
     metrics the webhook can compare against reference/genre targets.
+
+    Schema mirrors the `mix` block of _analyze_reference so the TypeScript
+    aggregator can compute deviationFromTarget without remapping fields.
     """
-    mono = mixed if mixed.ndim == 1 else mixed.mean(axis=0)
+    y = mixed if mixed.ndim == 2 else np.stack([mixed, mixed])
+    mono = y.mean(axis=0)
     mono = np.nan_to_num(mono.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+
     meter = pyln.Meter(sr)
     try:
         lufs = float(meter.integrated_loudness(mono))
     except Exception:
         lufs = -99.0
-    peak = float(np.max(np.abs(mixed))) if mixed.size else 0.0
-    crest = float(peak / (np.sqrt(np.mean(mono ** 2)) + 1e-9)) if mono.size else 0.0
+
+    peak_lin = float(np.max(np.abs(y))) if y.size else 0.0
+    peak_db  = 20.0 * np.log10(peak_lin + 1e-12) if peak_lin > 0 else -99.0
+    rms_full = float(np.sqrt(np.mean(mono ** 2))) if mono.size else 1e-9
+    crest    = float(peak_lin / (rms_full + 1e-9)) if mono.size else 0.0
+    dr_db    = 20.0 * np.log10(peak_lin / (rms_full + 1e-12)) if peak_lin > 0 else 0.0
+
+    # Loudness range (LRA) — short-term LUFS spread
+    try:
+        win = int(sr * 3.0); hop = int(sr * 1.0); shorts = []
+        for i in range(0, max(1, len(mono) - win), hop):
+            seg = mono[i:i + win]
+            if len(seg) < win // 2: continue
+            try:
+                sl = float(meter.integrated_loudness(seg))
+                if sl > -70: shorts.append(sl)
+            except Exception:
+                pass
+        lra = float(np.percentile(shorts, 95) - np.percentile(shorts, 10)) if len(shorts) >= 4 else 0.0
+    except Exception:
+        lra = 0.0
+
+    # Stereo width (side/mid)
+    if y.shape[0] == 2:
+        mid_b  = (y[0] + y[1]) / 2; side_b = (y[0] - y[1]) / 2
+        mid_e  = float(np.sqrt(np.mean(mid_b ** 2)) + 1e-12)
+        side_e = float(np.sqrt(np.mean(side_b ** 2)))
+        sw     = float(min(1.5, side_e / mid_e))
+    else:
+        sw = 0.0
+
+    # 6-band balance — same schema as reference profile
+    S = np.abs(librosa.stft(mono, n_fft=2048, hop_length=512))
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    bands6 = {
+        "sub":      (20, 60),
+        "low":      (60, 250),
+        "low_mid":  (250, 500),
+        "mid":      (500, 2000),
+        "high_mid": (2000, 6000),
+        "air":      (6000, 20000),
+    }
+    bal6 = {}; total6 = 1e-12
+    for name, (lo, hi) in bands6.items():
+        mask = (freqs >= lo) & (freqs < hi)
+        e = float(np.sqrt(np.mean(S[mask] ** 2))) if mask.any() else 0.0
+        bal6[name] = e; total6 += e
+    bal6 = {k: round(v / total6, 4) for k, v in bal6.items()}
+
     return {
+        # legacy fields (kept for backwards compat with current webhook display)
         "lufs":    round(lufs, 2),
-        "peakDb":  round(20.0 * np.log10(peak + 1e-12), 2) if peak > 0 else -99.0,
+        "peakDb":  round(peak_db, 2),
         "crest":   round(crest, 2),
-        "balance": _measure_frequency_balance(mixed, sr),
+        "balance": _measure_frequency_balance(y, sr),
+        # rich profile — mirrors _analyze_reference mix block
+        "true_peak":         round(peak_db, 2),
+        "loudness_range":    round(lra, 2),
+        "dynamic_range":     round(dr_db, 2),
+        "stereo_width":      round(sw, 3),
+        "frequency_balance": bal6,
     }
 
 
@@ -1163,6 +1222,18 @@ class Predictor(BasePredictor):
             result = self._revise_mix(job_id, mix_params_json)
         elif action == "separate-stems":
             result = self._separate_stems(audio_url, job_id)
+        elif action == "analyze-reference":
+            # Reference Analysis & Learning Engine — builds a profile JSON.
+            # source_quality is encoded into input_balance to avoid adding
+            # another Cog Input field; falls back to "other" if absent.
+            sq = ""
+            try:
+                if input_balance and input_balance != "{}":
+                    payload = json.loads(input_balance)
+                    sq = str(payload.get("source_quality", "")).lower()
+            except Exception:
+                sq = ""
+            result = self._analyze_reference(audio_url, stems_json, genre, sq)
         else:
             raise ValueError(f"Unknown action: {action}")
 
@@ -2000,6 +2071,360 @@ class Predictor(BasePredictor):
             "bass":  write_stem(y_bass,  "bass"),
             "drums": write_stem(y_drums, "drums"),
             "other": write_stem(y_other, "other"),
+        }
+
+    # ---------- ANALYZE REFERENCE (Reference Library) ----------
+    def _analyze_reference(self, audio_url, stems_json, genre, source_quality):
+        """
+        Build a reference profile for the Reference Analysis & Learning Engine.
+
+        Inputs:
+          audio_url     — full mix URL (commercial track or user reference)
+          stems_json    — JSON string mapping stem names to signed URLs
+                          ({"vocals": ..., "drums": ..., "bass": ..., "other": ...})
+                          If empty, only full-mix analysis is run.
+          genre         — genre tag (HIP_HOP, RNB, etc.)
+          source_quality— provenance tag (lossless, spotify, youtube, etc.)
+
+        Output: profile JSON per spec — mix, stems, relationships, sections,
+                separation_confidence, source_quality, source_quality_weight.
+
+        Audio is NOT stored — only the numerical profile.
+        """
+        # Source quality → analysis weight
+        SOURCE_WEIGHTS = {
+            "lossless":    1.0,
+            "apple_music": 1.0,
+            "tidal":       1.0,
+            "amazon_hd":   1.0,
+            "deezer":      1.0,
+            "spotify":     0.9,
+            "youtube":     0.6,
+            "soundcloud":  0.5,
+            "other":       0.6,
+        }
+        sq = (source_quality or "other").lower()
+        sq_weight = SOURCE_WEIGHTS.get(sq, 0.6)
+
+        # ── Full mix analysis ────────────────────────────────────────────────
+        mix_path = download_audio(audio_url)
+        y, sr = librosa.load(mix_path, sr=None, mono=False)
+        os.unlink(mix_path)
+        if y.ndim == 1:
+            y_stereo = np.stack([y, y])
+            mono = y
+        else:
+            y_stereo = y
+            mono = y.mean(axis=0)
+        mono = np.nan_to_num(mono.astype(np.float32))
+
+        # LUFS (integrated)
+        meter = pyln.Meter(sr)
+        try:
+            mix_lufs = float(meter.integrated_loudness(mono))
+        except Exception:
+            mix_lufs = -99.0
+
+        # True peak (oversampled approximation: peak of the time-domain signal)
+        true_peak_lin = float(np.max(np.abs(y_stereo))) if y_stereo.size else 0.0
+        true_peak_db = 20.0 * np.log10(true_peak_lin + 1e-12) if true_peak_lin > 0 else -99.0
+
+        # Loudness range (LRA) — short-term LUFS percentile spread
+        try:
+            window_samples = int(sr * 3.0)
+            hop = int(sr * 1.0)
+            short_lufs = []
+            for i in range(0, max(1, len(mono) - window_samples), hop):
+                seg = mono[i:i + window_samples]
+                if len(seg) < window_samples // 2:
+                    continue
+                try:
+                    sl = float(meter.integrated_loudness(seg))
+                    if sl > -70:
+                        short_lufs.append(sl)
+                except Exception:
+                    pass
+            if len(short_lufs) >= 4:
+                lra = float(np.percentile(short_lufs, 95) - np.percentile(short_lufs, 10))
+            else:
+                lra = 0.0
+        except Exception:
+            lra = 0.0
+
+        # Dynamic range (peak − RMS in dB)
+        rms_full = float(np.sqrt(np.mean(mono ** 2))) if mono.size else 1e-9
+        dr_db = 20.0 * np.log10(true_peak_lin / (rms_full + 1e-12)) if true_peak_lin > 0 else 0.0
+
+        # Stereo width (M/S ratio)
+        if y_stereo.shape[0] == 2:
+            mid = (y_stereo[0] + y_stereo[1]) / 2
+            side = (y_stereo[0] - y_stereo[1]) / 2
+            mid_e = float(np.sqrt(np.mean(mid ** 2)) + 1e-12)
+            side_e = float(np.sqrt(np.mean(side ** 2)))
+            stereo_width = float(min(1.5, side_e / mid_e))
+        else:
+            stereo_width = 0.0
+
+        # Frequency balance (4-band)
+        balance_4 = _measure_frequency_balance(y_stereo, sr)
+
+        # Detailed 6-band balance for reference profile
+        S = np.abs(librosa.stft(mono, n_fft=2048, hop_length=512))
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+        bands6 = {
+            "sub":      (20, 60),
+            "low":      (60, 250),
+            "low_mid":  (250, 500),
+            "mid":      (500, 2000),
+            "high_mid": (2000, 6000),
+            "air":      (6000, 20000),
+        }
+        balance_6 = {}
+        total6 = 1e-12
+        for name, (lo, hi) in bands6.items():
+            mask = (freqs >= lo) & (freqs < hi)
+            e = float(np.sqrt(np.mean(S[mask] ** 2))) if mask.any() else 0.0
+            balance_6[name] = e
+            total6 += e
+        balance_6 = {k: round(v / total6, 4) for k, v in balance_6.items()}
+
+        # RT60 estimate (reuse logic from _analyze_mix)
+        rt60 = 0.4
+        try:
+            hop_e = sr // 4
+            env = librosa.feature.rms(y=mono, hop_length=hop_e)[0]
+            if len(env) > 12:
+                peak_idx = int(np.argmax(env))
+                tail_start = min(peak_idx + 2, len(env) - 5)
+                tail_end = min(tail_start + 4, len(env))
+                tail = env[tail_start:tail_end]
+                pk = env[peak_idx]
+                if pk > 1e-4 and len(tail) >= 2:
+                    rt60 = float(np.clip((np.mean(tail) / pk) * 0.85, 0.05, 0.6))
+        except Exception:
+            pass
+
+        mix_profile = {
+            "lufs":             round(mix_lufs, 2),
+            "true_peak":        round(true_peak_db, 2),
+            "loudness_range":   round(lra, 2),
+            "dynamic_range":    round(dr_db, 2),
+            "stereo_width":     round(stereo_width, 3),
+            "rt60_estimate":    round(rt60, 3),
+            "frequency_balance": balance_6,
+        }
+
+        # ── Per-stem analysis ────────────────────────────────────────────────
+        stems_urls = {}
+        try:
+            stems_urls = json.loads(stems_json) if stems_json else {}
+        except Exception:
+            stems_urls = {}
+
+        def analyze_one_stem(stem_y, stem_sr):
+            mono_s = stem_y if stem_y.ndim == 1 else stem_y.mean(axis=0)
+            mono_s = np.nan_to_num(mono_s.astype(np.float32))
+            try:
+                lufs_s = float(pyln.Meter(stem_sr).integrated_loudness(mono_s))
+            except Exception:
+                lufs_s = -99.0
+            peak_s = float(np.max(np.abs(stem_y))) if stem_y.size else 0.0
+            rms_s = float(np.sqrt(np.mean(mono_s ** 2))) + 1e-9
+            crest = float(peak_s / rms_s)
+            try:
+                cent = float(np.mean(librosa.feature.spectral_centroid(y=mono_s, sr=stem_sr)))
+            except Exception:
+                cent = 0.0
+            try:
+                rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=mono_s, sr=stem_sr, roll_percent=0.85)))
+            except Exception:
+                rolloff = 0.0
+            if stem_y.ndim == 2 and stem_y.shape[0] == 2:
+                mid_s = (stem_y[0] + stem_y[1]) / 2
+                side_s = (stem_y[0] - stem_y[1]) / 2
+                me = float(np.sqrt(np.mean(mid_s ** 2)) + 1e-12)
+                se = float(np.sqrt(np.mean(side_s ** 2)))
+                sw_s = float(min(1.5, se / me))
+            else:
+                sw_s = 0.0
+            return {
+                "lufs":               round(lufs_s, 2),
+                "peak_db":            round(20.0 * np.log10(peak_s + 1e-12), 2) if peak_s > 0 else -99.0,
+                "rms_db":             round(20.0 * np.log10(rms_s + 1e-12), 2),
+                "crest_factor":       round(crest, 2),
+                "spectral_centroid":  round(cent, 1),
+                "spectral_rolloff":   round(rolloff, 1),
+                "stereo_width":       round(sw_s, 3),
+                "frequency_balance":  _measure_frequency_balance(stem_y, stem_sr),
+            }
+
+        stems_analysis = {}
+        stem_arrays = {}  # for relationship / bleed calcs
+        for name in ("vocals", "drums", "bass", "other"):
+            url = stems_urls.get(name)
+            if not url:
+                continue
+            try:
+                sp = download_audio(url)
+                ys, sr_s = librosa.load(sp, sr=sr, mono=False)
+                os.unlink(sp)
+                if ys.ndim == 1:
+                    ys = np.stack([ys, ys])
+                ys = np.nan_to_num(ys.astype(np.float32))
+                stems_analysis[name] = analyze_one_stem(ys, sr_s)
+                stem_arrays[name] = ys
+            except Exception as e:
+                print(f"_analyze_reference: failed to load stem {name}: {e}", flush=True)
+
+        # ── Stem relationships ───────────────────────────────────────────────
+        def lufs_diff(a_name, b_name):
+            a = stems_analysis.get(a_name)
+            b = stems_analysis.get(b_name)
+            if not a or not b:
+                return None
+            return round(a["lufs"] - b["lufs"], 2)
+
+        def freq_overlap(a_name, b_name, lo, hi):
+            """Energy correlation in [lo, hi] Hz between two stems."""
+            ya = stem_arrays.get(a_name)
+            yb = stem_arrays.get(b_name)
+            if ya is None or yb is None:
+                return None
+            ma = ya.mean(axis=0) if ya.ndim == 2 else ya
+            mb = yb.mean(axis=0) if yb.ndim == 2 else yb
+            n = min(len(ma), len(mb))
+            ma, mb = ma[:n], mb[:n]
+            Sa = np.abs(librosa.stft(ma.astype(np.float32), n_fft=2048, hop_length=512))
+            Sb = np.abs(librosa.stft(mb.astype(np.float32), n_fft=2048, hop_length=512))
+            f = librosa.fft_frequencies(sr=sr, n_fft=2048)
+            mask = (f >= lo) & (f < hi)
+            if not mask.any():
+                return None
+            ea = Sa[mask].mean(axis=0)
+            eb = Sb[mask].mean(axis=0)
+            n2 = min(len(ea), len(eb))
+            if n2 < 4:
+                return None
+            ea, eb = ea[:n2], eb[:n2]
+            denom = (np.linalg.norm(ea) * np.linalg.norm(eb)) + 1e-12
+            return float(round(np.dot(ea, eb) / denom, 3))
+
+        relationships = {
+            "vocal_to_drums_db":         lufs_diff("vocals", "drums"),
+            "vocal_to_bass_db":          lufs_diff("vocals", "bass"),
+            "vocal_to_other_db":         lufs_diff("vocals", "other"),
+            "vocal_drum_freq_overlap":   freq_overlap("vocals", "drums", 2000, 5000),
+            "vocal_other_freq_overlap":  freq_overlap("vocals", "other", 500, 2000),
+            "bass_kick_separation":      freq_overlap("bass",   "drums",  60,   200),
+        }
+
+        # ── Bleed / separation confidence ────────────────────────────────────
+        sep_conf = 1.0
+        sep_weight = 1.0
+        try:
+            if len(stem_arrays) >= 2:
+                # Cross-correlation of mono envelopes between every stem pair.
+                names = list(stem_arrays.keys())
+                env_map = {}
+                for n in names:
+                    arr = stem_arrays[n].mean(axis=0) if stem_arrays[n].ndim == 2 else stem_arrays[n]
+                    env = librosa.feature.rms(y=arr.astype(np.float32), hop_length=2048)[0]
+                    env_map[n] = env / (np.max(env) + 1e-9)
+                pair_corrs = []
+                for i in range(len(names)):
+                    for j in range(i + 1, len(names)):
+                        a = env_map[names[i]]
+                        b = env_map[names[j]]
+                        n2 = min(len(a), len(b))
+                        if n2 < 8:
+                            continue
+                        a, b = a[:n2], b[:n2]
+                        c = float(np.corrcoef(a, b)[0, 1])
+                        if not np.isnan(c):
+                            pair_corrs.append(abs(c))
+                if pair_corrs:
+                    avg_corr = float(np.mean(pair_corrs))
+                    # Lower correlation = better isolation
+                    sep_conf = float(np.clip(1.0 - avg_corr, 0.0, 1.0))
+        except Exception as e:
+            print(f"_analyze_reference: bleed detection failed: {e}", flush=True)
+        if   sep_conf > 0.8:  sep_weight = 1.0
+        elif sep_conf > 0.6:  sep_weight = 0.7
+        else:                 sep_weight = 0.3
+
+        # ── Section-level analysis (temporal profiling) ──────────────────────
+        sections_profile = {}
+        try:
+            # Detect section boundaries via spectral novelty
+            duration = len(mono) / sr
+            # Simple quartile slicing as a fallback / fast path; spec allows
+            # librosa onset-based detection but quartiles are stable & cheap.
+            section_defs = [
+                ("intro",   0.00, 0.10),
+                ("verse_1", 0.10, 0.35),
+                ("chorus_1",0.35, 0.55),
+                ("verse_2", 0.55, 0.75),
+                ("chorus_2",0.75, 0.95),
+                ("outro",   0.95, 1.00),
+            ]
+            for label, start_pct, end_pct in section_defs:
+                s = int(start_pct * len(mono))
+                e = int(end_pct   * len(mono))
+                if e <= s + sr:
+                    continue
+                seg = y_stereo[:, s:e] if y_stereo.ndim == 2 else mono[s:e]
+                seg_mono = seg if seg.ndim == 1 else seg.mean(axis=0)
+                seg_mono = np.nan_to_num(seg_mono.astype(np.float32))
+                try:
+                    seg_lufs = float(meter.integrated_loudness(seg_mono))
+                except Exception:
+                    seg_lufs = -99.0
+                if seg.ndim == 2 and seg.shape[0] == 2:
+                    m = (seg[0] + seg[1]) / 2
+                    sd = (seg[0] - seg[1]) / 2
+                    me = float(np.sqrt(np.mean(m ** 2)) + 1e-12)
+                    se_ = float(np.sqrt(np.mean(sd ** 2)))
+                    seg_sw = float(min(1.5, se_ / me))
+                else:
+                    seg_sw = 0.0
+                sections_profile[label] = {
+                    "start_time":        round(s / sr, 2),
+                    "end_time":          round(e / sr, 2),
+                    "lufs":              round(seg_lufs, 2),
+                    "stereo_width":      round(seg_sw, 3),
+                    "frequency_balance": _measure_frequency_balance(seg, sr),
+                }
+        except Exception as e:
+            print(f"_analyze_reference: section profiling failed: {e}", flush=True)
+
+        # ── Audio fingerprint (chromaprint, optional) ────────────────────────
+        fingerprint_hash = None
+        try:
+            import acoustid as _acoustid  # pyacoustid binding
+            tmp_fp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+            sf.write(tmp_fp, mono, sr, subtype="PCM_16")
+            try:
+                _, fp = _acoustid.fingerprint_file(tmp_fp)
+                fingerprint_hash = fp.decode("utf-8") if isinstance(fp, bytes) else str(fp)
+            finally:
+                os.unlink(tmp_fp)
+        except Exception as e:
+            # chromaprint not installed — skip fingerprinting; dedup falls back
+            # to None which the caller handles.
+            print(f"_analyze_reference: chromaprint unavailable ({e})", flush=True)
+
+        return {
+            "genre":                 genre or "",
+            "source":                "commercial",
+            "source_quality":        sq,
+            "source_quality_weight": sq_weight,
+            "separation_confidence": round(sep_conf, 3),
+            "separation_weight":     sep_weight,
+            "fingerprint_hash":      fingerprint_hash,
+            "mix":                   mix_profile,
+            "stems":                 stems_analysis,
+            "relationships":         relationships,
+            "sections":              sections_profile,
         }
 
     # ---------- MIX FULL ----------

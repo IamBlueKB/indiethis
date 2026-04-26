@@ -247,6 +247,24 @@ export async function POST(req: NextRequest) {
     results.qualityScoreUpdate = "skipped (not due)";
   }
 
+  // ── Reference Library — runs daily ───────────────────────────────────────────
+  const shouldRunReferenceLibrary = await shouldRun("REFERENCE_LIBRARY", 22);
+  if (shouldRunReferenceLibrary) {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL}/api/cron/reference-library`,
+        { method: "POST", headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }
+      );
+      const data = await res.json() as { genresRecomputed?: number; abandonedLogged?: number; promoted?: number };
+      results.referenceLibrary = `recomputed=${data.genresRecomputed ?? 0} abandoned=${data.abandonedLogged ?? 0} promoted=${data.promoted ?? 0}`;
+      await logAgentAction("REFERENCE_LIBRARY", "AGENT_RUN_START");
+    } catch (err) {
+      results.referenceLibrary = `error: ${String(err)}`;
+    }
+  } else {
+    results.referenceLibrary = "skipped (not due)";
+  }
+
   // ── Revenue Report — configurable schedule (checks every hour) ───────────────
   try {
     const { db } = await import("@/lib/db");
@@ -406,6 +424,20 @@ export async function POST(req: NextRequest) {
     }
   } else {
     results.albumMasteringNudge = "skipped (not due)";
+  }
+
+  // ── Mix file cleanup — runs daily (expired guest jobs) ──────────────────────
+  const shouldRunMixCleanup = await shouldRun("MIX_FILE_CLEANUP", 22); // 22h guard
+  if (shouldRunMixCleanup) {
+    try {
+      const { cleanupExpiredMixJobs } = await import("@/lib/mix-console/cleanup");
+      const cleanup = await cleanupExpiredMixJobs();
+      results.mixFileCleanup = `checked=${cleanup.checked} expired=${cleanup.expired} errors=${cleanup.errors}`;
+    } catch (err) {
+      results.mixFileCleanup = `error: ${String(err)}`;
+    }
+  } else {
+    results.mixFileCleanup = "skipped (not due)";
   }
 
   // ── Stuck Stitch Recovery — runs every tick (lightweight DB query) ──────────

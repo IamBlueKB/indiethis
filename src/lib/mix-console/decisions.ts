@@ -15,6 +15,7 @@ import type {
   DelayThrow,
   InputFile,
 } from "@/lib/mix-console/engine";
+import { loadReferenceContext } from "@/lib/reference-library/context";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -231,6 +232,12 @@ export async function decideMixParameters(params: {
     `${s.name}: ${s.start.toFixed(1)}s – ${s.end.toFixed(1)}s`
   ).join(", ");
 
+  // ─── Reference-library genre target (if we've built one for this genre) ──
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refCtxBlock = refCtx
+    ? `\n\nREFERENCE-LIBRARY GENRE TARGET (use as quantitative anchor):\n${refCtx.promptBlock}\n\nWhen choosing busParams (peakNormalize, glueComp), per-stem EQ shelves, and stereo width — pull toward the mean of this genre profile. The p25–p75 range is your acceptable corridor; don't drift outside it without a clear reason from the analysis or custom direction.`
+    : "";
+
   const prompt = `You are a professional mix engineer AI. The Python engine is a faithful executor — it applies exactly what you specify in stemParams. You are responsible for every creative decision. Use these professional standards as your benchmark.
 
 MIX TARGETS — use these as your decision benchmarks:
@@ -271,7 +278,7 @@ ${referenceAnalysis ? `
 REFERENCE TRACK: "${referenceAnalysis.fileName}"
 LUFS: ${referenceAnalysis.lufs.toFixed(1)} | BPM: ${referenceAnalysis.bpm.toFixed(1)} | Key: ${referenceAnalysis.key}
 Frequency balance: sub=${referenceAnalysis.balance.sub.toFixed(3)} low=${referenceAnalysis.balance.low.toFixed(3)} mid=${referenceAnalysis.balance.mid.toFixed(3)} high=${referenceAnalysis.balance.high.toFixed(3)}
-Use this as your loudness and tonal target. Match the overall LUFS via busParams.peakNormalize and glueCompThresh. Match the frequency balance by adjusting eqLowShelf/eqHighShelf and per-stem EQ. If the reference is brighter (high > 0.05), boost high shelf. If it's bassier (sub > 0.3), boost low shelf. The artist wants their mix to sound like this reference.` : "No reference track provided."}
+Use this as your loudness and tonal target. Match the overall LUFS via busParams.peakNormalize and glueCompThresh. Match the frequency balance by adjusting eqLowShelf/eqHighShelf and per-stem EQ. If the reference is brighter (high > 0.05), boost high shelf. If it's bassier (sub > 0.3), boost low shelf. The artist wants their mix to sound like this reference.` : "No reference track provided."}${refCtxBlock}
 
 TASK: Return ONLY valid JSON (no markdown, no explanation):
 {

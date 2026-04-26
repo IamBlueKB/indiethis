@@ -31,6 +31,7 @@ import {
   MonitorPlay,
   Film,
   Sliders,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canAccess } from "@/lib/admin-permissions";
@@ -70,6 +71,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: "Agents",      href: "/admin/agents",       icon: Bot,             page: "agents"       },
   { label: "Video Studio", href: "/admin/video-studio", icon: Film,           page: "video-studio"  },
   { label: "Mix & Master", href: "/admin/mastering",    icon: Sliders,        page: "mastering"     },
+  { label: "Reference Library", href: "/admin/reference-library", icon: Library, page: "mastering" },
   { label: "Rev Report",  href: "/admin/revenue-report", icon: BarChart3,      page: "revenue-report" },
   { label: "Team",        href: "/admin/team",         icon: UsersRound,      page: "team"         },
   { label: "Settings",    href: "/admin/settings",         icon: Settings,    page: "settings"     },

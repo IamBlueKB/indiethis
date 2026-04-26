@@ -20,6 +20,7 @@ import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 import { reviseParameters } from "@/lib/mix-console/decisions";
+import { logRevisionOutcome } from "@/lib/reference-library/log-outcome";
 
 export const maxDuration = 300;
 
@@ -163,6 +164,9 @@ export async function POST(
       },
       "/api/mix-console/webhook/replicate/revise",
     );
+
+    // Log revision as a negative outcome (fire-and-forget)
+    void logRevisionOutcome({ jobId: id, feedback: body.feedback.trim() });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

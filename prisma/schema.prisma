@@ -3376,3 +3376,89 @@ model MasteringPreset {
   @@index([genre])
   @@index([sortOrder])
 }
+
+// ─── Reference Analysis & Learning Engine ────────────────────────────────────
+// Three-tier intelligence system: commercial library + user references + mix outcomes.
+// See .claude/specs/indiethis-reference-analysis-engine-spec.md
+
+model ReferenceProfile {
+  id                    String   @id @default(cuid())
+  source                String                       // 'commercial' | 'user_reference' | 'user_mix_outcome'
+  sourceQuality         String?                      // 'lossless' | 'apple_music' | 'tidal' | 'spotify' | 'amazon_hd' | 'deezer' | 'youtube' | 'soundcloud' | 'other'
+  sourceQualityWeight   Float    @default(1.0)       // 1.0 lossless / 0.9 spotify / 0.6 youtube / 0.5 soundcloud
+  separationConfidence  Float?                       // 0.0–1.0 Demucs separation quality
+  separationWeight      Float    @default(1.0)       // 1.0 clean / 0.7 acceptable / 0.3 poor
+  genre                 String                       // HIP_HOP | TRAP | RNB | POP | ROCK | ELECTRONIC | ACOUSTIC | LO_FI | AFROBEATS | LATIN | COUNTRY | GOSPEL | NEO_SOUL
+  subgenre              String?
+  trackName             String?                      // human-readable label for admin UI
+  artistName            String?
+  fingerprintHash       String?                      // chromaprint fingerprint for dedup
+  mixJobId              String?                      // links to MixJob if user_reference / user_mix_outcome
+  profileData           Json                         // full analysis JSON
+  qualityGatePassed     Boolean  @default(false)
+  weight                Float    @default(1.0)       // base weight before source × separation modifiers
+  isHoldout             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  @@index([genre])
+  @@index([source])
+  @@index([fingerprintHash])
+  @@index([mixJobId])
+  @@index([genre, source])
+}
+
+model GenreTarget {
+  id               String   @id @default(cuid())
+  genre            String   @unique
+  trackCount       Int      @default(0)
+  commercialCount  Int      @default(0)
+  userRefCount     Int      @default(0)
+  userOutcomeCount Int      @default(0)
+  pendingCount     Int      @default(0)            // event-driven recompute counter
+  targetData       Json                            // aggregated mean/std/p25/p75 per param
+  lastComputed     DateTime @default(now())
+
+  @@index([genre])
+}
+
+model UserReferencePopularity {
+  id              String   @id @default(cuid())
+  fingerprintHash String   @unique
+  genre           String
+  uploadCount     Int      @default(1)
+  firstSeen       DateTime @default(now())
+  lastSeen        DateTime @default(now())
+  autoPromoted    Boolean  @default(false)
+  profileId       String?                          // optional FK to ReferenceProfile representing this song
+  trackName       String?
+  artistName      String?
+
+  @@index([genre])
+  @@index([uploadCount])
+}
+
+model MixOutcomeFeedback {
+  id                   String   @id @default(cuid())
+  mixJobId             String
+  genre                String
+  tier                 String?                    // STANDARD | PREMIUM | PRO
+  inputQualityScore    Int?
+  mixParamsUsed        Json?
+  outputAnalysis       Json?
+  outcome              String                     // 'downloaded' | 'revised' | 'abandoned'
+  revisionNotes        Json?                      // array of { time, note }
+  revisionKeywords     String[]                   // parsed keywords for aggregation
+  revisionCount        Int      @default(0)
+  variationSelected    String?
+  timeToDownload       Int?                       // seconds from preview to download
+  deviationFromTarget  Json?                      // z-scores per parameter
+  qualifiesForLearning Boolean  @default(false)
+  learningWeight       Float    @default(0)
+  isHoldout            Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  @@index([mixJobId])
+  @@index([genre])
+  @@index([outcome])
+  @@index([qualifiesForLearning])
+}

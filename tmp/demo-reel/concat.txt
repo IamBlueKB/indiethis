@@ -1,0 +1,4 @@
+file 'C:/Users/brian/Documents/indiethis/tmp/demo-reel/scene-0-intro.mp4'
+file 'C:/Users/brian/Documents/indiethis/tmp/demo-reel/scene-1-verse.mp4'
+file 'C:/Users/brian/Documents/indiethis/tmp/demo-reel/scene-2-chorus.mp4'
+file 'C:/Users/brian/Documents/indiethis/tmp/demo-reel/scene-3-outro.mp4'

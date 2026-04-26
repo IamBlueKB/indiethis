@@ -20,6 +20,7 @@ import type {
   MasterVersion,
 } from "./engine";
 import { db as prisma } from "@/lib/db";
+import { loadReferenceContext } from "@/lib/reference-library/context";
 
 const anthropic = new Anthropic();
 
@@ -180,6 +181,7 @@ function buildMasterPrompt(
   presetProfile: Record<string, unknown> | null,
   naturalLanguagePrompt: string | null,
   essentiaHints: EssentiaHints | null,
+  refContextBlock: string = "",
 ): string {
   return `You are a mastering engineer specializing in ${genre}.
 
@@ -195,6 +197,7 @@ TARGET MOOD: ${mood}
 ${essentiaHints ? `AUDIO INTELLIGENCE (from ML analysis):\n${formatEssentiaHints(essentiaHints)}` : ""}
 ${presetProfile ? `GENRE PRESET MASTERING DEFAULTS:\n${JSON.stringify(presetProfile, null, 2)}` : ""}
 ${naturalLanguagePrompt ? `ARTIST DIRECTION: "${naturalLanguagePrompt}"` : ""}
+${refContextBlock ? `\n${refContextBlock}\n\nUse the genre profile above as a quantitative anchor when choosing EQ shelves, stereoWidth, monoBelow, and saturation. Stay inside the p25–p75 corridor unless the mix analysis or artist direction clearly demands otherwise.` : ""}
 
 OUTPUT REQUIREMENTS:
 Return a JSON object with this exact structure:
@@ -344,7 +347,10 @@ export async function decideMasterParameters(opts: {
     presetProfile = (preset?.masterProfile as Record<string, unknown>) ?? null;
   }
 
-  const prompt = buildMasterPrompt(analysis, genre, mood, presetProfile, naturalLanguagePrompt, essentiaHints);
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refContextBlock = refCtx?.promptBlock ?? "";
+
+  const prompt = buildMasterPrompt(analysis, genre, mood, presetProfile, naturalLanguagePrompt, essentiaHints, refContextBlock);
 
   const response = await anthropic.messages.create({
     model:      "claude-sonnet-4-5",

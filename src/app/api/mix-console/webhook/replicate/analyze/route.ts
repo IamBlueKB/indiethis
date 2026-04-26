@@ -11,6 +11,7 @@ import { db as prisma } from "@/lib/db";
 import { decideMixParameters, generateMixRecommendation } from "@/lib/mix-console/decisions";
 import { runMixEngineSync } from "@/lib/mix-console/engine";
 import type { MixAnalysisResult, InputFile } from "@/lib/mix-console/engine";
+import { captureUserReference } from "@/lib/reference-library/capture-user-reference";
 
 export const maxDuration = 300;
 
@@ -171,6 +172,19 @@ export async function POST(req: NextRequest) {
         referenceNotes:         decision.referenceNotes                 ?? null,
       },
     });
+
+    // ─── Reference-library capture (fire-and-forget) ─────────────────────
+    // If the artist supplied a reference track, run the deep `analyze-reference`
+    // pipeline asynchronously and store it as a user-reference profile.
+    // Never blocks the webhook response or fails it.
+    if (job.referenceTrackUrl && job.genre) {
+      void captureUserReference({
+        jobId,
+        audioUrl: job.referenceTrackUrl,
+        genre:    job.genre,
+        fileName: job.referenceFileName ?? undefined,
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

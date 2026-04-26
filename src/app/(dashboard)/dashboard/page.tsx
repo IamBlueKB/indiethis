@@ -116,20 +116,34 @@ export default async function DashboardPage(
   const sp         = await searchParams;
   const showWelcome = sp.welcome === "1";
 
-  // Session linking: link any guest-purchased videos/lyric-videos to this userId on first visit
+  // Session linking: link any guest-purchased videos/lyric-videos/mix jobs to this userId on first visit
   let linkedVideoCount = 0;
+  let linkedMixCount   = 0;
   try {
-    const userEmail = await db.user.findUnique({
+    const userRecord = await db.user.findUnique({
       where:  { id: userId },
-      select: { email: true },
+      select: { email: true, convertedFromGuestAt: true },
     });
-    if (userEmail?.email) {
-      const [{ linked: mv }, { linked: lv }, mjLinked] = await Promise.all([
-        linkGuestVideosByEmail(userId, userEmail.email),
-        linkGuestLyricVideosByEmail(userId, userEmail.email),
-        linkGuestMasteringJobsByEmail(userEmail.email, userId),
+    if (userRecord?.email) {
+      const [{ linked: mv }, { linked: lv }, mjLinked, mxLinked] = await Promise.all([
+        linkGuestVideosByEmail(userId, userRecord.email),
+        linkGuestLyricVideosByEmail(userId, userRecord.email),
+        linkGuestMasteringJobsByEmail(userRecord.email, userId),
+        // Link any guest mix jobs and clear expiry so files are kept permanently
+        db.mixJob.updateMany({
+          where: { guestEmail: userRecord.email, userId: null },
+          data:  { userId, expiresAt: null },
+        }).then((r) => r.count),
       ]);
-      linkedVideoCount = mv + lv + mjLinked;
+      linkedMixCount   = mxLinked;
+      linkedVideoCount = mv + lv + mjLinked + mxLinked;
+      // Record guest→account conversion timestamp on first link
+      if (linkedVideoCount > 0 && !userRecord.convertedFromGuestAt) {
+        await db.user.update({
+          where: { id: userId },
+          data:  { convertedFromGuestAt: new Date() },
+        }).catch(() => {});
+      }
     }
   } catch { /* non-fatal */ }
 
@@ -294,6 +308,30 @@ export default async function DashboardPage(
                 {linkedVideoCount === 1
                   ? "The video you created before signing up has been added to your account."
                   : `${linkedVideoCount} videos you created before signing up have been added to your account.`}
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={14} style={{ color: "#D4A843" }} className="shrink-0" />
+        </Link>
+      )}
+
+      {/* ── Mix Console link banner — shown when a guest mix was just linked ── */}
+      {linkedMixCount > 0 && (
+        <Link
+          href="/mix-console"
+          className="flex items-center justify-between rounded-xl border px-4 py-3 no-underline transition-colors hover:border-accent/40"
+          style={{ backgroundColor: "rgba(212,168,67,0.06)", borderColor: "rgba(212,168,67,0.25)" }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-base">🎚️</span>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "#D4A843" }}>
+                Your {linkedMixCount === 1 ? "mix is" : "mixes are"} already here
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#888" }}>
+                {linkedMixCount === 1
+                  ? "The mix you created before signing up has been saved to your account."
+                  : `${linkedMixCount} mixes you created before signing up have been saved to your account.`}
               </p>
             </div>
           </div>

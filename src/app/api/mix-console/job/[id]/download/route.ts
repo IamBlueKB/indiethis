@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { generateFreshSignedUrl } from "@/lib/mix-console/engine";
+import { logDownloadOutcome } from "@/lib/reference-library/log-outcome";
 
 export const maxDuration = 300;
 
@@ -136,6 +137,9 @@ export async function GET(
     const ext      = FORMAT_EXT[format] ?? "wav";
     const mime     = FORMAT_MIME[format] ?? "audio/wav";
     const filename = `mix_${version}_${format}.${ext}`;
+
+    // Log download as a positive outcome for the reference library (fire-and-forget)
+    void logDownloadOutcome({ jobId: id });
 
     return new Response(fileRes.body, {
       status: 200,

@@ -51,6 +51,7 @@ export interface RevenueReport {
     netGrowth:           number;
     totalActive:         number;
     signupsByProvider:   { email: number; google: number; facebook: number };
+    guestConversions:    number;
   };
 
   products: {
@@ -258,7 +259,7 @@ async function gatherRevenue(start: Date, end: Date, prevStart: Date, prevEnd: D
 }
 
 async function gatherUsers(start: Date, end: Date) {
-  const [newSignupsList, newSubscribersList, churnedList, totalActiveCount] = await Promise.all([
+  const [newSignupsList, newSubscribersList, churnedList, totalActiveCount, guestConversions] = await Promise.all([
     db.user.findMany({
       where: { createdAt: { gte: start, lte: end } },
       select: { authProvider: true },
@@ -273,6 +274,9 @@ async function gatherUsers(start: Date, end: Date) {
     }),
     db.user.count({
       where: { subscription: { status: "ACTIVE" } },
+    }),
+    db.user.count({
+      where: { convertedFromGuestAt: { gte: start, lte: end } },
     }),
   ]);
 
@@ -296,6 +300,7 @@ async function gatherUsers(start: Date, end: Date) {
     netGrowth,
     totalActive: totalActiveCount,
     signupsByProvider,
+    guestConversions,
   };
 }
 
@@ -605,6 +610,9 @@ export function buildReportEmail(
     const growthColor = report.users.netGrowth >= 0 ? "#4CAF50" : "#E85D4A";
     body += row("Net Growth:", `<span style="color:${growthColor};">${report.users.netGrowth >= 0 ? "+" : ""}${report.users.netGrowth}</span>`);
     body += row("Total Active:", `<strong style="color:#fff;">${fmtNum(report.users.totalActive)}</strong>`);
+    if (report.users.guestConversions > 0) {
+      body += row("Guest → Account:", `<span style="color:#D4A843;">${fmtNum(report.users.guestConversions)} converted</span>`);
+    }
   }
 
   // ── Products ──

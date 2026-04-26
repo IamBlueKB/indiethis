@@ -6,7 +6,7 @@
  * pyloudnorm, Demucs). This file handles serialization, error propagation,
  * and type safety only — zero DSP logic lives here.
  *
- * Model: r8.im/iambluekb/indiethis-master-engine
+ * Model: r8.im/indiethis/indiethis-dsp
  * Env:   REPLICATE_API_TOKEN, REPLICATE_MASTERING_MODEL_VERSION
  */
 
