@@ -325,11 +325,25 @@ function LibraryTab() {
 
         {(processing || logs.length > 0) && (
           <div className="mt-4 rounded-md border border-[#222] p-3" style={{ background: "#0A0A0A" }}>
-            {progress && (
-              <p className="text-xs mb-2" style={{ color: "#D4A843" }}>
-                Processing {progress.index + 1} of {progress.total} — {progress.track}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-3 mb-2">
+              {progress ? (
+                <p className="text-xs" style={{ color: "#D4A843" }}>
+                  Processing {progress.index + 1} of {progress.total} — {progress.track}
+                </p>
+              ) : <span />}
+              <button
+                type="button"
+                onClick={() => {
+                  setProcessing(false);
+                  setProgress(null);
+                  setLogs([]);
+                }}
+                className="flex items-center gap-1.5 text-xs shrink-0"
+                style={{ color: "#999" }}
+              >
+                <RefreshCw size={12}/> Reset
+              </button>
+            </div>
             <div className="text-[11px] font-mono space-y-0.5 max-h-40 overflow-y-auto" style={{ color: "#999" }}>
               {logs.map((l, i) => <div key={i}>{l}</div>)}
             </div>
@@ -343,11 +357,7 @@ function LibraryTab() {
           <h2 className="text-sm font-semibold">Genre Profiles</h2>
           <button
             type="button"
-            onClick={() => {
-              setProcessing(false);
-              setProgress(null);
-              void loadGenres();
-            }}
+            onClick={() => { void loadGenres(); }}
             className="flex items-center gap-1.5 text-xs"
             style={{ color: "#999" }}
           >
