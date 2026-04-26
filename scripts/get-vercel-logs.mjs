@@ -3,8 +3,9 @@
  * Uses the Vercel REST API to get runtime logs with full content.
  */
 
-const TOKEN = "vca_8ZOudYa8jPsUj5RQknqc0gSgbEP9hCiHVVawY9J71dW93FCJ5F1nMxPp";
-const TEAM  = "team_Vp2OTioijgS53o5i8PKFS5r6"; // bluekbs-projects team ID
+const TOKEN = process.env.VERCEL_TOKEN;
+const TEAM  = process.env.VERCEL_TEAM_ID ?? "team_Vp2OTioijgS53o5i8PKFS5r6"; // bluekbs-projects team ID
+if (!TOKEN) { console.error("Set VERCEL_TOKEN env var"); process.exit(1); }
 
 const headers = {
   Authorization: `Bearer ${TOKEN}`,
