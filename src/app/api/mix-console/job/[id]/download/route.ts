@@ -107,14 +107,26 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 
-    // Resolve stored file path for the requested version
+    // Resolve stored file path for the requested version.
+    // The Python engine produces 3 variations (clean/polished/aggressive); a
+    // separate `mix` output isn't always rendered. PRO/Premium UI hardcodes
+    // version="mix" as the canonical single mix — fall back to polished
+    // (AI-recommended) → clean → aggressive so the artist always gets a file.
     const pathMap: Record<string, string | null> = {
       clean:      job.cleanFilePath      ?? null,
       polished:   job.polishedFilePath   ?? null,
       aggressive: job.aggressiveFilePath ?? null,
       mix:        job.mixFilePath        ?? null,
     };
-    const filePath = pathMap[version] ?? null;
+    let filePath = pathMap[version] ?? null;
+    if (!filePath) {
+      const fallbackOrder = version === "mix"
+        ? ["polished", "clean", "aggressive"]
+        : ["polished", "clean", "aggressive", "mix"].filter(v => v !== version);
+      for (const v of fallbackOrder) {
+        if (pathMap[v]) { filePath = pathMap[v]; break; }
+      }
+    }
 
     if (!filePath) {
       return NextResponse.json({ error: "File not available for this version." }, { status: 404 });
