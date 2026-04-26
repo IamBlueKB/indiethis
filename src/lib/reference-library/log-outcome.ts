@@ -60,11 +60,13 @@ export async function logDownloadOutcome(opts: {
     });
     if (!job) return;
 
-    // Skip if already logged (only one outcome per job)
+    // Skip if we've already logged a "downloaded" outcome for this job.
+    // BUT: if a "revised" record exists, upgrade it to "downloaded" — the
+    // final accepted mix is the real learning signal, not the rejected one.
     const existing = await prisma.mixOutcomeFeedback.findFirst({
       where: { mixJobId: job.id },
     });
-    if (existing) return;
+    if (existing && existing.outcome === "downloaded") return;
 
     // Time-to-download in seconds
     const timeToDownload = Math.floor((Date.now() - new Date(job.createdAt).getTime()) / 1000);
@@ -76,26 +78,44 @@ export async function logDownloadOutcome(opts: {
     const outputAnalysis    = pickPolishedQa(job.qaCheckResults);
     const deviationFromTarget = await computeDeviation(job.genre ?? "", outputAnalysis);
 
-    await prisma.mixOutcomeFeedback.create({
-      data: {
-        mixJobId:          job.id,
-        genre:             job.genre ?? "unknown",
-        tier:              job.tier ?? "STANDARD",
-        inputQualityScore,
-        mixParamsUsed:     (job.mixParameters ?? {}) as object,
-        outputAnalysis:    (outputAnalysis ?? {}) as object,
-        outcome:           "downloaded",
-        revisionNotes:     Prisma.JsonNull,
-        revisionKeywords:  [],
-        revisionCount:     job.revisionCount ?? 0,
-        variationSelected: null,
-        timeToDownload,
-        deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
-        qualifiesForLearning: inputQualityScore >= 0.6 && (job.revisionCount ?? 0) <= 1,
-        learningWeight:    inputQualityScore,
-        isHoldout,
-      },
-    });
+    if (existing) {
+      // Upgrade revised → downloaded, refreshing measured output + deviation
+      // so the final accepted mix is what feeds the genre aggregate.
+      await prisma.mixOutcomeFeedback.update({
+        where: { id: existing.id },
+        data: {
+          outcome:           "downloaded",
+          mixParamsUsed:     (job.mixParameters ?? {}) as object,
+          outputAnalysis:    (outputAnalysis ?? {}) as object,
+          revisionCount:     job.revisionCount ?? 0,
+          timeToDownload,
+          deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
+          qualifiesForLearning: inputQualityScore >= 0.6 && (job.revisionCount ?? 0) <= 1,
+          learningWeight:    inputQualityScore,
+        },
+      });
+    } else {
+      await prisma.mixOutcomeFeedback.create({
+        data: {
+          mixJobId:          job.id,
+          genre:             job.genre ?? "unknown",
+          tier:              job.tier ?? "STANDARD",
+          inputQualityScore,
+          mixParamsUsed:     (job.mixParameters ?? {}) as object,
+          outputAnalysis:    (outputAnalysis ?? {}) as object,
+          outcome:           "downloaded",
+          revisionNotes:     Prisma.JsonNull,
+          revisionKeywords:  [],
+          revisionCount:     job.revisionCount ?? 0,
+          variationSelected: null,
+          timeToDownload,
+          deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
+          qualifiesForLearning: inputQualityScore >= 0.6 && (job.revisionCount ?? 0) <= 1,
+          learningWeight:    inputQualityScore,
+          isHoldout,
+        },
+      });
+    }
 
     // If qualifies for learning, recompute that genre's target so the next
     // mix benefits from this confirmed-good outcome.

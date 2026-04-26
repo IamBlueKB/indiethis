@@ -112,6 +112,7 @@ function buildMixPrompt(
   naturalLanguagePrompt: string | null,
   referenceUrl:   string | null,
   essentiaHints:  EssentiaHints | null,
+  refContextBlock: string = "",
 ): string {
   return `You are a professional mix engineer with deep expertise in ${genre} production.
 
@@ -138,6 +139,7 @@ ${essentiaHints ? `AUDIO INTELLIGENCE (from ML analysis):\n${formatEssentiaHints
 ${presetProfile ? `GENRE PRESET DEFAULTS:\n${JSON.stringify(presetProfile, null, 2)}` : ""}
 ${naturalLanguagePrompt ? `ARTIST DIRECTION: "${naturalLanguagePrompt}"` : ""}
 ${referenceUrl ? `REFERENCE TRACK: provided (Matchering will handle spectral matching after your chain)` : ""}
+${refContextBlock ? `\n${refContextBlock}\n\nUse the genre profile above as a quantitative anchor for vocal LUFS, vocal-to-drums dB, frequency balance and mix-bus targets. Stay inside the p25–p75 corridor unless the analysis or artist direction clearly demands otherwise.` : ""}
 
 OUTPUT REQUIREMENTS:
 Return a JSON object with this exact structure. Every stem must have an entry, even if processing is minimal.
@@ -306,7 +308,10 @@ export async function decideMixParameters(opts: {
     presetProfile = (preset?.mixProfile as Record<string, unknown>) ?? null;
   }
 
-  const prompt = buildMixPrompt(stems, analysis, genre, mood, presetProfile, naturalLanguagePrompt, referenceUrl, essentiaHints);
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refContextBlock = refCtx?.promptBlock ?? "";
+
+  const prompt = buildMixPrompt(stems, analysis, genre, mood, presetProfile, naturalLanguagePrompt, referenceUrl, essentiaHints, refContextBlock);
 
   const response = await anthropic.messages.create({
     model:      "claude-sonnet-4-5",
@@ -418,6 +423,13 @@ export async function generateDirectionRecommendation(
   const mid  = analysis.frequencyBalance.find(b => b.band === "mid")?.energy  ?? 0;
   const high = analysis.frequencyBalance.find(b => b.band === "high")?.energy ?? 0;
 
+  // Pull genre target so the artist-facing recommendation grounds claims
+  // in the same numbers the actual mastering Claude is using.
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refCtxLine = refCtx
+    ? `\nGenre profile (${refCtx.trackCount} tracks): ${refCtx.promptBlock.split("\n").slice(3, 10).join(" | ")}`
+    : "";
+
   const response = await anthropic.messages.create({
     model:      "claude-haiku-4-5",
     max_tokens: 100,
@@ -430,8 +442,9 @@ Analysis:
 - Key: ${analysis.key}
 - LUFS: ${analysis.lufs.toFixed(1)}
 - Frequency balance: sub=${sub.toFixed(2)}, low=${low.toFixed(2)}, mid=${mid.toFixed(2)}, high=${high.toFixed(2)}
-- Genre: ${genre}
+- Genre: ${genre}${refCtxLine}
 
+If a genre profile is provided, you may compare the track to those targets when giving your recommendation.
 Respond with just the recommendation, no preamble.`,
     }],
   });

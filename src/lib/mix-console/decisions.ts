@@ -80,6 +80,13 @@ export async function generateMixRecommendation(params: {
 }): Promise<string> {
   const { analysis, genre, tier, customDirection, inputFiles } = params;
 
+  // Pull genre target so the artist-facing recommendation grounds claims
+  // in the same numbers the mix-decision Claude is using.
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refCtxBlock = refCtx
+    ? `\nGenre profile (${refCtx.trackCount} tracks): ${refCtx.promptBlock.split("\n").slice(3, 12).join(" | ")}`
+    : "";
+
   const stemLabels = inputFiles.map(f => f.label).join(", ");
   const rt60       = analysis.roomReverb;
   const reverbState =
@@ -111,9 +118,10 @@ Vocal roles: ${analysis.vocalClassification.map(v => `stem ${v.stemIndex}=${v.ro
 
 Per-stem analysis:
 ${stemSummary || "(none)"}
+${refCtxBlock}
 ${customDirection ? `\nArtist direction: "${customDirection}" — address this specifically.` : ""}
 
-Write 2–3 sentences about what's actually going on in THIS mix. Reference at least one concrete measured value. No examples, no templates — write it fresh.`;
+Write 2–3 sentences about what's actually going on in THIS mix. Reference at least one concrete measured value. If a genre profile is provided, you may compare the track to those targets (e.g. "your vocal sits 3dB below the genre's typical level"). No examples, no templates — write it fresh.`;
 
   const msg = await client.messages.create({
     model:       "claude-haiku-4-5",
@@ -534,6 +542,13 @@ async function runMixCritic(params: {
 }): Promise<MixDecision | null> {
   const { firstPass, analysis, genre, tier, referenceAnalysis } = params;
 
+  // Critic gets the same genre target the first-pass call had access to,
+  // so it can flag any deviation from the genre's p25–p75 corridor.
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refCtxBlock = refCtx
+    ? `\n\nREFERENCE-LIBRARY GENRE TARGET (use to spot deviations):\n${refCtx.promptBlock}`
+    : "";
+
   const stemSummary = analysis.stemAnalysis
     .map(s => `${s.label} (${s.role ?? "?"}): ${s.lufs.toFixed(1)} LUFS, balance sub/low/mid/high = ${s.balance.sub.toFixed(2)}/${s.balance.low.toFixed(2)}/${s.balance.mid.toFixed(2)}/${s.balance.high.toFixed(2)}`)
     .join("\n");
@@ -565,7 +580,7 @@ Pitch deviation: ${analysis.pitchDeviation.toFixed(2)} semitones
 
 Per-stem analysis:
 ${stemSummary}
-${referenceAnalysis ? `\nReference "${referenceAnalysis.fileName}": ${referenceAnalysis.lufs.toFixed(1)} LUFS, balance ${JSON.stringify(referenceAnalysis.balance)}` : ""}
+${referenceAnalysis ? `\nReference "${referenceAnalysis.fileName}": ${referenceAnalysis.lufs.toFixed(1)} LUFS, balance ${JSON.stringify(referenceAnalysis.balance)}` : ""}${refCtxBlock}
 
 First-pass mix decision to review:
 ${JSON.stringify(firstPass, null, 2).slice(0, 6000)}
@@ -600,6 +615,13 @@ export async function reviseParameters(params: {
 }): Promise<MixDecision> {
   const { previousParams, feedback, analysis, genre, tier } = params;
 
+  // Pull genre target so revisions stay anchored to the genre instead of
+  // drifting freely with each iteration.
+  const refCtx = await loadReferenceContext(genre).catch(() => null);
+  const refCtxBlock = refCtx
+    ? `\n\nREFERENCE-LIBRARY GENRE TARGET (stay inside the corridor unless feedback explicitly asks you to leave it):\n${refCtx.promptBlock}`
+    : "";
+
   const prompt = `You are a professional mix engineer AI. The artist gave revision feedback on a mix.
 Adjust the mix parameters to address the feedback. Return ONLY updated JSON, same schema as before.
 
@@ -609,7 +631,7 @@ ${JSON.stringify(previousParams, null, 2).slice(0, 3000)}
 Artist feedback: "${feedback}"
 
 Genre: ${genre}
-BPM: ${analysis.bpm.toFixed(1)}, Key: ${analysis.key}
+BPM: ${analysis.bpm.toFixed(1)}, Key: ${analysis.key}${refCtxBlock}
 
 Return ONLY the updated JSON object with the same structure. Make targeted changes to address the feedback.
 Do not change things the artist didn't mention.`;
