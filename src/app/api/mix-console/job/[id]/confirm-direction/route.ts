@@ -36,6 +36,7 @@ export async function POST(
         status:           true,
         userId:           true,
         guestEmail:       true,
+        tier:             true,
         mixParameters:    true,
         inputFiles:       true,
         genre:            true,
@@ -91,6 +92,7 @@ export async function POST(
     const mixParams = {
       ...(job.mixParameters as Record<string, unknown> ?? {}),
       stems_urls:       stemsUrlsObj,
+      tier:             job.tier         ?? "STANDARD",
       genre:            job.genre        ?? "HIP_HOP",
       pitchCorrection:  job.pitchCorrection ?? "OFF",
       breathEditing:    job.breathEditing   ?? "SUBTLE",

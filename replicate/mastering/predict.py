@@ -2458,8 +2458,10 @@ class Predictor(BasePredictor):
         fade_out           = params.get("fadeOut", "AUTO")          # AUTO | 3S | 5S | 8S | NO
         beat_polish        = bool(params.get("beatPolish", False))  # extra transient + sat on beat — no Claude param maps to this
         reference_notes    = params.get("referenceNotes", None)     # informational; logged for traceability
+        tier               = str(params.get("tier", "STANDARD")).upper()  # STANDARD | PREMIUM | PRO
         if reference_notes:
             print(f"referenceNotes: {str(reference_notes)[:200]}", flush=True)
+        print(f"tier: {tier}", flush=True)
         # Note: mixVibe / reverbStyle / delayStyle are NOT applied as DSP multipliers here.
         # Claude reads them from the prompt (see decisions.ts) and bakes them into
         # busParams (eqLowShelf/eqHighShelf/glueComp*) and per-stem reverbSend +
@@ -3003,12 +3005,19 @@ class Predictor(BasePredictor):
                     clip[:, -fade:] *= np.linspace(1, 0, fade)
                 return clip
 
-            # ── Generate 3 meaningfully different variations ──
-            variation_configs = [
-                ("clean",      "transparent"),
-                ("polished",   "radio"),
-                ("aggressive", "punchy"),
-            ]
+            # ── Variation rendering — tier-aware ──
+            # STANDARD: 3 variations (clean/polished/aggressive) — menu of options
+            # PREMIUM/PRO: single "mix" output rendered with Claude's exact busParams
+            #   already baked into `mixed` — no extra coloring. They're paying for
+            #   Claude's best recommendation, not a menu.
+            if tier in ("PREMIUM", "PRO"):
+                variation_configs = [("mix", "claude_exact")]
+            else:
+                variation_configs = [
+                    ("clean",      "transparent"),
+                    ("polished",   "radio"),
+                    ("aggressive", "punchy"),
+                ]
             file_paths    = {}
             waveforms     = {}
             preview_paths = {}
@@ -3017,7 +3026,16 @@ class Predictor(BasePredictor):
             for name, style in variation_configs:
                 var_audio = np.nan_to_num(mixed.copy().astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
 
-                if style == "transparent":
+                if style == "claude_exact":
+                    # Premium/Pro: mixed already has Claude's exact busParams baked in
+                    # (multiband, dynamic EQ, Claude's eqLowShelf/eqHighShelf/glueComp,
+                    # widener, M/S EQ, parallel comp, soft clip, LUFS norm to -13,
+                    # peak normalize to Claude's bus_normalize, fade out). Apply only
+                    # a transparent safety limiter to catch any inter-sample peaks.
+                    var_board = Pedalboard([
+                        Limiter(threshold_db=-0.3),
+                    ])
+                elif style == "transparent":
                     # Clean: very light bus glue, -1 dB ceiling — closest to raw mix
                     var_board = Pedalboard([
                         Compressor(threshold_db=-16, ratio=1.5, attack_ms=30, release_ms=250),

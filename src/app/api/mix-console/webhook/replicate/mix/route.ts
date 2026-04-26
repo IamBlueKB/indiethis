@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
           const job = await prisma.mixJob.findUnique({
             where: { id: jobId },
             select: {
-              inputFiles: true, genre: true, mixParameters: true, analysisData: true,
+              inputFiles: true, genre: true, tier: true, mixParameters: true, analysisData: true,
               pitchCorrection: true, breathEditing: true, fadeOut: true,
               mixVibe: true, reverbStyle: true, delayStyle: true,
               beatPolish: true, referenceNotes: true,
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
           const mixParams = {
             ...(job.mixParameters as Record<string, unknown> ?? {}),
             stems_urls:      stemsUrlsObj,
+            tier:            job.tier            ?? "STANDARD",
             genre:           job.genre           ?? "HIP_HOP",
             pitchCorrection: job.pitchCorrection  ?? "OFF",
             breathEditing:   job.breathEditing    ?? "SUBTLE",
