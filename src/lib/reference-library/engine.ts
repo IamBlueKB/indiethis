@@ -111,9 +111,25 @@ export async function analyzeReferenceTrack(opts: {
     version: MIX_VERSION,
     input:   replicateInput,
   });
-  const result = await replicate.wait(prediction);
+
+  // Hard timeout per track: 5 min. Without this, replicate.wait() hangs
+  // forever if Replicate stalls and the batch is dead in the water.
+  const TIMEOUT_MS = 5 * 60 * 1000;
+  const result = await Promise.race<typeof prediction | null>([
+    replicate.wait(prediction),
+    new Promise<null>(resolve => setTimeout(() => resolve(null), TIMEOUT_MS)),
+  ]);
+
+  if (result === null) {
+    // Cancel the runaway prediction so we stop paying for it.
+    try { await replicate.predictions.cancel(prediction.id); } catch {}
+    throw new Error(`analyze-reference timed out after ${TIMEOUT_MS / 1000}s (prediction ${prediction.id})`);
+  }
   if (result.status === "failed") {
     throw new Error(`analyze-reference failed: ${result.error ?? "unknown"}`);
+  }
+  if (result.status !== "succeeded") {
+    throw new Error(`analyze-reference unexpected status: ${result.status}`);
   }
   const raw = result.output as string;
   return JSON.parse(raw) as ReferenceProfileData;
