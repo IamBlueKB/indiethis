@@ -205,7 +205,10 @@ export interface FrequencyVisualizerProps {
   audioRef:  RefObject<HTMLAudioElement | null>;
   isPlaying: boolean;
   height?:   number;
+  /** Click maps to revision marker (Premium/Pro). Receives currentTime. */
   onTap?:    (timeSec: number) => void;
+  /** Click also seeks to the clicked X position. Always wired. */
+  onSeek?:   (timeSec: number) => void;
 }
 
 export function FrequencyVisualizer({
@@ -213,6 +216,7 @@ export function FrequencyVisualizer({
   isPlaying: _isPlaying,
   height = 200,
   onTap,
+  onSeek,
 }: FrequencyVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef   = useRef<HTMLDivElement | null>(null);
@@ -316,28 +320,61 @@ export function FrequencyVisualizer({
     return () => cancelAnimationFrame(rafRef.current);
   }, [audioRef, height]);
 
+  // Map a click X position on the canvas to a time in the song. The visible
+  // window is centered on the playhead at canvas center, so X=center maps to
+  // currentTime; X=0 maps to currentTime - WINDOW_SECONDS/2; etc.
+  const handleSeekClick = (clientX: number) => {
+    if (!onSeek) return;
+    const audio = audioRef.current;
+    const wrap  = wrapRef.current;
+    if (!audio || !wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const cssW = rect.width;
+    if (cssW <= 0) return;
+    const padXcss   = 16;                // matches renderFrame padX (in CSS px)
+    const usableW   = Math.max(1, cssW - padXcss * 2);
+    const xInUsable = Math.max(0, Math.min(usableW, clientX - rect.left - padXcss));
+    const cur       = audio.currentTime || 0;
+    const halfWin   = WINDOW_SECONDS / 2;
+    const seekTo    = (cur - halfWin) + (xInUsable / usableW) * WINDOW_SECONDS;
+    const clamped   = Math.max(0, Math.min(audio.duration || seekTo, seekTo));
+    onSeek(clamped);
+  };
+
+  // Click ONLY seeks. Marking a revision moment is a separate gesture
+  // (Enter/Space key on the focused canvas, or the explicit "Mark this
+  // moment" button in MixResultsClient) so artists can scrub freely
+  // without dropping a marker every time they click.
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleSeekClick(e.clientX);
+  };
+
+  const isInteractive = !!(onTap || onSeek);
+
   return (
     <div ref={wrapRef} className="w-full">
       <canvas
         ref={canvasRef}
-        role={onTap ? "button" : "img"}
-        tabIndex={onTap ? 0 : undefined}
+        role={isInteractive ? "button" : "img"}
+        tabIndex={isInteractive ? 0 : undefined}
         aria-label={onTap
-          ? "Press Enter during playback to mark this moment for revision feedback"
-          : "Three step-function energy lines scrolling at song pace — mix, vocals, beat"}
-        onClick={onTap ? () => onTap(audioRef.current?.currentTime ?? 0) : undefined}
+          ? "Click anywhere on the wave to seek. Press Enter to mark this moment for revision feedback."
+          : (onSeek
+            ? "Click anywhere on the wave to seek to that moment"
+            : "Three step-function energy lines scrolling at song pace — mix, vocals, beat")}
+        onClick={isInteractive ? handleClick : undefined}
         onKeyDown={onTap ? (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onTap(audioRef.current?.currentTime ?? 0);
           }
         } : undefined}
-        className={onTap ? "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0B09] rounded" : undefined}
+        className={isInteractive ? "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0B09] rounded" : undefined}
         style={{
           display: "block",
           width:   "100%",
           height,
-          cursor:  onTap ? "crosshair" : "default",
+          cursor:  isInteractive ? "pointer" : "default",
         }}
       />
     </div>

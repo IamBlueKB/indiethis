@@ -104,13 +104,19 @@ export function LogoPlayer({ controller, maxTime, size = 180 }: LogoPlayerProps)
           />
         </svg>
 
-        {/* Coral play / pause button */}
+        {/* Coral play / pause button — sized so the outer ring stays clickable
+            for scrub. Previous absolute inset-0 covered the full square and
+            swallowed every ring click. */}
         <button
           type="button"
           onClick={toggle}
           aria-label={isPlaying ? "Pause" : "Play"}
-          className="absolute inset-0 flex items-center justify-center rounded-[30%]"
+          className="absolute flex items-center justify-center rounded-full"
           style={{
+            top:    "25%",
+            left:   "25%",
+            width:  "50%",
+            height: "50%",
             background: "transparent",
             boxShadow: isPlaying ? "none" : "0 0 20px 4px rgba(232,115,90,0.25)",
             animation: isPlaying ? "none" : "mixPlayerPulse 2s ease-in-out infinite",

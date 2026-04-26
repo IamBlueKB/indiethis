@@ -263,8 +263,27 @@ export function MixResultsClient({
           audioRef={audioRef}
           isPlaying={controller.isPlaying}
           height={visualizerHeight}
+          onSeek={controller.seek}
           onTap={canRevise ? handleVisualizerTap : undefined}
         />
+
+        {canRevise && (
+          <div className="flex justify-center mt-2">
+            <button
+              type="button"
+              onClick={() => handleVisualizerTap(audioRef.current?.currentTime ?? 0)}
+              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
+              style={{
+                backgroundColor: "#1A1815",
+                color:           "#D4AF37",
+                border:          "1px solid #2A2723",
+              }}
+              aria-label="Mark the current playback moment for revision feedback"
+            >
+              + Mark this moment for revision
+            </button>
+          </div>
+        )}
 
         {/* Legend */}
         <div className="flex items-center justify-center flex-wrap gap-x-4 sm:gap-x-6 gap-y-1 mt-3 text-[11px]" style={{ color: "#888" }}>
