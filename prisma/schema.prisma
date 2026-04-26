@@ -3392,7 +3392,7 @@ model ReferenceProfile {
   subgenre              String?
   trackName             String?                      // human-readable label for admin UI
   artistName            String?
-  fingerprintHash       String?                      // chromaprint fingerprint for dedup
+  fingerprintHash       String?  @unique             // chromaprint fingerprint for dedup; UNIQUE so race-conditions in batch uploads can't insert dupes
   mixJobId              String?                      // links to MixJob if user_reference / user_mix_outcome
   profileData           Json                         // full analysis JSON
   qualityGatePassed     Boolean  @default(false)

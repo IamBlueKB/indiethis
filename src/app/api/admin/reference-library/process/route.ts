@@ -96,23 +96,40 @@ export async function POST(req: NextRequest) {
           }
 
           const sqWeight = SOURCE_WEIGHTS[t.sourceQuality] ?? 0.6;
-          await prisma.referenceProfile.create({
-            data: {
-              source:                "commercial",
-              sourceQuality:         t.sourceQuality,
-              sourceQualityWeight:   sqWeight,
-              separationConfidence:  profile.separation_confidence,
-              separationWeight:      profile.separation_weight,
-              genre:                 t.genre,
-              subgenre:              t.subgenre ?? null,
-              trackName:             t.trackName ?? null,
-              artistName:            t.artistName ?? null,
-              fingerprintHash:       fpHash,
-              profileData:           profile as any,
-              qualityGatePassed:     profile.separation_confidence >= 0.6,
-              weight:                1.0,
-            },
-          });
+          try {
+            await prisma.referenceProfile.create({
+              data: {
+                source:                "commercial",
+                sourceQuality:         t.sourceQuality,
+                sourceQualityWeight:   sqWeight,
+                separationConfidence:  profile.separation_confidence,
+                separationWeight:      profile.separation_weight,
+                genre:                 t.genre,
+                subgenre:              t.subgenre ?? null,
+                trackName:             t.trackName ?? null,
+                artistName:            t.artistName ?? null,
+                fingerprintHash:       fpHash,
+                profileData:           profile as any,
+                qualityGatePassed:     profile.separation_confidence >= 0.6,
+                weight:                1.0,
+              },
+            });
+          } catch (createErr) {
+            // P2002 = unique constraint violation. Two requests in the same
+            // batch can both pass the findFirst check before either insert
+            // commits — the unique index on fingerprintHash catches the race.
+            const code = (createErr as { code?: string })?.code;
+            if (code === "P2002") {
+              skipped++;
+              send({
+                type:   "track_skipped",
+                index:  i,
+                reason: "duplicate fingerprint (race-caught by unique index)",
+              });
+              continue;
+            }
+            throw createErr;
+          }
           touchedGenres.add(t.genre);
           ok++;
           send({ type: "track_ok", index: i, genre: t.genre, separation: profile.separation_confidence });

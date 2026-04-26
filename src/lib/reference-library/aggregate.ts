@@ -119,6 +119,11 @@ export async function recomputeGenreTarget(genre: string): Promise<void> {
     for (const p of profiles) {
       const v = pluck(p.profileData, path);
       if (v == null) continue;
+      // Note on true peak: lossy-source profiles routinely measure > 0 dBFS
+      // because float overshoots aren't bounded by the codec's PCM range.
+      // We keep these values (they describe real corpus shape) but clamp the
+      // resulting target mean to a safe master ceiling below — so Claude sees
+      // "hot and tight" but won't aim past 0 dBTP.
       const w = (p.sourceQualityWeight || 1.0)
               * (p.separationWeight    || 1.0)
               * (p.weight              || 1.0)
@@ -127,7 +132,18 @@ export async function recomputeGenreTarget(genre: string): Promise<void> {
       vals.push(v);
       wts.push(w);
     }
-    if (vals.length >= 3) targets[key] = weightedStats(vals, wts);
+    if (vals.length >= 3) {
+      const stats = weightedStats(vals, wts);
+      // Hard clamp the final true-peak target to ≤ −0.5 dBTP regardless of
+      // what the corpus produced. Belt-and-braces on top of the per-row gate.
+      if (key === "mix_true_peak") {
+        const cap = -0.5;
+        if (stats.mean > cap) stats.mean = cap;
+        if (stats.p75  > cap) stats.p75  = cap;
+        if (stats.p25  > cap) stats.p25  = cap;
+      }
+      targets[key] = stats;
+    }
   }
 
   await prisma.genreTarget.upsert({
