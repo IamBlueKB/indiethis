@@ -59,28 +59,46 @@ export function LogoPlayer({ controller, maxTime, size = 180 }: LogoPlayerProps)
   const progress   = total > 0 ? Math.min(1, currentTime / total) : 0;
   const dashOffset = pathLen > 0 ? pathLen * (1 - progress) : pathLen;
 
-  function handleRingScrub(e: React.MouseEvent<SVGSVGElement>) {
-    if (total <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+  // Single click handler — covers the whole player surface. Hit-tests by
+  // distance from center so the button's inset-0 hitbox doesn't swallow
+  // ring clicks any more:
+  //   • near the center (≤ 30% of half-size) → toggle play/pause
+  //   • out toward the ring                  → scrub to that angle
+  function handlePlayerClick(e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const cx   = rect.left + rect.width  / 2;
     const cy   = rect.top  + rect.height / 2;
     const dx   = e.clientX - cx;
     const dy   = e.clientY - cy;
-    // Angle from 12 o'clock, clockwise — same as mastering player
-    const angle = (Math.atan2(dx, -dy) + Math.PI) / (2 * Math.PI); // 0..1
-    seek(angle * total);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const half = rect.width / 2;
+    if (dist <= half * 0.30) {
+      toggle();
+      return;
+    }
+    if (total > 0) {
+      // 0 at 12 o'clock, increasing clockwise to 1.
+      // atan2(dx, -dy): top=0, right=+π/2, bottom=±π, left=-π/2.
+      let t = Math.atan2(dx, -dy) / (2 * Math.PI);
+      if (t < 0) t += 1;
+      seek(t * total);
+    }
   }
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="relative" style={{ width: size, height: size }}>
+      <div
+        className="relative cursor-pointer"
+        style={{ width: size, height: size }}
+        onClick={handlePlayerClick}
+        role="button"
+        aria-label={isPlaying ? "Pause (click center) or scrub (click ring)" : "Play (click center) or scrub (click ring)"}
+      >
         <svg
           viewBox={`0 0 ${SQ} ${SQ}`}
           width={size}
           height={size}
-          onClick={handleRingScrub}
-          className="cursor-pointer"
-          style={{ display: "block" }}
+          style={{ display: "block", pointerEvents: "none" }}
           aria-hidden="true"
         >
           {/* Background ring */}
@@ -104,22 +122,18 @@ export function LogoPlayer({ controller, maxTime, size = 180 }: LogoPlayerProps)
           />
         </svg>
 
-        {/* Coral play / pause button — sized so the outer ring stays clickable
-            for scrub. Previous absolute inset-0 covered the full square and
-            swallowed every ring click. */}
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={isPlaying ? "Pause" : "Play"}
-          className="absolute flex items-center justify-center rounded-full"
+        {/* Coral play / pause button — visually identical to original
+            (absolute inset-0). Pointer events disabled so the parent
+            handlePlayerClick gets every click and routes by hit-test:
+            center → toggle, ring → scrub. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-center rounded-[30%]"
           style={{
-            top:    "25%",
-            left:   "25%",
-            width:  "50%",
-            height: "50%",
             background: "transparent",
             boxShadow: isPlaying ? "none" : "0 0 20px 4px rgba(232,115,90,0.25)",
             animation: isPlaying ? "none" : "mixPlayerPulse 2s ease-in-out infinite",
+            pointerEvents: "none",
           }}
         >
           {isPlaying ? (
@@ -132,7 +146,7 @@ export function LogoPlayer({ controller, maxTime, size = 180 }: LogoPlayerProps)
               <polygon points="2,2 30,18 2,34" fill={CORAL} />
             </svg>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Track time */}

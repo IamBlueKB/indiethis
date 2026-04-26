@@ -320,9 +320,16 @@ export function FrequencyVisualizer({
     return () => cancelAnimationFrame(rafRef.current);
   }, [audioRef, height]);
 
-  // Map a click X position on the canvas to a time in the song. The visible
-  // window is centered on the playhead at canvas center, so X=center maps to
-  // currentTime; X=0 maps to currentTime - WINDOW_SECONDS/2; etc.
+  // Map a click X position on the canvas to a time in the song.
+  //
+  // The wave visually scrolls a ~4.5s window centered on the playhead, so
+  // mapping clicks to "what you can see" only allows ±2.25s nudges — useless
+  // for navigating a full song. Instead we treat the canvas like a standard
+  // waveform scrubber: full width = full song duration. Click 25% in → 25%
+  // of the song. The visual content under the cursor isn't where you'll
+  // land (it's still showing ±2.25s of the current playhead), but the
+  // playhead immediately seeks there and the wave re-centers on impact —
+  // which matches how every other audio scrub bar behaves.
   const handleSeekClick = (clientX: number) => {
     if (!onSeek) return;
     const audio = audioRef.current;
@@ -334,19 +341,34 @@ export function FrequencyVisualizer({
     const padXcss   = 16;                // matches renderFrame padX (in CSS px)
     const usableW   = Math.max(1, cssW - padXcss * 2);
     const xInUsable = Math.max(0, Math.min(usableW, clientX - rect.left - padXcss));
-    const cur       = audio.currentTime || 0;
-    const halfWin   = WINDOW_SECONDS / 2;
-    const seekTo    = (cur - halfWin) + (xInUsable / usableW) * WINDOW_SECONDS;
-    const clamped   = Math.max(0, Math.min(audio.duration || seekTo, seekTo));
-    onSeek(clamped);
+    const dur       = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+    if (dur <= 0) return;
+    const seekTo = (xInUsable / usableW) * dur;
+    onSeek(Math.max(0, Math.min(dur, seekTo)));
   };
 
-  // Click ONLY seeks. Marking a revision moment is a separate gesture
-  // (Enter/Space key on the focused canvas, or the explicit "Mark this
-  // moment" button in MixResultsClient) so artists can scrub freely
-  // without dropping a marker every time they click.
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Click + drag scrubbing. Pointer down starts a scrub, pointer move
+  // continues seeking while the button is held (or finger is down on
+  // touch), pointer up ends. Capturing the pointer means we keep getting
+  // move events even if the cursor leaves the canvas — standard scrubber
+  // UX. Marking a revision moment is a separate gesture (Enter/Space on
+  // the focused canvas) so artists can scrub freely without dropping a
+  // marker every time they click.
+  const draggingRef = useRef(false);
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!onSeek) return;
+    draggingRef.current = true;
+    (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     handleSeekClick(e.clientX);
+  };
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!draggingRef.current) return;
+    handleSeekClick(e.clientX);
+  };
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    try { (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId); } catch {}
   };
 
   const isInteractive = !!(onTap || onSeek);
@@ -362,7 +384,10 @@ export function FrequencyVisualizer({
           : (onSeek
             ? "Click anywhere on the wave to seek to that moment"
             : "Three step-function energy lines scrolling at song pace — mix, vocals, beat")}
-        onClick={isInteractive ? handleClick : undefined}
+        onPointerDown={isInteractive ? handlePointerDown : undefined}
+        onPointerMove={isInteractive ? handlePointerMove : undefined}
+        onPointerUp={isInteractive ? handlePointerUp : undefined}
+        onPointerCancel={isInteractive ? handlePointerUp : undefined}
         onKeyDown={onTap ? (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -375,6 +400,7 @@ export function FrequencyVisualizer({
           width:   "100%",
           height,
           cursor:  isInteractive ? "pointer" : "default",
+          touchAction: isInteractive ? "none" : undefined,
         }}
       />
     </div>
