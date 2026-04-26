@@ -340,6 +340,35 @@ Rules:
 - deReverbStrength: 0 unless RT60 is clearly above 0.4s AND vocal sounds roomy; use 0.2–0.35 moderate, 0.4–0.6 heavy
 - busParams.stereoWidth: 1.0–1.5 (1.0 = no change, 1.25 = slightly wider, 1.5 = wide)
 - referenceNotes: if a reference track was provided, write 1-2 sentences explaining what you took from it (loudness target, tonal changes made). If no reference, leave as empty string.
+
+TOGGLE ENFORCEMENT — these are the artist's explicit creative choices. You MUST honor them.
+The Python engine does not second-guess your numbers, so if you contradict the toggles the
+artist literally won't get what they asked for. These rules are non-negotiable:
+
+- reverbStyle="DRY"        → every stem reverbSend MUST be ≤ 0.02 (functionally none)
+- reverbStyle="ROOM"       → lead reverbSend 0.08–0.12, supporting 0.10–0.18
+- reverbStyle="PLATE"      → lead reverbSend 0.10–0.14, supporting 0.15–0.22 (slightly brighter tail; reflect by trimming reverb HP-affected lows in your stem EQ if needed)
+- reverbStyle="HALL"       → lead reverbSend 0.14–0.18, supporting 0.20–0.28
+- reverbStyle="CATHEDRAL"  → lead reverbSend 0.18–0.22 (CAP at 0.22 — you still must not pour water on the vocal), supporting 0.25–0.32
+- delayStyle="OFF"         → delayThrows MUST be an empty array []. Do not include throws even if lyrics are perfect for them.
+- delayStyle="SUBTLE"      → ≤ 2 throws max, only on chorus hooks
+- delayStyle="STANDARD"    → up to 4 throws across choruses + bridge
+- delayStyle="DUB"         → up to 6 throws, can include verse hooks
+- mixVibe="CLEAN"          → eqLowShelf 0.0–1.0, eqHighShelf 0.5–1.5, glueCompRatio 1.8–2.2, glueCompThresh -10 to -13
+- mixVibe="WARM"           → eqLowShelf 1.5–2.5, eqHighShelf -1.0 to 0.0, glueCompRatio ≤ 2.0, glueCompThresh -10 to -12 (slower glue feel)
+- mixVibe="PUNCHY"         → eqLowShelf 0.5–1.5, eqHighShelf 0.5–1.5, glueCompRatio ≥ 2.5, glueCompThresh ≤ -14
+- mixVibe="AGGRESSIVE"     → eqLowShelf 1.0–2.0, eqHighShelf 1.0–2.0, glueCompRatio ≥ 3.0, glueCompThresh ≤ -15, peakNormalize -0.5
+- mixVibe="AIRY"           → eqLowShelf 0.0–1.0, eqHighShelf 1.5–2.5, glueCompRatio 1.8–2.2, peakNormalize -1.0
+- mixVibe="VINTAGE"        → eqLowShelf 1.0–2.0, eqHighShelf -1.5 to -0.5, glueCompRatio ≤ 2.0, glueCompThresh -10 to -12 (rolled highs, soft glue)
+- beatPolish=true          → Python adds extra distortion + parallel saturation + harder transient shaping on the beat stem. Compensate by pulling beat stemParams.gainDb down 0.5dB to leave bus headroom for the added harmonic content.
+- beatPolish=false         → no compensation needed.
+- pitchCorrection="OFF"    → no special handling
+- pitchCorrection!="OFF"   → if you observe pitchDeviation > 0.3 semitones in analysis, increase deEssThresh by 1–2dB (tuning surfaces sibilance)
+
+Reference-library anchoring (only when refCtx is provided above): if your busParams.peakNormalize
+deviates more than 1.0dB from the genre p50, briefly justify it in referenceNotes (e.g. "pulled
+peakNormalize to -1.5 because reference LUFS = -10 vs genre p50 = -13").
+
 - Return ONLY the JSON object, nothing else.`;
 
   const raw = await callMixDecisionClaude({
@@ -372,6 +401,16 @@ Rules:
     };
   }
 
+  // ─── Output validation gate ─────────────────────────────────────────────
+  // Programmatic safety net: if Claude contradicts the artist's explicit
+  // toggle choices (e.g. delayThrows present while delayStyle=OFF), fix it
+  // here BEFORE the critic runs. The critic re-evaluates the cleaned output.
+  firstPass = enforceToggles(firstPass, {
+    reverbStyle: params.reverbStyle,
+    delayStyle:  params.delayStyle,
+    mixVibe:     params.mixVibe,
+  });
+
   // ─── Two-pass critic (Premium/Pro only) ────────────────────────────────
   // Second Claude call acts as a senior mix engineer reviewing the first pass.
   // It can overwrite specific params if the first pass made engineering errors
@@ -387,7 +426,13 @@ Rules:
         tier:            params.tier,
         referenceAnalysis: params.referenceAnalysis,
       });
-      if (refined) return refined;
+      if (refined) {
+        return enforceToggles(refined, {
+          reverbStyle: params.reverbStyle,
+          delayStyle:  params.delayStyle,
+          mixVibe:     params.mixVibe,
+        });
+      }
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
       console.error(`[mix-decisions:critic] skipped — ${m.slice(0, 160)}`);
@@ -395,6 +440,81 @@ Rules:
   }
 
   return firstPass;
+}
+
+// ─── Output validation gate ─────────────────────────────────────────────────
+
+/**
+ * Programmatic safety net that enforces the artist's toggle choices on
+ * Claude's output. Runs after firstPass parse and again after the critic.
+ *
+ * Philosophy: the prompt asks Claude to honor toggles, but LLMs drift.
+ * Toggles are explicit user intent — if Claude contradicts them, the
+ * artist literally doesn't get what they asked for. We clamp here so
+ * the engine can never accidentally play music the user vetoed.
+ *
+ * Only enforces hard constraints. Soft tonal preferences (mixVibe shelves)
+ * are left to Claude — clamping them would defeat the purpose of having
+ * an LLM make creative calls.
+ */
+function enforceToggles(
+  decision: MixDecision,
+  toggles:  { reverbStyle: string; delayStyle: string; mixVibe: string },
+): MixDecision {
+  const out = { ...decision };
+  const warnings = [...(out.warnings ?? [])];
+
+  // delayStyle=OFF → no delay throws, period.
+  if (toggles.delayStyle?.toUpperCase() === "OFF" && (out.delayThrows?.length ?? 0) > 0) {
+    warnings.push(`Stripped ${out.delayThrows.length} delay throws — delayStyle=OFF.`);
+    out.delayThrows = [];
+  }
+
+  // reverbStyle=DRY → cap every reverbSend at 0.02
+  if (toggles.reverbStyle?.toUpperCase() === "DRY" && out.stemParams) {
+    const fixed: Record<string, StemParams> = {};
+    let stripped = 0;
+    for (const [label, sp] of Object.entries(out.stemParams)) {
+      if ((sp.reverbSend ?? 0) > 0.02) {
+        fixed[label] = { ...sp, reverbSend: 0.02 };
+        stripped++;
+      } else {
+        fixed[label] = sp;
+      }
+    }
+    if (stripped > 0) {
+      warnings.push(`Capped reverbSend on ${stripped} stem(s) — reverbStyle=DRY.`);
+      out.stemParams = fixed;
+    }
+  }
+
+  // reverbStyle=CATHEDRAL → cap lead vocal at 0.22 (still has to sit clear of vocal)
+  if (toggles.reverbStyle?.toUpperCase() === "CATHEDRAL" && out.stemParams) {
+    const fixed: Record<string, StemParams> = {};
+    let capped = 0;
+    for (const [label, sp] of Object.entries(out.stemParams)) {
+      const isLead = sp.role === "lead";
+      if (isLead && (sp.reverbSend ?? 0) > 0.22) {
+        fixed[label] = { ...sp, reverbSend: 0.22 };
+        capped++;
+      } else {
+        fixed[label] = sp;
+      }
+    }
+    if (capped > 0) {
+      warnings.push(`Capped lead reverbSend at 0.22 — reverbStyle=CATHEDRAL.`);
+      out.stemParams = fixed;
+    }
+  }
+
+  // delayStyle=SUBTLE → max 2 throws (keep highest-confidence first 2)
+  if (toggles.delayStyle?.toUpperCase() === "SUBTLE" && (out.delayThrows?.length ?? 0) > 2) {
+    warnings.push(`Trimmed delay throws to 2 — delayStyle=SUBTLE.`);
+    out.delayThrows = out.delayThrows.slice(0, 2);
+  }
+
+  out.warnings = warnings;
+  return out;
 }
 
 // ─── Two-pass critic ────────────────────────────────────────────────────────

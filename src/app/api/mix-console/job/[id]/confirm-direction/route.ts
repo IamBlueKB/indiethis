@@ -47,6 +47,7 @@ export async function POST(
         reverbStyle:      true,
         delayStyle:       true,
         beatPolish:       true,
+        referenceNotes:   true,
       },
     });
 
@@ -98,6 +99,7 @@ export async function POST(
       reverbStyle:      job.reverbStyle     ?? "ROOM",
       delayStyle:       job.delayStyle      ?? "STANDARD",
       beatPolish:       job.beatPolish      ?? false,
+      referenceNotes:   job.referenceNotes  ?? null,
       roomReverb:       (analysisData.room_reverb as number) ?? 0,
       bpm:              (analysisData.bpm          as number) ?? 120,
       sections:         (analysisData.sections     as unknown[]) ?? [],

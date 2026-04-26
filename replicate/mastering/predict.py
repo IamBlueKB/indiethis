@@ -2453,9 +2453,17 @@ class Predictor(BasePredictor):
         bpm_global         = float(params.get("bpm", 120.0))        # for delay sync
         breath_editing     = params.get("breathEditing",  "SUBTLE") # OFF | SUBTLE | CLEAN | TIGHT
         volume_riding      = params.get("volumeRiding",   True)     # bool
-        section_map        = params.get("sectionMap", [])           # Claude's section gain overrides [{label, gainDb, start, end}]
+        section_map        = params.get("sectionMap", [])           # Claude's section gain overrides [{sectionName, gainDb, reverbScale, compScale}]
         sections_data      = params.get("sections", [])             # analysis sections [{start, end, type}]
         fade_out           = params.get("fadeOut", "AUTO")          # AUTO | 3S | 5S | 8S | NO
+        beat_polish        = bool(params.get("beatPolish", False))  # extra transient + sat on beat — no Claude param maps to this
+        reference_notes    = params.get("referenceNotes", None)     # informational; logged for traceability
+        if reference_notes:
+            print(f"referenceNotes: {str(reference_notes)[:200]}", flush=True)
+        # Note: mixVibe / reverbStyle / delayStyle are NOT applied as DSP multipliers here.
+        # Claude reads them from the prompt (see decisions.ts) and bakes them into
+        # busParams (eqLowShelf/eqHighShelf/glueComp*) and per-stem reverbSend +
+        # delayThrows. Adding multipliers on top would override Claude's analysis.
 
         if not stems_input:
             return {"file_paths": {}, "waveforms": {}, "original_waveform": [], "preview_file_paths": {}, "applied_parameters": params}
@@ -2582,12 +2590,24 @@ class Predictor(BasePredictor):
                             beat_fx.append(HighShelfFilter(cutoff_frequency_hz=f, gain_db=g))
                         elif t == "lowshelf":
                             beat_fx.append(LowShelfFilter(cutoff_frequency_hz=f, gain_db=g))
-                    beat_fx.append(Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200))
+                    # beatPolish: tighter glue comp + harmonic distortion bite for punch
+                    if beat_polish:
+                        from pedalboard import Distortion
+                        beat_fx.append(Compressor(threshold_db=-16, ratio=2.5, attack_ms=20, release_ms=180))
+                        beat_fx.append(Distortion(drive_db=2.5))
+                    else:
+                        beat_fx.append(Compressor(threshold_db=-18, ratio=2.0, attack_ms=30, release_ms=200))
                     beat_board = Pedalboard(beat_fx)
                     y_proc = beat_board(np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0), sr)
 
-                    # Transient shaper on beat — tighten attack, pull back sustain slightly
-                    y_proc = apply_transient_shaper(y_proc, sr, attack_boost_db=2.5, sustain_cut_db=-1.5)
+                    # Transient shaper on beat — tighten attack, pull back sustain slightly.
+                    # beatPolish: hit the transients harder for snappier kick/snare,
+                    # then add parallel tape-style saturation for analog warmth/glue.
+                    if beat_polish:
+                        y_proc = apply_transient_shaper(y_proc, sr, attack_boost_db=4.0, sustain_cut_db=-2.5)
+                        y_proc = apply_parallel_saturation(y_proc.astype(np.float32), sr, wet=0.10)
+                    else:
+                        y_proc = apply_transient_shaper(y_proc, sr, attack_boost_db=2.5, sustain_cut_db=-1.5)
 
                 else:
                     # ── Vocal stem chain ──────────────────────────────────────────
@@ -2826,7 +2846,8 @@ class Predictor(BasePredictor):
                     # Build label→gainDb lookup from Claude's sectionMap
                     label_gain: dict = {}
                     for sm in section_map:
-                        lbl = str(sm.get("label", "")).lower()
+                        # Claude's schema uses "sectionName"; older calls used "label" — accept both
+                        lbl = str(sm.get("sectionName", sm.get("label", ""))).lower()
                         gdb = float(sm.get("gainDb", 0.0))
                         if lbl and gdb != 0.0:
                             label_gain[lbl] = gdb
@@ -2881,6 +2902,8 @@ class Predictor(BasePredictor):
                     print(f"sidechain_compression skipped: {sc_err}", flush=True)
 
             # ── Bus processing ────────────────────────────────────────────────────
+            # All bus values come from Claude (decisions.ts). mixVibe is in Claude's
+            # prompt — Claude bakes it into these numbers; predict.py applies verbatim.
             bus_low_shelf  = float(bus_params_ai.get("eqLowShelf",     0.5))
             bus_high_shelf = float(bus_params_ai.get("eqHighShelf",    1.0))
             bus_thresh     = float(bus_params_ai.get("glueCompThresh", -12))
