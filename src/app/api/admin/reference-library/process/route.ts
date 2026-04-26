@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       const send = (obj: unknown) => controller.enqueue(enc.encode(JSON.stringify(obj) + "\n"));
 
       const touchedGenres = new Set<string>();
-      let ok = 0, fail = 0;
+      let ok = 0, fail = 0, skipped = 0;
 
       for (let i = 0; i < tracks.length; i++) {
         const t = tracks[i];
@@ -75,6 +75,26 @@ export async function POST(req: NextRequest) {
             genre:         t.genre,
             sourceQuality: t.sourceQuality,
           });
+
+          // Dedup: if this fingerprint already exists in any genre, skip insert
+          // so we don't double-weight the same track in the aggregate.
+          const fpHash = normalizeFingerprint(profile.fingerprint_hash);
+          if (fpHash) {
+            const existing = await prisma.referenceProfile.findFirst({
+              where:  { fingerprintHash: fpHash },
+              select: { id: true, genre: true },
+            });
+            if (existing) {
+              skipped++;
+              send({
+                type:    "track_skipped",
+                index:   i,
+                reason:  `duplicate of existing ${existing.genre} reference (id ${existing.id.slice(0, 8)}…)`,
+              });
+              continue;
+            }
+          }
+
           const sqWeight = SOURCE_WEIGHTS[t.sourceQuality] ?? 0.6;
           await prisma.referenceProfile.create({
             data: {
@@ -87,7 +107,7 @@ export async function POST(req: NextRequest) {
               subgenre:              t.subgenre ?? null,
               trackName:             t.trackName ?? null,
               artistName:            t.artistName ?? null,
-              fingerprintHash:       normalizeFingerprint(profile.fingerprint_hash),
+              fingerprintHash:       fpHash,
               profileData:           profile as any,
               qualityGatePassed:     profile.separation_confidence >= 0.6,
               weight:                1.0,
@@ -114,7 +134,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      send({ type: "done", ok, fail, genres: [...touchedGenres] });
+      send({ type: "done", ok, fail, skipped, genres: [...touchedGenres] });
       controller.close();
     },
   });

@@ -214,10 +214,11 @@ function LibraryTab() {
           try {
             const evt = JSON.parse(line);
             if (evt.type === "progress") setProgress(evt);
-            if (evt.type === "track_ok")     setLogs(l => [...l, `✓ ${evt.genre} · sep ${(evt.separation * 100).toFixed(0)}%`]);
-            if (evt.type === "track_failed") setLogs(l => [...l, `✗ #${evt.index} — ${evt.error}`]);
+            if (evt.type === "track_ok")      setLogs(l => [...l, `✓ ${evt.genre} · sep ${(evt.separation * 100).toFixed(0)}%`]);
+            if (evt.type === "track_failed")  setLogs(l => [...l, `✗ #${evt.index} — ${evt.error}`]);
+            if (evt.type === "track_skipped") setLogs(l => [...l, `↷ #${evt.index} — ${evt.reason}`]);
             if (evt.type === "genre_recomputed") setLogs(l => [...l, `↻ recomputed ${evt.genre}`]);
-            if (evt.type === "done") setLogs(l => [...l, `done — ${evt.ok} ok / ${evt.fail} failed`]);
+            if (evt.type === "done") setLogs(l => [...l, `done — ${evt.ok} ok / ${evt.fail} failed${evt.skipped ? ` / ${evt.skipped} skipped` : ""}`]);
           } catch {/* ignore parse errors */}
         }
       }
