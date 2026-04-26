@@ -15,10 +15,21 @@
  */
 
 import { NextRequest } from "next/server";
+import { createHash } from "crypto";
 import { db as prisma } from "@/lib/db";
 import { assertReferenceAdmin } from "@/lib/reference-library/auth";
 import { analyzeReferenceTrack, SOURCE_WEIGHTS, type SourceQuality } from "@/lib/reference-library/engine";
 import { recomputeGenreTarget } from "@/lib/reference-library/aggregate";
+
+/**
+ * Cog returns the full chromaprint signature in `fingerprint_hash`, which can
+ * be 3-4KB. The btree index on ReferenceProfile.fingerprintHash maxes out at
+ * 2704 bytes, so we hash it to a fixed-size sha256 hex (64 chars).
+ */
+function normalizeFingerprint(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export const maxDuration = 800; // up to ~13 min per batch
 
@@ -76,7 +87,7 @@ export async function POST(req: NextRequest) {
               subgenre:              t.subgenre ?? null,
               trackName:             t.trackName ?? null,
               artistName:            t.artistName ?? null,
-              fingerprintHash:       profile.fingerprint_hash ?? null,
+              fingerprintHash:       normalizeFingerprint(profile.fingerprint_hash),
               profileData:           profile as any,
               qualityGatePassed:     profile.separation_confidence >= 0.6,
               weight:                1.0,

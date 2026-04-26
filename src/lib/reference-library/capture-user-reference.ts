@@ -10,9 +10,16 @@
  * Designed to be fire-and-forget — must never throw into the webhook.
  */
 
+import { createHash } from "crypto";
 import { db as prisma } from "@/lib/db";
 import { analyzeReferenceTrack, SOURCE_WEIGHTS } from "@/lib/reference-library/engine";
 import { recomputeGenreTarget } from "@/lib/reference-library/aggregate";
+
+/** Cog returns the full chromaprint signature (~3-4KB). Hash to fixed-size sha256. */
+function hashFp(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export async function captureUserReference(opts: {
   jobId:    string;
@@ -35,7 +42,7 @@ export async function captureUserReference(opts: {
 
     const sepConf  = Number(profile.separation_confidence ?? 0);
     const sepW     = sepConf >= 0.8 ? 1.0 : sepConf >= 0.6 ? 0.7 : 0.3;
-    const fpHash   = profile.fingerprint_hash ?? null;
+    const fpHash   = hashFp(profile.fingerprint_hash);
     const sqWeight = SOURCE_WEIGHTS.other ?? 0.6;
 
     const passed = sepConf >= 0.6;
