@@ -6,6 +6,7 @@
  * All helpers are fire-and-forget; never throw into a caller.
  */
 
+import { Prisma } from "@prisma/client";
 import { db as prisma } from "@/lib/db";
 import { recomputeGenreTarget } from "@/lib/reference-library/aggregate";
 
@@ -84,12 +85,12 @@ export async function logDownloadOutcome(opts: {
         mixParamsUsed:     (job.mixParameters ?? {}) as object,
         outputAnalysis:    (outputAnalysis ?? {}) as object,
         outcome:           "downloaded",
-        revisionNotes:     null,
+        revisionNotes:     Prisma.JsonNull,
         revisionKeywords:  [],
         revisionCount:     job.revisionCount ?? 0,
         variationSelected: null,
         timeToDownload,
-        deviationFromTarget: deviationFromTarget as object | null,
+        deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
         qualifiesForLearning: inputQualityScore >= 0.6 && (job.revisionCount ?? 0) <= 1,
         learningWeight:    inputQualityScore,
         isHoldout,
@@ -151,7 +152,7 @@ export async function logRevisionOutcome(opts: {
           revisionKeywords:  keywords,
           revisionCount:     (job.revisionCount ?? 0) + 1,
           outputAnalysis:    (outputAnalysis ?? {}) as object,
-          deviationFromTarget: deviationFromTarget as object | null,
+          deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
           // A revised mix is a learning-quality signal regardless of input quality
           // (we now know what was wrong, even if input was bad)
           qualifiesForLearning: inputQualityScore >= 0.6,
@@ -173,7 +174,7 @@ export async function logRevisionOutcome(opts: {
           revisionCount:     (job.revisionCount ?? 0) + 1,
           variationSelected: null,
           timeToDownload:    null,
-          deviationFromTarget: deviationFromTarget as object | null,
+          deviationFromTarget: (deviationFromTarget ?? Prisma.JsonNull) as Prisma.InputJsonValue | typeof Prisma.JsonNull,
           qualifiesForLearning: inputQualityScore >= 0.6,
           learningWeight:    inputQualityScore,
           isHoldout,

@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db as prisma } from "@/lib/db";
 import { recomputeAllGenres, recomputeGenreTarget } from "@/lib/reference-library/aggregate";
 
@@ -71,12 +72,12 @@ export async function POST(req: NextRequest) {
         mixParamsUsed:     (job.mixParameters ?? {}) as object,
         outputAnalysis:    {} as object,
         outcome:           "abandoned",
-        revisionNotes:     null,
+        revisionNotes:     Prisma.JsonNull,
         revisionKeywords:  [],
         revisionCount:     job.revisionCount ?? 0,
         variationSelected: null,
         timeToDownload:    null,
-        deviationFromTarget: null,
+        deviationFromTarget: Prisma.JsonNull,
         qualifiesForLearning: false,  // abandoned ≠ learning signal
         learningWeight:    0,
         isHoldout,
