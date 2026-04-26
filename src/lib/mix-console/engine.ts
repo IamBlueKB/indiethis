@@ -138,10 +138,10 @@ export async function startMixAction(
     webhook:   webhookUrl,
   }));
 
-  // Retry up to 4x on 429/500 — parse retry_after from Replicate's response
-  // Total budget: ~50s max (fits inside maxDuration=60 callers)
+  // Retry up to 8x on 429/500 with jitter — parse retry_after from Replicate
+  // Total budget: ~110s max worst-case (fits inside maxDuration=300 callers)
   let lastError: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const prediction = await replicate.predictions.create({
         version:               MIX_VERSION,
@@ -156,10 +156,13 @@ export async function startMixAction(
       const is429 = msg.includes("429");
       const is500 = msg.includes("500");
       if (!is429 && !is500) throw err;
-      if (attempt >= 3) break;
-      // Parse retry_after from Replicate error body, default 6s
+      if (attempt >= 7) break;
+      // Parse retry_after from Replicate error body, default 8s; add jitter
+      // to avoid thundering-herd when multiple calls retry together
       const retryAfterMatch = msg.match(/"retry_after"\s*:\s*(\d+)/);
-      const waitMs = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 1) * 1000 : 6000;
+      const baseMs  = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 2) * 1000 : 8000;
+      const jitter  = Math.floor(Math.random() * 3000);
+      const waitMs  = baseMs + jitter;
       console.error(`[mix-engine] attempt ${attempt} throttled — waiting ${waitMs}ms`);
       await new Promise(r => setTimeout(r, waitMs));
     }
@@ -220,7 +223,7 @@ export async function runMixEngineSync(
   if (!MIX_VERSION) throw new Error("REPLICATE_MIX_MODEL_VERSION not set");
   const replicateInput = { action, ...inputs, supabase_url: SUPABASE_URL, supabase_service_key: SUPABASE_SERVICE_KEY };
   let lastError: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const prediction = await replicate.predictions.create({ version: MIX_VERSION, input: replicateInput });
       const result = await replicate.wait(prediction);
@@ -231,9 +234,11 @@ export async function runMixEngineSync(
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("429") && !msg.includes("500")) throw err;
-      if (attempt >= 3) break;
+      if (attempt >= 7) break;
       const retryAfterMatch = msg.match(/"retry_after"\s*:\s*(\d+)/);
-      const waitMs = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 1) * 1000 : 6000;
+      const baseMs = retryAfterMatch ? (parseInt(retryAfterMatch[1]) + 2) * 1000 : 8000;
+      const jitter = Math.floor(Math.random() * 3000);
+      const waitMs = baseMs + jitter;
       console.error(`[mix-engine-sync] attempt ${attempt} throttled — waiting ${waitMs}ms`);
       await new Promise(r => setTimeout(r, waitMs));
     }
