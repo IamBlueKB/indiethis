@@ -39,7 +39,8 @@ export async function GET(
     const tokenParam = req.nextUrl.searchParams.get("access_token") ?? null;
 
     const job = await prisma.mixJob.findUnique({
-      where: { id },
+      where:   { id },
+      include: { accessToken: true },
     });
 
     if (!job) {
@@ -61,12 +62,19 @@ export async function GET(
     }
 
     // If job is COMPLETE, convert previewFilePaths storage paths → signed URLs
-    let responseJob: typeof job & { previewFilePaths?: unknown } = job;
+    let responseJob: typeof job & { previewFilePaths?: unknown; accessTokenValue?: string | null } = job;
     if (job.status === "COMPLETE" && job.previewFilePaths) {
       const paths = job.previewFilePaths as Record<string, string>;
       const signed = await signPaths(paths);
       responseJob = { ...job, previewFilePaths: signed };
     }
+
+    // Surface the access token string (when present) so the wizard can
+    // redirect guests to /mix-console/results?token=... on COMPLETE.
+    responseJob = {
+      ...responseJob,
+      accessTokenValue: job.accessToken?.token ?? null,
+    };
 
     return NextResponse.json(responseJob);
   } catch (err) {

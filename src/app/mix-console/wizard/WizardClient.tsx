@@ -305,14 +305,16 @@ export default function MixConsoleWizardClient() {
         } else if (status === "COMPLETE") {
           clearTimeout(timeoutId);
           clearInterval(pollRef.current!);
-          setJobData(data);
-          // Default to first available version
-          const previewPaths = data.previewFilePaths as Record<string, string> | null;
-          if (previewPaths) {
-            const firstKey = Object.keys(previewPaths)[0];
-            if (firstKey) setSelectedVersion(firstKey);
+          // Redirect to the new results page with the audio-reactive
+          // visualizer player. Guests use the access-token URL; signed-in
+          // users go straight to the dashboard route.
+          const accessTokenValue = (data.accessTokenValue as string | null) ?? null;
+          if (accessTokenValue) {
+            window.location.href = `/mix-console/results?token=${accessTokenValue}`;
+          } else {
+            window.location.href = `/dashboard/ai/mix-console/${jobId}`;
           }
-          setStep("compare");
+          return;
         } else if (status === "FAILED") {
           clearTimeout(timeoutId);
           clearInterval(pollRef.current!);
