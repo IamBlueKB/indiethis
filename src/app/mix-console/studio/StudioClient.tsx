@@ -106,7 +106,7 @@ function relSavedAt(iso: string | null): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, originalStems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm, sections = [] } = props;
+  const { jobId: _jobId, trackTitle, stems, originalStems, aiOriginals, reverbTypes, initialState, referenceTrackUrl, bpm, sections = [] } = props;
 
   // Stable role order — first stem wins as transport master clock.
   const roles = useMemo(() => Object.keys(stems), [stems]);
@@ -611,7 +611,7 @@ export function StudioClient(props: StudioClientProps) {
         const nextSects:  typeof prev.sections = { ...prev.sections };
         if (selectedSection) {
           // Section-scoped polish: write into sections override map.
-          const prevSection: Record<string, Partial<StemState>> = { ...(prev.sections[selectedSection] ?? {}) };
+          const prevSection: { [stemRole: string]: Partial<StemState> | undefined } = { ...(prev.sections[selectedSection] ?? {}) };
           for (const role of Object.keys(stemPatches)) {
             const patch = stemPatches[role];
             if (!patch) continue;
@@ -676,6 +676,82 @@ export function StudioClient(props: StudioClientProps) {
       if (aiPolishNoteTimerRef.current) clearTimeout(aiPolishNoteTimerRef.current);
     };
   }, []);
+
+  // ─── Reference A/B toggle ───────────────────────────────────────────────
+  // The artist uploaded a reference track during the wizard. The studio
+  // exposes a one-click A/B toggle that swaps between THE MIX and THE
+  // REFERENCE so they can hear what they're chasing in context.
+  //
+  // Implementation: a hidden HTMLAudioElement plays the reference URL
+  // independently of the Web Audio graph. When toggled to reference:
+  //   1. Capture the studio playhead.
+  //   2. Pause the studio transport (stops all stem sources).
+  //   3. Seek the audio element to the same position (best effort — if
+  //      the ref is shorter we cap at its duration).
+  //   4. audio.play().
+  // When toggled back:
+  //   1. Pause the audio element + capture its currentTime.
+  //   2. Seek the studio transport back to that position.
+  //   3. Resume studio if it was playing before the swap.
+  const [referenceMode, setReferenceMode] = useState(false);
+  // Track whether the studio was playing at the moment we entered reference
+  // mode, so toggling back resumes playback if appropriate.
+  const refWasPlayingRef = useRef(false);
+  const refAudioElRef    = useRef<HTMLAudioElement | null>(null);
+
+  async function toggleReferenceMode() {
+    if (!referenceTrackUrl) return;
+    const audioEl = refAudioElRef.current;
+    if (!audioEl)      return;
+
+    if (!referenceMode) {
+      // ENTERING reference mode.
+      const wasPlaying = audio.transport.isPlaying;
+      const at         = audio.transport.currentTime;
+      refWasPlayingRef.current = wasPlaying;
+      if (wasPlaying) audio.transport.pause();
+      try {
+        const dur = Number.isFinite(audioEl.duration) ? audioEl.duration : Infinity;
+        audioEl.currentTime = Math.min(at, Math.max(0, dur - 0.05));
+      } catch { /* metadata may not be ready — best effort */ }
+      setReferenceMode(true);
+      try { await audioEl.play(); } catch { /* user-gesture or CORS — leave paused */ }
+    } else {
+      // LEAVING reference mode — return to the studio mix.
+      const at = audioEl.currentTime;
+      try { audioEl.pause(); } catch { /* noop */ }
+      audio.transport.seek(Math.max(0, at));
+      setReferenceMode(false);
+      if (refWasPlayingRef.current) {
+        try { await audio.transport.play(); } catch { /* noop */ }
+      }
+    }
+  }
+
+  // Belt-and-suspenders: if the audio element ever ends naturally while in
+  // reference mode, fall back to the studio so the UI doesn't get stuck.
+  useEffect(() => {
+    const el = refAudioElRef.current;
+    if (!el) return;
+    const onEnded = () => {
+      if (referenceMode) setReferenceMode(false);
+    };
+    el.addEventListener("ended", onEnded);
+    return () => el.removeEventListener("ended", onEnded);
+  }, [referenceMode]);
+
+  // If the studio transport is paused externally (user hits space), make sure
+  // the reference audio element is paused too — and vice-versa for the inverse.
+  useEffect(() => {
+    if (!referenceMode) return;
+    const el = refAudioElRef.current;
+    if (!el) return;
+    if (audio.transport.isPlaying) {
+      // User hit play while in ref mode — bounce them back to studio.
+      try { el.pause(); } catch { /* noop */ }
+      setReferenceMode(false);
+    }
+  }, [audio.transport.isPlaying, referenceMode]);
 
   // ─── Transport ──────────────────────────────────────────────────────────
   async function togglePlay() {
@@ -825,6 +901,25 @@ export function StudioClient(props: StudioClientProps) {
             onDelete={deleteSnapshot}
             onRecall={recallSnapshot}
           />
+
+          {/* Reference A/B toggle — only when a reference track was uploaded. */}
+          {referenceTrackUrl && (
+            <button
+              type="button"
+              onClick={toggleReferenceMode}
+              aria-pressed={referenceMode}
+              aria-label={referenceMode ? "Switch back to your mix" : "Switch to reference track"}
+              title={referenceMode ? "Playing REFERENCE — click to return to your mix" : "A/B with your reference track"}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors"
+              style={{
+                backgroundColor: referenceMode ? "#D4A843" : "transparent",
+                color:           referenceMode ? "#0A0A0A" : "#888",
+                border:          `1px solid ${referenceMode ? "#D4A843" : "#2A2824"}`,
+              }}
+            >
+              {referenceMode ? "Reference ON" : "A/B Reference"}
+            </button>
+          )}
 
           {/* AI Polish — Opus full-mix pass. Hidden for guests. */}
           {!props.isGuest && (
@@ -1060,6 +1155,35 @@ export function StudioClient(props: StudioClientProps) {
           >
             back to global mix
           </button>
+        </div>
+      )}
+
+      {/* ─── Hidden reference audio element (step 22) ───────────────────── */}
+      {referenceTrackUrl && (
+        <audio
+          ref={refAudioElRef}
+          src={referenceTrackUrl}
+          preload="metadata"
+          crossOrigin="anonymous"
+          style={{ display: "none" }}
+        />
+      )}
+
+      {/* ─── Reference-mode banner ─────────────────────────────────────── */}
+      {referenceMode && (
+        <div
+          className="absolute top-16 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
+          style={{
+            backgroundColor: "#D4A843",
+            color:           "#0A0A0A",
+            boxShadow:       "0 4px 14px rgba(212, 168, 67, 0.35)",
+          }}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: "#0A0A0A", animation: "pulse 1.2s ease-in-out infinite" }}
+          />
+          Playing reference track
         </div>
       )}
 
