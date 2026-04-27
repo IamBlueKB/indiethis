@@ -214,6 +214,13 @@ export default async function StudioPage({
       jobId={job.id}
       trackTitle={trackTitle}
       stems={stems}
+      // Pre-Step 26: `stems` IS the raw upload, so we pass the same map.
+      // The hook detects equality and the dry leg falls back to a tap on
+      // the wet source (effects-bypass). After Step 26 lands, `stems` will
+      // become the processed-stem URLs and `originalStems` will keep the
+      // raw inputFiles URLs — at which point the slider will lazy-load
+      // the raw audio for true dry blending.
+      originalStems={stems}
       aiOriginals={aiOriginals}
       reverbTypes={reverbTypes}
       initialState={initialState}

@@ -44,6 +44,15 @@ import type {
 interface UseStudioAudioOptions {
   /** Map of stem role → fresh signed URL. Order is preserved in the returned roles[]. */
   stems: Record<StemRole, string>;
+  /**
+   * Optional map of stem role → URL for the raw / unprocessed upload. When
+   * provided AND distinct from `stems[role]`, the dry/wet slider will lazy-
+   * fetch this buffer the first time the user moves it and route the dry
+   * leg from the original source. If absent (or equal to `stems[role]`),
+   * the dry leg taps the wet source directly so the slider effectively
+   * bypasses the per-stem effect chain.
+   */
+  originalStems?: Record<StemRole, string>;
   /** Per-stem reverb type (Claude's choice). Stems set to "dry" skip the convolver entirely. */
   reverbTypes?: Record<StemRole, ReverbType>;
   /** Track BPM — drives delay-time sync (1/8 note at this tempo). Defaults to 120. */
@@ -64,6 +73,20 @@ interface StemNodes {
   delayWet:     GainNode;
   sumGain:      GainNode;
   compressor:   DynamicsCompressorNode;  // dynamics — step 11
+  /** Mix-out gain on the wet (processed) leg. 1.0 = fully processed. */
+  wetMixGain:   GainNode;
+  /**
+   * Dry leg input — sources connect here. Until the original buffer loads
+   * we leave this disconnected and re-tap stemInput at the join point so
+   * the dry slider bypasses effects against the same source. Once the
+   * original buffer is loaded, per-play we create an AudioBufferSourceNode
+   * for it and connect into dryStemInput.
+   */
+  dryStemInput: GainNode;
+  /** Mix-out gain on the dry leg. Starts at 0 (slider default = 100 = fully processed). */
+  dryDirectGain:GainNode;
+  /** Tap on stemInput that feeds dryDirectGain when the original buffer hasn't loaded yet. */
+  dryFallbackTap: GainNode;
   stemGain:     GainNode;
   panner:       StereoPannerNode;
   analyser:     AnalyserNode;
@@ -71,8 +94,18 @@ interface StemNodes {
   reverbType:   ReverbType;
   /** Last gainDb the user requested (so solo logic can restore it). */
   lastGainDb:   number;
+  /** Last dry/wet knob value 0..100 — used so solo doesn't clobber the mix. */
+  lastDryWet:   number;
   /** Active source for the current playback session. Recreated each play/seek. */
   activeSource: AudioBufferSourceNode | null;
+  /** URL of the raw / unprocessed upload (if different from the wet stem URL). */
+  originalUrl:  string | null;
+  /** Decoded raw upload, fetched lazily on first setDryWet move. */
+  originalBuffer: AudioBuffer | null;
+  /** "idle" until first setDryWet move triggers fetch; "loading" while in flight; "ready" or "error" after. */
+  originalState: "idle" | "loading" | "ready" | "error";
+  /** Active dry source mirroring the wet timeline. Null until original buffer is ready or while paused. */
+  activeDrySource: AudioBufferSourceNode | null;
 }
 
 function dbToLinear(db: number): number {
@@ -118,7 +151,7 @@ function buildReverbIR(ctx: AudioContext, type: Exclude<ReverbType, "dry">): Aud
 }
 
 export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioReturn {
-  const { stems, reverbTypes, bpm } = opts;
+  const { stems, originalStems, reverbTypes, bpm } = opts;
   const roles = useMemo(() => Object.keys(stems), [stems]);
 
   // Cache the bpm-synced 1/8-note delay time so setDelay can read it without
@@ -248,6 +281,22 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       compressor.attack.value    = 0.003;
       compressor.release.value   = 0.1;
 
+      // Wet (processed) mix-out — knob default dryWet=100 → wet at full.
+      const wetMixGain = ctx.createGain();
+      wetMixGain.gain.value = 1.0;
+
+      // Dry leg: dryStemInput is where a future raw-upload source will be
+      // connected once the lazy fetch lands. Until then, dryFallbackTap
+      // mirrors stemInput so the slider still bypasses effects.
+      const dryStemInput = ctx.createGain();
+      dryStemInput.gain.value = 1.0;
+
+      const dryFallbackTap = ctx.createGain();
+      dryFallbackTap.gain.value = 1.0;     // active fallback
+
+      const dryDirectGain = ctx.createGain();
+      dryDirectGain.gain.value = 0;        // slider default = 100 → dry leg silent
+
       const stemGain = ctx.createGain();
       stemGain.gain.value = 1.0;
 
@@ -277,10 +326,28 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       delay.connect(delayWet).connect(sumGain);
 
       sumGain.connect(compressor);
-      compressor.connect(stemGain);
+      compressor.connect(wetMixGain);
+      wetMixGain.connect(stemGain);
+
+      // Dry leg: until original buffer is ready, fallback tap from stemInput
+      // feeds dryDirectGain. Once a raw-upload source is decoded, we connect
+      // it into dryStemInput (which also feeds dryDirectGain) and disconnect
+      // the fallback tap to avoid double-summing.
+      stemInput.connect(dryFallbackTap);
+      dryFallbackTap.connect(dryDirectGain);
+      dryStemInput.connect(dryDirectGain);
+      dryDirectGain.connect(stemGain);
+
       stemGain.connect(panner);
       panner.connect(analyser);
       analyser.connect(masterGain);
+
+      // Detect whether a separate raw-upload URL is available for this stem.
+      // If absent or identical to the wet URL, dry stays a fallback tap.
+      const origUrl =
+        originalStems && originalStems[role] && originalStems[role] !== stems[role]
+          ? originalStems[role]
+          : null;
 
       stemNodesRef.current[role] = {
         buffer:       null,
@@ -294,12 +361,21 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         delayWet,
         sumGain,
         compressor,
+        wetMixGain,
+        dryStemInput,
+        dryDirectGain,
+        dryFallbackTap,
         stemGain,
         panner,
         analyser,
-        reverbType:   stemReverbType,
-        lastGainDb:   0,
-        activeSource: null,
+        reverbType:    stemReverbType,
+        lastGainDb:    0,
+        lastDryWet:    100,
+        activeSource:  null,
+        originalUrl:   origUrl,
+        originalBuffer:null,
+        originalState: "idle",
+        activeDrySource: null,
       };
     }
 
@@ -359,13 +435,15 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         if (!n) continue;
         try { n.activeSource?.stop(); } catch { /* noop */ }
         try { n.activeSource?.disconnect(); } catch { /* noop */ }
+        try { n.activeDrySource?.stop(); } catch { /* noop */ }
+        try { n.activeDrySource?.disconnect(); } catch { /* noop */ }
       }
       stemNodesRef.current = {};
       try { ctx.close(); } catch { /* noop */ }
       ctxRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(stems), JSON.stringify(reverbTypes ?? {})]);
+  }, [JSON.stringify(stems), JSON.stringify(originalStems ?? {}), JSON.stringify(reverbTypes ?? {})]);
 
   // ─── Mute / solo logic ──────────────────────────────────────────────────
   function applyMuteSolo() {
@@ -393,6 +471,16 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       src.connect(n.stemInput);
       try { src.start(when, Math.min(offset, n.buffer.duration)); } catch { /* noop */ }
       n.activeSource = src;
+
+      // If we already have the raw-upload buffer decoded, fire a parallel
+      // dry source synced to the same start time + offset.
+      if (n.originalBuffer && n.originalState === "ready") {
+        const drySrc = ctx.createBufferSource();
+        drySrc.buffer = n.originalBuffer;
+        drySrc.connect(n.dryStemInput);
+        try { drySrc.start(when, Math.min(offset, n.originalBuffer.duration)); } catch { /* noop */ }
+        n.activeDrySource = drySrc;
+      }
     }
     startedAtRef.current = when;
     playOffsetRef.current = offset;
@@ -432,6 +520,12 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         try { src.stop(); } catch { /* noop */ }
         try { src.disconnect(); } catch { /* noop */ }
         n.activeSource = null;
+      }
+      const drySrc = n.activeDrySource;
+      if (drySrc) {
+        try { drySrc.stop(); } catch { /* noop */ }
+        try { drySrc.disconnect(); } catch { /* noop */ }
+        n.activeDrySource = null;
       }
     }
   }
@@ -483,6 +577,53 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           n.delay.delayTime.value = eighthNoteSecRef.current;
           // Feedback: 0..0.5. Light at low knob values, more washy past 50.
           n.delayFb.gain.value = (v / 100) * 0.5;
+        },
+        setDryWet: (value: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n) return;
+          const v = Math.max(0, Math.min(100, value));
+          n.lastDryWet = v;
+          // 0 = dry input only, 100 = fully processed.
+          n.wetMixGain.gain.value   = v / 100;
+          n.dryDirectGain.gain.value = 1 - (v / 100);
+
+          // Lazy-fetch the raw upload buffer the first time the user moves
+          // the slider — only if a distinct original URL exists. While idle
+          // the fallback tap from stemInput keeps the dry leg sounding like
+          // an effects-bypass of the wet source.
+          if (n.originalUrl && n.originalState === "idle") {
+            n.originalState = "loading";
+            const ctx = ctxRef.current;
+            if (!ctx) return;
+            (async () => {
+              try {
+                const res = await fetch(n.originalUrl as string, { credentials: "omit" });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const ab  = await res.arrayBuffer();
+                const buf = await ctx.decodeAudioData(ab);
+                if (stemNodesRef.current[role] !== n) return;  // unmounted
+                n.originalBuffer = buf;
+                n.originalState  = "ready";
+                // Swap fallback tap off so the dry leg now feeds from the
+                // raw-upload source instead of the wet source.
+                try { n.dryFallbackTap.disconnect(); } catch { /* noop */ }
+                // If we're currently playing, fire a synced dry source now.
+                if (n.activeSource) {
+                  const elapsed = ctx.currentTime - startedAtRef.current;
+                  const offset  = playOffsetRef.current + Math.max(0, elapsed);
+                  const drySrc = ctx.createBufferSource();
+                  drySrc.buffer = buf;
+                  drySrc.connect(n.dryStemInput);
+                  try { drySrc.start(ctx.currentTime + 0.02, Math.min(offset, buf.duration)); } catch { /* noop */ }
+                  n.activeDrySource = drySrc;
+                }
+              } catch {
+                n.originalState = "error";
+                // Keep the fallback tap wired so the slider still does
+                // *something* (effects bypass) on subsequent moves.
+              }
+            })();
+          }
         },
         setComp: (value: number) => {
           const n = stemNodesRef.current[role];

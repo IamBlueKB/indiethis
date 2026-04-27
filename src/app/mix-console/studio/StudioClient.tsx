@@ -30,6 +30,7 @@ import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
 import { MiniSpectrum }   from "./MiniSpectrum";
+import { DryWetSlider }   from "./DryWetSlider";
 import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { useStudioHistory } from "./useStudioHistory";
@@ -43,6 +44,13 @@ export interface StudioClientProps {
   trackTitle:   string;
   /** Map of stem role → fresh signed URL. */
   stems:        Record<StemRole, string>;
+  /**
+   * Optional map of stem role → URL for the raw / unprocessed upload. When
+   * different from `stems`, the dry/wet slider lazy-loads this as the dry
+   * source. Today (pre-Step 26) `stems` IS the raw upload, so this is
+   * usually the same map and the dry leg falls back to effects-bypass.
+   */
+  originalStems?: Record<StemRole, string>;
   /** Claude's per-stem decisions in the studio's knob domain. Used to seed
    *  initial state AND render the gold AI reference tick on each control. */
   aiOriginals?: Record<StemRole, AiOriginal>;
@@ -98,7 +106,7 @@ function relSavedAt(iso: string | null): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm, sections = [] } = props;
+  const { jobId: _jobId, trackTitle, stems, originalStems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm, sections = [] } = props;
 
   // Stable role order — first stem wins as transport master clock.
   const roles = useMemo(() => Object.keys(stems), [stems]);
@@ -214,6 +222,7 @@ export function StudioClient(props: StudioClientProps) {
         audio.stems[role]?.setReverb(e.reverb);
         audio.stems[role]?.setDelay(e.delay);
         audio.stems[role]?.setComp(e.comp);
+        audio.stems[role]?.setDryWet(e.dryWet);
         audio.setMuted(role,  e.muted);
         audio.setSoloed(role, e.soloed);
       }
@@ -239,7 +248,7 @@ export function StudioClient(props: StudioClientProps) {
   }
 
   // ─── Audio graph ────────────────────────────────────────────────────────
-  const audio = useStudioAudio({ stems, reverbTypes, bpm });
+  const audio = useStudioAudio({ stems, originalStems, reverbTypes, bpm });
 
   // ─── Autosave ────────────────────────────────────────────────────────────
   // Guests don't autosave (no MixJob persistence rights). Subscribers get
@@ -265,6 +274,10 @@ export function StudioClient(props: StudioClientProps) {
       audio.stems[role]?.setReverb(s.reverb);
       audio.stems[role]?.setDelay(s.delay);
       audio.stems[role]?.setComp(s.comp);
+      // Only push dry/wet when the artist has it parked off the default 100;
+      // calling setDryWet at default is a no-op but harmless. Restoring a
+      // saved session where they had it < 100 will lazy-fetch the raw upload.
+      if (s.dryWet !== 100) audio.stems[role]?.setDryWet(s.dryWet);
       if (s.muted)  audio.setMuted(role, true);
       if (s.soloed) audio.setSoloed(role, true);
     }
@@ -328,6 +341,10 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { brightness: v });
     audio.stems[role]?.setBrightness(v);
   }
+  function setStemDryWet(role: StemRole, v: number) {
+    updateStem(role, { dryWet: v });
+    audio.stems[role]?.setDryWet(v);
+  }
   function updateMaster(patch: Partial<MasterState>) {
     setState((prev) => ({
       ...prev,
@@ -390,6 +407,7 @@ export function StudioClient(props: StudioClientProps) {
         audio.stems[role]?.setReverb(e.reverb);
         audio.stems[role]?.setDelay(e.delay);
         audio.stems[role]?.setComp(e.comp);
+        audio.stems[role]?.setDryWet(e.dryWet);
         audio.setMuted(role,  e.muted);
         audio.setSoloed(role, e.soloed);
       }
@@ -451,6 +469,7 @@ export function StudioClient(props: StudioClientProps) {
       audio.stems[role]?.setReverb(e.reverb);
       audio.stems[role]?.setDelay(e.delay);
       audio.stems[role]?.setComp(e.comp);
+      audio.stems[role]?.setDryWet(e.dryWet);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSection]);
@@ -767,6 +786,14 @@ export function StudioClient(props: StudioClientProps) {
                   modified={isStemModified(role)}
                   advanced={advanced}
                   effectsSlot={effectsSlot}
+                  dryWetSlot={
+                    <DryWetSlider
+                      value={s.dryWet}
+                      onChange={(v) => setStemDryWet(role, v)}
+                      color={stemColor}
+                      label={`${labelForRole(role)} dry/wet`}
+                    />
+                  }
                   topSlot={
                     <MiniSpectrum
                       analyser={audio.stems[role]?.analyser ?? null}

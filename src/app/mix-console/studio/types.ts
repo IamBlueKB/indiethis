@@ -100,6 +100,13 @@ export interface StemHandle {
   setDelay(value: number): void;
   /** Compression 0..100 (0 = bypass, 100 = aggressive). Drives ratio + threshold together. */
   setComp(value: number): void;
+  /**
+   * Dry/wet 0..100. 0 = raw upload only, 100 = fully processed (current chain output).
+   * On first move with originalStems !== stems, the original buffer is lazy-fetched +
+   * decoded. While unloaded the dry slot just falls back to the wet source so the
+   * slider still does *something* (effects bypass) on first interaction.
+   */
+  setDryWet(value: number): void;
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
 }
