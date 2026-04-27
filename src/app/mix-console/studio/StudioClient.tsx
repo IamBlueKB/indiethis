@@ -26,6 +26,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Download, RotateCw } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
+import { EffectKnob }     from "./EffectKnob";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { MasterState, StemRole, StemState, StudioState } from "./types";
@@ -142,6 +143,10 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { pan });
     audio.stems[role]?.setPan(pan);
   }
+  function setStemReverb(role: StemRole, v: number)     { updateStem(role, { reverb: v }); }
+  function setStemDelay(role: StemRole, v: number)      { updateStem(role, { delay: v }); }
+  function setStemComp(role: StemRole, v: number)       { updateStem(role, { comp: v }); }
+  function setStemBrightness(role: StemRole, v: number) { updateStem(role, { brightness: v }); }
   function toggleMute(role: StemRole) {
     const next = !state.global[role]?.muted;
     updateStem(role, { muted: next });
@@ -182,6 +187,10 @@ export function StudioClient(props: StudioClientProps) {
     /* TODO step 26 — POST /api/mix-console/job/[id]/studio/render */
     console.log("Re-render requested with state:", state);
   }
+
+  // ─── Simple / Advanced view toggle ───────────────────────────────────────
+  // Simple view hides the per-stem 2x2 effect knobs + dry/wet + visualizer.
+  const [advanced, setAdvanced] = useState(false);
 
   // ─── Below-768 viewport guard ────────────────────────────────────────────
   const [tooSmall, setTooSmall] = useState(false);
@@ -249,6 +258,34 @@ export function StudioClient(props: StudioClientProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Simple / Advanced view toggle */}
+          <div
+            className="flex items-center text-[10px] font-bold uppercase tracking-wider rounded-lg overflow-hidden"
+            style={{ border: "1px solid #2A2824" }}
+          >
+            <button
+              type="button"
+              onClick={() => setAdvanced(false)}
+              className="px-2.5 py-1.5 transition-colors"
+              style={{
+                backgroundColor: !advanced ? "#D4A843" : "transparent",
+                color:           !advanced ? "#0A0A0A" : "#888",
+              }}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdvanced(true)}
+              className="px-2.5 py-1.5 transition-colors"
+              style={{
+                backgroundColor: advanced ? "#D4A843" : "transparent",
+                color:           advanced ? "#0A0A0A" : "#888",
+              }}
+            >
+              Advanced
+            </button>
+          </div>
           <button
             type="button"
             onClick={onRerender}
@@ -290,6 +327,42 @@ export function StudioClient(props: StudioClientProps) {
             {roles.map((role) => {
               const s = state.global[role];
               if (!s) return null;
+              const stemColor = colorForRole(role);
+
+              // 2x2 effect knob grid — wired in steps 8–11 to the audio graph.
+              const effectsSlot = (
+                <div className="grid grid-cols-2 gap-1 justify-items-center">
+                  <EffectKnob
+                    value={s.reverb}
+                    onChange={(v) => setStemReverb(role, v)}
+                    color={stemColor}
+                    label={`${labelForRole(role)} reverb`}
+                    shortLabel="REV"
+                  />
+                  <EffectKnob
+                    value={s.delay}
+                    onChange={(v) => setStemDelay(role, v)}
+                    color={stemColor}
+                    label={`${labelForRole(role)} delay`}
+                    shortLabel="DLY"
+                  />
+                  <EffectKnob
+                    value={s.comp}
+                    onChange={(v) => setStemComp(role, v)}
+                    color={stemColor}
+                    label={`${labelForRole(role)} compression`}
+                    shortLabel="CMP"
+                  />
+                  <EffectKnob
+                    value={s.brightness}
+                    onChange={(v) => setStemBrightness(role, v)}
+                    color={stemColor}
+                    label={`${labelForRole(role)} brightness`}
+                    shortLabel="BRT"
+                  />
+                </div>
+              );
+
               return (
                 <ChannelStrip
                   key={role}
@@ -305,7 +378,8 @@ export function StudioClient(props: StudioClientProps) {
                   onMuteToggle={() => toggleMute(role)}
                   onSoloToggle={() => toggleSolo(role)}
                   modified={isStemModified(role)}
-                  advanced={false}     /* simple view default — step 6 checkpoint */
+                  advanced={advanced}
+                  effectsSlot={effectsSlot}
                 />
               );
             })}
