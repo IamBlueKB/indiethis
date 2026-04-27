@@ -57,6 +57,7 @@ interface ChannelStripProps {
   topSlot?:       React.ReactNode;   // mini visualizer (step 14)
   effectsSlot?:   React.ReactNode;   // 2x2 knobs (steps 7–11)
   dryWetSlot?:    React.ReactNode;   // dry/wet slider (step 19)
+  linkBadge?:     React.ReactNode;   // chain icon + group name (step 23)
 
   /** Show the advanced slots (effects, dry/wet, visualizer). Simple view hides them. */
   advanced?:      boolean;
@@ -80,6 +81,7 @@ export function ChannelStrip({
   topSlot,
   effectsSlot,
   dryWetSlot,
+  linkBadge,
   advanced = false,
 }: ChannelStripProps) {
   const color = colorForRole(role);
@@ -97,6 +99,13 @@ export function ChannelStrip({
         borderRadius:    4,
       }}
     >
+      {/* Link badge (step 23) — chain icon when this stem is in a linked group */}
+      {linkBadge && (
+        <div className="w-full flex justify-center">
+          {linkBadge}
+        </div>
+      )}
+
       {/* Top — mini visualizer slot (step 14) */}
       {advanced && (
         <div className="w-full" style={{ height: 40 }}>

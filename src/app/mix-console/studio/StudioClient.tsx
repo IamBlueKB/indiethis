@@ -24,7 +24,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Download, RotateCw, Undo2, Redo2, Sparkles } from "lucide-react";
+import { Pause, Play, Download, RotateCw, Undo2, Redo2, Sparkles, Link2 } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
@@ -35,6 +35,7 @@ import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { useStudioHistory } from "./useStudioHistory";
 import { SnapshotsMenu }   from "./SnapshotsMenu";
+import { LinkStemsMenu }   from "./LinkStemsMenu";
 import { useStudioAutosave } from "./useStudioAutosave";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, Snapshot, SongSection, StemRole, StemState, StudioState } from "./types";
@@ -136,6 +137,7 @@ export function StudioClient(props: StudioClientProps) {
       global,
       sections:    {},
       master:      { ...DEFAULT_MASTER_STATE },
+      linkedGroups: {},
       isDirty:     false,
       lastSavedAt: null,
     };
@@ -317,9 +319,59 @@ export function StudioClient(props: StudioClientProps) {
     });
   }
 
+  // ─── Linked-group helpers (step 23) ─────────────────────────────────────
+  // A role belongs to at most one group. groupForRole returns the group's
+  // member array or null. linkedPartners excludes the role itself.
+  function groupForRole(role: StemRole): StemRole[] | null {
+    const groups = state.linkedGroups ?? {};
+    for (const name of Object.keys(groups)) {
+      if (groups[name].includes(role)) return groups[name];
+    }
+    return null;
+  }
+  function linkedPartners(role: StemRole): StemRole[] {
+    const g = groupForRole(role);
+    if (!g) return [];
+    return g.filter((r) => r !== role);
+  }
+
+  function createLinkGroup(name: string, members: StemRole[]) {
+    setState((prev) => {
+      const groups = { ...(prev.linkedGroups ?? {}) };
+      // Strip these members from any group they're already in (defensive —
+      // the menu disables already-linked rows, but make sure).
+      for (const k of Object.keys(groups)) {
+        groups[k] = groups[k].filter((r) => !members.includes(r));
+        if (groups[k].length < 2) delete groups[k];
+      }
+      groups[name] = [...members];
+      return { ...prev, linkedGroups: groups, isDirty: true };
+    });
+  }
+  function deleteLinkGroup(name: string) {
+    setState((prev) => {
+      const groups = { ...(prev.linkedGroups ?? {}) };
+      delete groups[name];
+      return { ...prev, linkedGroups: groups, isDirty: true };
+    });
+  }
+
   function setStemGainDb(role: StemRole, db: number) {
+    // Compute the dB delta first so we can apply the same delta to every
+    // linked partner — preserving the relative balance the artist set.
+    const cur   = effectiveStem(role)?.gainDb ?? 0;
+    const delta = db - cur;
     updateStem(role, { gainDb: db });
     audio.stems[role]?.setGainDb(db);
+
+    if (delta !== 0) {
+      for (const partner of linkedPartners(role)) {
+        const pCur  = effectiveStem(partner)?.gainDb ?? 0;
+        const pNext = Math.max(-12, Math.min(6, pCur + delta));
+        updateStem(partner, { gainDb: pNext });
+        audio.stems[partner]?.setGainDb(pNext);
+      }
+    }
   }
   function setStemPan(role: StemRole, pan: number) {
     updateStem(role, { pan });
@@ -902,6 +954,14 @@ export function StudioClient(props: StudioClientProps) {
             onRecall={recallSnapshot}
           />
 
+          {/* Linked-stem groups (step 23) */}
+          <LinkStemsMenu
+            roles={roles}
+            groups={state.linkedGroups ?? {}}
+            onCreate={createLinkGroup}
+            onDelete={deleteLinkGroup}
+          />
+
           {/* Reference A/B toggle — only when a reference track was uploaded. */}
           {referenceTrackUrl && (
             <button
@@ -1066,6 +1126,31 @@ export function StudioClient(props: StudioClientProps) {
                 <ChannelStrip
                   key={role}
                   role={role}
+                  linkBadge={(() => {
+                    const groupName = (() => {
+                      const groups = state.linkedGroups ?? {};
+                      for (const n of Object.keys(groups)) {
+                        if (groups[n].includes(role)) return n;
+                      }
+                      return null;
+                    })();
+                    if (!groupName) return null;
+                    return (
+                      <div
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider"
+                        style={{
+                          backgroundColor: "#1A1612",
+                          color:           "#D4A843",
+                          border:          "1px solid #D4A843",
+                          maxWidth:        72,
+                        }}
+                        title={`Linked: ${groupName}`}
+                      >
+                        <Link2 size={8} />
+                        <span className="truncate">{groupName}</span>
+                      </div>
+                    );
+                  })()}
                   gainDb={s.gainDb}
                   onGainDbChange={(db) => setStemGainDb(role, db)}
                   analyser={audio.stems[role]?.analyser ?? null}

@@ -19,12 +19,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface IncomingState {
-  global?:     Record<string, unknown>;
-  sections?:   Record<string, unknown>;
-  master?:     Record<string, unknown>;
-  snapshots?:  unknown[];
-  isDirty?:    boolean;
-  lastSavedAt?: string | null;
+  global?:       Record<string, unknown>;
+  sections?:     Record<string, unknown>;
+  master?:       Record<string, unknown>;
+  linkedGroups?: Record<string, unknown>;
+  snapshots?:    unknown[];
+  isDirty?:      boolean;
+  lastSavedAt?:  string | null;
 }
 
 export async function POST(
@@ -56,7 +57,7 @@ export async function POST(
   if (typeof body !== "object" || body === null) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const allowed = ["global","sections","master","snapshots","isDirty","lastSavedAt"] as const;
+  const allowed = ["global","sections","master","linkedGroups","snapshots","isDirty","lastSavedAt"] as const;
   for (const k of Object.keys(body)) {
     if (!(allowed as readonly string[]).includes(k)) {
       return NextResponse.json({ error: `unknown key: ${k}` }, { status: 400 });
@@ -65,12 +66,13 @@ export async function POST(
 
   const savedAt = new Date().toISOString();
   const studioState = {
-    global:      body.global      ?? {},
-    sections:    body.sections    ?? {},
-    master:      body.master      ?? {},
-    snapshots:   body.snapshots   ?? [],
-    isDirty:     false,
-    lastSavedAt: savedAt,
+    global:       body.global       ?? {},
+    sections:     body.sections     ?? {},
+    master:       body.master       ?? {},
+    linkedGroups: body.linkedGroups ?? {},
+    snapshots:    body.snapshots    ?? [],
+    isDirty:      false,
+    lastSavedAt:  savedAt,
   };
 
   await prisma.mixJob.update({

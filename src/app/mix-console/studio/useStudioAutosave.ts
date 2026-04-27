@@ -51,10 +51,11 @@ export function useStudioAutosave(args: UseStudioAutosaveArgs): UseStudioAutosav
   function buildBody() {
     const s = stateRef.current;
     return {
-      global:    s.global,
-      sections:  s.sections,
-      master:    s.master,
-      snapshots: snapshotsRef.current,
+      global:       s.global,
+      sections:     s.sections,
+      master:       s.master,
+      linkedGroups: s.linkedGroups ?? {},
+      snapshots:    snapshotsRef.current,
     };
   }
 

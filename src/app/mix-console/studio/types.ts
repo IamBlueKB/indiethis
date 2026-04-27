@@ -50,6 +50,13 @@ export interface StudioState {
   global:    Record<StemRole, StemState>;
   sections:  Record<string, SectionOverride>;  // sectionName -> overrides
   master:    MasterState;
+  /**
+   * Linked stem groups: when the user drags one stem's fader, the same
+   * dB delta is applied to every other member so the relative balance
+   * is preserved (e.g. group "Drums" = [kick, snare, drums_other, cymbals]).
+   * A role can belong to at most one group.
+   */
+  linkedGroups?: Record<string, StemRole[]>;
   isDirty:   boolean;
   lastSavedAt: string | null;
 }
