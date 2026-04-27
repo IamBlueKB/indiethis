@@ -308,6 +308,7 @@ TASK: Return ONLY valid JSON (no markdown, no explanation):
       "deEssThresh": -30,
       "deReverbStrength": 0.0,
       "reverbSend": 0.10,
+      "reverbType": "plate",
       "saturation": 0.02,
       "stereoWidth": 0.0,
       "monoBelow": 120,
@@ -346,6 +347,7 @@ Rules:
 - stereoWidth (stem-level): 0 for lead vocal (mono center), 0.2–0.4 for doubles, 0.3–0.5 for harmonies, 0 for beat
 - monoBelow: 120 for all vocal stems; 80 for bass/kick/beat
 - chorusWet: 0.25–0.40 for doubles/harmonies if genre calls for thickness; 0 otherwise
+- reverbType: per-stem reverb character — one of "plate" | "room" | "hall" | "cathedral" | "dry". Defaults to the job-level reverbStyle (lowercased) for most stems. You MAY pick a different type per stem when it serves the production: tight close vocals on "plate" while harmonies sit on "hall", or a mono lead on "room" with wide adlibs on "plate". If reverbSend === 0 (or reverbStyle="DRY"), set reverbType="dry". Drum stems usually share one type. Pick deliberately — the studio mixer loads a different IR per type so this choice is audible.
 - deReverbStrength: 0 unless RT60 is clearly above 0.4s AND vocal sounds roomy; use 0.2–0.35 moderate, 0.4–0.6 heavy
 - busParams.stereoWidth: 1.0–1.5 (1.0 = no change, 1.25 = slightly wider, 1.5 = wide)
 - referenceNotes: if a reference track was provided, write 1-2 sentences explaining what you took from it (loudness target, tonal changes made). If no reference, leave as empty string.
@@ -477,6 +479,25 @@ function enforceToggles(
   if (toggles.delayStyle?.toUpperCase() === "OFF" && (out.delayThrows?.length ?? 0) > 0) {
     warnings.push(`Stripped ${out.delayThrows.length} delay throws — delayStyle=OFF.`);
     out.delayThrows = [];
+  }
+
+  // Normalize per-stem reverbType. Default to the job-level reverbStyle when
+  // Claude didn't tag it. Force "dry" when reverbStyle=DRY, when the stem's
+  // reverbSend is essentially zero, or when Claude returned an unknown value.
+  if (out.stemParams) {
+    const validTypes = new Set(["plate", "room", "hall", "cathedral", "dry"]);
+    const styleLower = (toggles.reverbStyle ?? "").toLowerCase();
+    const fallback   = validTypes.has(styleLower) ? styleLower : "plate";
+    const isDryStyle = toggles.reverbStyle?.toUpperCase() === "DRY";
+    const fixed: Record<string, StemParams> = {};
+    for (const [label, sp] of Object.entries(out.stemParams)) {
+      const wet = sp.reverbSend ?? 0;
+      let type: StemParams["reverbType"] = sp.reverbType;
+      if (!type || !validTypes.has(type)) type = fallback as StemParams["reverbType"];
+      if (isDryStyle || wet <= 0.02) type = "dry";
+      fixed[label] = { ...sp, reverbType: type };
+    }
+    out.stemParams = fixed;
   }
 
   // reverbStyle=DRY → cap every reverbSend at 0.02
