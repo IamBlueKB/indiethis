@@ -641,6 +641,140 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           const n = stemNodesRef.current[role];
           return n?.analyser ?? (null as unknown as AnalyserNode);
         },
+        renderToBuffer: async (stemState) => {
+          const n = stemNodesRef.current[role];
+          if (!n || !n.buffer) return null;
+
+          // Build an offline context that mirrors the live chain. Output is
+          // forced stereo; sample rate matches the source buffer.
+          const sr  = n.buffer.sampleRate;
+          const len = n.buffer.length;
+          const oCtx = new OfflineAudioContext({
+            numberOfChannels: 2,
+            length:           len,
+            sampleRate:       sr,
+          });
+
+          // Source.
+          const src = oCtx.createBufferSource();
+          src.buffer = n.buffer;
+
+          // brightness (high-shelf at 6 kHz, ±8 dB across 0..100 knob).
+          const v = Math.max(0, Math.min(100, stemState.brightness));
+          const brightness = oCtx.createBiquadFilter();
+          brightness.type            = "highshelf";
+          brightness.frequency.value = 6000;
+          brightness.gain.value      = ((v - 50) / 50) * 8;
+
+          // sumGain is where dry / reverb / delay all converge.
+          const sumGain = oCtx.createGain();
+          sumGain.gain.value = 1.0;
+
+          // Dry leg of the wet chain.
+          const dryGain = oCtx.createGain();
+          dryGain.gain.value = 1.0;
+
+          // Reverb wet (skip wiring for "dry" reverbType).
+          if (n.reverbType !== "dry") {
+            const ir = REVERB_PROFILES[n.reverbType];
+            const length    = Math.max(1, Math.floor(sr * ir.dur));
+            const irBuf     = oCtx.createBuffer(2, length, sr);
+            const predelay  = Math.floor((ir.predelayMs / 1000) * sr);
+            for (let ch = 0; ch < 2; ch++) {
+              const data = irBuf.getChannelData(ch);
+              for (let i = 0; i < length; i++) {
+                if (i < predelay) { data[i] = 0; continue; }
+                const t   = (i - predelay) / (length - predelay);
+                const env = Math.pow(1 - t, ir.decay);
+                const noise = (Math.random() * 2 - 1 + Math.random() * 2 - 1) * 0.5;
+                data[i] = noise * env;
+              }
+            }
+            const conv = oCtx.createConvolver();
+            conv.buffer = irBuf;
+            const reverbWet = oCtx.createGain();
+            reverbWet.gain.value = Math.max(0, Math.min(100, stemState.reverb)) / 100;
+            brightness.connect(conv);
+            conv.connect(reverbWet).connect(sumGain);
+          }
+
+          // Delay (1/8 note at track BPM with feedback).
+          const dly = oCtx.createDelay(2.0);
+          dly.delayTime.value = eighthNoteSecRef.current;
+          const dlyVal = Math.max(0, Math.min(100, stemState.delay));
+          const dlyFb = oCtx.createGain();
+          dlyFb.gain.value = (dlyVal / 100) * 0.5;
+          const dlyWet = oCtx.createGain();
+          dlyWet.gain.value = (dlyVal / 100) * 0.5;
+          brightness.connect(dly);
+          dly.connect(dlyFb).connect(dly);
+          dly.connect(dlyWet).connect(sumGain);
+
+          // Brightness → dry → sumGain.
+          brightness.connect(dryGain).connect(sumGain);
+
+          // Compressor.
+          const compVal = Math.max(0, Math.min(100, stemState.comp));
+          const comp = oCtx.createDynamicsCompressor();
+          comp.knee.value      = 6;
+          comp.attack.value    = 0.003;
+          comp.release.value   = 0.1;
+          comp.ratio.value     = 1 + (compVal / 100) * 7;
+          comp.threshold.value = -(compVal / 100) * 30;
+
+          // Wet mix-out gain.
+          const wetMix = oCtx.createGain();
+          wetMix.gain.value = Math.max(0, Math.min(100, stemState.dryWet)) / 100;
+
+          // Dry leg (raw upload mix-out). If the original buffer has been
+          // lazy-loaded, route a parallel source through it; otherwise fall
+          // back to the wet source so the slider still acts as effects-bypass.
+          const dryMix = oCtx.createGain();
+          dryMix.gain.value = 1 - Math.max(0, Math.min(100, stemState.dryWet)) / 100;
+          let drySrc: AudioBufferSourceNode | null = null;
+          if (n.originalBuffer && n.originalState === "ready") {
+            drySrc = oCtx.createBufferSource();
+            drySrc.buffer = n.originalBuffer;
+            drySrc.connect(dryMix);
+          } else {
+            // Fallback dry tap: the same source feeds dryMix bypassing the chain.
+            // We add another source on the same buffer (sample-locked) so dryMix
+            // gets unprocessed audio.
+            const fb = oCtx.createBufferSource();
+            fb.buffer = n.buffer;
+            fb.connect(dryMix);
+            drySrc = fb;
+          }
+
+          // Stem gain (dB delta from AI's level).
+          const stemGain = oCtx.createGain();
+          stemGain.gain.value = dbToLinear(stemState.gainDb);
+
+          // Pan.
+          const pan = oCtx.createStereoPanner();
+          pan.pan.value = Math.max(-1, Math.min(1, stemState.pan));
+
+          // Chain: src → brightness → (dry + wet busses) → sumGain →
+          //        compressor → wetMix → stemGain → pan → destination
+          //        (dry leg) drySrc → dryMix → stemGain → pan → destination
+          src.connect(brightness);
+          sumGain.connect(comp);
+          comp.connect(wetMix);
+          wetMix.connect(stemGain);
+          dryMix.connect(stemGain);
+          stemGain.connect(pan);
+          pan.connect(oCtx.destination);
+
+          src.start(0);
+          if (drySrc) drySrc.start(0);
+
+          try {
+            const rendered = await oCtx.startRendering();
+            return rendered;
+          } catch {
+            return null;
+          }
+        },
       };
     }
     return out;

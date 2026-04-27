@@ -31,6 +31,7 @@ import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
 import { MiniSpectrum }   from "./MiniSpectrum";
 import { DryWetSlider }   from "./DryWetSlider";
+import { audioBufferToWavBlob } from "./wav";
 import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { useStudioHistory } from "./useStudioHistory";
@@ -729,6 +730,53 @@ export function StudioClient(props: StudioClientProps) {
     };
   }, []);
 
+  // ─── Stem export (step 24) ──────────────────────────────────────────────
+  // Renders the stem's effect chain offline using the live state values,
+  // encodes the resulting AudioBuffer as a 16-bit PCM WAV, and triggers a
+  // browser download. The output reflects whatever the artist is hearing
+  // RIGHT NOW — same chain, same knob positions, including section
+  // overrides if a section is selected.
+  const [exportBusy, setExportBusy] = useState<Record<StemRole, boolean>>({});
+
+  function safeFilename(s: string): string {
+    return s.replace(/[^a-z0-9_.-]+/gi, "_").slice(0, 60) || "stem";
+  }
+
+  async function exportStem(role: StemRole) {
+    if (exportBusy[role]) return;
+    const handle = audio.stems[role];
+    if (!handle?.renderToBuffer) return;
+    setExportBusy((m) => ({ ...m, [role]: true }));
+    try {
+      const cur = effectiveStem(role);
+      const buf = await handle.renderToBuffer({
+        gainDb:     cur.gainDb,
+        pan:        cur.pan,
+        reverb:     cur.reverb,
+        delay:      cur.delay,
+        comp:       cur.comp,
+        brightness: cur.brightness,
+        dryWet:     cur.dryWet,
+      });
+      if (!buf) throw new Error("render failed");
+      const blob = audioBufferToWavBlob(buf);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      const stamp = selectedSection ? `_${safeFilename(selectedSection)}` : "";
+      a.download = `${safeFilename(trackTitle)}_${safeFilename(role)}${stamp}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Free the URL after the click is dispatched.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("[stem-export]", err);
+    } finally {
+      setExportBusy((m) => ({ ...m, [role]: false }));
+    }
+  }
+
   // ─── Reference A/B toggle ───────────────────────────────────────────────
   // The artist uploaded a reference track during the wizard. The studio
   // exposes a one-click A/B toggle that swaps between THE MIX and THE
@@ -1163,6 +1211,8 @@ export function StudioClient(props: StudioClientProps) {
                   onSoloToggle={() => toggleSolo(role)}
                   onAiAssist={props.isGuest ? undefined : () => runAiAssist(role)}
                   aiAssistBusy={!!aiAssistBusy[role]}
+                  onExport={() => exportStem(role)}
+                  exportBusy={!!exportBusy[role]}
                   modified={isStemModified(role)}
                   advanced={advanced}
                   effectsSlot={effectsSlot}

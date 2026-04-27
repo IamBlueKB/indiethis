@@ -116,6 +116,21 @@ export interface StemHandle {
   setDryWet(value: number): void;
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
+  /**
+   * Render this stem's full effect chain offline at the current settings
+   * and return the rendered AudioBuffer. Used by stem export (step 24).
+   * Mute/solo are ignored (export always reflects the audible chain).
+   * Resolves to null when the stem's source buffer hasn't loaded yet.
+   */
+  renderToBuffer(stemState: {
+    gainDb:     number;
+    pan:        number;
+    reverb:     number;
+    delay:      number;
+    comp:       number;
+    brightness: number;
+    dryWet:     number;
+  }): Promise<AudioBuffer | null>;
 }
 
 export interface MasterHandle {

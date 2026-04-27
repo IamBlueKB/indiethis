@@ -21,7 +21,7 @@
 
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Download } from "lucide-react";
 import { VolumeFader }   from "./VolumeFader";
 import { PanKnob }       from "./PanKnob";
 import { colorForRole, labelForRole } from "./stem-colors";
@@ -50,6 +50,10 @@ interface ChannelStripProps {
   onAiAssist?:    () => void;
   aiAssistBusy?:  boolean;
 
+  // Stem export (step 24)
+  onExport?:      () => void;
+  exportBusy?:    boolean;
+
   // True if any control on this stem differs from the AI's original.
   modified?:      boolean;
 
@@ -77,6 +81,8 @@ export function ChannelStrip({
   onSoloToggle,
   onAiAssist,
   aiAssistBusy = false,
+  onExport,
+  exportBusy = false,
   modified = false,
   topSlot,
   effectsSlot,
@@ -177,28 +183,54 @@ export function ChannelStrip({
         </button>
       </div>
 
-      {/* AI Assist sparkle */}
-      <button
-        type="button"
-        onClick={onAiAssist}
-        disabled={!onAiAssist || aiAssistBusy}
-        aria-label={`AI assist ${label}`}
-        className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
-        style={{
-          backgroundColor: aiAssistBusy ? "#E8735A" : "transparent",
-          border:          `1px solid ${aiAssistBusy ? "#E8735A" : "#2A2824"}`,
-          opacity:         onAiAssist ? 1 : 0.3,
-          cursor:          onAiAssist ? "pointer" : "default",
-        }}
-      >
-        <Sparkles
-          size={12}
+      {/* AI Assist sparkle + Export download — side by side */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onAiAssist}
+          disabled={!onAiAssist || aiAssistBusy}
+          aria-label={`AI assist ${label}`}
+          className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
           style={{
-            color: aiAssistBusy ? "#0A0A0A" : color,
-            animation: aiAssistBusy ? "pulse 1s ease-in-out infinite" : undefined,
+            backgroundColor: aiAssistBusy ? "#E8735A" : "transparent",
+            border:          `1px solid ${aiAssistBusy ? "#E8735A" : "#2A2824"}`,
+            opacity:         onAiAssist ? 1 : 0.3,
+            cursor:          onAiAssist ? "pointer" : "default",
           }}
-        />
-      </button>
+        >
+          <Sparkles
+            size={12}
+            style={{
+              color: aiAssistBusy ? "#0A0A0A" : color,
+              animation: aiAssistBusy ? "pulse 1s ease-in-out infinite" : undefined,
+            }}
+          />
+        </button>
+
+        {/* Export — download this stem as a 16-bit WAV with current settings */}
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={!onExport || exportBusy}
+          aria-label={`Export ${label} as WAV`}
+          title={exportBusy ? "Rendering…" : `Download ${label} as WAV`}
+          className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
+          style={{
+            backgroundColor: exportBusy ? "#D4A843" : "transparent",
+            border:          `1px solid ${exportBusy ? "#D4A843" : "#2A2824"}`,
+            opacity:         onExport ? 1 : 0.3,
+            cursor:          onExport ? "pointer" : "default",
+          }}
+        >
+          <Download
+            size={11}
+            style={{
+              color: exportBusy ? "#0A0A0A" : "#888",
+              animation: exportBusy ? "pulse 0.9s ease-in-out infinite" : undefined,
+            }}
+          />
+        </button>
+      </div>
 
       {/* Stem label + AI indicator */}
       <div className="flex flex-col items-center gap-0.5">
