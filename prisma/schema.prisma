@@ -3337,6 +3337,13 @@ model MixJob {
   // Access token (guests)
   accessToken     MixAccessToken?
 
+  // Pro Studio Mixer (Pro tier only — interactive browser-based fine-tuning)
+  studioState       Json?     // Current mixer state: { global, sections, master, dryWet, isDirty, lastSavedAt }
+  studioSnapshots   Json?     // [{ name, protected, created_at, state }] — max 10, "AI Original" is protected
+  studioFilePath    String?   // mixing/{jobId}/studio_mix.wav
+  studioStatus      String?   // null | STUDIO_RENDERING | STUDIO_COMPLETE | STUDIO_FAILED
+  studioRenderedAt  DateTime?
+
   // Guest file retention — cleared when guest converts to subscriber
   expiresAt       DateTime?
 
