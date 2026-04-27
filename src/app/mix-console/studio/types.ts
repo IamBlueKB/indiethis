@@ -69,6 +69,8 @@ export interface StemHandle {
   setPan(pan: number): void;
   /** Brightness 0..100 (50 = AI's setting / flat). Drives the high-shelf at 6 kHz. */
   setBrightness(value: number): void;
+  /** Reverb 0..100 (0 = dry, 50 = moderate, 100 = lush). Drives convolver wet send. */
+  setReverb(value: number): void;
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
 }

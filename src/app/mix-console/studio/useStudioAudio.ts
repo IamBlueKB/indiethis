@@ -72,6 +72,29 @@ function dbToLinear(db: number): number {
   return Math.pow(10, db / 20);
 }
 
+/**
+ * Build a plate-style stereo impulse response algorithmically.
+ * Decaying filtered white noise — sounds like a clean medium hall.
+ * Saves us from shipping IR WAV files and works at any sample rate.
+ */
+function buildReverbIR(ctx: AudioContext, durationSec = 2.4, decay = 3.5): AudioBuffer {
+  const sr     = ctx.sampleRate;
+  const length = Math.max(1, Math.floor(sr * durationSec));
+  const buf    = ctx.createBuffer(2, length, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      // Exponential decay envelope.
+      const env = Math.pow(1 - t, decay);
+      // Filtered noise: average two random samples = light low-pass.
+      const noise = (Math.random() * 2 - 1 + Math.random() * 2 - 1) * 0.5;
+      data[i] = noise * env;
+    }
+  }
+  return buf;
+}
+
 export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioReturn {
   const { stems } = opts;
   const roles = useMemo(() => Object.keys(stems), [stems]);
@@ -140,6 +163,9 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     masterEq[masterEq.length - 1].connect(masterAnalyser);
     masterAnalyser.connect(ctx.destination);
 
+    // Build a single shared IR for all stems' convolvers.
+    const reverbIR = buildReverbIR(ctx);
+
     // Build per-stem persistent chain (no source yet — added on play).
     for (const role of roles) {
       const stemInput = ctx.createGain();
@@ -154,6 +180,7 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       brightness.gain.value      = 0;
 
       const convolver = ctx.createConvolver();
+      convolver.buffer = reverbIR;
 
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = 0;
@@ -375,6 +402,14 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           const v  = Math.max(0, Math.min(100, value));
           const db = ((v - 50) / 50) * 8;
           n.brightness.gain.value = db;
+        },
+        setReverb: (value: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n) return;
+          // 0..100 → reverb wet gain 0..0.6 (50 = 0.3 = moderate hall).
+          const v   = Math.max(0, Math.min(100, value));
+          const wet = (v / 100) * 0.6;
+          n.reverbWet.gain.value = wet;
         },
         get analyser(): AnalyserNode {
           const n = stemNodesRef.current[role];
