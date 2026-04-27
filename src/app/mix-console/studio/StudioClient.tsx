@@ -119,6 +119,7 @@ export function StudioClient(props: StudioClientProps) {
       if (!s) continue;
       audio.stems[role]?.setGainDb(s.gainDb);
       audio.stems[role]?.setPan(s.pan);
+      audio.stems[role]?.setBrightness(s.brightness);
       if (s.muted)  audio.setMuted(role, true);
       if (s.soloed) audio.setSoloed(role, true);
     }
@@ -146,7 +147,10 @@ export function StudioClient(props: StudioClientProps) {
   function setStemReverb(role: StemRole, v: number)     { updateStem(role, { reverb: v }); }
   function setStemDelay(role: StemRole, v: number)      { updateStem(role, { delay: v }); }
   function setStemComp(role: StemRole, v: number)       { updateStem(role, { comp: v }); }
-  function setStemBrightness(role: StemRole, v: number) { updateStem(role, { brightness: v }); }
+  function setStemBrightness(role: StemRole, v: number) {
+    updateStem(role, { brightness: v });
+    audio.stems[role]?.setBrightness(v);
+  }
   function toggleMute(role: StemRole) {
     const next = !state.global[role]?.muted;
     updateStem(role, { muted: next });

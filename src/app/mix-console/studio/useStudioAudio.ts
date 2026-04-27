@@ -363,6 +363,14 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           if (!n) return;
           n.panner.pan.value = Math.max(-1, Math.min(1, pan));
         },
+        setBrightness: (value: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n) return;
+          // 0..100 → -8..+8 dB (50 = 0 dB / flat = AI's setting)
+          const v  = Math.max(0, Math.min(100, value));
+          const db = ((v - 50) / 50) * 8;
+          n.brightness.gain.value = db;
+        },
         get analyser(): AnalyserNode {
           const n = stemNodesRef.current[role];
           return n?.analyser ?? (null as unknown as AnalyserNode);

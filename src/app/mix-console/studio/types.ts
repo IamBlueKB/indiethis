@@ -67,6 +67,8 @@ export interface StemHandle {
   setGainDb(db: number): void;
   /** Set pan from -1 (full left) to +1 (full right). */
   setPan(pan: number): void;
+  /** Brightness 0..100 (50 = AI's setting / flat). Drives the high-shelf at 6 kHz. */
+  setBrightness(value: number): void;
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
 }
