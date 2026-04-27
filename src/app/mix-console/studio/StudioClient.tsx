@@ -24,7 +24,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Download, RotateCw, Undo2, Redo2 } from "lucide-react";
+import { Pause, Play, Download, RotateCw, Undo2, Redo2, Sparkles } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
@@ -571,6 +571,112 @@ export function StudioClient(props: StudioClientProps) {
     };
   }, []);
 
+  // ─── AI Polish (Opus full-mix pass) ─────────────────────────────────────
+  // One round-trip to /studio/ai-polish: Claude looks at every stem + master
+  // together and returns a coordinated patch (e.g. duck the bass when the
+  // kick is forward, lift the vocal if the master is dense). Applied through
+  // setState atomically so a single Ctrl+Z reverts the whole polish — and
+  // through the audio graph so the change is audible immediately.
+  const [aiPolishBusy, setAiPolishBusy] = useState(false);
+  const [aiPolishNote, setAiPolishNote] = useState<string | null>(null);
+  const aiPolishNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function runAiPolish() {
+    if (aiPolishBusy)  return;
+    if (props.isGuest) return;
+    setAiPolishBusy(true);
+    try {
+      const res = await fetch(`/api/mix-console/job/${_jobId}/studio/ai-polish`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          global:       state.global,
+          master:       state.master,
+          aiOriginals:  aiOriginals ?? null,
+          sectionName:  selectedSection,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        stemPatches?: Record<StemRole, Partial<StemState>>;
+        masterPatch?: Partial<MasterState>;
+        note?:        string;
+      };
+      const stemPatches = data.stemPatches ?? {};
+      const masterPatch = data.masterPatch ?? {};
+
+      // Atomic state update — single undo entry covers the whole polish.
+      setState((prev) => {
+        const nextGlobal: typeof prev.global   = { ...prev.global };
+        const nextSects:  typeof prev.sections = { ...prev.sections };
+        if (selectedSection) {
+          // Section-scoped polish: write into sections override map.
+          const prevSection: Record<string, Partial<StemState>> = { ...(prev.sections[selectedSection] ?? {}) };
+          for (const role of Object.keys(stemPatches)) {
+            const patch = stemPatches[role];
+            if (!patch) continue;
+            prevSection[role] = { ...(prevSection[role] ?? {}), ...patch };
+          }
+          nextSects[selectedSection] = prevSection;
+        } else {
+          // Global polish.
+          for (const role of Object.keys(stemPatches)) {
+            const patch = stemPatches[role];
+            if (!patch || !prev.global[role]) continue;
+            nextGlobal[role] = { ...prev.global[role], ...patch };
+          }
+        }
+        return {
+          ...prev,
+          global:   nextGlobal,
+          sections: nextSects,
+          master:   { ...prev.master, ...masterPatch },
+          isDirty:  true,
+        };
+      });
+
+      // Mirror into the audio graph for instant audible feedback.
+      queueMicrotask(() => {
+        for (const role of Object.keys(stemPatches)) {
+          const patch = stemPatches[role];
+          const a     = audio.stems[role];
+          if (!patch || !a) continue;
+          if (typeof patch.gainDb     === "number") a.setGainDb(patch.gainDb);
+          if (typeof patch.pan        === "number") a.setPan(patch.pan);
+          if (typeof patch.reverb     === "number") a.setReverb(patch.reverb);
+          if (typeof patch.delay      === "number") a.setDelay(patch.delay);
+          if (typeof patch.comp       === "number") a.setComp(patch.comp);
+          if (typeof patch.brightness === "number") a.setBrightness(patch.brightness);
+        }
+        if (typeof masterPatch.volumeDb === "number") audio.master?.setGainDb(masterPatch.volumeDb);
+        if (Array.isArray(masterPatch.eq) && masterPatch.eq.length === 5) {
+          for (let i = 0; i < 5; i++) {
+            audio.master?.setEqBand(i as 0|1|2|3|4, masterPatch.eq[i]);
+          }
+        }
+      });
+
+      const noteText = data.note?.trim()
+        || `Polished ${Object.keys(stemPatches).length} stem${Object.keys(stemPatches).length === 1 ? "" : "s"} + master.`;
+      setAiPolishNote(noteText);
+      if (aiPolishNoteTimerRef.current) clearTimeout(aiPolishNoteTimerRef.current);
+      aiPolishNoteTimerRef.current = setTimeout(() => setAiPolishNote(null), 6000);
+    } catch (err) {
+      console.error("[ai-polish]", err);
+      setAiPolishNote("AI Polish hit a snag — try again.");
+      if (aiPolishNoteTimerRef.current) clearTimeout(aiPolishNoteTimerRef.current);
+      aiPolishNoteTimerRef.current = setTimeout(() => setAiPolishNote(null), 4000);
+    } finally {
+      setAiPolishBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (aiPolishNoteTimerRef.current) clearTimeout(aiPolishNoteTimerRef.current);
+    };
+  }, []);
+
   // ─── Transport ──────────────────────────────────────────────────────────
   async function togglePlay() {
     if (audio.transport.isPlaying) audio.transport.pause();
@@ -719,6 +825,33 @@ export function StudioClient(props: StudioClientProps) {
             onDelete={deleteSnapshot}
             onRecall={recallSnapshot}
           />
+
+          {/* AI Polish — Opus full-mix pass. Hidden for guests. */}
+          {!props.isGuest && (
+            <button
+              type="button"
+              onClick={runAiPolish}
+              disabled={aiPolishBusy || !audio.ready}
+              aria-label="AI Polish — full-mix coordinated nudge"
+              title="AI Polish — Opus reasons across the whole mix and nudges everything together"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors"
+              style={{
+                backgroundColor: aiPolishBusy ? "#D4A843" : "transparent",
+                color:           aiPolishBusy ? "#0A0A0A" : "#D4A843",
+                border:          "1px solid #D4A843",
+                cursor:          aiPolishBusy || !audio.ready ? "default" : "pointer",
+                opacity:         !audio.ready ? 0.4 : 1,
+              }}
+            >
+              <Sparkles
+                size={11}
+                style={{
+                  animation: aiPolishBusy ? "pulse 1.1s ease-in-out infinite" : undefined,
+                }}
+              />
+              {aiPolishBusy ? "Polishing…" : "AI Polish"}
+            </button>
+          )}
 
           {/* Simple / Advanced view toggle */}
           <div
@@ -927,6 +1060,27 @@ export function StudioClient(props: StudioClientProps) {
           >
             back to global mix
           </button>
+        </div>
+      )}
+
+      {/* ─── AI Polish note toast ───────────────────────────────────────── */}
+      {aiPolishNote && (
+        <div
+          className="absolute bottom-32 left-1/2 -translate-x-1/2 px-5 py-3 rounded-lg text-xs flex items-start gap-2.5 max-w-lg"
+          style={{
+            backgroundColor: "#1A1612",
+            border:          "1px solid #D4A843",
+            color:           "#F0D88E",
+            boxShadow:       "0 8px 24px rgba(0,0,0,0.55)",
+          }}
+        >
+          <Sparkles size={13} style={{ color: "#D4A843", marginTop: 1 }} />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-bold uppercase tracking-wider text-[10px]" style={{ color: "#D4A843" }}>
+              AI Polish
+            </span>
+            <span className="leading-snug">{aiPolishNote}</span>
+          </div>
         </div>
       )}
 
