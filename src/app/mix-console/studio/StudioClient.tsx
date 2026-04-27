@@ -24,7 +24,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Download, RotateCw } from "lucide-react";
+import { Pause, Play, Download, RotateCw, Undo2, Redo2 } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
@@ -32,6 +32,7 @@ import { MasterEqRow }    from "./MasterEqRow";
 import { MiniSpectrum }   from "./MiniSpectrum";
 import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
+import { useStudioHistory } from "./useStudioHistory";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, SongSection, StemRole, StemState, StudioState } from "./types";
 
@@ -119,7 +120,8 @@ export function StudioClient(props: StudioClientProps) {
     };
   }, [initialState, roles, aiOriginals]);
 
-  const [state, setState] = useState<StudioState>(initialStudioState);
+  const history = useStudioHistory(initialStudioState);
+  const { state, setState, undo, redo, canUndo, canRedo } = history;
 
   // ─── Section-edit context ───────────────────────────────────────────────
   // null = editing the global mix. Otherwise editing the override for the
@@ -249,6 +251,67 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { soloed: next });
     audio.setSoloed(role, next);
   }
+
+  // ─── Undo/redo plumbing ─────────────────────────────────────────────────
+  // After undo/redo replaces `state` wholesale, we need to push every value
+  // back through the audio graph so what's playing matches the restored
+  // state. We bump a ref-counted version on every undo/redo so the effect
+  // below knows to re-sync.
+  const restoreVersion = useRef(0);
+  function doUndo() { undo(); restoreVersion.current++; reSyncAll(); }
+  function doRedo() { redo(); restoreVersion.current++; reSyncAll(); }
+
+  function reSyncAll() {
+    // Defer to next microtask so React has applied the new state first.
+    queueMicrotask(() => {
+      if (!audio.ready) return;
+      for (const role of roles) {
+        const e = (() => {
+          const g = state.global[role];
+          if (!selectedSection) return g;
+          const override = state.sections[selectedSection]?.[role];
+          return override ? { ...g, ...override } : g;
+        })();
+        if (!e) continue;
+        audio.stems[role]?.setGainDb(e.gainDb);
+        audio.stems[role]?.setPan(e.pan);
+        audio.stems[role]?.setBrightness(e.brightness);
+        audio.stems[role]?.setReverb(e.reverb);
+        audio.stems[role]?.setDelay(e.delay);
+        audio.stems[role]?.setComp(e.comp);
+        audio.setMuted(role,  e.muted);
+        audio.setSoloed(role, e.soloed);
+      }
+      audio.master?.setGainDb(state.master.volumeDb);
+      for (let i = 0; i < 5; i++) {
+        audio.master?.setEqBand(i as 0 | 1 | 2 | 3 | 4, state.master.eq[i]);
+      }
+    });
+  }
+
+  // Keyboard shortcuts: Ctrl/Cmd+Z = undo, Ctrl+Shift+Z / Ctrl+Y = redo.
+  // Skip when user is typing in an input/textarea so we don't hijack form
+  // editing (no inputs in the studio today, but defensive for later).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag    = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      const meta = e.ctrlKey || e.metaKey;
+      if (!meta) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        doRedo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audio.ready, selectedSection, roles.join("|")]);
 
   // ─── Section selection ──────────────────────────────────────────────────
   // Selecting a section auto-seeks to its start so the artist hears what
@@ -395,6 +458,42 @@ export function StudioClient(props: StudioClientProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Undo / Redo */}
+          <div
+            className="flex items-center rounded-lg overflow-hidden"
+            style={{ border: "1px solid #2A2824" }}
+          >
+            <button
+              type="button"
+              onClick={doUndo}
+              disabled={!canUndo}
+              aria-label="Undo (Ctrl+Z)"
+              title="Undo (Ctrl+Z)"
+              className="px-2 py-1.5 transition-colors flex items-center"
+              style={{
+                color:  canUndo ? "#D4A843" : "#444",
+                cursor: canUndo ? "pointer" : "default",
+              }}
+            >
+              <Undo2 size={13} />
+            </button>
+            <div style={{ width: 1, height: 18, backgroundColor: "#2A2824" }} />
+            <button
+              type="button"
+              onClick={doRedo}
+              disabled={!canRedo}
+              aria-label="Redo (Ctrl+Shift+Z)"
+              title="Redo (Ctrl+Shift+Z)"
+              className="px-2 py-1.5 transition-colors flex items-center"
+              style={{
+                color:  canRedo ? "#D4A843" : "#444",
+                cursor: canRedo ? "pointer" : "default",
+              }}
+            >
+              <Redo2 size={13} />
+            </button>
+          </div>
+
           {/* Simple / Advanced view toggle */}
           <div
             className="flex items-center text-[10px] font-bold uppercase tracking-wider rounded-lg overflow-hidden"
