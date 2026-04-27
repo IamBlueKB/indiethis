@@ -7,6 +7,14 @@
  * stemParams + busParams. See _studio_render in predict.py.
  */
 
+// Song section as detected by the analysis pipeline. Mirrors SongSection in
+// engine.ts but kept here so the studio doesn't reach across into engine internals.
+export interface SongSection {
+  name:  string;   // "intro" | "verse1" | "chorus1" | "bridge" | "outro" etc.
+  start: number;   // seconds
+  end:   number;   // seconds
+}
+
 // Stem roles that can appear in a job. Pulled from the existing pipeline —
 // labels like "vocal_main", "vocal_doubles", etc. come from inputFiles[].label.
 // When Beat Polish is on, the beat is split into kick/bass/drums_other/melodics.

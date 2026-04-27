@@ -198,10 +198,16 @@ export default async function StudioPage({
   const initialState =
     (job.studioState as unknown as StudioStateShape | null) ?? null;
 
-  // Restore reference URL + bpm for later steps.
+  // Restore reference URL + bpm + sections for later steps.
   const referenceTrackUrl = job.referenceTrackUrl ?? null;
-  const analysisData      = (job.analysisData as { bpm?: number } | null) ?? null;
+  type SongSectionShape = { name: string; start: number; end: number };
+  const analysisData      = (job.analysisData as { bpm?: number; sections?: SongSectionShape[] } | null) ?? null;
   const bpm               = typeof analysisData?.bpm === "number" ? analysisData.bpm : 120;
+  const sections          = Array.isArray(analysisData?.sections)
+    ? (analysisData!.sections as SongSectionShape[]).filter(
+        (s) => s && typeof s.name === "string" && typeof s.start === "number" && typeof s.end === "number"
+      )
+    : [];
 
   return (
     <StudioClient
@@ -214,6 +220,7 @@ export default async function StudioPage({
       isGuest={false}
       referenceTrackUrl={referenceTrackUrl}
       bpm={bpm}
+      sections={sections}
     />
   );
 }

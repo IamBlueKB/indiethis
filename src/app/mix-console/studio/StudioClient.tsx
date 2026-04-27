@@ -30,9 +30,10 @@ import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
 import { MiniSpectrum }   from "./MiniSpectrum";
+import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
-import type { AiOriginal, MasterState, ReverbType, StemRole, StemState, StudioState } from "./types";
+import type { AiOriginal, MasterState, ReverbType, SongSection, StemRole, StemState, StudioState } from "./types";
 
 export interface StudioClientProps {
   jobId:        string;
@@ -52,6 +53,8 @@ export interface StudioClientProps {
   referenceTrackUrl?: string | null;
   /** BPM — used for delay-time sync in step 10. */
   bpm?:         number;
+  /** Detected song sections from analysisData (intro/verse/chorus/etc.). */
+  sections?:    SongSection[];
 }
 
 const DEFAULT_STEM_STATE: StemState = {
@@ -81,7 +84,7 @@ function mmss(t: number): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm } = props;
+  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm, sections = [] } = props;
 
   // Stable role order — first stem wins as transport master clock.
   const roles = useMemo(() => Object.keys(stems), [stems]);
@@ -118,6 +121,20 @@ export function StudioClient(props: StudioClientProps) {
 
   const [state, setState] = useState<StudioState>(initialStudioState);
 
+  // ─── Section-edit context ───────────────────────────────────────────────
+  // null = editing the global mix. Otherwise editing the override for the
+  // named section. Knob changes merge into state.sections[name][role].
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+
+  // Effective stem state for rendering knobs + driving the audio graph.
+  // Section override wins when present; otherwise we fall back to global.
+  function effectiveStem(role: StemRole): StemState {
+    const g = state.global[role];
+    if (!selectedSection) return g;
+    const override = state.sections[selectedSection]?.[role];
+    return override ? { ...g, ...override } : g;
+  }
+
   // ─── Audio graph ────────────────────────────────────────────────────────
   const audio = useStudioAudio({ stems, reverbTypes, bpm });
 
@@ -146,12 +163,32 @@ export function StudioClient(props: StudioClientProps) {
   }, [audio.ready]);
 
   // ─── State setters that drive both React state + audio graph ─────────────
+  // When a section is selected, knob changes write to the section override
+  // map instead of the global mix. predict.py applies the override for that
+  // section's time range at render time (step 26).
   function updateStem(role: StemRole, patch: Partial<StemState>) {
-    setState((prev) => ({
-      ...prev,
-      global:  { ...prev.global, [role]: { ...prev.global[role], ...patch } },
-      isDirty: true,
-    }));
+    setState((prev) => {
+      if (selectedSection) {
+        const prevSection = prev.sections[selectedSection] ?? {};
+        const prevOverride = prevSection[role] ?? {};
+        return {
+          ...prev,
+          sections: {
+            ...prev.sections,
+            [selectedSection]: {
+              ...prevSection,
+              [role]: { ...prevOverride, ...patch },
+            },
+          },
+          isDirty: true,
+        };
+      }
+      return {
+        ...prev,
+        global:  { ...prev.global, [role]: { ...prev.global[role], ...patch } },
+        isDirty: true,
+      };
+    });
   }
 
   function setStemGainDb(role: StemRole, db: number) {
@@ -212,6 +249,37 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { soloed: next });
     audio.setSoloed(role, next);
   }
+
+  // ─── Section selection ──────────────────────────────────────────────────
+  // Selecting a section auto-seeks to its start so the artist hears what
+  // they're editing, and snaps the audio graph to that section's effective
+  // values. predict.py applies sections at render time; the browser only
+  // ever previews one set of values at once.
+  function selectSection(name: string | null) {
+    setSelectedSection(name);
+  }
+
+  // Whenever the editing context changes, push that context's effective
+  // values into the audio graph so what plays = what you're editing.
+  useEffect(() => {
+    if (!audio.ready) return;
+    for (const role of roles) {
+      const e = (() => {
+        const g = state.global[role];
+        if (!selectedSection) return g;
+        const override = state.sections[selectedSection]?.[role];
+        return override ? { ...g, ...override } : g;
+      })();
+      if (!e) continue;
+      audio.stems[role]?.setGainDb(e.gainDb);
+      audio.stems[role]?.setPan(e.pan);
+      audio.stems[role]?.setBrightness(e.brightness);
+      audio.stems[role]?.setReverb(e.reverb);
+      audio.stems[role]?.setDelay(e.delay);
+      audio.stems[role]?.setComp(e.comp);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSection]);
 
   // ─── Modified detection (lights AI badge dim) ────────────────────────────
   // Compare against Claude's actual values per stem (NOT the DEFAULT_STEM_STATE
@@ -394,7 +462,7 @@ export function StudioClient(props: StudioClientProps) {
           {/* Channel strips — horizontal scroll on overflow */}
           <div className="flex-1 flex items-stretch gap-1.5 px-4 py-4 overflow-x-auto">
             {roles.map((role) => {
-              const s = state.global[role];
+              const s = effectiveStem(role);
               if (!s) return null;
               const stemColor = colorForRole(role);
               const ai        = aiOriginals?.[role];
@@ -492,15 +560,38 @@ export function StudioClient(props: StudioClientProps) {
         </div>
       )}
 
-      {/* ─── Section timeline placeholder — step 15 fills in ──────────────── */}
+      {/* ─── Section timeline — step 15 ──────────────────────────────────── */}
       {audio.ready && (
+        <SectionTimeline
+          sections={sections}
+          duration={audio.transport.duration}
+          currentTime={audio.transport.currentTime}
+          selectedSection={selectedSection}
+          onSelect={selectSection}
+          onSeek={(t) => audio.transport.seek(t)}
+        />
+      )}
+
+      {/* "Now editing" indicator above the timeline — only when a section is
+          picked, so the artist always knows knob changes won't go to global. */}
+      {audio.ready && selectedSection && (
         <div
-          className="flex items-center px-6 py-2 border-t gap-1"
-          style={{ backgroundColor: "#141210", borderColor: "#1f1d1a", minHeight: 36 }}
+          className="flex items-center justify-center px-4 py-1 border-t text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            backgroundColor: "#1A1612",
+            borderColor:     "#2A2622",
+            color:           "#D4A843",
+          }}
         >
-          <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: "#444" }}>
-            Sections — step 15
-          </span>
+          Editing: {selectedSection}
+          <button
+            type="button"
+            onClick={() => selectSection(null)}
+            className="ml-3 underline normal-case font-normal text-[10px]"
+            style={{ color: "#888" }}
+          >
+            back to global mix
+          </button>
         </div>
       )}
 
