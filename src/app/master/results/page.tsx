@@ -7,6 +7,7 @@
 
 import { db as prisma } from "@/lib/db";
 import { MasterResultsClient } from "./MasterResultsClient";
+import { ResultsHeader } from "@/components/layout/ResultsHeader";
 
 export default async function MasterResultsPage({
   searchParams,
@@ -58,29 +59,33 @@ export default async function MasterResultsPage({
   }
 
   return (
-    <MasterResultsClient
-      jobId={job.id}
-      token={token}
-      versions={(job.versions ?? []) as {
-        name: string; lufs: number; truePeak: number; url: string; waveformData: number[];
-      }[]}
-      exports={(job.exports ?? []) as { platform: string; lufs: number; format: string; url: string }[]}
-      reportData={(job.reportData ?? null) as {
-        finalLufs: number; truePeak: number; dynamicRange: number;
-        loudnessPenalties: { platform: string; penalty: number }[];
-      } | null}
-      previewUrl={job.previewUrl ?? ""}
-      originalUrl={job.inputFileUrl ?? null}
-      selectedVersion={job.selectedVersion ?? null}
-      guestName={job.guestName ?? "Artist"}
-      expiresAt={accessToken.expiresAt.toISOString()}
-    />
+    <div style={{ backgroundColor: "#0A0A0A", minHeight: "100vh", color: "#fff" }}>
+      <ResultsHeader isGuest kind="master" />
+      <MasterResultsClient
+        jobId={job.id}
+        token={token}
+        versions={(job.versions ?? []) as {
+          name: string; lufs: number; truePeak: number; url: string; waveformData: number[];
+        }[]}
+        exports={(job.exports ?? []) as { platform: string; lufs: number; format: string; url: string }[]}
+        reportData={(job.reportData ?? null) as {
+          finalLufs: number; truePeak: number; dynamicRange: number;
+          loudnessPenalties: { platform: string; penalty: number }[];
+        } | null}
+        previewUrl={job.previewUrl ?? ""}
+        originalUrl={job.inputFileUrl ?? null}
+        selectedVersion={job.selectedVersion ?? null}
+        guestName={job.guestName ?? "Artist"}
+        expiresAt={accessToken.expiresAt.toISOString()}
+      />
+    </div>
   );
 }
 
 function ErrorPage({ message }: { message: string }) {
   return (
     <div style={{ backgroundColor: "#0A0A0A", minHeight: "100vh", color: "#fff" }}>
+      <ResultsHeader isGuest kind="master" />
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold mb-3">Link unavailable</h1>
         <p className="text-sm mb-8" style={{ color: "#777" }}>{message}</p>

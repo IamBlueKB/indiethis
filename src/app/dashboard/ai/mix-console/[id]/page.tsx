@@ -12,6 +12,7 @@ import { db as prisma }       from "@/lib/db";
 import { MixResultsClient }   from "@/app/mix-console/results/MixResultsClient";
 import { ProcessingState }    from "@/app/mix-console/results/ProcessingState";
 import { mixJobToResultsData } from "@/app/mix-console/results/load-mix-data";
+import { ResultsHeader }      from "@/components/layout/ResultsHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default async function SubscriberMixResultsPage({
   if (job.status !== "COMPLETE") {
     return (
       <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+        <ResultsHeader isGuest={false} kind="mix" />
         <ProcessingState jobId={job.id} initialStatus={job.status} />
       </div>
     );
@@ -54,6 +56,7 @@ export default async function SubscriberMixResultsPage({
 
   return (
     <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+      <ResultsHeader isGuest={false} kind="mix" />
       <MixResultsClient data={data} />
     </div>
   );

@@ -11,6 +11,7 @@ import { db as prisma }       from "@/lib/db";
 import { MixResultsClient }   from "./MixResultsClient";
 import { ProcessingState }    from "./ProcessingState";
 import { mixJobToResultsData } from "./load-mix-data";
+import { ResultsHeader }      from "@/components/layout/ResultsHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function MixResultsPage({
   if (!token) {
     return (
       <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+        <ResultsHeader isGuest kind="mix" />
         <div className="max-w-md mx-auto px-6 py-20 text-center">
           <p className="text-4xl mb-4">🔗</p>
           <h1 className="text-xl font-bold mb-2">Missing access token</h1>
@@ -51,6 +53,7 @@ export default async function MixResultsPage({
   if (!accessToken || isExpired) {
     return (
       <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+        <ResultsHeader isGuest kind="mix" />
         <div className="max-w-md mx-auto px-6 py-20 text-center">
           <p className="text-4xl mb-4">⏱</p>
           <h1 className="text-xl font-bold mb-2">
@@ -78,6 +81,7 @@ export default async function MixResultsPage({
   if (job.status !== "COMPLETE") {
     return (
       <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+        <ResultsHeader isGuest kind="mix" />
         <ProcessingState
           jobId={job.id}
           initialStatus={job.status}
@@ -91,6 +95,7 @@ export default async function MixResultsPage({
 
   return (
     <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
+      <ResultsHeader isGuest kind="mix" />
       <MixResultsClient data={data} accessToken={token} />
     </div>
   );
