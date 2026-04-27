@@ -87,7 +87,7 @@ export default async function StudioPage({
   }
 
   // Build stems map from inputFiles. Filter out anything without a usable URL.
-  const inputFiles = (job.inputFiles ?? []) as InputFile[];
+  const inputFiles = ((job.inputFiles ?? []) as unknown) as InputFile[];
   const stems: Record<string, string> = {};
   for (const f of inputFiles) {
     if (!f?.url || !f?.label) continue;
