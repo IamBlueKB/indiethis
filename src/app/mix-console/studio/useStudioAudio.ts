@@ -179,14 +179,19 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
 
-      // stemInput fans out to dry, wet (brightness→convolver→reverbWet), and delay (with feedback).
-      stemInput.connect(dryGain).connect(sumGain);
-
+      // stemInput → brightness (in series, always in the path so it's audible
+      // even when reverb/delay are at zero). brightness then fans out to:
+      //   1. dry path:   brightness → dryGain → sumGain
+      //   2. reverb wet: brightness → convolver → reverbWet → sumGain
+      //   3. delay wet:  brightness → delay (with feedback) → delayWet → sumGain
       stemInput.connect(brightness);
+
+      brightness.connect(dryGain).connect(sumGain);
+
       brightness.connect(convolver);
       convolver.connect(reverbWet).connect(sumGain);
 
-      stemInput.connect(delay);
+      brightness.connect(delay);
       delay.connect(delayFb).connect(delay);  // feedback loop
       delay.connect(delayWet).connect(sumGain);
 
