@@ -174,7 +174,7 @@ export default async function MixConsoleDashboardPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {isComplete && (
                       <Link
-                        href={`/mix-console/wizard?resume=${job.id}`}
+                        href={`/dashboard/ai/mix-console/${job.id}`}
                         className="text-xs px-3 py-1.5 rounded-lg border transition-all hover:border-[#D4A843] no-underline"
                         style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
                       >
