@@ -410,6 +410,26 @@ export function MixResultsClient({
         accessToken={accessToken}
       />
 
+      {/* ── Pro Studio Mixer entrypoint (Pro tier only) ──────────────────── */}
+      {data.tier === "PRO" && !accessToken && (
+        <div className="px-4">
+          <a
+            href={`/dashboard/ai/mix-console/${data.id}/studio`}
+            className="block w-full max-w-2xl mx-auto px-5 py-4 rounded-2xl text-center transition-all hover:opacity-90"
+            style={{
+              backgroundColor: "transparent",
+              border:          "1px solid #D4A843",
+              color:           "#D4A843",
+            }}
+          >
+            <span className="text-sm font-bold tracking-wide">🎛  Open Pro Studio Mixer</span>
+            <span className="block text-[11px] mt-1" style={{ color: "#888" }}>
+              Fine-tune the mix with hands-on faders, knobs, and AI assist
+            </span>
+          </a>
+        </div>
+      )}
+
       {/* ── §10 REVISION SECTION (Premium/Pro — Step 10) ─────────────────── */}
       {canRevise && (
         <RevisionMarkers
