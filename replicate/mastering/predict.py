@@ -1220,6 +1220,8 @@ class Predictor(BasePredictor):
             result = self._preview_mix(job_id)
         elif action == "revise-mix":
             result = self._revise_mix(job_id, mix_params_json)
+        elif action == "studio-render":
+            result = self._studio_render(job_id, mix_params_json)
         elif action == "separate-stems":
             result = self._separate_stems(audio_url, job_id)
         elif action == "analyze-reference":
@@ -2811,7 +2813,8 @@ class Predictor(BasePredictor):
                                 bpm=bpm_global,
                                 throw_type=str(throw.get("type", "dotted_eighth")),
                                 feedback_count=int(throw.get("feedback", 3)),
-                                wet=0.35,
+                                # Studio mode scales this via delay knob — fall back to 0.35
+                                wet=float(np.clip(float(throw.get("wet", 0.35)), 0.0, 1.0)),
                             )
 
                     y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
@@ -2927,12 +2930,18 @@ class Predictor(BasePredictor):
 
             # Then bus EQ + glue comp
             mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
-            bus_board = Pedalboard([
+            # Studio Mixer: master EQ mid band (band 2 of master.eq) routed
+            # to a 1kHz peak filter on the bus — surfaced via params.
+            studio_mid_db = float(params.get("studioMasterMidBand", 0.0))
+            bus_chain = [
                 LowShelfFilter(cutoff_frequency_hz=100,  gain_db=bus_low_shelf),
                 HighShelfFilter(cutoff_frequency_hz=8000, gain_db=bus_high_shelf),
-                Compressor(threshold_db=bus_thresh, ratio=bus_ratio,
-                           attack_ms=30, release_ms=200),
-            ])
+            ]
+            if abs(studio_mid_db) > 0.05:
+                bus_chain.append(PeakFilter(cutoff_frequency_hz=1000, gain_db=studio_mid_db, q=0.7))
+            bus_chain.append(Compressor(threshold_db=bus_thresh, ratio=bus_ratio,
+                                        attack_ms=30, release_ms=200))
+            bus_board = Pedalboard(bus_chain)
             mixed = bus_board(mixed.astype(np.float32), sr_out)
 
             # ── Stereo widener on bus (M/S) ───────────────────────────────────────
@@ -3005,12 +3014,16 @@ class Predictor(BasePredictor):
                     clip[:, -fade:] *= np.linspace(1, 0, fade)
                 return clip
 
-            # ── Variation rendering — tier-aware ──
-            # STANDARD: 3 variations (clean/polished/aggressive) — menu of options
+            # ── Variation rendering — tier/mode aware ──
+            # STUDIO MODE (Pro Studio Mixer render): single "studio" output, no previews.
+            # STANDARD: 3 variations (clean/polished/aggressive) — menu of options.
             # PREMIUM/PRO: single "mix" output rendered with Claude's exact busParams
             #   already baked into `mixed` — no extra coloring. They're paying for
             #   Claude's best recommendation, not a menu.
-            if tier in ("PREMIUM", "PRO"):
+            studio_mode = bool(params.get("studioMode", False))
+            if studio_mode:
+                variation_configs = [("studio", "claude_exact")]
+            elif tier in ("PREMIUM", "PRO"):
                 variation_configs = [("mix", "claude_exact")]
             else:
                 variation_configs = [
@@ -3077,12 +3090,21 @@ class Predictor(BasePredictor):
                 except Exception as qa_err:
                     print(f"qa measurement failed for {name}: {qa_err}", flush=True)
 
-                var_path = os.path.join(out_dir, f"mix_{name}.wav")
+                # Studio render writes to mixing/{jobId}/studio_mix.wav (matches schema).
+                if studio_mode:
+                    out_filename = "studio_mix.wav"
+                else:
+                    out_filename = f"mix_{name}.wav"
+                var_path = os.path.join(out_dir, out_filename)
                 sf.write(var_path, apply_tpdf_dither(var_audio).T, sr_out, subtype="PCM_16")
-                remote = f"mixing/{job_id}/mix_{name}.wav"
+                remote = f"mixing/{job_id}/{out_filename}"
                 upload_to_supabase(var_path, "processed", remote)
                 file_paths[name] = remote
                 os.unlink(var_path)
+
+                # Studio renders skip previews — the artist plays the full file back live.
+                if studio_mode:
+                    continue
 
                 clip = make_clip(var_audio, preview_start, preview_end, sr_out)
                 clip_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
@@ -3095,16 +3117,20 @@ class Predictor(BasePredictor):
                 os.unlink(clip_tmp)
 
             # ── Original waveform — use raw dry sum (pre-processing), NOT processed mix ──
-            orig_source = dry_sum if dry_sum is not None else mixed.astype(np.float32)
-            orig_clip = make_clip(orig_source, preview_start, preview_end, sr_out)
-            orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
-            original_waveform = extract_waveform_from_array(orig_mono)
-            orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
-            sf.write(orig_tmp, apply_tpdf_dither(orig_clip).T, sr_out, subtype="PCM_16")
-            orig_remote = f"mixing/{job_id}/preview_original.wav"
-            upload_to_supabase(orig_tmp, "processed", orig_remote)
-            preview_paths["original"] = orig_remote
-            os.unlink(orig_tmp)
+            # Skipped in studio mode (no compare-to-original UI on studio renders).
+            if not studio_mode:
+                orig_source = dry_sum if dry_sum is not None else mixed.astype(np.float32)
+                orig_clip = make_clip(orig_source, preview_start, preview_end, sr_out)
+                orig_mono = orig_clip[0] if orig_clip.ndim > 1 else orig_clip
+                original_waveform = extract_waveform_from_array(orig_mono)
+                orig_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+                sf.write(orig_tmp, apply_tpdf_dither(orig_clip).T, sr_out, subtype="PCM_16")
+                orig_remote = f"mixing/{job_id}/preview_original.wav"
+                upload_to_supabase(orig_tmp, "processed", orig_remote)
+                preview_paths["original"] = orig_remote
+                os.unlink(orig_tmp)
+            else:
+                original_waveform = []
 
         finally:
             shutil.rmtree(out_dir, ignore_errors=True)
@@ -3133,3 +3159,204 @@ class Predictor(BasePredictor):
     def _revise_mix(self, job_id, mix_params_json):
         """Re-run mix with updated parameters (revision round)."""
         return self._mix_full(job_id, mix_params_json)
+
+    # ---------- STUDIO RENDER ----------
+    def _studio_render(self, job_id, mix_params_json):
+        """
+        Pro Studio Mixer render. Takes Claude's original mix parameters PLUS
+        an artist-controlled `studioState` block, translates the studio's
+        knob domain into mutations on stemParams / busParams / sectionMap,
+        then delegates to _mix_full with `studioMode=True` so the engine
+        emits a single `mixing/{jobId}/studio_mix.wav` (no previews).
+
+        studioState shape (mirrors the browser's StudioState contract):
+          global:   {label: {gainDb (delta), pan (-1..1), reverb 0..100,
+                             delay 0..100, comp 0..100, brightness 0..100,
+                             dryWet 0..100, muted, soloed}}
+          sections: {sectionName: {label: Partial<StemState>}}
+          master:   {volumeDb, stereoWidth (0..150%), eq[5] (±6dB each),
+                     aiIntensity 0..100}
+          linkedGroups: ignored (already baked into per-stem gainDb client-side)
+
+        Knob convention: 50 = "AI's setting" for reverb/comp/brightness
+        — values below 50 scale Claude's setting down toward zero, above
+        50 scale up. dryWet=100 means fully processed (default).
+        """
+        try:
+            params = json.loads(mix_params_json) if mix_params_json else {}
+        except Exception:
+            params = {}
+
+        studio = params.get("studioState") or {}
+        s_global   = studio.get("global")   or {}
+        s_master   = studio.get("master")   or {}
+        s_sections = studio.get("sections") or {}
+
+        # ── 1. Mute / Solo: filter stems_urls so muted stems never load ───────
+        stems_in = dict(params.get("stems_urls", {}))
+        soloed_labels = [lbl for lbl, st in s_global.items() if isinstance(st, dict) and st.get("soloed")]
+        if soloed_labels:
+            stems_in = {lbl: u for lbl, u in stems_in.items() if lbl in soloed_labels}
+        else:
+            stems_in = {
+                lbl: u for lbl, u in stems_in.items()
+                if not (s_global.get(lbl) or {}).get("muted")
+            }
+        params["stems_urls"] = stems_in
+
+        # ── 2. Per-stem overrides → mutate stemParams ─────────────────────────
+        ai_intensity = float(s_master.get("aiIntensity", 100.0)) / 100.0
+        ai_intensity = max(0.0, min(2.0, ai_intensity))
+
+        stem_params = dict(params.get("stemParams", {}) or {})
+        for label, knobs in s_global.items():
+            if not isinstance(knobs, dict):
+                continue
+            sp = dict(stem_params.get(label, {}) or {})
+
+            # gainDb — additive delta on Claude's gainDb (which itself is a delta
+            # from the LUFS staging target).
+            sp["gainDb"] = float(sp.get("gainDb", 0.0)) + float(knobs.get("gainDb", 0.0))
+
+            # pan — absolute replacement
+            if "pan" in knobs:
+                sp["panLR"] = float(max(-1.0, min(1.0, float(knobs.get("pan", 0.0)))))
+
+            # reverb 0..100 (50 = AI). Scale Claude's reverbSend AND apply aiIntensity.
+            rv_knob   = float(knobs.get("reverb", 50.0))
+            ai_reverb = float(sp.get("reverbSend", 0.0))
+            if ai_reverb <= 0.0:
+                # Claude said no reverb — give the knob a reasonable baseline
+                # so dragging above 50 still does something.
+                ai_reverb = 0.12
+            sp["reverbSend"] = float(max(0.0, min(1.0, ai_reverb * (rv_knob / 50.0) * ai_intensity)))
+
+            # brightness 0..100 (50 = flat). ±6dB high-shelf at 6kHz at extremes.
+            br_knob = float(knobs.get("brightness", 50.0))
+            if abs(br_knob - 50.0) > 1.0:
+                shelf_db = (br_knob - 50.0) / 50.0 * 6.0
+                eq_list = list(sp.get("eq", []) or [])
+                eq_list.append({"type": "highshelf", "freq": 6000, "gainDb": shelf_db, "q": 0.7})
+                sp["eq"] = eq_list
+
+            # comp 0..100 (50 = AI). Scale comp1.ratio. 0=bypass (ratio 1), 100=2x AI capped at 8.
+            cp_knob = float(knobs.get("comp", 50.0))
+            if abs(cp_knob - 50.0) > 1.0:
+                c1 = dict(sp.get("comp1", {}) or {})
+                ai_ratio = float(c1.get("ratio", 3.0))
+                new_ratio = ai_ratio * (cp_knob / 50.0)
+                c1["ratio"] = float(max(1.0, min(8.0, new_ratio)))
+                sp["comp1"] = c1
+
+            # dryWet 0..100 (100 = fully processed, default). Approximate dry by
+            # scaling all "wet" amounts toward zero. Real dry-mix needs raw
+            # uploads at the bus — deferred to a later step.
+            dw_knob = float(knobs.get("dryWet", 100.0))
+            if dw_knob < 99.0:
+                dw = max(0.0, min(1.0, dw_knob / 100.0))
+                sp["reverbSend"] = float(sp.get("reverbSend", 0.0)) * dw
+                sp["saturation"] = float(sp.get("saturation", 0.02)) * dw
+                sp["chorusWet"]  = float(sp.get("chorusWet",  0.0))  * dw
+                sp["flangerWet"] = float(sp.get("flangerWet", 0.0))  * dw
+                c1 = dict(sp.get("comp1", {}) or {})
+                c1_ratio = float(c1.get("ratio", 3.0))
+                c1["ratio"] = float(1.0 + (c1_ratio - 1.0) * dw)
+                sp["comp1"] = c1
+
+            stem_params[label] = sp
+        params["stemParams"] = stem_params
+
+        # ── 3. Delay knob (main vocal only) → scale delayThrows[].wet ─────────
+        # _mix_full now reads throw["wet"] (default 0.35) so this propagates.
+        main_label = None
+        for lbl in s_global:
+            if lbl in ("vocal_main", "lead") or (
+                lbl.startswith("vocal_") and not any(k in lbl for k in ("adlib", "double", "harmoni", "insout"))
+            ):
+                main_label = lbl
+                break
+        if main_label:
+            delay_knob = float((s_global.get(main_label) or {}).get("delay", 50.0))
+            if abs(delay_knob - 50.0) > 1.0:
+                scale = max(0.0, min(2.0, delay_knob / 50.0))
+                throws_in = list(params.get("delayThrows", []) or [])
+                scaled = []
+                for t in throws_in:
+                    tt = dict(t)
+                    tt["wet"] = float(max(0.0, min(1.0, float(tt.get("wet", 0.35)) * scale)))
+                    scaled.append(tt)
+                params["delayThrows"] = scaled
+
+        # ── 4. Section overrides → merge into sectionMap ──────────────────────
+        # studio sections store partial StemState per stem; we collapse them to
+        # an average gainDb per section since _mix_full's sectionMap acts on
+        # the full mix. (Per-stem section gain is not yet wired in _mix_full.)
+        if s_sections:
+            existing = list(params.get("sectionMap", []) or [])
+            sm_by_name = {}
+            for sm in existing:
+                key = str(sm.get("sectionName", sm.get("label", ""))).lower()
+                if key:
+                    sm_by_name[key] = dict(sm)
+            for sec_name, stem_overrides in s_sections.items():
+                if not isinstance(stem_overrides, dict):
+                    continue
+                deltas = []
+                for o in stem_overrides.values():
+                    if isinstance(o, dict) and "gainDb" in o:
+                        try:
+                            deltas.append(float(o.get("gainDb", 0.0)))
+                        except Exception:
+                            pass
+                if not deltas:
+                    continue
+                avg = sum(deltas) / len(deltas)
+                key = str(sec_name).lower()
+                if key in sm_by_name:
+                    sm_by_name[key]["gainDb"] = float(sm_by_name[key].get("gainDb", 0.0)) + avg
+                else:
+                    sm_by_name[key] = {"sectionName": sec_name, "gainDb": avg}
+            params["sectionMap"] = list(sm_by_name.values())
+
+        # ── 5. Master overrides → mutate busParams ────────────────────────────
+        bp = dict(params.get("busParams", {}) or {})
+
+        # stereoWidth: 0..150 percent of "normal". 100 = AI, 0 = mono, 150 = +50% wider.
+        sw_pct = float(s_master.get("stereoWidth", 100.0)) / 100.0
+        sw_pct = max(0.0, min(1.5, sw_pct))
+        bp["stereoWidth"] = float(bp.get("stereoWidth", 1.25)) * sw_pct
+
+        # eq[5]: ±6dB per band — sub, low, mid, high-mid, air. Sub+Low fold into
+        # busParams.eqLowShelf, High-Mid+Air into eqHighShelf, Mid → studioMasterMidBand.
+        eq_bands = s_master.get("eq")
+        if isinstance(eq_bands, list) and len(eq_bands) >= 5:
+            try:
+                bp["eqLowShelf"]  = float(bp.get("eqLowShelf",  0.5)) + float(eq_bands[0]) + float(eq_bands[1])
+                bp["eqHighShelf"] = float(bp.get("eqHighShelf", 1.0)) + float(eq_bands[3]) + float(eq_bands[4])
+                params["studioMasterMidBand"] = float(eq_bands[2])
+            except Exception:
+                pass
+
+        # volumeDb: shift the bus peak target. Default peakNormalize is -1.0 dBFS;
+        # artist's volumeDb adds onto that, clamped so we never exceed -0.1 dBFS.
+        vol_db = float(s_master.get("volumeDb", 0.0))
+        if abs(vol_db) > 0.05:
+            bp["peakNormalize"] = float(max(-24.0, min(-0.1, float(bp.get("peakNormalize", -1.0)) + vol_db)))
+
+        params["busParams"] = bp
+
+        # ── 6. Flag studio mode + pin tier so output naming + chain are right ─
+        params["studioMode"] = True
+        params["tier"]       = "PRO"
+
+        # Strip the studioState payload so it isn't re-applied on any nested call.
+        params.pop("studioState", None)
+
+        result = self._mix_full(job_id, json.dumps(params))
+        file_paths = (result or {}).get("file_paths") or {}
+        studio_path = file_paths.get("studio") or file_paths.get("mix") or None
+        return {
+            "studio_file_path": studio_path,
+            "file_paths":       file_paths,
+            "qa_results":       (result or {}).get("qa_results") or {},
+        }
