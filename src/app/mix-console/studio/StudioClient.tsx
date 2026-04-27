@@ -33,8 +33,9 @@ import { MiniSpectrum }   from "./MiniSpectrum";
 import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { useStudioHistory } from "./useStudioHistory";
+import { SnapshotsMenu }   from "./SnapshotsMenu";
 import { colorForRole, labelForRole } from "./stem-colors";
-import type { AiOriginal, MasterState, ReverbType, SongSection, StemRole, StemState, StudioState } from "./types";
+import type { AiOriginal, MasterState, ReverbType, Snapshot, SongSection, StemRole, StemState, StudioState } from "./types";
 
 export interface StudioClientProps {
   jobId:        string;
@@ -122,6 +123,82 @@ export function StudioClient(props: StudioClientProps) {
 
   const history = useStudioHistory(initialStudioState);
   const { state, setState, undo, redo, canUndo, canRedo } = history;
+
+  // ─── Snapshots ──────────────────────────────────────────────────────────
+  // "AI Original" is auto-seeded from the initial state and protected from
+  // deletion. Artists can save additional named snapshots; recall replaces
+  // the current state via setState (so it lands on the undo stack and can
+  // be backed out).
+  const [snapshots, setSnapshots] = useState<Snapshot[]>(() => [{
+    name:       "AI Original",
+    protected:  true,
+    created_at: new Date().toISOString(),
+    state:      {
+      global:   initialStudioState.global,
+      sections: initialStudioState.sections,
+      master:   initialStudioState.master,
+    },
+  }]);
+
+  function saveSnapshot(name: string) {
+    setSnapshots((prev) => {
+      // De-dupe: replace existing snapshot of the same name (unless protected).
+      const filtered = prev.filter((s) => s.name !== name || s.protected);
+      // If a protected snapshot has this name, append a numeric suffix.
+      const finalName = filtered.some((s) => s.name === name) ? `${name} (2)` : name;
+      const next: Snapshot = {
+        name:       finalName,
+        protected:  false,
+        created_at: new Date().toISOString(),
+        state: {
+          global:   state.global,
+          sections: state.sections,
+          master:   state.master,
+        },
+      };
+      return [...filtered, next];
+    });
+  }
+
+  function deleteSnapshot(name: string) {
+    setSnapshots((prev) => prev.filter((s) => s.name !== name || s.protected));
+  }
+
+  function recallSnapshot(snap: Snapshot) {
+    setState((prev) => ({
+      ...prev,
+      global:   snap.state.global,
+      sections: snap.state.sections,
+      master:   snap.state.master,
+      isDirty:  true,
+    }));
+    // Push the restored values into the audio graph on the next microtask
+    // (after React has applied the new state).
+    queueMicrotask(() => {
+      if (!audio.ready) return;
+      for (const role of roles) {
+        const e = (() => {
+          const g = snap.state.global[role];
+          if (!selectedSection) return g;
+          const override = snap.state.sections[selectedSection]?.[role];
+          return override ? { ...g, ...override } : g;
+        })();
+        if (!e) continue;
+        audio.stems[role]?.setGainDb(e.gainDb);
+        audio.stems[role]?.setPan(e.pan);
+        audio.stems[role]?.setBrightness(e.brightness);
+        audio.stems[role]?.setReverb(e.reverb);
+        audio.stems[role]?.setDelay(e.delay);
+        audio.stems[role]?.setComp(e.comp);
+        audio.setMuted(role,  e.muted);
+        audio.setSoloed(role, e.soloed);
+      }
+      audio.master?.setGainDb(snap.state.master.volumeDb);
+      for (let i = 0; i < 5; i++) {
+        audio.master?.setEqBand(i as 0 | 1 | 2 | 3 | 4, snap.state.master.eq[i]);
+      }
+    });
+  }
 
   // ─── Section-edit context ───────────────────────────────────────────────
   // null = editing the global mix. Otherwise editing the override for the
@@ -493,6 +570,14 @@ export function StudioClient(props: StudioClientProps) {
               <Redo2 size={13} />
             </button>
           </div>
+
+          {/* Snapshots */}
+          <SnapshotsMenu
+            snapshots={snapshots}
+            onSave={saveSnapshot}
+            onDelete={deleteSnapshot}
+            onRecall={recallSnapshot}
+          />
 
           {/* Simple / Advanced view toggle */}
           <div
