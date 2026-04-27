@@ -88,6 +88,10 @@ export interface StemHandle {
   setBrightness(value: number): void;
   /** Reverb 0..100 (0 = dry, 50 = moderate, 100 = lush). Drives convolver wet send. */
   setReverb(value: number): void;
+  /** Delay 0..100 (0 = off, 100 = washy). Drives delay wet + feedback; time = 1/8 note at track BPM. */
+  setDelay(value: number): void;
+  /** Compression 0..100 (0 = bypass, 100 = aggressive). Drives ratio + threshold together. */
+  setComp(value: number): void;
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
 }

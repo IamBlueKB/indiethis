@@ -46,6 +46,8 @@ interface UseStudioAudioOptions {
   stems: Record<StemRole, string>;
   /** Per-stem reverb type (Claude's choice). Stems set to "dry" skip the convolver entirely. */
   reverbTypes?: Record<StemRole, ReverbType>;
+  /** Track BPM — drives delay-time sync (1/8 note at this tempo). Defaults to 120. */
+  bpm?: number;
 }
 
 const MASTER_EQ_FREQS = [60, 250, 1000, 4000, 12000] as const;
@@ -61,6 +63,7 @@ interface StemNodes {
   delayFb:      GainNode;
   delayWet:     GainNode;
   sumGain:      GainNode;
+  compressor:   DynamicsCompressorNode;  // dynamics — step 11
   stemGain:     GainNode;
   panner:       StereoPannerNode;
   analyser:     AnalyserNode;
@@ -115,8 +118,16 @@ function buildReverbIR(ctx: AudioContext, type: Exclude<ReverbType, "dry">): Aud
 }
 
 export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioReturn {
-  const { stems, reverbTypes } = opts;
+  const { stems, reverbTypes, bpm } = opts;
   const roles = useMemo(() => Object.keys(stems), [stems]);
+
+  // Cache the bpm-synced 1/8-note delay time so setDelay can read it without
+  // re-running the build effect.
+  const eighthNoteSecRef = useRef<number>(0.25);
+  eighthNoteSecRef.current = (() => {
+    const safeBpm = Number.isFinite(bpm) && (bpm as number) > 30 ? (bpm as number) : 120;
+    return 60 / safeBpm / 2;
+  })();
 
   // Mutable graph state lives in refs so React rerenders don't rebuild it.
   const ctxRef            = useRef<AudioContext | null>(null);
@@ -227,6 +238,16 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       const sumGain = ctx.createGain();
       sumGain.gain.value = 1.0;
 
+      // Per-stem compressor — knob 0..100 drives threshold + ratio together.
+      // At 0 the compressor is effectively bypassed (ratio=1). Defaults match
+      // a transparent vocal/drum bus comp until the user moves the knob.
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = 0;
+      compressor.knee.value      = 6;
+      compressor.ratio.value     = 1;
+      compressor.attack.value    = 0.003;
+      compressor.release.value   = 0.1;
+
       const stemGain = ctx.createGain();
       stemGain.gain.value = 1.0;
 
@@ -255,7 +276,8 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       delay.connect(delayFb).connect(delay);  // feedback loop
       delay.connect(delayWet).connect(sumGain);
 
-      sumGain.connect(stemGain);
+      sumGain.connect(compressor);
+      compressor.connect(stemGain);
       stemGain.connect(panner);
       panner.connect(analyser);
       analyser.connect(masterGain);
@@ -271,6 +293,7 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         delayFb,
         delayWet,
         sumGain,
+        compressor,
         stemGain,
         panner,
         analyser,
@@ -447,6 +470,31 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           // with the actual % wet baked into the AI mix).
           const v = Math.max(0, Math.min(100, value));
           n.reverbWet.gain.value = v / 100;
+        },
+        setDelay: (value: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n) return;
+          const v = Math.max(0, Math.min(100, value));
+          // Wet level: 0..100 → 0..0.5 (50% max wet — keeps the dry signal
+          // dominant; full wet would smear the mix).
+          n.delayWet.gain.value = (v / 100) * 0.5;
+          // Time: 1/8 note at the track's BPM. Locked to bpm so it always
+          // sits in the pocket regardless of song.
+          n.delay.delayTime.value = eighthNoteSecRef.current;
+          // Feedback: 0..0.5. Light at low knob values, more washy past 50.
+          n.delayFb.gain.value = (v / 100) * 0.5;
+        },
+        setComp: (value: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n) return;
+          // 0..100 → threshold 0..-30 dB, ratio 1..8.
+          // 0     = pass-through (ratio 1, threshold 0 dB).
+          // 100   = aggressive squash (ratio 8, threshold -30 dB).
+          const v        = Math.max(0, Math.min(100, value));
+          const ratio    = 1 + (v / 100) * 7;
+          const threshDb = -(v / 100) * 30;
+          n.compressor.ratio.value     = ratio;
+          n.compressor.threshold.value = threshDb;
         },
         get analyser(): AnalyserNode {
           const n = stemNodesRef.current[role];

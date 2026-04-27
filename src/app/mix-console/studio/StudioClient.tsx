@@ -78,7 +78,7 @@ function mmss(t: number): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm: _bpm } = props;
+  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm } = props;
 
   // Stable role order — first stem wins as transport master clock.
   const roles = useMemo(() => Object.keys(stems), [stems]);
@@ -116,7 +116,7 @@ export function StudioClient(props: StudioClientProps) {
   const [state, setState] = useState<StudioState>(initialStudioState);
 
   // ─── Audio graph ────────────────────────────────────────────────────────
-  const audio = useStudioAudio({ stems, reverbTypes });
+  const audio = useStudioAudio({ stems, reverbTypes, bpm });
 
   // Push initial state into the audio graph once it's ready.
   const seededRef = useRef(false);
@@ -130,6 +130,8 @@ export function StudioClient(props: StudioClientProps) {
       audio.stems[role]?.setPan(s.pan);
       audio.stems[role]?.setBrightness(s.brightness);
       audio.stems[role]?.setReverb(s.reverb);
+      audio.stems[role]?.setDelay(s.delay);
+      audio.stems[role]?.setComp(s.comp);
       if (s.muted)  audio.setMuted(role, true);
       if (s.soloed) audio.setSoloed(role, true);
     }
@@ -158,8 +160,14 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { reverb: v });
     audio.stems[role]?.setReverb(v);
   }
-  function setStemDelay(role: StemRole, v: number)      { updateStem(role, { delay: v }); }
-  function setStemComp(role: StemRole, v: number)       { updateStem(role, { comp: v }); }
+  function setStemDelay(role: StemRole, v: number) {
+    updateStem(role, { delay: v });
+    audio.stems[role]?.setDelay(v);
+  }
+  function setStemComp(role: StemRole, v: number) {
+    updateStem(role, { comp: v });
+    audio.stems[role]?.setComp(v);
+  }
   function setStemBrightness(role: StemRole, v: number) {
     updateStem(role, { brightness: v });
     audio.stems[role]?.setBrightness(v);
