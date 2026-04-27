@@ -4,22 +4,29 @@
  * Builds a per-stem audio graph and a shared master bus. Returns stable
  * handles for the UI to drive in real time.
  *
- * Step 2 scope:
- *   - Per-stem chain wired with all node types in place (so later steps
- *     can flip on brightness / reverb / delay setters without rebuilding
- *     the graph)
- *   - Exposed setters: gain, pan, mute, solo
- *   - Per-stem AnalyserNode + master AnalyserNode (used in step 14)
- *   - Master gain + 5x flat biquad EQ + master analyser → destination
- *   - Transport that drives all stem audio elements off a master clock
+ * Sync model (rewritten):
+ *   We fetch + decodeAudioData each stem URL into an AudioBuffer at
+ *   mount time, then play with AudioBufferSourceNode. All stems are
+ *   started with ctx.currentTime + small lookahead and the same offset,
+ *   so they are sample-accurate-locked to the AudioContext clock and
+ *   cannot drift. <audio> + MediaElementAudioSourceNode (the previous
+ *   approach) used independent media-element clocks per stem and drifted
+ *   noticeably over a few minutes.
+ *
+ * Per-stem chain (persistent):
+ *   stemInput (GainNode, used as source fan-out point)
+ *     ├── dryGain    ──────────────────────────────┐
+ *     ├── brightness → convolver → reverbWet ──────┤── sumGain → stemGain → panner → analyser → master
+ *     └── delay (with feedback) → delayWet ────────┘
+ *
+ * Per play we create a fresh AudioBufferSourceNode and connect to
+ * stemInput. AudioBufferSourceNodes are one-shot per Web Audio spec.
+ *
+ * Master chain (persistent):
+ *   stems → masterGain → 5x biquad EQ (flat) → analyser → destination
  *
  * Later steps (7–13) wire reverb / delay / brightness / dry-wet / master
- * EQ setters onto the existing nodes.
- *
- * Drift handling: stems stay in sync because all HTMLAudioElements share
- * the same currentTime via setSeek + the master clock. If drift exceeds
- * 50ms during playback we resync. Drift is rare with same-length WAVs
- * decoded by the same browser engine.
+ * EQ setters onto the persistent nodes — no graph rebuild needed.
  */
 
 "use client";
@@ -41,29 +48,25 @@ interface UseStudioAudioOptions {
 const MASTER_EQ_FREQS = [60, 250, 1000, 4000, 12000] as const;
 
 interface StemNodes {
-  el:           HTMLAudioElement;
-  source:       MediaElementAudioSourceNode;
-  dryGain:      GainNode;          // wet/dry split — dry path
-  brightness:   BiquadFilterNode;  // high shelf — wired in step 8
-  convolver:    ConvolverNode;     // reverb — wired in step 9
-  reverbWet:    GainNode;          // parallel wet send
-  delay:        DelayNode;         // delay — wired in step 10
-  delayFb:      GainNode;          // delay feedback
-  delayWet:     GainNode;          // parallel wet send
-  sumGain:      GainNode;          // wet+dry sum
-  stemGain:     GainNode;          // user-controlled volume
+  buffer:       AudioBuffer | null;
+  stemInput:    GainNode;           // entry point — source.connect(stemInput) per play
+  dryGain:      GainNode;
+  brightness:   BiquadFilterNode;   // high shelf — wired in step 8
+  convolver:    ConvolverNode;      // reverb — wired in step 9
+  reverbWet:    GainNode;
+  delay:        DelayNode;          // delay — wired in step 10
+  delayFb:      GainNode;
+  delayWet:     GainNode;
+  sumGain:      GainNode;
+  stemGain:     GainNode;
   panner:       StereoPannerNode;
   analyser:     AnalyserNode;
-  // Tracking flags for solo/mute logic
-  muted:        boolean;
-  soloed:       boolean;
   /** Last gainDb the user requested (so solo logic can restore it). */
   lastGainDb:   number;
+  /** Active source for the current playback session. Recreated each play/seek. */
+  activeSource: AudioBufferSourceNode | null;
 }
 
-/**
- * Convert dB to linear gain. -Infinity / very low values clamp to 0.
- */
 function dbToLinear(db: number): number {
   if (!Number.isFinite(db) || db < -60) return 0;
   return Math.pow(10, db / 20);
@@ -73,29 +76,37 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
   const { stems } = opts;
   const roles = useMemo(() => Object.keys(stems), [stems]);
 
-  // Mutable graph state lives in a ref so React rerenders don't rebuild it.
+  // Mutable graph state lives in refs so React rerenders don't rebuild it.
   const ctxRef            = useRef<AudioContext | null>(null);
   const masterGainRef     = useRef<GainNode | null>(null);
   const masterEqRef       = useRef<BiquadFilterNode[]>([]);
   const masterAnalyserRef = useRef<AnalyserNode | null>(null);
   const stemNodesRef      = useRef<Record<StemRole, StemNodes>>({});
 
-  // Mute/solo bookkeeping — stored in refs so handlers see current state.
+  // Mute/solo bookkeeping.
   const muteSoloRef = useRef<{ muted: Set<StemRole>; soloed: Set<StemRole> }>({
     muted:  new Set(),
     soloed: new Set(),
   });
 
-  const [ready,   setReady]   = useState(false);
-  const [errors,  setErrors]  = useState<Record<StemRole, string>>({});
+  // Transport bookkeeping for AudioContext-based playback.
+  // playOffsetRef = where we'll start the next play() (or the paused position).
+  // startedAtRef  = ctx.currentTime when the last play() began.
+  const playOffsetRef = useRef<number>(0);
+  const startedAtRef  = useRef<number>(0);
+
+  const [ready,       setReady]       = useState(false);
+  const [errors,      setErrors]      = useState<Record<StemRole, string>>({});
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration,    setDuration]    = useState(0);
 
-  // ─── Build graph on mount ────────────────────────────────────────────────
+  // ─── Build graph + decode buffers on mount ───────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (roles.length === 0) return;
+
+    let cancelled = false;
 
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
@@ -108,7 +119,6 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
 
     const masterEq = MASTER_EQ_FREQS.map((freq, idx) => {
       const node = ctx.createBiquadFilter();
-      // First and last bands are shelves; middle three are peaking.
       node.type      = idx === 0 ? "lowshelf"
                      : idx === MASTER_EQ_FREQS.length - 1 ? "highshelf"
                      : "peaking";
@@ -123,7 +133,6 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     masterAnalyser.fftSize = 2048;
     masterAnalyserRef.current = masterAnalyser;
 
-    // Wire master chain: masterGain → eq[0] → eq[1] → ... → analyser → destination
     masterGain.connect(masterEq[0]);
     for (let i = 0; i < masterEq.length - 1; i++) {
       masterEq[i].connect(masterEq[i + 1]);
@@ -131,41 +140,20 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     masterEq[masterEq.length - 1].connect(masterAnalyser);
     masterAnalyser.connect(ctx.destination);
 
-    // Per-stem chain
-    const errorMap: Record<StemRole, string> = {};
-    let loadedCount = 0;
-
+    // Build per-stem persistent chain (no source yet — added on play).
     for (const role of roles) {
-      const url = stems[role];
-      const el  = new Audio();
-      el.crossOrigin = "anonymous";
-      el.preload     = "auto";
-      el.src         = url;
+      const stemInput = ctx.createGain();
+      stemInput.gain.value = 1.0;
 
-      el.addEventListener("loadedmetadata", () => {
-        // Use the longest stem as the source of truth for duration.
-        if (Number.isFinite(el.duration)) {
-          setDuration((d) => Math.max(d, el.duration));
-        }
-        loadedCount += 1;
-        if (loadedCount === roles.length) setReady(true);
-      });
-      el.addEventListener("error", () => {
-        errorMap[role] = "Failed to load stem audio.";
-        setErrors({ ...errorMap });
-      });
-
-      const source     = ctx.createMediaElementSource(el);
-      const dryGain    = ctx.createGain();
+      const dryGain = ctx.createGain();
       dryGain.gain.value = 1.0;
 
       const brightness = ctx.createBiquadFilter();
       brightness.type            = "highshelf";
       brightness.frequency.value = 6000;
-      brightness.gain.value      = 0;  // flat — wired in step 8
+      brightness.gain.value      = 0;
 
       const convolver = ctx.createConvolver();
-      // No IR loaded yet — wired in step 9.
 
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = 0;
@@ -183,7 +171,7 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       sumGain.gain.value = 1.0;
 
       const stemGain = ctx.createGain();
-      stemGain.gain.value = 1.0;  // 0 dB
+      stemGain.gain.value = 1.0;
 
       const panner = ctx.createStereoPanner();
       panner.pan.value = 0;
@@ -191,19 +179,15 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
 
-      // Source splits into:
-      //   1. dry path:    source → dryGain → sumGain
-      //   2. wet path:    source → brightness → convolver → reverbWet → sumGain
-      //   3. delay path:  source → delay (with feedback loop) → delayWet → sumGain
-      // Then sumGain → stemGain → panner → analyser → masterGain
-      source.connect(dryGain).connect(sumGain);
+      // stemInput fans out to dry, wet (brightness→convolver→reverbWet), and delay (with feedback).
+      stemInput.connect(dryGain).connect(sumGain);
 
-      source.connect(brightness);
+      stemInput.connect(brightness);
       brightness.connect(convolver);
       convolver.connect(reverbWet).connect(sumGain);
 
-      source.connect(delay);
-      delay.connect(delayFb).connect(delay);   // feedback loop
+      stemInput.connect(delay);
+      delay.connect(delayFb).connect(delay);  // feedback loop
       delay.connect(delayWet).connect(sumGain);
 
       sumGain.connect(stemGain);
@@ -212,8 +196,8 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       analyser.connect(masterGain);
 
       stemNodesRef.current[role] = {
-        el,
-        source,
+        buffer:       null,
+        stemInput,
         dryGain,
         brightness,
         convolver,
@@ -225,25 +209,49 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         stemGain,
         panner,
         analyser,
-        muted:      false,
-        soloed:     false,
-        lastGainDb: 0,
+        lastGainDb:   0,
+        activeSource: null,
       };
     }
 
-    setErrors(errorMap);
+    // Fetch + decode all stems in parallel.
+    const errorMap: Record<StemRole, string> = {};
+    Promise.all(
+      roles.map(async (role) => {
+        try {
+          const res = await fetch(stems[role], { credentials: "omit" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const ab  = await res.arrayBuffer();
+          const buf = await ctx.decodeAudioData(ab);
+          if (cancelled) return;
+          const n = stemNodesRef.current[role];
+          if (n) n.buffer = buf;
+          // Use the longest stem as the master duration.
+          setDuration((d) => Math.max(d, buf.duration));
+        } catch (err) {
+          errorMap[role] = (err as Error).message || "Failed to load stem audio.";
+          setErrors({ ...errorMap });
+        }
+      })
+    ).then(() => {
+      if (!cancelled) setReady(true);
+    });
 
-    // Master clock — drive currentTime updates from the first stem.
-    const firstEl = stemNodesRef.current[roles[0]]?.el;
+    // rAF tick — drives currentTime while playing.
     let rafId: number | null = null;
     const tick = () => {
-      if (firstEl) setCurrentTime(firstEl.currentTime);
+      const c = ctxRef.current;
+      if (c) {
+        // If any active source still exists, we're playing.
+        const playing = roles.some((r) => stemNodesRef.current[r]?.activeSource !== null);
+        if (playing) {
+          const t = playOffsetRef.current + (c.currentTime - startedAtRef.current);
+          setCurrentTime(t);
+        }
+      }
       rafId = requestAnimationFrame(tick);
     };
-    if (firstEl) {
-      firstEl.addEventListener("ended", () => setIsPlaying(false));
-      rafId = requestAnimationFrame(tick);
-    }
+    rafId = requestAnimationFrame(tick);
 
     // Resume context on focus if it suspended.
     const onVisibility = () => {
@@ -254,23 +262,23 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
+      cancelled = true;
       document.removeEventListener("visibilitychange", onVisibility);
       if (rafId !== null) cancelAnimationFrame(rafId);
       for (const role of roles) {
         const n = stemNodesRef.current[role];
         if (!n) continue;
-        try { n.el.pause(); } catch { /* noop */ }
-        try { n.source.disconnect(); } catch { /* noop */ }
+        try { n.activeSource?.stop(); } catch { /* noop */ }
+        try { n.activeSource?.disconnect(); } catch { /* noop */ }
       }
       stemNodesRef.current = {};
       try { ctx.close(); } catch { /* noop */ }
       ctxRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(stems)]);  // rebuild only when the stems map identity changes
+  }, [JSON.stringify(stems)]);
 
   // ─── Mute / solo logic ──────────────────────────────────────────────────
-  // If anything is soloed, only soloed stems play. Otherwise respect mute.
   function applyMuteSolo() {
     const { muted, soloed } = muteSoloRef.current;
     const anySoloed = soloed.size > 0;
@@ -283,7 +291,63 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     }
   }
 
-  // ─── Build stable per-stem handles ──────────────────────────────────────
+  // ─── Internal start/stop helpers ────────────────────────────────────────
+  function startSourcesAt(offset: number) {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const when = ctx.currentTime + 0.05;  // 50ms lookahead so all sources start synchronously
+    for (const role of roles) {
+      const n = stemNodesRef.current[role];
+      if (!n || !n.buffer) continue;
+      const src = ctx.createBufferSource();
+      src.buffer = n.buffer;
+      src.connect(n.stemInput);
+      try { src.start(when, Math.min(offset, n.buffer.duration)); } catch { /* noop */ }
+      n.activeSource = src;
+    }
+    startedAtRef.current = when;
+    playOffsetRef.current = offset;
+
+    // Detect end via the longest buffer's source.
+    const longest = roles.reduce<{ role: StemRole | null; dur: number }>(
+      (acc, r) => {
+        const buf = stemNodesRef.current[r]?.buffer;
+        return buf && buf.duration > acc.dur ? { role: r, dur: buf.duration } : acc;
+      },
+      { role: null, dur: 0 }
+    );
+    const longestSrc = longest.role ? stemNodesRef.current[longest.role]?.activeSource : null;
+    if (longestSrc) {
+      longestSrc.onended = () => {
+        // Only treat as natural end if this source is still the active one
+        // (i.e. we didn't manually stop/seek).
+        const stillActive =
+          longest.role && stemNodesRef.current[longest.role]?.activeSource === longestSrc;
+        if (stillActive) {
+          stopSources();
+          playOffsetRef.current = 0;
+          setCurrentTime(0);
+          setIsPlaying(false);
+        }
+      };
+    }
+  }
+
+  function stopSources() {
+    for (const role of roles) {
+      const n = stemNodesRef.current[role];
+      if (!n) continue;
+      const src = n.activeSource;
+      if (src) {
+        try { src.onended = null; } catch { /* noop */ }
+        try { src.stop(); } catch { /* noop */ }
+        try { src.disconnect(); } catch { /* noop */ }
+        n.activeSource = null;
+      }
+    }
+  }
+
+  // ─── Stem handles ───────────────────────────────────────────────────────
   const stemHandles = useMemo<Record<StemRole, StemHandle>>(() => {
     const out: Record<StemRole, StemHandle> = {};
     for (const role of roles) {
@@ -292,19 +356,15 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           const n = stemNodesRef.current[role];
           if (!n) return;
           n.lastGainDb = db;
-          // Solo logic may force gain to 0 — recompute via applyMuteSolo.
           applyMuteSolo();
         },
         setPan: (pan: number) => {
           const n = stemNodesRef.current[role];
           if (!n) return;
-          const clamped = Math.max(-1, Math.min(1, pan));
-          n.panner.pan.value = clamped;
+          n.panner.pan.value = Math.max(-1, Math.min(1, pan));
         },
-        // Lazily exposed analyser — populated after graph build.
         get analyser(): AnalyserNode {
           const n = stemNodesRef.current[role];
-          // Fallback in pre-build window — caller should gate on `ready`.
           return n?.analyser ?? (null as unknown as AnalyserNode);
         },
       };
@@ -330,41 +390,37 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       const ctx = ctxRef.current;
       if (!ctx) return;
       if (ctx.state === "suspended") await ctx.resume();
-      // Snap all stems to the current master clock before playing.
-      const firstEl = stemNodesRef.current[roles[0]]?.el;
-      const snap    = firstEl ? firstEl.currentTime : 0;
-      for (const role of roles) {
-        const n = stemNodesRef.current[role];
-        if (!n) continue;
-        try {
-          n.el.currentTime = snap;
-          await n.el.play();
-        } catch { /* autoplay rejection — caller should retry on user gesture */ }
-      }
+      if (!ready) return;
+      // Already playing — no-op.
+      if (roles.some((r) => stemNodesRef.current[r]?.activeSource)) return;
+      startSourcesAt(playOffsetRef.current);
       setIsPlaying(true);
     },
     pause: () => {
-      for (const role of roles) {
-        const n = stemNodesRef.current[role];
-        if (!n) continue;
-        try { n.el.pause(); } catch { /* noop */ }
-      }
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      const elapsed = ctx.currentTime - startedAtRef.current;
+      const offset  = playOffsetRef.current + Math.max(0, elapsed);
+      stopSources();
+      playOffsetRef.current = Math.min(offset, duration || offset);
+      setCurrentTime(playOffsetRef.current);
       setIsPlaying(false);
     },
     seek: (seconds: number) => {
-      const t = Math.max(0, Math.min(seconds, duration || seconds));
-      for (const role of roles) {
-        const n = stemNodesRef.current[role];
-        if (!n) continue;
-        try { n.el.currentTime = t; } catch { /* noop */ }
-      }
+      const t       = Math.max(0, Math.min(seconds, duration || seconds));
+      const wasPlaying = roles.some((r) => stemNodesRef.current[r]?.activeSource);
+      stopSources();
+      playOffsetRef.current = t;
       setCurrentTime(t);
+      if (wasPlaying) {
+        startSourcesAt(t);
+      }
     },
     isPlaying,
     currentTime,
     duration,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [isPlaying, currentTime, duration, roles.join("|")]);
+  }), [isPlaying, currentTime, duration, ready, roles.join("|")]);
 
   function setMuted(role: StemRole, muted: boolean) {
     if (muted) muteSoloRef.current.muted.add(role);
