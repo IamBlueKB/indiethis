@@ -28,6 +28,7 @@ import { Pause, Play, Download, RotateCw } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
+import { MasterEqRow }    from "./MasterEqRow";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, StemRole, StemState, StudioState } from "./types";
@@ -137,6 +138,9 @@ export function StudioClient(props: StudioClientProps) {
       if (s.soloed) audio.setSoloed(role, true);
     }
     audio.master.setGainDb(state.master.volumeDb);
+    for (let i = 0; i < 5; i++) {
+      audio.master.setEqBand(i as 0 | 1 | 2 | 3 | 4, state.master.eq[i]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio.ready]);
 
@@ -179,11 +183,22 @@ export function StudioClient(props: StudioClientProps) {
       master:  { ...prev.master, ...patch },
       isDirty: true,
     }));
-    // Only volumeDb is audible in the browser. AI intensity + stereo width
-    // bake in at re-render time (step 26).
+    // Volume + master EQ are audible in the browser (live biquad chain).
+    // AI intensity + stereo width bake in at re-render time (step 26).
     if (typeof patch.volumeDb === "number") {
       audio.master?.setGainDb(patch.volumeDb);
     }
+    if (patch.eq) {
+      for (let i = 0; i < 5; i++) {
+        audio.master?.setEqBand(i as 0 | 1 | 2 | 3 | 4, patch.eq[i]);
+      }
+    }
+  }
+
+  function setMasterEqBand(index: 0 | 1 | 2 | 3 | 4, gainDb: number) {
+    const next: MasterState["eq"] = [...state.master.eq] as MasterState["eq"];
+    next[index] = gainDb;
+    updateMaster({ eq: next });
   }
 
   function toggleMute(role: StemRole) {
@@ -453,6 +468,12 @@ export function StudioClient(props: StudioClientProps) {
             master={state.master}
             onChange={updateMaster}
             analyser={audio.master?.analyser ?? null}
+            eqSlot={
+              <MasterEqRow
+                values={state.master.eq}
+                onChange={setMasterEqBand}
+              />
+            }
           />
         </div>
       )}

@@ -99,6 +99,8 @@ export interface StemHandle {
 export interface MasterHandle {
   /** Set master gain in dB. */
   setGainDb(db: number): void;
+  /** Set a master EQ band's gain in dB. Bands: 0=Bass, 1=Warmth, 2=Body, 3=Presence, 4=Sparkle. */
+  setEqBand(index: 0 | 1 | 2 | 3 | 4, gainDb: number): void;
   /** Master AnalyserNode for the master visualizer. */
   analyser: AnalyserNode;
 }

@@ -512,6 +512,12 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       if (!g) return;
       g.gain.value = dbToLinear(db);
     },
+    setEqBand: (index, gainDb) => {
+      const eq = masterEqRef.current;
+      if (!eq[index]) return;
+      const clamped = Math.max(-6, Math.min(6, gainDb));
+      eq[index].gain.value = clamped;
+    },
     get analyser(): AnalyserNode {
       return masterAnalyserRef.current ?? (null as unknown as AnalyserNode);
     },
