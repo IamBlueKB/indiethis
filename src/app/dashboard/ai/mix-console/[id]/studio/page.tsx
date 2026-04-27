@@ -20,8 +20,46 @@ import { auth }               from "@/lib/auth";
 import { db as prisma }       from "@/lib/db";
 import { ResultsHeader }      from "@/components/layout/ResultsHeader";
 import { StudioClient }       from "@/app/mix-console/studio/StudioClient";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl }       from "@aws-sdk/s3-request-presigner";
 
 export const dynamic = "force-dynamic";
+
+// Stems are stored as 4-hour presigned S3 URLs in MixJob.inputFiles. After
+// expiry, the browser fetch fails with 403 and the studio shows "Failed to
+// load" for every stem. We extract the S3 key from the stored URL and
+// re-sign at request time so URLs handed to the client are always fresh.
+const S3_REGION = process.env.AWS_REGION ?? "us-east-1";
+const S3_BUCKET = (() => {
+  const url = process.env.REMOTION_SERVE_URL ?? "";
+  const m   = url.match(/^https?:\/\/([^.]+)\.s3\./);
+  return m?.[1] ?? "";
+})();
+const s3 = (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
+  ? new S3Client({
+      region: S3_REGION,
+      credentials: {
+        accessKeyId:     process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    })
+  : null;
+
+async function freshenStemUrl(rawUrl: string): Promise<string> {
+  if (!s3 || !S3_BUCKET) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    // Only re-sign URLs hosted on our own S3 bucket. Leave anything else
+    // (UploadThing, fal.ai, etc.) alone.
+    if (!u.hostname.includes(`${S3_BUCKET}.s3.`)) return rawUrl;
+    const key = decodeURIComponent(u.pathname.replace(/^\//, ""));
+    if (!key) return rawUrl;
+    const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    return await getSignedUrl(s3, cmd, { expiresIn: 14400 });
+  } catch {
+    return rawUrl;
+  }
+}
 
 export const metadata = {
   title:       "Pro Studio Mixer — IndieThis",
@@ -87,12 +125,13 @@ export default async function StudioPage({
   }
 
   // Build stems map from inputFiles. Filter out anything without a usable URL.
+  // Re-sign S3 URLs in parallel so the browser never gets a stale presigned URL
+  // (the originals are 4h presigned URLs stored at upload time).
   const inputFiles = ((job.inputFiles ?? []) as unknown) as InputFile[];
+  const usable     = inputFiles.filter((f) => f?.url && f?.label);
+  const freshUrls  = await Promise.all(usable.map((f) => freshenStemUrl(f.url)));
   const stems: Record<string, string> = {};
-  for (const f of inputFiles) {
-    if (!f?.url || !f?.label) continue;
-    stems[f.label] = f.url;
-  }
+  usable.forEach((f, i) => { stems[f.label] = freshUrls[i]; });
 
   if (Object.keys(stems).length === 0) {
     return (
