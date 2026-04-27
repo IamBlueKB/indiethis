@@ -162,6 +162,7 @@ export interface StemParams {
   deEssThresh:       number;        // dB; 0 = skip
   deReverbStrength?: number;        // 0–0.6; 0 = skip (Claude controls)
   reverbSend:        number;        // 0–1 wet level
+  reverbType?:       "plate" | "room" | "hall" | "cathedral" | "dry";  // per-stem IR character (Studio Mixer)
   saturation:        number;        // 0–1 drive
   stereoWidth:       number;        // 0–1 per-stem M/S widening
   monoBelow:         number;        // Hz — mono below this frequency

@@ -53,6 +53,23 @@ export interface Snapshot {
   state:      Pick<StudioState, "global" | "sections" | "master">;
 }
 
+/**
+ * AI Original — Claude's chosen settings for a stem, used to seed the studio
+ * AND to render the gold reference tick on each control. The studio opens
+ * sounding identical to the AI mix; controls move from these positions.
+ */
+export type ReverbType = "plate" | "room" | "hall" | "cathedral" | "dry";
+
+export interface AiOriginal {
+  gainDb:      number;     // dB the AI rendered the stem at (delta knob = 0 = AI's gain)
+  pan:         number;     // -1..+1
+  reverb:      number;     // 0..100 (knob domain) — derived from Claude's reverbSend × 100
+  reverbType:  ReverbType; // which IR Claude chose
+  brightness:  number;     // 0..100 (knob domain) — 50 = flat; derived from EQ highshelf
+  delay:       number;     // 0..100 — currently 0 unless Claude outputs delay per stem
+  comp:        number;     // 0..100 — derived from comp1.ratio
+}
+
 // ── Web Audio hook contract ────────────────────────────────────────────────
 //
 // useStudioAudio builds the audio graph and returns stable handles.

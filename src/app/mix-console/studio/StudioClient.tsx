@@ -29,20 +29,18 @@ import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
-import type { MasterState, StemRole, StemState, StudioState } from "./types";
-
-interface AiOriginal {
-  /** AI's original pan position per stem (-1..+1). Defaults to 0 if missing. */
-  pan: number;
-}
+import type { AiOriginal, MasterState, ReverbType, StemRole, StemState, StudioState } from "./types";
 
 export interface StudioClientProps {
   jobId:        string;
   trackTitle:   string;
   /** Map of stem role → fresh signed URL. */
   stems:        Record<StemRole, string>;
-  /** AI's original per-stem settings — used for the AI reference dot + modified detection. */
+  /** Claude's per-stem decisions in the studio's knob domain. Used to seed
+   *  initial state AND render the gold AI reference tick on each control. */
   aiOriginals?: Record<StemRole, AiOriginal>;
+  /** Per-stem Claude reverb-type choice (drives which IR each convolver loads). */
+  reverbTypes?: Record<StemRole, ReverbType>;
   /** Existing studio state if the artist is reopening a session (autosave restore). */
   initialState?: StudioState | null;
   /** True if the artist arrived via guest token (changes export/share UX). */
@@ -80,19 +78,30 @@ function mmss(t: number): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, aiOriginals, initialState, referenceTrackUrl: _ref, bpm: _bpm } = props;
+  const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm: _bpm } = props;
 
   // Stable role order — first stem wins as transport master clock.
   const roles = useMemo(() => Object.keys(stems), [stems]);
 
   // ─── Build initial state ───────────────────────────────────────────────
+  // Every control opens at Claude's chosen value — the studio sounds
+  // identical to the AI mix until the artist moves something. The AI Original
+  // snapshot captures these positions (step 17).
   const initialStudioState = useMemo<StudioState>(() => {
     if (initialState) return initialState;
     const global: Record<StemRole, StemState> = {};
     for (const role of roles) {
+      const ai = aiOriginals?.[role];
       global[role] = {
-        ...DEFAULT_STEM_STATE,
-        pan: aiOriginals?.[role]?.pan ?? 0,
+        gainDb:     0,                             // delta — AI's gain is the 0 dB reference on the fader
+        pan:        ai?.pan        ?? 0,
+        reverb:     ai?.reverb     ?? 0,           // 0..100 = 0..100% wet
+        delay:      ai?.delay      ?? 0,
+        comp:       ai?.comp       ?? 0,
+        brightness: ai?.brightness ?? 50,          // 50 = flat shelf
+        dryWet:     100,
+        muted:      false,
+        soloed:     false,
       };
     }
     return {
@@ -107,7 +116,7 @@ export function StudioClient(props: StudioClientProps) {
   const [state, setState] = useState<StudioState>(initialStudioState);
 
   // ─── Audio graph ────────────────────────────────────────────────────────
-  const audio = useStudioAudio({ stems });
+  const audio = useStudioAudio({ stems, reverbTypes });
 
   // Push initial state into the audio graph once it's ready.
   const seededRef = useRef(false);
@@ -167,10 +176,24 @@ export function StudioClient(props: StudioClientProps) {
   }
 
   // ─── Modified detection (lights AI badge dim) ────────────────────────────
+  // Compare against Claude's actual values per stem (NOT the DEFAULT_STEM_STATE
+  // fallback) so the AI badge only dims when the artist genuinely changed
+  // something away from Claude's mix.
   function isStemModified(role: StemRole): boolean {
-    const s   = state.global[role];
-    const ref = { ...DEFAULT_STEM_STATE, pan: aiOriginals?.[role]?.pan ?? 0 };
+    const s = state.global[role];
     if (!s) return false;
+    const ai = aiOriginals?.[role];
+    const ref: StemState = {
+      gainDb:     0,
+      pan:        ai?.pan        ?? 0,
+      reverb:     ai?.reverb     ?? 0,
+      delay:      ai?.delay      ?? 0,
+      comp:       ai?.comp       ?? 0,
+      brightness: ai?.brightness ?? 50,
+      dryWet:     100,
+      muted:      false,
+      soloed:     false,
+    };
     return (
       s.gainDb     !== ref.gainDb     ||
       s.pan        !== ref.pan        ||
@@ -336,20 +359,27 @@ export function StudioClient(props: StudioClientProps) {
               const s = state.global[role];
               if (!s) return null;
               const stemColor = colorForRole(role);
+              const ai        = aiOriginals?.[role];
+              const isDry     = (reverbTypes?.[role] ?? "plate") === "dry";
 
-              // 2x2 effect knob grid — wired in steps 8–11 to the audio graph.
+              // 2x2 effect knob grid. Each knob's `aiOriginal` is Claude's
+              // actual chosen value — the gold tick lines up with the AI mix.
+              // Dry stems have no convolver wired so the REV knob is disabled.
               const effectsSlot = (
                 <div className="grid grid-cols-2 gap-1 justify-items-center">
                   <EffectKnob
                     value={s.reverb}
                     onChange={(v) => setStemReverb(role, v)}
+                    aiOriginal={ai?.reverb ?? 0}
                     color={stemColor}
                     label={`${labelForRole(role)} reverb`}
                     shortLabel="REV"
+                    disabled={isDry}
                   />
                   <EffectKnob
                     value={s.delay}
                     onChange={(v) => setStemDelay(role, v)}
+                    aiOriginal={ai?.delay ?? 0}
                     color={stemColor}
                     label={`${labelForRole(role)} delay`}
                     shortLabel="DLY"
@@ -357,6 +387,7 @@ export function StudioClient(props: StudioClientProps) {
                   <EffectKnob
                     value={s.comp}
                     onChange={(v) => setStemComp(role, v)}
+                    aiOriginal={ai?.comp ?? 0}
                     color={stemColor}
                     label={`${labelForRole(role)} compression`}
                     shortLabel="CMP"
@@ -364,6 +395,7 @@ export function StudioClient(props: StudioClientProps) {
                   <EffectKnob
                     value={s.brightness}
                     onChange={(v) => setStemBrightness(role, v)}
+                    aiOriginal={ai?.brightness ?? 50}
                     color={stemColor}
                     label={`${labelForRole(role)} brightness`}
                     shortLabel="BRT"

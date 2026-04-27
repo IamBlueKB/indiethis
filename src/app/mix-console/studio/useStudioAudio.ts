@@ -34,6 +34,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   MasterHandle,
+  ReverbType,
   StemHandle,
   StemRole,
   TransportHandle,
@@ -43,6 +44,8 @@ import type {
 interface UseStudioAudioOptions {
   /** Map of stem role → fresh signed URL. Order is preserved in the returned roles[]. */
   stems: Record<StemRole, string>;
+  /** Per-stem reverb type (Claude's choice). Stems set to "dry" skip the convolver entirely. */
+  reverbTypes?: Record<StemRole, ReverbType>;
 }
 
 const MASTER_EQ_FREQS = [60, 250, 1000, 4000, 12000] as const;
@@ -51,16 +54,18 @@ interface StemNodes {
   buffer:       AudioBuffer | null;
   stemInput:    GainNode;           // entry point — source.connect(stemInput) per play
   dryGain:      GainNode;
-  brightness:   BiquadFilterNode;   // high shelf — wired in step 8
-  convolver:    ConvolverNode;      // reverb — wired in step 9
+  brightness:   BiquadFilterNode;   // high shelf — step 8
+  convolver:    ConvolverNode;      // reverb — step 9
   reverbWet:    GainNode;
-  delay:        DelayNode;          // delay — wired in step 10
+  delay:        DelayNode;          // delay — step 10
   delayFb:      GainNode;
   delayWet:     GainNode;
   sumGain:      GainNode;
   stemGain:     GainNode;
   panner:       StereoPannerNode;
   analyser:     AnalyserNode;
+  /** Reverb type Claude chose for this stem. "dry" = convolver not wired. */
+  reverbType:   ReverbType;
   /** Last gainDb the user requested (so solo logic can restore it). */
   lastGainDb:   number;
   /** Active source for the current playback session. Recreated each play/seek. */
@@ -73,21 +78,35 @@ function dbToLinear(db: number): number {
 }
 
 /**
- * Build a plate-style stereo impulse response algorithmically.
- * Decaying filtered white noise — sounds like a clean medium hall.
- * Saves us from shipping IR WAV files and works at any sample rate.
+ * Build a stereo impulse response algorithmically per reverb character.
+ * Each profile tunes (durationSec, decay, predelay smear, brightness) so the
+ * convolved tail sounds like the named space. Saves shipping IR WAV files
+ * and works at any sample rate.
+ *   - plate:     short, dense, bright          (~1.5s, fast decay, no predelay)
+ *   - room:      tight, controlled             (~0.8s, faster decay)
+ *   - hall:      lush, longer tail             (~3.2s, slow decay, mild predelay smear)
+ *   - cathedral: very long, washy              (~5.5s, slow decay, more predelay smear)
  */
-function buildReverbIR(ctx: AudioContext, durationSec = 2.4, decay = 3.5): AudioBuffer {
-  const sr     = ctx.sampleRate;
-  const length = Math.max(1, Math.floor(sr * durationSec));
-  const buf    = ctx.createBuffer(2, length, sr);
+const REVERB_PROFILES: Record<Exclude<ReverbType, "dry">, { dur: number; decay: number; predelayMs: number }> = {
+  plate:     { dur: 1.5, decay: 3.5, predelayMs: 0  },
+  room:      { dur: 0.8, decay: 4.0, predelayMs: 0  },
+  hall:      { dur: 3.2, decay: 2.8, predelayMs: 12 },
+  cathedral: { dur: 5.5, decay: 2.2, predelayMs: 30 },
+};
+
+function buildReverbIR(ctx: AudioContext, type: Exclude<ReverbType, "dry">): AudioBuffer {
+  const { dur, decay, predelayMs } = REVERB_PROFILES[type];
+  const sr        = ctx.sampleRate;
+  const length    = Math.max(1, Math.floor(sr * dur));
+  const buf       = ctx.createBuffer(2, length, sr);
+  const predelay  = Math.floor((predelayMs / 1000) * sr);
   for (let ch = 0; ch < 2; ch++) {
     const data = buf.getChannelData(ch);
     for (let i = 0; i < length; i++) {
-      const t = i / length;
-      // Exponential decay envelope.
+      if (i < predelay) { data[i] = 0; continue; }
+      const t   = (i - predelay) / (length - predelay);
       const env = Math.pow(1 - t, decay);
-      // Filtered noise: average two random samples = light low-pass.
+      // Filtered noise: average two random samples = light low-pass smoothing.
       const noise = (Math.random() * 2 - 1 + Math.random() * 2 - 1) * 0.5;
       data[i] = noise * env;
     }
@@ -96,7 +115,7 @@ function buildReverbIR(ctx: AudioContext, durationSec = 2.4, decay = 3.5): Audio
 }
 
 export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioReturn {
-  const { stems } = opts;
+  const { stems, reverbTypes } = opts;
   const roles = useMemo(() => Object.keys(stems), [stems]);
 
   // Mutable graph state lives in refs so React rerenders don't rebuild it.
@@ -163,8 +182,14 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     masterEq[masterEq.length - 1].connect(masterAnalyser);
     masterAnalyser.connect(ctx.destination);
 
-    // Build a single shared IR for all stems' convolvers.
-    const reverbIR = buildReverbIR(ctx);
+    // Pre-build all four reverb IRs once. Each stem's convolver loads the
+    // one matching its Claude-chosen reverbType. Dry stems skip the convolver.
+    const irs: Record<Exclude<ReverbType, "dry">, AudioBuffer> = {
+      plate:     buildReverbIR(ctx, "plate"),
+      room:      buildReverbIR(ctx, "room"),
+      hall:      buildReverbIR(ctx, "hall"),
+      cathedral: buildReverbIR(ctx, "cathedral"),
+    };
 
     // Build per-stem persistent chain (no source yet — added on play).
     for (const role of roles) {
@@ -179,8 +204,13 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       brightness.frequency.value = 6000;
       brightness.gain.value      = 0;
 
+      // Per-stem reverb IR — Claude's choice. "dry" → leave convolver
+      // disconnected from the wet bus so it eats no CPU and is silent.
+      const stemReverbType: ReverbType = reverbTypes?.[role] ?? "plate";
       const convolver = ctx.createConvolver();
-      convolver.buffer = reverbIR;
+      if (stemReverbType !== "dry") {
+        convolver.buffer = irs[stemReverbType];
+      }
 
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = 0;
@@ -215,8 +245,11 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
 
       brightness.connect(dryGain).connect(sumGain);
 
-      brightness.connect(convolver);
-      convolver.connect(reverbWet).connect(sumGain);
+      // Reverb fan-out — only wired up if Claude chose a non-dry reverb.
+      if (stemReverbType !== "dry") {
+        brightness.connect(convolver);
+        convolver.connect(reverbWet).connect(sumGain);
+      }
 
       brightness.connect(delay);
       delay.connect(delayFb).connect(delay);  // feedback loop
@@ -241,6 +274,7 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         stemGain,
         panner,
         analyser,
+        reverbType:   stemReverbType,
         lastGainDb:   0,
         activeSource: null,
       };
@@ -308,7 +342,7 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
       ctxRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(stems)]);
+  }, [JSON.stringify(stems), JSON.stringify(reverbTypes ?? {})]);
 
   // ─── Mute / solo logic ──────────────────────────────────────────────────
   function applyMuteSolo() {
@@ -406,10 +440,13 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
         setReverb: (value: number) => {
           const n = stemNodesRef.current[role];
           if (!n) return;
-          // 0..100 → reverb wet gain 0..0.6 (50 = 0.3 = moderate hall).
-          const v   = Math.max(0, Math.min(100, value));
-          const wet = (v / 100) * 0.6;
-          n.reverbWet.gain.value = wet;
+          // Dry stems have no convolver wired — knob is a no-op.
+          if (n.reverbType === "dry") return;
+          // Knob value 0..100 maps directly to wet level 0..1 (matches
+          // Claude's reverbSend convention so the gold AI tick lines up
+          // with the actual % wet baked into the AI mix).
+          const v = Math.max(0, Math.min(100, value));
+          n.reverbWet.gain.value = v / 100;
         },
         get analyser(): AnalyserNode {
           const n = stemNodesRef.current[role];

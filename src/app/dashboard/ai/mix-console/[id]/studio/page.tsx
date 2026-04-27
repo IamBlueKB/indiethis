@@ -109,15 +109,84 @@ export default async function StudioPage({
     );
   }
 
-  // Extract AI's per-stem pan from mixParameters.stemParams[role].pan.
-  // The pan field may be -1..+1 or 0..1; mix-console uses -1..+1 (the same
-  // convention the StereoPannerNode accepts). Default to 0 (centered).
-  const mixParams   = (job.mixParameters as Record<string, unknown> | null) ?? null;
-  const stemParams  = (mixParams?.stemParams ?? {}) as Record<string, { pan?: number }>;
-  const aiOriginals: Record<string, { pan: number }> = {};
+  // Extract Claude's full per-stem decision and translate into the studio's
+  // knob domain (0..100). The studio opens sounding identical to the AI mix:
+  // every control is initialized to where Claude put it.
+  type EQPoint    = { type: string; freq: number; gainDb: number; q: number };
+  type CompParams = { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number };
+  type ClaudeStemParams = {
+    role?:       string;
+    gainDb?:     number;
+    panLR?:      number;
+    pan?:        number;
+    eq?:         EQPoint[];
+    comp1?:      CompParams;
+    reverbSend?: number;
+    reverbType?: "plate" | "room" | "hall" | "cathedral" | "dry";
+  };
+  const mixParams  = (job.mixParameters as Record<string, unknown> | null) ?? null;
+  const stemParams = (mixParams?.stemParams ?? {}) as Record<string, ClaudeStemParams>;
+  // Job-level reverb style as a fallback when Claude hasn't tagged a per-stem reverbType.
+  const jobReverbStyle = (mixParams?.reverbStyle ?? "plate") as "plate" | "room" | "hall" | "cathedral" | "dry";
+
+  type ReverbType = "plate" | "room" | "hall" | "cathedral" | "dry";
+  type AiOriginal = {
+    gainDb:     number;
+    pan:        number;
+    reverb:     number;
+    reverbType: ReverbType;
+    brightness: number;
+    delay:      number;
+    comp:       number;
+  };
+
+  const aiOriginals: Record<string, AiOriginal> = {};
+  const reverbTypes: Record<string, ReverbType>  = {};
+
   for (const role of Object.keys(stems)) {
-    const p = stemParams[role]?.pan;
-    aiOriginals[role] = { pan: typeof p === "number" ? p : 0 };
+    const p = stemParams[role] ?? {};
+
+    // Pan: prefer panLR (Claude's canonical key), fall back to legacy `pan`.
+    const pan = typeof p.panLR === "number" ? p.panLR
+              : typeof p.pan   === "number" ? p.pan
+              : 0;
+
+    // Reverb wet 0..1 → knob 0..100. If Claude said reverbType="dry", knob = 0.
+    const reverbWet01 = typeof p.reverbSend === "number" ? p.reverbSend : 0;
+    const reverbKnob  = Math.max(0, Math.min(100, reverbWet01 * 100));
+
+    // Reverb type: explicit per-stem field beats job-level style.
+    // If Claude set reverbSend === 0, treat as effectively dry.
+    let reverbType: ReverbType =
+      p.reverbType ?? (reverbWet01 === 0 ? "dry" : jobReverbStyle);
+    if (!["plate","room","hall","cathedral","dry"].includes(reverbType)) reverbType = "plate";
+
+    // Brightness: read the highest-frequency highshelf in Claude's EQ.
+    // Map gainDb -8..+8 → knob 0..100 (50 = flat / no shelf).
+    let highshelfDb = 0;
+    if (Array.isArray(p.eq)) {
+      const shelves = p.eq.filter((e) => e?.type === "highshelf");
+      if (shelves.length > 0) {
+        const top = shelves.reduce((a, b) => ((a?.freq ?? 0) >= (b?.freq ?? 0) ? a : b));
+        if (typeof top?.gainDb === "number") highshelfDb = top.gainDb;
+      }
+    }
+    const brightnessKnob = Math.max(0, Math.min(100, 50 + (highshelfDb / 8) * 50));
+
+    // Comp: comp1.ratio 1..6 → knob 0..100 (1.0 → 0, 6.0 → 100).
+    const compRatio  = typeof p.comp1?.ratio === "number" ? p.comp1.ratio : 1;
+    const compKnob   = Math.max(0, Math.min(100, ((compRatio - 1) / 5) * 100));
+
+    aiOriginals[role] = {
+      gainDb:     0,                  // delta; AI's gain is the baseline 0 dB on the fader
+      pan,
+      reverb:     reverbKnob,
+      reverbType,
+      brightness: brightnessKnob,
+      delay:      0,                  // per-stem delay not in Claude output today
+      comp:       compKnob,
+    };
+    reverbTypes[role] = reverbType;
   }
 
   const trackTitle = inputFiles[0]?.label
@@ -140,6 +209,7 @@ export default async function StudioPage({
       trackTitle={trackTitle}
       stems={stems}
       aiOriginals={aiOriginals}
+      reverbTypes={reverbTypes}
       initialState={initialState}
       isGuest={false}
       referenceTrackUrl={referenceTrackUrl}
