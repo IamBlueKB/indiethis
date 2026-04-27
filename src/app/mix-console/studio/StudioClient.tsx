@@ -286,7 +286,7 @@ export function StudioClient(props: StudioClientProps) {
       {audio.ready && (
         <div className="flex-1 flex overflow-hidden">
           {/* Channel strips — horizontal scroll on overflow */}
-          <div className="flex-1 flex items-start gap-1.5 px-4 py-4 overflow-x-auto">
+          <div className="flex-1 flex items-stretch gap-1.5 px-4 py-4 overflow-x-auto">
             {roles.map((role) => {
               const s = state.global[role];
               if (!s) return null;
