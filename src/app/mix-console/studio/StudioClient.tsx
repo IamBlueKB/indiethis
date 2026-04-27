@@ -34,6 +34,7 @@ import { SectionTimeline } from "./SectionTimeline";
 import { useStudioAudio } from "./useStudioAudio";
 import { useStudioHistory } from "./useStudioHistory";
 import { SnapshotsMenu }   from "./SnapshotsMenu";
+import { useStudioAutosave } from "./useStudioAutosave";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, Snapshot, SongSection, StemRole, StemState, StudioState } from "./types";
 
@@ -85,6 +86,17 @@ function mmss(t: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function relSavedAt(iso: string | null): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const diff = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diff < 5)     return "just now";
+  if (diff < 60)    return `${diff}s ago`;
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
+}
+
 export function StudioClient(props: StudioClientProps) {
   const { jobId: _jobId, trackTitle, stems, aiOriginals, reverbTypes, initialState, referenceTrackUrl: _ref, bpm, sections = [] } = props;
 
@@ -129,16 +141,28 @@ export function StudioClient(props: StudioClientProps) {
   // deletion. Artists can save additional named snapshots; recall replaces
   // the current state via setState (so it lands on the undo stack and can
   // be backed out).
-  const [snapshots, setSnapshots] = useState<Snapshot[]>(() => [{
-    name:       "AI Original",
-    protected:  true,
-    created_at: new Date().toISOString(),
-    state:      {
-      global:   initialStudioState.global,
-      sections: initialStudioState.sections,
-      master:   initialStudioState.master,
-    },
-  }]);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>(() => {
+    // Restore snapshots persisted alongside studioState (they ride along on
+    // the JSON column even though StudioState type doesn't formally include
+    // them). If the user saved any earlier, we get them back here.
+    const persisted = (initialState as unknown as { snapshots?: Snapshot[] } | null)?.snapshots;
+    if (Array.isArray(persisted) && persisted.length > 0) {
+      // Make sure AI Original always exists + is protected, even if the
+      // persisted blob is missing it (data drift safety net).
+      const hasAi = persisted.some((s) => s.protected && s.name === "AI Original");
+      if (hasAi) return persisted;
+    }
+    return [{
+      name:       "AI Original",
+      protected:  true,
+      created_at: new Date().toISOString(),
+      state:      {
+        global:   initialStudioState.global,
+        sections: initialStudioState.sections,
+        master:   initialStudioState.master,
+      },
+    }];
+  });
 
   function saveSnapshot(name: string) {
     setSnapshots((prev) => {
@@ -216,6 +240,16 @@ export function StudioClient(props: StudioClientProps) {
 
   // ─── Audio graph ────────────────────────────────────────────────────────
   const audio = useStudioAudio({ stems, reverbTypes, bpm });
+
+  // ─── Autosave ────────────────────────────────────────────────────────────
+  // Guests don't autosave (no MixJob persistence rights). Subscribers get
+  // debounced saves on every dirty state change + a flush on tab close.
+  const autosave = useStudioAutosave({
+    jobId:     _jobId,
+    state,
+    snapshots,
+    disabled:  !!props.isGuest,
+  });
 
   // Push initial state into the audio graph once it's ready.
   const seededRef = useRef(false);
@@ -570,6 +604,29 @@ export function StudioClient(props: StudioClientProps) {
               <Redo2 size={13} />
             </button>
           </div>
+
+          {/* Autosave status pill — hidden for guests. */}
+          {!props.isGuest && (
+            <span
+              className="text-[10px] uppercase font-semibold tracking-wider px-2 py-1 rounded"
+              style={{
+                color:           autosave.status === "error"  ? "#E8554A"
+                                : autosave.status === "saving" ? "#D4A843"
+                                                               : "#666",
+                backgroundColor: "transparent",
+                border:          `1px solid ${autosave.status === "error" ? "#5a2421" : "#2A2824"}`,
+                minWidth:         88,
+                textAlign:        "center",
+              }}
+              title={autosave.status === "error" ? "Save failed — click to retry" : "Autosaved to your account"}
+              onClick={() => { if (autosave.status === "error") void autosave.saveNow(); }}
+            >
+              {autosave.status === "saving" ? "Saving…"
+                : autosave.status === "error"  ? "Save failed"
+                : autosave.lastSavedAt        ? `Saved ${relSavedAt(autosave.lastSavedAt)}`
+                                              : "Saved"}
+            </span>
+          )}
 
           {/* Snapshots */}
           <SnapshotsMenu
