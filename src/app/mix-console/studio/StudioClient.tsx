@@ -27,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Download, RotateCw } from "lucide-react";
 import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
+import { MasterStrip }    from "./MasterStrip";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, StemRole, StemState, StudioState } from "./types";
@@ -172,6 +173,19 @@ export function StudioClient(props: StudioClientProps) {
     updateStem(role, { brightness: v });
     audio.stems[role]?.setBrightness(v);
   }
+  function updateMaster(patch: Partial<MasterState>) {
+    setState((prev) => ({
+      ...prev,
+      master:  { ...prev.master, ...patch },
+      isDirty: true,
+    }));
+    // Only volumeDb is audible in the browser. AI intensity + stereo width
+    // bake in at re-render time (step 26).
+    if (typeof patch.volumeDb === "number") {
+      audio.master?.setGainDb(patch.volumeDb);
+    }
+  }
+
   function toggleMute(role: StemRole) {
     const next = !state.global[role]?.muted;
     updateStem(role, { muted: next });
@@ -433,23 +447,13 @@ export function StudioClient(props: StudioClientProps) {
             })}
           </div>
 
-          {/* Master strip placeholder — step 12 fills in */}
-          <div
-            className="flex-shrink-0 flex flex-col items-center py-4 px-3 ml-2 mr-3 my-4 gap-2"
-            style={{
-              width:           120,
-              backgroundColor: "#1a1816",
-              border:          "0.5px solid #2A2824",
-              borderRadius:    4,
-            }}
-          >
-            <span className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: "#888" }}>
-              Master
-            </span>
-            <p className="text-[10px] text-center mt-2" style={{ color: "#444" }}>
-              Master strip<br />(step 12)
-            </p>
-          </div>
+          {/* Master strip — wired in step 12 (volume audible; AI intensity +
+              stereo width visual until re-render bakes them in step 26). */}
+          <MasterStrip
+            master={state.master}
+            onChange={updateMaster}
+            analyser={audio.master?.analyser ?? null}
+          />
         </div>
       )}
 
