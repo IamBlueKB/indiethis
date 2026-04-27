@@ -29,6 +29,7 @@ import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
+import { MiniSpectrum }   from "./MiniSpectrum";
 import { useStudioAudio } from "./useStudioAudio";
 import { colorForRole, labelForRole } from "./stem-colors";
 import type { AiOriginal, MasterState, ReverbType, StemRole, StemState, StudioState } from "./types";
@@ -457,6 +458,12 @@ export function StudioClient(props: StudioClientProps) {
                   modified={isStemModified(role)}
                   advanced={advanced}
                   effectsSlot={effectsSlot}
+                  topSlot={
+                    <MiniSpectrum
+                      analyser={audio.stems[role]?.analyser ?? null}
+                      color={stemColor}
+                    />
+                  }
                 />
               );
             })}
@@ -468,6 +475,13 @@ export function StudioClient(props: StudioClientProps) {
             master={state.master}
             onChange={updateMaster}
             analyser={audio.master?.analyser ?? null}
+            topSlot={
+              <MiniSpectrum
+                analyser={audio.master?.analyser ?? null}
+                color="#D4A843"
+                bars={32}
+              />
+            }
             eqSlot={
               <MasterEqRow
                 values={state.master.eq}
