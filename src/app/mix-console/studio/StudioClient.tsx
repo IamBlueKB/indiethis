@@ -506,6 +506,71 @@ export function StudioClient(props: StudioClientProps) {
     );
   }
 
+  // ─── AI Assist (per-stem Haiku nudge) ───────────────────────────────────
+  // Sparkle button on each ChannelStrip POSTs the stem's current settings +
+  // AI Original to /studio/ai-assist. Claude returns a small patch (1-3
+  // fields). We apply it through the normal updateStem path so it lands on
+  // the undo stack — backable out with Ctrl+Z if the artist hates it.
+  // Per-role busy + last-note state powers the sparkle UI.
+  const [aiAssistBusy, setAiAssistBusy] = useState<Record<StemRole, boolean>>({});
+  const [aiAssistNote, setAiAssistNote] = useState<{ role: StemRole; note: string } | null>(null);
+  const aiAssistNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function runAiAssist(role: StemRole) {
+    if (aiAssistBusy[role]) return;
+    if (props.isGuest)      return;  // guests don't have a job to call against
+    setAiAssistBusy((m) => ({ ...m, [role]: true }));
+    try {
+      const cur = effectiveStem(role);
+      const res = await fetch(`/api/mix-console/job/${_jobId}/studio/ai-assist`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          role,
+          currentStem: cur,
+          aiOriginal:  aiOriginals?.[role] ?? null,
+          sectionName: selectedSection,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { patch?: Partial<StemState>; note?: string };
+      const patch = data.patch ?? {};
+      // Apply patch through updateStem — lands on undo stack and triggers autosave.
+      if (Object.keys(patch).length > 0) {
+        updateStem(role, patch);
+        // Push directly into the audio graph for the fields we know about.
+        const a = audio.stems[role];
+        if (a) {
+          if (typeof patch.gainDb     === "number") a.setGainDb(patch.gainDb);
+          if (typeof patch.pan        === "number") a.setPan(patch.pan);
+          if (typeof patch.reverb     === "number") a.setReverb(patch.reverb);
+          if (typeof patch.delay      === "number") a.setDelay(patch.delay);
+          if (typeof patch.comp       === "number") a.setComp(patch.comp);
+          if (typeof patch.brightness === "number") a.setBrightness(patch.brightness);
+          if (typeof patch.dryWet     === "number") a.setDryWet(patch.dryWet);
+        }
+      }
+      if (data.note) {
+        setAiAssistNote({ role, note: data.note });
+        if (aiAssistNoteTimerRef.current) clearTimeout(aiAssistNoteTimerRef.current);
+        aiAssistNoteTimerRef.current = setTimeout(() => setAiAssistNote(null), 4500);
+      }
+    } catch (err) {
+      console.error("[ai-assist]", err);
+      setAiAssistNote({ role, note: "AI Assist hit a snag — try again." });
+      if (aiAssistNoteTimerRef.current) clearTimeout(aiAssistNoteTimerRef.current);
+      aiAssistNoteTimerRef.current = setTimeout(() => setAiAssistNote(null), 3500);
+    } finally {
+      setAiAssistBusy((m) => ({ ...m, [role]: false }));
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (aiAssistNoteTimerRef.current) clearTimeout(aiAssistNoteTimerRef.current);
+    };
+  }, []);
+
   // ─── Transport ──────────────────────────────────────────────────────────
   async function togglePlay() {
     if (audio.transport.isPlaying) audio.transport.pause();
@@ -783,6 +848,8 @@ export function StudioClient(props: StudioClientProps) {
                   soloed={s.soloed}
                   onMuteToggle={() => toggleMute(role)}
                   onSoloToggle={() => toggleSolo(role)}
+                  onAiAssist={props.isGuest ? undefined : () => runAiAssist(role)}
+                  aiAssistBusy={!!aiAssistBusy[role]}
                   modified={isStemModified(role)}
                   advanced={advanced}
                   effectsSlot={effectsSlot}
@@ -860,6 +927,24 @@ export function StudioClient(props: StudioClientProps) {
           >
             back to global mix
           </button>
+        </div>
+      )}
+
+      {/* ─── AI Assist note toast ───────────────────────────────────────── */}
+      {aiAssistNote && (
+        <div
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-xs flex items-start gap-2 max-w-md"
+          style={{
+            backgroundColor: "#1A1612",
+            border:          "1px solid #D4A843",
+            color:           "#E8C97A",
+            boxShadow:       "0 6px 20px rgba(0,0,0,0.45)",
+          }}
+        >
+          <span className="font-bold uppercase tracking-wider text-[10px]" style={{ color: "#D4A843" }}>
+            {labelForRole(aiAssistNote.role)}
+          </span>
+          <span className="leading-snug">{aiAssistNote.note}</span>
         </div>
       )}
 
