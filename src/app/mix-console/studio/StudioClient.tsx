@@ -1409,7 +1409,7 @@ export function StudioClient(props: StudioClientProps) {
               Advanced
             </button>
           </div>
-          <div className="flex flex-col items-end gap-0.5">
+          <div className="relative">
             <button
               type="button"
               onClick={onRerender}
@@ -1440,12 +1440,13 @@ export function StudioClient(props: StudioClientProps) {
             </button>
             {!props.isGuest && (
               <span
-                className="text-[9px] font-medium leading-none"
-                style={{ color: rendersRemaining === 0 ? "#D4A843" : "#666" }}
+                className="absolute left-0 right-0 text-[9px] font-medium leading-none text-center whitespace-nowrap pointer-events-none"
+                style={{
+                  top:   "calc(100% + 3px)",
+                  color: rendersRemaining === 0 ? "#D4A843" : "#666",
+                }}
               >
-                {rendersRemaining > 0
-                  ? `${renderCount} of ${allowedRenders} re-renders used`
-                  : `${renderCount} of ${allowedRenders} re-renders used`}
+                {`${renderCount} of ${allowedRenders} re-renders used`}
               </span>
             )}
           </div>
