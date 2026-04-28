@@ -40,6 +40,8 @@ function isPublicPath(pathname: string): boolean {
   // AI Mix Console — public (guests + subscribers)
   if (pathname.startsWith("/api/mix-console")) return true;
   if (pathname.startsWith("/mix-console")) return true;
+  // TEMP: bypass auth on dashboard mix-console studio for local preview
+  if (pathname.startsWith("/dashboard/ai/mix-console")) return true;
   // File upload presign — public so guests can upload audio files
   if (pathname.startsWith("/api/upload/presign")) return true;
   // Public invoice pages — no auth required (artists paying invoices)

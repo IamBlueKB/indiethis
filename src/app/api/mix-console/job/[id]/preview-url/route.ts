@@ -21,7 +21,7 @@ import { generateFreshSignedUrl }     from "@/lib/mix-console/engine";
 
 export const dynamic = "force-dynamic";
 
-const VALID_VERSIONS = ["clean", "polished", "aggressive", "mix", "original"];
+const VALID_VERSIONS = ["clean", "polished", "aggressive", "mix", "original", "studio"];
 const VALID_KINDS    = ["preview", "full"];
 
 export async function GET(
@@ -64,6 +64,7 @@ export async function GET(
         aggressiveFilePath: true,
         mixFilePath:        true,
         previewFilePaths:   true,
+        studioFilePath:     true,
       },
     });
 
@@ -100,6 +101,8 @@ export async function GET(
         mix:        job.mixFilePath        ?? null,
         // No "original" full-length — fall through to preview if requested
         original:   previews?.original     ?? null,
+        // Pro Studio re-render output (step 27 diff card).
+        studio:     job.studioFilePath     ?? null,
       };
       filePath = fullMap[version];
 

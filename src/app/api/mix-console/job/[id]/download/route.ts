@@ -41,7 +41,7 @@ const FORMAT_EXT: Record<string, string> = {
 };
 
 const VALID_FORMATS  = Object.keys(FORMAT_MIME);
-const VALID_VERSIONS = ["clean", "polished", "aggressive", "mix"];
+const VALID_VERSIONS = ["clean", "polished", "aggressive", "mix", "studio"];
 
 export async function GET(
   req: NextRequest,
@@ -82,6 +82,7 @@ export async function GET(
         polishedFilePath:    true,
         aggressiveFilePath:  true,
         mixFilePath:         true,
+        studioFilePath:      true,
       },
     });
 
@@ -117,12 +118,17 @@ export async function GET(
       polished:   job.polishedFilePath   ?? null,
       aggressive: job.aggressiveFilePath ?? null,
       mix:        job.mixFilePath        ?? null,
+      studio:     job.studioFilePath     ?? null,
     };
     let filePath = pathMap[version] ?? null;
     if (!filePath) {
+      // version=studio falls back to the AI mix when no re-render has run yet
+      // (or the artist hasn't pressed Re-render). All other fallbacks unchanged.
       const fallbackOrder = version === "mix"
         ? ["polished", "clean", "aggressive"]
-        : ["polished", "clean", "aggressive", "mix"].filter(v => v !== version);
+        : version === "studio"
+          ? ["mix", "polished", "clean", "aggressive"]
+          : ["polished", "clean", "aggressive", "mix"].filter(v => v !== version);
       for (const v of fallbackOrder) {
         if (pathMap[v]) { filePath = pathMap[v]; break; }
       }

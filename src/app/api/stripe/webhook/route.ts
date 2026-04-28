@@ -854,6 +854,43 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      // --- Pro Studio extra re-render credit ($1.99 each) ---
+      // After the 5 free studio re-renders are used, the artist can buy
+      // additional credits. Each successful checkout increments
+      // MixJob.studioRenderExtraCredits by 1 (idempotent via session id).
+      if (checkSession.metadata?.type === "studio_extra_render") {
+        const jobId  = checkSession.metadata?.jobId;
+        const paidBy = checkSession.metadata?.userId ?? null;
+        if (jobId) {
+          const job = await db.mixJob.findUnique({
+            where:  { id: jobId },
+            select: { id: true, studioExtraRenderStripeIds: true, studioRenderExtraCredits: true },
+          }).catch(() => null);
+
+          // Idempotency — if we've already credited this Stripe session, skip.
+          const alreadyCredited = (job?.studioExtraRenderStripeIds ?? []).includes(checkSession.id);
+          if (job && !alreadyCredited) {
+            await db.mixJob.update({
+              where: { id: jobId },
+              data:  {
+                studioRenderExtraCredits:    { increment: 1 },
+                studioExtraRenderStripeIds:  { push: checkSession.id },
+              },
+            });
+            if (paidBy) {
+              void createNotification({
+                userId:  paidBy,
+                type:    "AI_GENERATION_COMPLETE",
+                title:   "Extra studio re-render unlocked",
+                message: "You purchased one additional studio re-render. Render away.",
+                link:    `/dashboard/ai/mix-console/${jobId}/studio`,
+              }).catch(() => {});
+            }
+          }
+        }
+        break;
+      }
+
       // --- Atomic new-signup fallback (PendingSignup flow) ---
       // The /signup/complete page is the primary account creator; this webhook
       // handler is the idempotent fallback in case the user closes the tab before

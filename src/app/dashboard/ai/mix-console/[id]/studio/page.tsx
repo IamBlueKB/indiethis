@@ -82,9 +82,13 @@ function prettifyFilename(raw: string | undefined | null): string | null {
   if (!raw) return null;
   // Pull the basename out of a URL or path.
   let s = raw.split("?")[0].split("#")[0];
-  s = s.substring(s.lastIndexOf("/") + 1);
+  s = decodeURIComponent(s.substring(s.lastIndexOf("/") + 1));
   // Drop common audio extensions.
   s = s.replace(/\.(wav|mp3|flac|aiff?|m4a|ogg|opus)$/i, "");
+  // Strip leading UUID (8-4-4-4-12 hex) that storage layers prepend.
+  s = s.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ _-]*/i, "");
+  // Strip leading short hash / nanoid-style prefix (8+ hex chars + separator).
+  s = s.replace(/^[0-9a-f]{8,}[ _-]+/i, "");
   // Drop a trailing _vocals/_beat/_stem token if present.
   s = s.replace(/[ _-]*(vocals?|beat|instrumental|stems?|main|lead)$/i, "");
   // Replace separators with spaces.
@@ -299,6 +303,8 @@ export default async function StudioPage({
       referenceTrackUrl={referenceTrackUrl}
       bpm={bpm}
       sections={sections}
+      studioRenderCount={job.studioRenderCount ?? 0}
+      studioRenderExtraCredits={job.studioRenderExtraCredits ?? 0}
     />
     </div>
   );

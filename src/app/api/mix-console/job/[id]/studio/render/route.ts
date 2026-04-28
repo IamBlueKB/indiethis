@@ -65,6 +65,8 @@ export async function POST(
         fadeOut:         true,
         sectionMap:      true,
         cleanFilePath:   true,
+        studioRenderCount:        true,
+        studioRenderExtraCredits: true,
       },
     });
     if (!job)                            return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -83,6 +85,26 @@ export async function POST(
       return NextResponse.json(
         { error: "A studio render is already in progress." },
         { status: 409 },
+      );
+    }
+
+    // Re-render quota: 5 free per job + paid extra credits ($1.99 each).
+    // Frontend reads `needsPayment` and redirects to the extra-render checkout.
+    const FREE_RENDER_LIMIT = 5;
+    const usedCount    = job.studioRenderCount        ?? 0;
+    const extraCredits = job.studioRenderExtraCredits ?? 0;
+    const allowedCount = FREE_RENDER_LIMIT + extraCredits;
+    if (usedCount >= allowedCount) {
+      return NextResponse.json(
+        {
+          error:           "Re-render quota exceeded. Purchase additional credits to continue.",
+          needsPayment:    true,
+          used:            usedCount,
+          freeLimit:       FREE_RENDER_LIMIT,
+          extraCredits:    extraCredits,
+          unitPriceCents:  199,
+        },
+        { status: 402 },
       );
     }
 

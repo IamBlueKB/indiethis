@@ -53,8 +53,8 @@ const FRIENDLY_LABEL: Record<string, string> = {
   doubles:         "Doubles",
   vocal_harmonies: "Harmonies",
   harmonies:       "Harmonies",
-  vocal_insouts:   "Ins & Outs",
-  insouts:         "Ins & Outs",
+  vocal_insouts:   "Vocal Ins/Out",
+  insouts:         "Vocal Ins/Out",
   beat:            "Beat",
   kick:            "Kick",
   bass:            "Bass",
@@ -69,5 +69,17 @@ export function colorForRole(role: string): string {
 }
 
 export function labelForRole(role: string): string {
-  return FRIENDLY_LABEL[role.toLowerCase()] ?? role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const key = role.toLowerCase();
+  if (FRIENDLY_LABEL[key]) return FRIENDLY_LABEL[key];
+
+  // Indexed multi-stem roles like `vocal_insouts_0`, `vocal_insouts_1` —
+  // strip the numeric suffix, look up the friendly base, and re-attach the
+  // index (1-based for the user's eye).
+  const indexed = key.match(/^(.+)_(\d+)$/);
+  if (indexed) {
+    const base = FRIENDLY_LABEL[indexed[1]];
+    if (base) return `${base} ${Number(indexed[2]) + 1}`;
+  }
+
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

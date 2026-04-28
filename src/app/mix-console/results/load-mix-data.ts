@@ -214,6 +214,10 @@ function prettifyFilename(raw: string | undefined | null): string | null {
   let s = raw.split("?")[0].split("#")[0];
   s = decodeURIComponent(s.substring(s.lastIndexOf("/") + 1));
   s = s.replace(/\.(wav|mp3|flac|aiff?|m4a|ogg|opus)$/i, "");
+  // Strip leading UUID (8-4-4-4-12 hex) that storage layers prepend.
+  s = s.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ _-]*/i, "");
+  // Strip leading short hash / nanoid-style prefix.
+  s = s.replace(/^[0-9a-f]{8,}[ _-]+/i, "");
   s = s.replace(/[ _-]*(vocals?|beat|instrumental|stems?|main|lead)$/i, "");
   s = s.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
   if (!s) return null;

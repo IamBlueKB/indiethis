@@ -31,6 +31,10 @@ interface MasterStripProps {
   topSlot?:      React.ReactNode;
   /** EQ slot — 5-band knob row. */
   eqSlot?:       React.ReactNode;
+  /** Mix-notes slot — collapsible AI decision summary, shown in the dead
+   *  space between the master fader and the footer. Caller owns the
+   *  collapsed-state UI; this just allocates the space. */
+  notesSlot?:    React.ReactNode;
 }
 
 const GOLD = "#D4A843";
@@ -41,6 +45,7 @@ export function MasterStrip({
   analyser,
   topSlot,
   eqSlot,
+  notesSlot,
 }: MasterStripProps) {
   function onWidthChange(e: React.ChangeEvent<HTMLInputElement>) {
     onChange({ stereoWidth: Number(e.target.value) });
@@ -143,10 +148,19 @@ export function MasterStrip({
         </span>
       </div>
 
+      {/* Mix Notes — collapsible AI rationale. Sits in the previously-empty
+          space below the fader so the strip earns its full vertical real
+          estate. */}
+      {notesSlot && (
+        <div className="w-full mt-auto">
+          {notesSlot}
+        </div>
+      )}
+
       {/* Footer */}
       <span
-        className="text-[8px] font-mono uppercase tracking-wider mt-auto"
-        style={{ color: "#666" }}
+        className="text-[8px] font-mono uppercase tracking-wider"
+        style={{ color: "#666", marginTop: notesSlot ? 4 : "auto" }}
       >
         OUT
       </span>

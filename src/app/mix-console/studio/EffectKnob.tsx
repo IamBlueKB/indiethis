@@ -18,11 +18,9 @@
 
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-const SIZE      = 42;       // bumped from 36 — easier touch target on tablet
-const RADIUS    = SIZE / 2 - 3;
-const STROKE    = 3;        // thicker arc to match the larger knob
+const DEFAULT_SIZE = 42;    // bumped from 36 — easier touch target on tablet
 const ARC_START = 135;   // degrees, bottom-left
 const ARC_END   = 45;    // degrees, bottom-right (sweeping clockwise = 270deg total)
 const ARC_SWEEP = 270;
@@ -42,6 +40,8 @@ interface EffectKnobProps {
   shortLabel?:  string;
   /** Disabled / unavailable in current view (renders dimmed, no interaction). */
   disabled?:    boolean;
+  /** Optional knob diameter in px. Default 42; pass 26 for compact lane row. */
+  size?:        number;
 }
 
 export function EffectKnob({
@@ -52,13 +52,52 @@ export function EffectKnob({
   label,
   shortLabel,
   disabled = false,
+  size = DEFAULT_SIZE,
 }: EffectKnobProps) {
+  const SIZE   = size;
+  const RADIUS = SIZE / 2 - 3;
+  const STROKE = SIZE >= 36 ? 3 : 2;
   const [hovering, setHovering] = useState(false);
+  const [pressed,  setPressed]  = useState(false);
   const dragRef = useRef<{ startY: number; startVal: number } | null>(null);
+
+  // ─── Drift pulse on the AI tick ────────────────────────────────────────
+  // When the user's value strays >15% from AI's, the gold tick begins a slow
+  // 3s breath; amplitude scales with drift so a tiny tweak is barely
+  // noticeable, a large divergence pulses prominently. Static when on AI.
+  const tickRef    = useRef<SVGLineElement | null>(null);
+  const valueRef   = useRef(value);             valueRef.current   = value;
+  const aiValueRef = useRef(aiOriginal);        aiValueRef.current = aiOriginal;
+  useEffect(() => {
+    let raf = 0;
+    const THRESHOLD = 15;                       // 15 of 100 = 15%
+    const RANGE     = 100;
+    const BASE_OP   = 0.7;                      // existing static opacity
+    const tick = () => {
+      const el = tickRef.current;
+      if (el) {
+        const drift = Math.abs(valueRef.current - aiValueRef.current);
+        if (drift <= THRESHOLD) {
+          el.style.opacity = String(BASE_OP);
+        } else {
+          const f = Math.min(1, (drift - THRESHOLD) / (RANGE - THRESHOLD));
+          const sinv = 0.5 + 0.5 * Math.sin(performance.now() / 3000 * Math.PI * 2);
+          const min  = 0.5, max = 1.0;
+          const amp  = (max - min) * f;
+          const center = (min + max) / 2;
+          el.style.opacity = String(center - amp / 2 + sinv * amp);
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   function startDrag(clientY: number) {
     if (disabled) return;
     dragRef.current = { startY: clientY, startVal: value };
+    setPressed(true);
     const onMove = (e: MouseEvent | TouchEvent) => {
       if (!dragRef.current) return;
       const y = "touches" in e ? e.touches[0].clientY : e.clientY;
@@ -69,6 +108,7 @@ export function EffectKnob({
     };
     const onUp = () => {
       dragRef.current = null;
+      setPressed(false);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup",   onUp);
       document.removeEventListener("touchmove", onMove);
@@ -138,7 +178,18 @@ export function EffectKnob({
         onDoubleClick={onDoubleClick}
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
-        style={{ cursor: disabled ? "default" : "pointer" }}
+        style={{
+          cursor:    disabled ? "default" : "pointer",
+          // Tactile feel: subtle baseline depth shadow always; on press, scale
+          // up 5% and add a coloured glow so the knob feels grabbed. 50ms
+          // ease-out on release gives the soft landing.
+          transform:  pressed ? "scale(1.05)" : "scale(1)",
+          filter:     pressed
+            ? `drop-shadow(0 2px 4px rgba(0,0,0,0.55)) drop-shadow(0 0 5px ${color}88)`
+            : "drop-shadow(0 1px 2px rgba(0,0,0,0.45))",
+          transition: "transform 50ms ease-out, filter 50ms ease-out",
+          transformOrigin: "center",
+        }}
       >
         {/* Background arc (full sweep, dim) */}
         <path
@@ -158,8 +209,10 @@ export function EffectKnob({
             strokeLinecap="round"
           />
         )}
-        {/* AI-original tick (gold, always visible behind value) */}
+        {/* AI-original tick (gold, always visible behind value). Opacity is
+            driven by the drift-pulse rAF — see `tickRef` effect above. */}
         <line
+          ref={tickRef}
           x1={tickInner.x} y1={tickInner.y}
           x2={tickOuter.x} y2={tickOuter.y}
           stroke="#D4A843"

@@ -14,7 +14,7 @@
 
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 const WIDTH_PX  = 56;
 const HEIGHT_PX = 22;
@@ -46,11 +46,14 @@ function panLabel(pan: number): string {
 export function PanKnob({ value, onChange, aiOriginal = 0, color = "#D4A843", label }: PanKnobProps) {
   const trackRef    = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
+  const [hovering, setHovering] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   function startDrag(clientX: number) {
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return;
     draggingRef.current = true;
+    setDragging(true);
     update(clientX, rect);
     const onMove = (e: MouseEvent | TouchEvent) => {
       if (!draggingRef.current) return;
@@ -59,6 +62,7 @@ export function PanKnob({ value, onChange, aiOriginal = 0, color = "#D4A843", la
     };
     const onUp = () => {
       draggingRef.current = false;
+      setDragging(false);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup",   onUp);
       document.removeEventListener("touchmove", onMove);
@@ -93,6 +97,8 @@ export function PanKnob({ value, onChange, aiOriginal = 0, color = "#D4A843", la
         onMouseDown={(e) => startDrag(e.clientX)}
         onTouchStart={(e) => startDrag(e.touches[0].clientX)}
         onDoubleClick={onDoubleClick}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
         role="slider"
         aria-label={label ?? "Pan"}
         aria-valuemin={-100}
@@ -132,7 +138,18 @@ export function PanKnob({ value, onChange, aiOriginal = 0, color = "#D4A843", la
           }}
         />
       </div>
-      <span className="text-[9px] font-mono" style={{ color: "#888" }}>{panLabel(value)}</span>
+      {/* Permanent "PAN" label; swap to position readout (L20 / C / R15) only
+          while hovering or actively dragging. Fixed width so the row doesn't
+          jitter when the readout becomes 1–4 chars. */}
+      <span
+        className="text-[9px] font-mono uppercase tracking-wider leading-none text-center"
+        style={{
+          color: dragging || hovering ? "#D4A843" : "#888",
+          minWidth: 32,
+        }}
+      >
+        {dragging || hovering ? panLabel(value) : "PAN"}
+      </span>
     </div>
   );
 }

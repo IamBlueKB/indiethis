@@ -29,8 +29,10 @@ import { ChannelStrip }   from "./ChannelStrip";
 import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
+import { MixNotesPanel }  from "./MixNotesPanel";
 import { MiniSpectrum }   from "./MiniSpectrum";
 import { StemWaveform }   from "./StemWaveform";
+import { TrackWaveform }  from "./TrackWaveform";
 import { DryWetSlider }   from "./DryWetSlider";
 import { audioBufferToWavBlob } from "./wav";
 import { SectionTimeline } from "./SectionTimeline";
@@ -40,6 +42,12 @@ import { SnapshotsMenu }   from "./SnapshotsMenu";
 import { LinkStemsMenu }   from "./LinkStemsMenu";
 import { useStudioAutosave } from "./useStudioAutosave";
 import { colorForRole, labelForRole } from "./stem-colors";
+import { RenderDiffCard } from "./RenderDiffCard";
+import { coerceAnalysis } from "./summarizeDiff";
+import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+import { ShortcutHelpOverlay } from "./ShortcutHelpOverlay";
+import { A11yLiveRegion } from "./A11yLiveRegion";
+import { announce } from "./useA11yAnnounce";
 import type { AiOriginal, MasterState, ReverbType, Snapshot, SongSection, StemRole, StemState, StudioState } from "./types";
 
 export interface StudioClientProps {
@@ -69,6 +77,10 @@ export interface StudioClientProps {
   bpm?:         number;
   /** Detected song sections from analysisData (intro/verse/chorus/etc.). */
   sections?:    SongSection[];
+  /** Number of studio re-renders already used on this job. */
+  studioRenderCount?:        number;
+  /** Paid extra-render credits ($1.99 each) the artist has purchased. */
+  studioRenderExtraCredits?: number;
 }
 
 const DEFAULT_STEM_STATE: StemState = {
@@ -97,6 +109,35 @@ function mmss(t: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/* ─── Lane ordering + height hierarchy (Pro Studio Mixer Visual Restructure) ─
+   Main Vocal first (tallest). Doubles → Harmonies → Ad-libs → Ins & Outs.
+   Beat (or beat sub-stems if Demucs split it) last; second-tallest.
+   Anything unrecognized falls in between in original order. */
+function laneOrderRank(role: string): number {
+  const r = role.toLowerCase();
+  if (r === "vocal_main"   || r === "main_vocal" || r === "lead")     return 0;
+  if (r === "vocal_doubles" || r === "doubles"   || r === "double")   return 1;
+  if (r === "vocal_harmonies" || r === "harmonies" || r === "harmony" || r === "backing") return 2;
+  if (r === "vocal_adlibs"  || r === "adlibs"    || r === "adlib")    return 3;
+  if (r === "vocal_insouts" || r === "insouts")                       return 4;
+  if (r === "melodics")                                                return 5;
+  if (r === "drums_other"   || r === "drums" || r === "other")        return 6;
+  if (r === "bass")                                                    return 7;
+  if (r === "kick")                                                    return 8;
+  if (r === "beat")                                                    return 9;
+  return 5; // unknown roles sit mid-pack
+}
+
+function laneHeightFor(role: string): number {
+  const r = role.toLowerCase();
+  // Main vocal — tallest. The eye hits it first.
+  if (r === "vocal_main" || r === "main_vocal" || r === "lead") return 92;
+  // Beat (or beat sub-stems) — second tallest.
+  if (r === "beat" || r === "kick" || r === "bass" || r === "drums_other" || r === "drums" || r === "melodics" || r === "other") return 80;
+  // Supporting stems.
+  return 68;
+}
+
 function relSavedAt(iso: string | null): string {
   if (!iso) return "";
   const t = new Date(iso).getTime();
@@ -109,10 +150,24 @@ function relSavedAt(iso: string | null): string {
 }
 
 export function StudioClient(props: StudioClientProps) {
-  const { jobId: _jobId, trackTitle, stems, originalStems, aiOriginals, reverbTypes, initialState, referenceTrackUrl, bpm, sections = [] } = props;
+  const { jobId: _jobId, trackTitle, stems, originalStems, aiOriginals, reverbTypes: reverbTypesProp, initialState, referenceTrackUrl, bpm, sections = [] } = props;
+
+  // Reverb types are local state so the artist can opt-in stems Claude marked
+  // "dry" (e.g. beats / instruments). Clicking "Add reverb" on a dry lane
+  // swaps the type to "plate" and re-arms the reverb send in useStudioAudio.
+  const [reverbTypes, setReverbTypes] = useState<typeof reverbTypesProp>(reverbTypesProp);
+  function enableReverb(role: StemRole) {
+    setReverbTypes((prev) => ({ ...(prev ?? {} as Record<StemRole, ReverbType>), [role]: "plate" }));
+  }
 
   // Stable role order — first stem wins as transport master clock.
-  const roles = useMemo(() => Object.keys(stems), [stems]);
+  // Visual ordering for the lane stack is computed separately via laneOrderRank
+  // so audio/transport semantics aren't affected.
+  const roles      = useMemo(() => Object.keys(stems), [stems]);
+  const lanesOrder = useMemo(
+    () => [...roles].sort((a, b) => laneOrderRank(a) - laneOrderRank(b)),
+    [roles],
+  );
 
   // ─── Build initial state ───────────────────────────────────────────────
   // Every control opens at Claude's chosen value — the studio sounds
@@ -860,15 +915,254 @@ export function StudioClient(props: StudioClientProps) {
     else                            await audio.transport.play();
   }
 
-  // ─── Re-render trigger (step 26 wires the API call) ──────────────────────
-  function onRerender() {
-    /* TODO step 26 — POST /api/mix-console/job/[id]/studio/render */
-    console.log("Re-render requested with state:", state);
+  // ─── Re-render trigger (steps 26 + 27) ──────────────────────────────────
+  // Posts the current studio state to the render route, flips into
+  // "rendering" mode, captures a snapshot of state-at-render-time (so the
+  // diff card can compare against it when the render completes), and starts
+  // polling the job endpoint until studioStatus flips to STUDIO_COMPLETE.
+  const FREE_RENDER_LIMIT = 5;
+  const [renderCount,    setRenderCount]    = useState<number>(props.studioRenderCount        ?? 0);
+  const [extraCredits,   setExtraCredits]   = useState<number>(props.studioRenderExtraCredits ?? 0);
+  const allowedRenders   = FREE_RENDER_LIMIT + extraCredits;
+  const renderQuotaUsed  = renderCount >= allowedRenders;
+  const rendersRemaining = Math.max(0, allowedRenders - renderCount);
+  const [isRendering,        setIsRendering]        = useState(false);
+  const [diffOpen,           setDiffOpen]           = useState(false);
+  const [helpOpen,           setHelpOpen]           = useState(false);
+  // beforeState = AI Original (always available because we auto-seed it).
+  // afterState  = whatever the user had at the moment they hit Re-render.
+  const [diffBeforeState, setDiffBeforeState] = useState<Pick<StudioState, "global" | "master"> | null>(null);
+  const [diffAfterState,  setDiffAfterState]  = useState<Pick<StudioState, "global" | "master"> | null>(null);
+  const [diffBeforeUrl,   setDiffBeforeUrl]   = useState<string | null>(null);
+  const [diffAfterUrl,    setDiffAfterUrl]    = useState<string | null>(null);
+  // analysisData on the job is the BEFORE analysis. We don't currently store
+  // an after-analysis (webhook stub) — pass null so the summary falls back
+  // to state-only deltas. Future: webhook stores post-render analysis.
+  const beforeAnalysis = useMemo(
+    () => coerceAnalysis((props as unknown as { analysisData?: unknown }).analysisData ?? null),
+    [],
+  );
+  const renderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopRenderPolling() {
+    if (renderPollRef.current) {
+      clearInterval(renderPollRef.current);
+      renderPollRef.current = null;
+    }
   }
+
+  async function fetchSignedUrl(version: string): Promise<string | null> {
+    try {
+      const r = await fetch(`/api/mix-console/job/${_jobId}/preview-url?version=${encodeURIComponent(version)}&kind=full`);
+      if (!r.ok) return null;
+      const j = await r.json() as { url?: string };
+      return j.url ?? null;
+    } catch { return null; }
+  }
+
+  // Redirect to Stripe Checkout for an extra $1.99 re-render credit.
+  async function purchaseExtraRender() {
+    if (props.isGuest) return;
+    try {
+      const r = await fetch(`/api/mix-console/job/${_jobId}/studio/extra-render-checkout`, {
+        method: "POST",
+      });
+      if (!r.ok) {
+        console.error("[extra-render-checkout] HTTP", r.status);
+        return;
+      }
+      const j = await r.json() as { url?: string };
+      if (j.url) window.location.href = j.url;
+    } catch (err) {
+      console.error("[extra-render-checkout]", err);
+    }
+  }
+
+  async function onRerender() {
+    if (props.isGuest)  return;        // guests can't render against a job
+    if (isRendering)    return;
+    // Quota gate — out of renders → send to Stripe instead of firing the render.
+    if (renderQuotaUsed) {
+      void purchaseExtraRender();
+      return;
+    }
+    // Capture the AI Original snapshot as the "before" reference.
+    const aiOriginalSnap = snapshots.find((s) => s.protected && s.name === "AI Original");
+    const before = aiOriginalSnap
+      ? { global: aiOriginalSnap.state.global, master: aiOriginalSnap.state.master }
+      : { global: initialStudioState.global,    master: initialStudioState.master };
+    const after  = { global: state.global, master: state.master };
+    setDiffBeforeState(before);
+    setDiffAfterState(after);
+    try {
+      const res = await fetch(`/api/mix-console/job/${_jobId}/studio/render`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          global:       state.global,
+          sections:     state.sections,
+          master:       state.master,
+          linkedGroups: state.linkedGroups ?? {},
+        }),
+      });
+      if (res.status === 402) {
+        // Server says payment required — bounce to Stripe.
+        void purchaseExtraRender();
+        return;
+      }
+      if (!res.ok) {
+        console.error("[studio-render] HTTP", res.status);
+        return;
+      }
+      setIsRendering(true);
+      announce("Studio re-render started");
+      // Pre-fetch the BEFORE audio URL while the render runs.
+      void fetchSignedUrl("mix").then((u) => setDiffBeforeUrl(u ?? null));
+      // Start polling.
+      stopRenderPolling();
+      renderPollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/mix-console/job/${_jobId}`);
+          if (!r.ok) return;
+          const j = await r.json() as {
+            studioStatus?:             string;
+            studioRenderCount?:        number;
+            studioRenderExtraCredits?: number;
+          };
+          if (j.studioStatus === "STUDIO_COMPLETE") {
+            stopRenderPolling();
+            setIsRendering(false);
+            if (typeof j.studioRenderCount        === "number") setRenderCount(j.studioRenderCount);
+            if (typeof j.studioRenderExtraCredits === "number") setExtraCredits(j.studioRenderExtraCredits);
+            const url = await fetchSignedUrl("studio");
+            setDiffAfterUrl(url);
+            setDiffOpen(true);
+            announce("Studio re-render complete");
+          } else if (j.studioStatus === "STUDIO_FAILED") {
+            stopRenderPolling();
+            setIsRendering(false);
+            announce("Studio re-render failed");
+          }
+        } catch { /* keep polling on transient errors */ }
+      }, 3000);
+    } catch (err) {
+      console.error("[studio-render]", err);
+      setIsRendering(false);
+    }
+  }
+
+  // Stop polling on unmount.
+  useEffect(() => () => stopRenderPolling(), []);
+
+  // Auto-trigger after Stripe Checkout success (`?extra_render_paid=1`).
+  // We poll the job once to refresh extraCredits, strip the param, then fire
+  // the render. Guarded with a ref so React strict-mode double-invocation
+  // doesn't fire twice.
+  const extraPaidHandledRef = useRef(false);
+  useEffect(() => {
+    if (props.isGuest) return;
+    if (typeof window === "undefined") return;
+    if (extraPaidHandledRef.current) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("extra_render_paid") !== "1") return;
+    extraPaidHandledRef.current = true;
+    // Strip the query param from the address bar.
+    url.searchParams.delete("extra_render_paid");
+    window.history.replaceState({}, "", url.toString());
+    // Pull fresh credit counts, then kick off the render.
+    void (async () => {
+      try {
+        const r = await fetch(`/api/mix-console/job/${_jobId}`);
+        if (r.ok) {
+          const j = await r.json() as {
+            studioRenderCount?:        number;
+            studioRenderExtraCredits?: number;
+          };
+          if (typeof j.studioRenderCount        === "number") setRenderCount(j.studioRenderCount);
+          if (typeof j.studioRenderExtraCredits === "number") setExtraCredits(j.studioRenderExtraCredits);
+        }
+      } catch { /* ignore */ }
+      // Small delay so the credit-state update commits before onRerender's gate runs.
+      setTimeout(() => { void onRerender(); }, 100);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Simple / Advanced view toggle ───────────────────────────────────────
   // Simple view hides the per-stem 2x2 effect knobs + dry/wet + visualizer.
   const [advanced, setAdvanced] = useState(false);
+
+  // ─── Keyboard shortcut callbacks (step 29) ──────────────────────────────
+  // These reference existing handlers — we don't modify any of them. The hook
+  // only invokes; it never mutates audio or state directly.
+  function kbToggleMuteAt(idx: number) {
+    const role = lanesOrder[idx];
+    if (role) toggleMute(role);
+  }
+  function kbToggleSoloAt(idx: number) {
+    const role = lanesOrder[idx];
+    if (role) toggleSolo(role);
+  }
+  function kbSeekDelta(delta: number) {
+    if (!audio.ready) return;
+    const next = Math.max(0, Math.min(audio.transport.duration || 0, audio.transport.currentTime + delta));
+    audio.transport.seek(next);
+  }
+  function kbMasterDelta(deltaDb: number) {
+    const next = Math.max(-24, Math.min(6, state.master.volumeDb + deltaDb));
+    updateMaster({ volumeDb: next });
+  }
+  function kbSaveSnapshot() {
+    const name = window.prompt("Snapshot name");
+    if (name && name.trim()) saveSnapshot(name.trim());
+  }
+  function kbDeselectSection() {
+    if (selectedSection) selectSection(null);
+  }
+
+  useKeyboardShortcuts({
+    onTogglePlay:        () => { void togglePlay(); },
+    onUndo:              doUndo,
+    onRedo:              doRedo,
+    onToggleMuteAt:      kbToggleMuteAt,
+    onToggleSoloAt:      kbToggleSoloAt,
+    onToggleReference:   () => { void toggleReferenceMode(); },
+    onSaveSnapshot:      kbSaveSnapshot,
+    onRerender:          () => { void onRerender(); },
+    onSeekDelta:         kbSeekDelta,
+    onMasterVolumeDelta: kbMasterDelta,
+    onDeselectSection:   kbDeselectSection,
+    onOpenHelp:          () => setHelpOpen(true),
+    stemRoles:           lanesOrder,
+  });
+
+  // ─── A11y announcements (step 31) ───────────────────────────────────────
+  // Watch existing state slices and broadcast change descriptions to the live
+  // region. We subscribe to state — not the handlers — so we never modify the
+  // existing setters.
+  useEffect(() => {
+    if (selectedSection) announce(`Section ${selectedSection} selected`);
+    else                 announce("Editing global mix");
+  }, [selectedSection]);
+
+  // Mute / solo announcements — diff against previous snapshot.
+  const prevMuteRef = useRef<Record<StemRole, boolean>>({});
+  const prevSoloRef = useRef<Record<StemRole, boolean>>({});
+  useEffect(() => {
+    for (const role of roles) {
+      const m = !!state.global[role]?.muted;
+      const s = !!state.global[role]?.soloed;
+      if (prevMuteRef.current[role] !== m) {
+        prevMuteRef.current[role] = m;
+        announce(`${labelForRole(role)} ${m ? "muted" : "unmuted"}`);
+      }
+      if (prevSoloRef.current[role] !== s) {
+        prevSoloRef.current[role] = s;
+        announce(`${labelForRole(role)} ${s ? "soloed" : "unsoloed"}`);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.global, roles.join("|")]);
 
   // ─── Below-768 viewport guard ────────────────────────────────────────────
   const [tooSmall, setTooSmall] = useState(false);
@@ -890,10 +1184,19 @@ export function StudioClient(props: StudioClientProps) {
             The Pro Studio Mixer is designed for larger screens. Open this page on your
             desktop or tablet for the full mixing experience.
           </p>
+          <a
+            href={`/dashboard/ai/mix-console/${_jobId}`}
+            className="inline-block mt-4 text-xs underline"
+            style={{ color: "#D4A843" }}
+          >
+            Go to standard results page
+          </a>
         </div>
       </div>
     );
   }
+  // Tablet (768–1024px) restyling deferred — would require layout edits the
+  // user explicitly disallowed for this batch. Desktop layout renders as-is.
 
   return (
     <div
@@ -1000,8 +1303,11 @@ export function StudioClient(props: StudioClientProps) {
                                                                : "#666",
                 backgroundColor: "transparent",
                 border:          `1px solid ${autosave.status === "error" ? "#5a2421" : "#2A2824"}`,
-                minWidth:         88,
+                width:            128,           // fixed so siblings don't shift
                 textAlign:        "center",
+                whiteSpace:       "nowrap",
+                overflow:         "hidden",
+                textOverflow:     "ellipsis",
               }}
               title={autosave.status === "error" ? "Save failed — click to retry" : "Autosaved to your account"}
               onClick={() => { if (autosave.status === "error") void autosave.saveNow(); }}
@@ -1103,29 +1409,57 @@ export function StudioClient(props: StudioClientProps) {
               Advanced
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onRerender}
-            disabled={!state.isDirty}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            style={{
-              backgroundColor: state.isDirty ? "#D4A843" : "transparent",
-              color:           state.isDirty ? "#0A0A0A" : "#666",
-              border:          `1px solid ${state.isDirty ? "#D4A843" : "#2A2824"}`,
-              cursor:          state.isDirty ? "pointer" : "default",
-            }}
-          >
-            <RotateCw size={11} />
-            Re-render
-          </button>
-          <button
-            type="button"
+          <div className="flex flex-col items-end gap-0.5">
+            <button
+              type="button"
+              onClick={onRerender}
+              disabled={!renderQuotaUsed && !state.isDirty}
+              title={
+                renderQuotaUsed
+                  ? "Out of free re-renders — purchase an extra credit ($1.99) to render again."
+                  : `${rendersRemaining} of ${allowedRenders} re-renders remaining`
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+              style={{
+                backgroundColor: renderQuotaUsed
+                  ? "transparent"
+                  : (state.isDirty ? "#D4A843" : "transparent"),
+                color: renderQuotaUsed
+                  ? "#D4A843"
+                  : (state.isDirty ? "#0A0A0A" : "#666"),
+                border: `1px solid ${
+                  renderQuotaUsed
+                    ? "#D4A843"
+                    : (state.isDirty ? "#D4A843" : "#2A2824")
+                }`,
+                cursor: (renderQuotaUsed || state.isDirty) ? "pointer" : "default",
+              }}
+            >
+              <RotateCw size={11} />
+              {renderQuotaUsed ? "Additional re-renders $1.99 each" : "Re-render"}
+            </button>
+            {!props.isGuest && (
+              <span
+                className="text-[9px] font-medium leading-none"
+                style={{ color: rendersRemaining === 0 ? "#D4A843" : "#666" }}
+              >
+                {rendersRemaining > 0
+                  ? `${renderCount} of ${allowedRenders} re-renders used`
+                  : `${renderCount} of ${allowedRenders} re-renders used`}
+              </span>
+            )}
+          </div>
+          <a
+            href={`/api/mix-console/job/${_jobId}/download?version=studio&format=wav_24_44`}
+            aria-label="Export full mix as 24-bit WAV (studio re-render if available, AI mix otherwise)"
+            title="Download full mix (studio re-render if available, AI mix otherwise)"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
             style={{ backgroundColor: "transparent", color: "#888", border: "1px solid #2A2824" }}
+            onClick={() => announce("Export started")}
           >
             <Download size={11} />
             Export
-          </button>
+          </a>
         </div>
       </div>
 
@@ -1136,17 +1470,33 @@ export function StudioClient(props: StudioClientProps) {
         </div>
       )}
 
+      {/* ─── Top scrub bar — master waveform + section markers + playhead ──
+          Moved up here from the bottom of the page per the visual restructure
+          spec. The same SectionTimeline component drives both navigation and
+          editing-scope selection. */}
+      {audio.ready && (
+        <SectionTimeline
+          sections={sections}
+          duration={audio.transport.duration}
+          currentTime={audio.transport.currentTime}
+          selectedSection={selectedSection}
+          onSelect={selectSection}
+          onSeek={(t) => audio.transport.seek(t)}
+          getPeaks={(bins) => audio.getCombinedPeaks(bins)}
+        />
+      )}
+
       {/* ─── Main mixer area ─────────────────────────────────────────────── */}
       {audio.ready && (
         <div className="flex-1 flex overflow-hidden">
-          {/* Channel strips — horizontal scroll on overflow */}
+          {/* Stem lanes — vertical stack of horizontal lanes */}
           <div
-            className="flex-1 flex items-stretch gap-2 px-5 py-5 overflow-x-auto"
+            className="flex-1 flex flex-col overflow-y-auto"
             style={{
               background: "linear-gradient(180deg, rgba(20,18,16,0.0) 0%, rgba(212,168,67,0.025) 100%)",
             }}
           >
-            {roles.map((role) => {
+            {lanesOrder.map((role) => {
               const s = effectiveStem(role);
               if (!s) return null;
               const stemColor = colorForRole(role);
@@ -1158,22 +1508,58 @@ export function StudioClient(props: StudioClientProps) {
               // Dry stems have no convolver wired so the REV knob is disabled.
               const effectsSlot = (
                 <div
-                  className="grid grid-cols-2 justify-items-center"
+                  className="grid grid-cols-4 justify-items-center w-full"
                   style={{
-                    rowGap: 10,
-                    columnGap: 6,
-                    padding: "4px 2px",
+                    columnGap: 4,
+                    padding: "2px 0",
                   }}
                 >
-                  <EffectKnob
-                    value={s.reverb}
-                    onChange={(v) => setStemReverb(role, v)}
-                    aiOriginal={ai?.reverb ?? 0}
-                    color={stemColor}
-                    label={`${labelForRole(role)} reverb`}
-                    shortLabel="REV"
-                    disabled={isDry}
-                  />
+                  {isDry ? (
+                    <button
+                      type="button"
+                      onClick={() => enableReverb(role)}
+                      title={`Add reverb to ${labelForRole(role)} (Claude set this stem dry)`}
+                      className="flex flex-col items-center justify-center select-none transition-colors"
+                      style={{
+                        width:  26,
+                        height: 26 + 8 + 2 + 8,
+                        marginTop: 8,        // align body with knob bodies (skip the readout strip)
+                        opacity: 0.78,
+                      }}
+                    >
+                      <span
+                        className="rounded-full flex items-center justify-center"
+                        style={{
+                          width:  22,
+                          height: 22,
+                          border: `1px dashed ${stemColor}`,
+                          color:  stemColor,
+                          fontSize: 14,
+                          lineHeight: 1,
+                          fontWeight: 700,
+                          backgroundColor: "rgba(0,0,0,0.25)",
+                        }}
+                      >
+                        +
+                      </span>
+                      <span
+                        className="text-[8px] uppercase tracking-wider mt-0.5 leading-none"
+                        style={{ color: "#888" }}
+                      >
+                        REV
+                      </span>
+                    </button>
+                  ) : (
+                    <EffectKnob
+                      value={s.reverb}
+                      onChange={(v) => setStemReverb(role, v)}
+                      aiOriginal={ai?.reverb ?? 0}
+                      color={stemColor}
+                      label={`${labelForRole(role)} reverb`}
+                      shortLabel="REV"
+                      size={26}
+                    />
+                  )}
                   <EffectKnob
                     value={s.delay}
                     onChange={(v) => setStemDelay(role, v)}
@@ -1181,6 +1567,7 @@ export function StudioClient(props: StudioClientProps) {
                     color={stemColor}
                     label={`${labelForRole(role)} delay`}
                     shortLabel="DLY"
+                    size={26}
                   />
                   <EffectKnob
                     value={s.comp}
@@ -1189,6 +1576,7 @@ export function StudioClient(props: StudioClientProps) {
                     color={stemColor}
                     label={`${labelForRole(role)} compression`}
                     shortLabel="CMP"
+                    size={26}
                   />
                   <EffectKnob
                     value={s.brightness}
@@ -1197,14 +1585,22 @@ export function StudioClient(props: StudioClientProps) {
                     color={stemColor}
                     label={`${labelForRole(role)} brightness`}
                     shortLabel="BRT"
+                    size={26}
                   />
                 </div>
               );
+
+              const anySoloed = roles.some((r) => effectiveStem(r)?.soloed);
+              const isFaded   = anySoloed && !s.soloed && !s.muted;
+              const laneH     = laneHeightFor(role);
 
               return (
                 <ChannelStrip
                   key={role}
                   role={role}
+                  layout="horizontal"
+                  height={laneH}
+                  faded={isFaded}
                   linkBadge={(() => {
                     const groupName = (() => {
                       const groups = state.linkedGroups ?? {};
@@ -1233,6 +1629,7 @@ export function StudioClient(props: StudioClientProps) {
                   gainDb={s.gainDb}
                   onGainDbChange={(db) => setStemGainDb(role, db)}
                   analyser={audio.stems[role]?.analyser ?? null}
+                  gainAiOriginal={aiOriginals?.[role]?.gainDb ?? 0}
                   pan={s.pan}
                   onPanChange={(p) => setStemPan(role, p)}
                   panAiOriginal={aiOriginals?.[role]?.pan ?? 0}
@@ -1255,13 +1652,16 @@ export function StudioClient(props: StudioClientProps) {
                       label={`${labelForRole(role)} dry/wet`}
                     />
                   }
-                  topSlot={
-                    <StemWaveform
+                  waveformSlot={
+                    <TrackWaveform
                       getPeaks={(bins) => audio.stems[role]?.getPeaks(bins) ?? null}
                       currentTime={audio.transport.currentTime}
                       duration={audio.transport.duration}
                       color={stemColor}
                       onSeek={(t) => audio.transport.seek(t)}
+                      dim={s.muted}
+                      bright={s.soloed}
+                      faded={isFaded}
                     />
                   }
                 />
@@ -1288,24 +1688,20 @@ export function StudioClient(props: StudioClientProps) {
                 onChange={setMasterEqBand}
               />
             }
+            notesSlot={
+              <MixNotesPanel
+                roles={roles}
+                aiOriginals={aiOriginals}
+                reverbTypes={reverbTypes}
+              />
+            }
           />
         </div>
       )}
 
-      {/* ─── Section timeline — step 15 ──────────────────────────────────── */}
-      {audio.ready && (
-        <SectionTimeline
-          sections={sections}
-          duration={audio.transport.duration}
-          currentTime={audio.transport.currentTime}
-          selectedSection={selectedSection}
-          onSelect={selectSection}
-          onSeek={(t) => audio.transport.seek(t)}
-          getPeaks={(bins) => audio.getCombinedPeaks(bins)}
-        />
-      )}
+      {/* (Section timeline moved to the top scrub bar — see above) */}
 
-      {/* "Now editing" indicator above the timeline — only when a section is
+      {/* "Now editing" indicator — only when a section is
           picked, so the artist always knows knob changes won't go to global. */}
       {audio.ready && selectedSection && (
         <div
@@ -1401,6 +1797,48 @@ export function StudioClient(props: StudioClientProps) {
         <div className="absolute top-20 right-4 px-4 py-2 rounded-lg text-xs"
              style={{ backgroundColor: "#2A1818", border: "1px solid #E8554A", color: "#E8554A" }}>
           Failed to load: {Object.keys(audio.errors).map(labelForRole).join(", ")}
+        </div>
+      )}
+
+      {/* ─── Render-diff card (step 27) — modal overlay shown when a
+            studio re-render completes. Independent <audio> elements; never
+            touches useStudioAudio. */}
+      {diffBeforeState && diffAfterState && (
+        <RenderDiffCard
+          open={diffOpen}
+          onClose={() => setDiffOpen(false)}
+          beforeState={diffBeforeState}
+          afterState={diffAfterState}
+          beforeAnalysis={beforeAnalysis}
+          afterAnalysis={null}
+          beforeAudioUrl={diffBeforeUrl}
+          afterAudioUrl={diffAfterUrl}
+          labelForRole={labelForRole}
+        />
+      )}
+
+      {/* ─── Shortcut help overlay (step 29) ─────────────────────────────── */}
+      <ShortcutHelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* ─── A11y live region (step 31) ──────────────────────────────────── */}
+      <A11yLiveRegion />
+
+      {/* ─── Subtle "rendering…" indicator while studio render is in flight. */}
+      {isRendering && (
+        <div
+          className="absolute bottom-4 right-4 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-2"
+          style={{
+            backgroundColor: "#1A1612",
+            border: "1px solid #D4A843",
+            color: "#D4A843",
+          }}
+          aria-live="polite"
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: "#D4A843", animation: "pulse 1.2s ease-in-out infinite" }}
+          />
+          Rendering studio mix…
         </div>
       )}
     </div>

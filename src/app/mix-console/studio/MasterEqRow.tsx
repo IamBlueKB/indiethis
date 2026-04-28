@@ -22,11 +22,11 @@
 import { useRef } from "react";
 
 const BANDS = [
-  { name: "Bass",     freq: "60 Hz" },
-  { name: "Warmth",   freq: "250 Hz" },
-  { name: "Body",     freq: "1 kHz" },
-  { name: "Presence", freq: "4 kHz" },
-  { name: "Sparkle",  freq: "12 kHz" },
+  { name: "Bass", freq: "60 Hz"  },
+  { name: "Warm", freq: "250 Hz" },
+  { name: "Body", freq: "1 kHz"  },
+  { name: "Pres", freq: "4 kHz"  },
+  { name: "Air",  freq: "12 kHz" },
 ] as const;
 
 const GOLD       = "#D4A843";

@@ -16,7 +16,8 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Camera, X } from "lucide-react";
 import type { Snapshot } from "./types";
 
@@ -44,13 +45,37 @@ export function SnapshotsMenu({ snapshots, onRecall, onSave, onDelete }: Snapsho
   const [naming, setNaming]   = useState(false);
   const [draft, setDraft]     = useState("");
   const wrapRef               = useRef<HTMLDivElement | null>(null);
+  const triggerRef            = useRef<HTMLButtonElement | null>(null);
+  const panelRef              = useRef<HTMLDivElement | null>(null);
   const inputRef              = useRef<HTMLInputElement | null>(null);
+  const [pos, setPos]         = useState<{ top: number; right: number } | null>(null);
+
+  // Recompute panel position whenever it opens or the window resizes.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function update() {
+      const t = triggerRef.current;
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   // Click-outside to close.
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideWrap  = wrapRef.current?.contains(target);
+      const insidePanel = panelRef.current?.contains(target);
+      if (!insideWrap && !insidePanel) {
         setOpen(false);
         setNaming(false);
         setDraft("");
@@ -80,6 +105,7 @@ export function SnapshotsMenu({ snapshots, onRecall, onSave, onDelete }: Snapsho
   return (
     <div ref={wrapRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Snapshots"
@@ -97,14 +123,19 @@ export function SnapshotsMenu({ snapshots, onRecall, onSave, onDelete }: Snapsho
         <span style={{ color: "#666", fontWeight: 400 }}>{snapshots.length}</span>
       </button>
 
-      {open && (
+      {open && pos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute right-0 mt-1 rounded-lg shadow-xl z-50"
+          ref={panelRef}
+          className="rounded-lg"
           style={{
-            top:             "100%",
+            position:        "fixed",
+            top:             pos.top,
+            right:           pos.right,
             width:           260,
-            backgroundColor: "#1A1816",
+            backgroundColor: "#0E0C0A",
             border:          "1px solid #2A2824",
+            zIndex:          1000,
+            boxShadow:       "0 12px 32px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5)",
           }}
         >
           {/* List */}
@@ -202,7 +233,8 @@ export function SnapshotsMenu({ snapshots, onRecall, onSave, onDelete }: Snapsho
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -61,9 +61,10 @@ export async function POST(req: NextRequest) {
     await prisma.mixJob.update({
       where: { id: jobId },
       data:  {
-        studioStatus:     "STUDIO_COMPLETE",
-        studioFilePath:   studioFilePath ?? undefined,
-        studioRenderedAt: new Date(),
+        studioStatus:      "STUDIO_COMPLETE",
+        studioFilePath:    studioFilePath ?? undefined,
+        studioRenderedAt:  new Date(),
+        studioRenderCount: { increment: 1 },
       },
     });
 

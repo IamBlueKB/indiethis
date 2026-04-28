@@ -15,7 +15,8 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link2, Plus, X } from "lucide-react";
 import { labelForRole, colorForRole } from "./stem-colors";
 import type { StemRole } from "./types";
@@ -33,12 +34,36 @@ export function LinkStemsMenu({ roles, groups, onCreate, onDelete }: LinkStemsMe
   const [newName, setNewName]         = useState("");
   const [newMembers, setNewMembers]   = useState<Set<StemRole>>(new Set());
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef   = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  // Recompute panel position when open / on resize / scroll.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function update() {
+      const t = triggerRef.current;
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   // Click-outside.
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (!wrapperRef.current?.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideWrap  = wrapperRef.current?.contains(target);
+      const insidePanel = panelRef.current?.contains(target);
+      if (!insideWrap && !insidePanel) {
         setOpen(false);
         setCreating(false);
       }
@@ -82,6 +107,7 @@ export function LinkStemsMenu({ roles, groups, onCreate, onDelete }: LinkStemsMe
   return (
     <div ref={wrapperRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Link stems"
@@ -111,14 +137,20 @@ export function LinkStemsMenu({ roles, groups, onCreate, onDelete }: LinkStemsMe
         )}
       </button>
 
-      {open && (
+      {open && pos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute right-0 top-full mt-1 z-30 rounded-lg shadow-xl"
+          ref={panelRef}
+          className="rounded-lg"
           style={{
-            backgroundColor: "#1A1612",
+            position:        "fixed",
+            top:             pos.top,
+            right:           pos.right,
+            backgroundColor: "#0E0C0A",
             border:          "1px solid #2A2824",
             minWidth:        280,
             maxWidth:        360,
+            zIndex:          1000,
+            boxShadow:       "0 12px 32px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5)",
           }}
         >
           <div className="px-3 py-2 border-b" style={{ borderColor: "#2A2824" }}>
@@ -256,7 +288,8 @@ export function LinkStemsMenu({ roles, groups, onCreate, onDelete }: LinkStemsMe
               New group
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

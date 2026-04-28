@@ -157,8 +157,10 @@ export function SectionTimeline(props: SectionTimelineProps) {
             }}
           />
 
-          {/* Section overlays — translucent so waveform shows through. */}
-          <div className="absolute inset-0 flex items-stretch gap-[2px] p-[2px]">
+          {/* Section overlays — translucent so waveform shows through.
+              Widths sum to exactly 100% (no padding/gap) and shrink is
+              disabled so every section renders even when there are many. */}
+          <div className="absolute inset-0 flex items-stretch">
             {sections.map((s) => {
               const w        = duration > 0 ? ((s.end - s.start) / duration) * 100 : 0;
               const selected = selectedSection === s.name;
@@ -173,17 +175,23 @@ export function SectionTimeline(props: SectionTimelineProps) {
                     onSelect(s.name);
                     onSeek(s.start);
                   }}
-                  className="relative text-[10px] font-semibold rounded transition-all overflow-hidden whitespace-nowrap flex items-center justify-center"
+                  className="relative text-[10px] font-semibold transition-all overflow-hidden whitespace-nowrap flex items-center justify-center"
                   style={{
                     width:           `${w}%`,
                     minWidth:        0,
+                    flexShrink:      0,
+                    flexGrow:        0,
                     backgroundColor: selected ? "rgba(212,168,67,0.72)"
                                     : playing  ? "rgba(212,168,67,0.18)"
                                                : "rgba(20,18,16,0.45)",
                     color:           selected ? "#0A0A0A"
                                     : playing  ? "#F5E6B3"
                                                : "#CFCAC2",
-                    border:          `1px solid ${selected ? GOLD
+                    borderRight:     "1px solid rgba(212,168,67,0.18)",
+                    borderTop:       `1px solid ${selected ? GOLD
+                                                  : playing ? "rgba(212,168,67,0.55)"
+                                                            : "rgba(212,168,67,0.12)"}`,
+                    borderBottom:    `1px solid ${selected ? GOLD
                                                   : playing ? "rgba(212,168,67,0.55)"
                                                             : "rgba(212,168,67,0.12)"}`,
                     backdropFilter:  "blur(2px)",
@@ -204,7 +212,11 @@ export function SectionTimeline(props: SectionTimelineProps) {
             })}
           </div>
 
-          {/* Playhead — thin gold line over everything. */}
+          {/* Playhead — thin gold line with a soft layered halo so it reads
+              like a warm light source crossing the timeline rather than a
+              hard neon stripe. Three stacked shadows: tight inner core
+              (~5px @ 35%), mid bloom (~12px @ 22%), wide warm wash
+              (~22px @ 10%). */}
           {duration > 0 && (
             <div
               className="absolute top-0 bottom-0 pointer-events-none"
@@ -212,7 +224,11 @@ export function SectionTimeline(props: SectionTimelineProps) {
                 left:            `${playheadPct}%`,
                 width:           1.5,
                 backgroundColor: GOLD,
-                boxShadow:       `0 0 6px ${GOLD}`,
+                boxShadow: [
+                  "0 0 5px  rgba(212,168,67,0.35)",
+                  "0 0 12px rgba(212,168,67,0.22)",
+                  "0 0 22px rgba(212,168,67,0.10)",
+                ].join(", "),
               }}
             />
           )}

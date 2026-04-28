@@ -3343,6 +3343,9 @@ model MixJob {
   studioFilePath    String?   // mixing/{jobId}/studio_mix.wav
   studioStatus      String?   // null | STUDIO_RENDERING | STUDIO_COMPLETE | STUDIO_FAILED
   studioRenderedAt  DateTime?
+  studioRenderCount          Int      @default(0)  // total successful re-renders this job
+  studioRenderExtraCredits   Int      @default(0)  // paid credits beyond the 5 free renders ($1.99 each)
+  studioExtraRenderStripeIds String[] @default([]) // Stripe session ids already credited (webhook idempotency)
 
   // Guest file retention — cleared when guest converts to subscriber
   expiresAt       DateTime?
