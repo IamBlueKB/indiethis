@@ -168,6 +168,10 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
   const masterEqRef       = useRef<BiquadFilterNode[]>([]);
   const masterAnalyserRef = useRef<AnalyserNode | null>(null);
   const stemNodesRef      = useRef<Record<StemRole, StemNodes>>({});
+  // Per-(role, bins) peak-cache. Computing max-abs over a multi-minute buffer
+  // is non-trivial; cache the downsampled result so a 60fps redraw doesn't
+  // re-scan the buffer every frame.
+  const peakCacheRef      = useRef<Record<string, Float32Array>>({});
 
   // Mute/solo bookkeeping.
   const muteSoloRef = useRef<{ muted: Set<StemRole>; soloed: Set<StemRole> }>({
@@ -641,6 +645,41 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
           const n = stemNodesRef.current[role];
           return n?.analyser ?? (null as unknown as AnalyserNode);
         },
+        getPeaks: (bins: number) => {
+          const n = stemNodesRef.current[role];
+          if (!n?.buffer) return null;
+          const key    = `${role}:${bins}`;
+          const cached = peakCacheRef.current[key];
+          if (cached) return cached;
+          const buf    = n.buffer;
+          const ch0    = buf.getChannelData(0);
+          const ch1    = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
+          const N      = ch0.length;
+          const step   = Math.max(1, Math.floor(N / bins));
+          const out    = new Float32Array(bins);
+          let maxOverall = 0;
+          for (let i = 0; i < bins; i++) {
+            const start = i * step;
+            const end   = Math.min(N, start + step);
+            let peak = 0;
+            for (let j = start; j < end; j += 8) {  // every 8th sample — fast & visually identical
+              const a = Math.abs(ch0[j]);
+              const b = Math.abs(ch1[j]);
+              if (a > peak) peak = a;
+              if (b > peak) peak = b;
+            }
+            out[i] = peak;
+            if (peak > maxOverall) maxOverall = peak;
+          }
+          // Normalize so each stem fills its own row visually regardless of
+          // its absolute level — channel strip already conveys gain.
+          if (maxOverall > 0) {
+            const inv = 1 / maxOverall;
+            for (let i = 0; i < bins; i++) out[i] *= inv;
+          }
+          peakCacheRef.current[key] = out;
+          return out;
+        },
         renderToBuffer: async (stemState) => {
           const n = stemNodesRef.current[role];
           if (!n || !n.buffer) return null;
@@ -848,6 +887,33 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     applyMuteSolo();
   }
 
+  function getCombinedPeaks(bins: number): Float32Array | null {
+    const key    = `__combined__:${bins}`;
+    const cached = peakCacheRef.current[key];
+    if (cached) return cached;
+    let hadAny = false;
+    const acc  = new Float32Array(bins);
+    let max    = 0;
+    for (const role of roles) {
+      const handle = stemHandles[role];
+      if (!handle) continue;
+      const p = handle.getPeaks(bins);
+      if (!p) continue;
+      hadAny = true;
+      for (let i = 0; i < bins; i++) {
+        if (p[i] > acc[i]) acc[i] = p[i];
+        if (acc[i] > max)  max    = acc[i];
+      }
+    }
+    if (!hadAny) return null;
+    if (max > 0) {
+      const inv = 1 / max;
+      for (let i = 0; i < bins; i++) acc[i] *= inv;
+    }
+    peakCacheRef.current[key] = acc;
+    return acc;
+  }
+
   return {
     ready,
     errors,
@@ -857,5 +923,6 @@ export function useStudioAudio(opts: UseStudioAudioOptions): UseStudioAudioRetur
     transport,
     setMuted,
     setSoloed,
+    getCombinedPeaks,
   };
 }

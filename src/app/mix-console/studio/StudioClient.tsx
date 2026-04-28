@@ -30,6 +30,7 @@ import { EffectKnob }     from "./EffectKnob";
 import { MasterStrip }    from "./MasterStrip";
 import { MasterEqRow }    from "./MasterEqRow";
 import { MiniSpectrum }   from "./MiniSpectrum";
+import { StemWaveform }   from "./StemWaveform";
 import { DryWetSlider }   from "./DryWetSlider";
 import { audioBufferToWavBlob } from "./wav";
 import { SectionTimeline } from "./SectionTimeline";
@@ -895,11 +896,24 @@ export function StudioClient(props: StudioClientProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#0D0B09", color: "#fff" }}>
+    <div
+      className="min-h-screen flex flex-col"
+      style={{
+        // Warm dark base with a faint top vignette to match the rest of the
+        // IndieThis dashboard surfaces (#0D0B09 + 4% gold haze).
+        background: "radial-gradient(circle at 50% -10%, rgba(212,168,67,0.06), transparent 50%), #0D0B09",
+        color:      "#fff",
+      }}
+    >
       {/* ─── Top bar ──────────────────────────────────────────────────── */}
       <div
         className="flex items-center gap-4 px-6 py-3 border-b"
-        style={{ backgroundColor: "#141210", borderColor: "#1f1d1a" }}
+        style={{
+          backgroundColor: "rgba(20,18,16,0.92)",
+          borderColor:     "rgba(212,168,67,0.10)",
+          backdropFilter:  "blur(10px)",
+          boxShadow:       "0 1px 0 rgba(212,168,67,0.04), 0 6px 18px rgba(0,0,0,0.35)",
+        }}
       >
         {/* Title + PRO STUDIO badge */}
         <div className="flex items-center gap-3 min-w-0">
@@ -919,11 +933,16 @@ export function StudioClient(props: StudioClientProps) {
             onClick={togglePlay}
             disabled={!audio.ready}
             aria-label={audio.transport.isPlaying ? "Pause" : "Play"}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
             style={{
               backgroundColor: audio.ready ? "#E8735A" : "#3A3631",
               color:           "#0A0A0A",
               opacity:         audio.ready ? 1 : 0.5,
+              boxShadow:       audio.ready
+                ? (audio.transport.isPlaying
+                    ? "0 0 16px rgba(232,115,90,0.55), inset 0 1px 0 rgba(255,255,255,0.2)"
+                    : "0 4px 12px rgba(232,115,90,0.35), inset 0 1px 0 rgba(255,255,255,0.2)")
+                : "none",
             }}
           >
             {audio.transport.isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
@@ -1121,7 +1140,12 @@ export function StudioClient(props: StudioClientProps) {
       {audio.ready && (
         <div className="flex-1 flex overflow-hidden">
           {/* Channel strips — horizontal scroll on overflow */}
-          <div className="flex-1 flex items-stretch gap-1.5 px-4 py-4 overflow-x-auto">
+          <div
+            className="flex-1 flex items-stretch gap-2 px-5 py-5 overflow-x-auto"
+            style={{
+              background: "linear-gradient(180deg, rgba(20,18,16,0.0) 0%, rgba(212,168,67,0.025) 100%)",
+            }}
+          >
             {roles.map((role) => {
               const s = effectiveStem(role);
               if (!s) return null;
@@ -1133,7 +1157,14 @@ export function StudioClient(props: StudioClientProps) {
               // actual chosen value — the gold tick lines up with the AI mix.
               // Dry stems have no convolver wired so the REV knob is disabled.
               const effectsSlot = (
-                <div className="grid grid-cols-2 gap-1 justify-items-center">
+                <div
+                  className="grid grid-cols-2 justify-items-center"
+                  style={{
+                    rowGap: 10,
+                    columnGap: 6,
+                    padding: "4px 2px",
+                  }}
+                >
                   <EffectKnob
                     value={s.reverb}
                     onChange={(v) => setStemReverb(role, v)}
@@ -1225,9 +1256,12 @@ export function StudioClient(props: StudioClientProps) {
                     />
                   }
                   topSlot={
-                    <MiniSpectrum
-                      analyser={audio.stems[role]?.analyser ?? null}
+                    <StemWaveform
+                      getPeaks={(bins) => audio.stems[role]?.getPeaks(bins) ?? null}
+                      currentTime={audio.transport.currentTime}
+                      duration={audio.transport.duration}
                       color={stemColor}
+                      onSeek={(t) => audio.transport.seek(t)}
                     />
                   }
                 />
@@ -1267,6 +1301,7 @@ export function StudioClient(props: StudioClientProps) {
           selectedSection={selectedSection}
           onSelect={selectSection}
           onSeek={(t) => audio.transport.seek(t)}
+          getPeaks={(bins) => audio.getCombinedPeaks(bins)}
         />
       )}
 

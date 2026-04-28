@@ -97,12 +97,13 @@ export function ChannelStrip({
     <div
       className="flex flex-col items-center py-2 px-1 gap-2 shrink-0"
       style={{
-        width:           80,
-        backgroundColor: "#1a1816",
-        border:          "0.5px solid #2A2824",
+        width:           96,
+        backgroundColor: "#1A1816",
+        border:          "1px solid rgba(212,168,67,0.08)",
         borderTopWidth:  3,
         borderTopColor:  color,
-        borderRadius:    4,
+        borderRadius:    8,
+        boxShadow:       "inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 2px rgba(0,0,0,0.5)",
       }}
     >
       {/* Link badge (step 23) — chain icon when this stem is in a linked group */}
@@ -112,9 +113,17 @@ export function ChannelStrip({
         </div>
       )}
 
-      {/* Top — mini visualizer slot (step 14) */}
+      {/* Top — per-stem waveform with playhead (was mini spectrum). */}
       {advanced && (
-        <div className="w-full" style={{ height: 40 }}>
+        <div
+          className="w-full"
+          style={{
+            height: 44,
+            backgroundColor: "rgba(0,0,0,0.35)",
+            borderRadius: 4,
+            overflow: "hidden",
+          }}
+        >
           {topSlot}
         </div>
       )}
@@ -232,21 +241,45 @@ export function ChannelStrip({
         </button>
       </div>
 
-      {/* Stem label + AI indicator */}
-      <div className="flex flex-col items-center gap-0.5">
+      {/* Stem label + Claude's-mix indicator.
+          When all controls match Claude's original mix the gold dot glows;
+          once the artist changes anything it dims to a subtle gray so the
+          state of the strip is readable at a glance. */}
+      <div className="flex flex-col items-center gap-1">
         <span
           className="text-[11px] font-semibold leading-none text-center"
-          style={{ color, maxWidth: 72 }}
+          style={{ color, maxWidth: 84 }}
         >
           {label}
         </span>
-        <span
-          className="text-[8px] font-mono uppercase tracking-wider"
-          style={{ color: modified ? "#444" : "#888" }}
-          title={modified ? "Settings differ from the AI's original" : "AI's original settings"}
+        <div
+          className="flex items-center gap-1"
+          title={modified
+            ? "You've adjusted Claude's mix on this stem"
+            : "Showing Claude's original mix"}
         >
-          AI
-        </span>
+          <span
+            className="inline-block rounded-full"
+            style={{
+              width:           6,
+              height:          6,
+              backgroundColor: modified ? "#3A3733" : "#D4A843",
+              boxShadow:       modified
+                ? "none"
+                : "0 0 6px rgba(212,168,67,0.65)",
+              transition:      "background-color 200ms, box-shadow 200ms",
+            }}
+          />
+          <span
+            className="text-[8px] font-mono uppercase tracking-wider leading-none"
+            style={{
+              color:      modified ? "#5A5650" : "#D4A843",
+              transition: "color 200ms",
+            }}
+          >
+            {modified ? "Edited" : "Claude"}
+          </span>
+        </div>
       </div>
     </div>
   );

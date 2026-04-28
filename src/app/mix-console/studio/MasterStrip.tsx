@@ -1,17 +1,16 @@
 /**
  * MasterStrip — master bus column on the right of the mixer.
  *
- * Layout (top → bottom):
- *   - Header label "MASTER"
- *   - Master frequency visualizer slot     (step 14)
- *   - 5-band EQ knob row                   (step 13 wires audio; step 12 = visual)
- *   - AI Intensity knob                    (visual until re-render; bakes in step 26)
- *   - Stereo Width slider                  (visual until re-render; bakes in step 26)
- *   - Master volume fader + level meter    (WIRED — drives master.setGainDb)
- *   - Footer label
+ * Widened to 160px and reorganized so the EQ row's bottom labels no longer
+ * collide with the AI Intensity knob below. New layout (top → bottom):
  *
- * Width: 120px (matches the placeholder it replaces). Border-top in gold to
- * visually separate the master from the per-stem strips.
+ *   - Header label "MASTER"
+ *   - Master frequency visualizer slot
+ *   - 5-band EQ knob row  (its own padded section + divider)
+ *   - AI Intensity knob   (clearly separated)
+ *   - Stereo Width slider
+ *   - Master volume fader + level meter
+ *   - Footer label
  *
  * Setters take patch-style updates to MasterState so StudioClient owns the
  * state shape; the strip just renders + dispatches.
@@ -28,9 +27,9 @@ interface MasterStripProps {
   onChange:      (patch: Partial<MasterState>) => void;
   /** Live master analyser — drives the level meter on the volume fader. */
   analyser?:     AnalyserNode | null;
-  /** Top slot — master frequency visualizer (step 14). */
+  /** Top slot — master frequency visualizer. */
   topSlot?:      React.ReactNode;
-  /** EQ slot — 5-band knob row (step 13 fills in). */
+  /** EQ slot — 5-band knob row. */
   eqSlot?:       React.ReactNode;
 }
 
@@ -43,7 +42,6 @@ export function MasterStrip({
   topSlot,
   eqSlot,
 }: MasterStripProps) {
-  // Stereo width slider drag handler.
   function onWidthChange(e: React.ChangeEvent<HTMLInputElement>) {
     onChange({ stereoWidth: Number(e.target.value) });
   }
@@ -53,38 +51,51 @@ export function MasterStrip({
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col items-center py-3 px-2 ml-2 mr-3 my-4 gap-3"
+      className="flex-shrink-0 flex flex-col items-center py-3 px-3 ml-2 mr-3 my-4 gap-3"
       style={{
-        width:           120,
-        backgroundColor: "#1a1816",
-        border:          "0.5px solid #2A2824",
+        width:           160,
+        backgroundColor: "#1A1816",
+        border:          "1px solid rgba(212,168,67,0.18)",
         borderTopWidth:  3,
         borderTopColor:  GOLD,
-        borderRadius:    4,
+        borderRadius:    8,
+        boxShadow:       "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 14px rgba(0,0,0,0.45)",
       }}
     >
       {/* Header */}
       <span
-        className="text-[10px] uppercase font-semibold tracking-wider"
+        className="text-[10px] uppercase font-bold tracking-[0.18em]"
         style={{ color: GOLD }}
       >
         Master
       </span>
 
-      {/* Master frequency visualizer slot — step 14 */}
-      <div className="w-full" style={{ height: 40 }}>
+      {/* Master frequency visualizer */}
+      <div
+        className="w-full"
+        style={{
+          height: 36,
+          backgroundColor: "rgba(0,0,0,0.35)",
+          borderRadius: 4,
+          overflow: "hidden",
+        }}
+      >
         {topSlot}
       </div>
 
-      {/* 5-band EQ slot — step 13 */}
-      <div className="w-full">
+      {/* 5-band EQ — sectioned + padded so labels don't crowd the AI knob */}
+      <div
+        className="w-full pt-2 pb-3"
+        style={{
+          borderTop:    "1px solid rgba(212,168,67,0.10)",
+          borderBottom: "1px solid rgba(212,168,67,0.10)",
+        }}
+      >
         {eqSlot}
       </div>
 
-      {/* AI Intensity — global multiplier on Claude's effect values. Visual
-          only in the browser; multiplier is applied at re-render time
-          (predict.py _studio_render in step 26). 50 = 100% (Claude's mix). */}
-      <div className="flex flex-col items-center gap-1">
+      {/* AI Intensity — global multiplier on Claude's effect values. */}
+      <div className="flex flex-col items-center gap-1 mt-1">
         <EffectKnob
           value={master.aiIntensity}
           onChange={(v) => onChange({ aiIntensity: v })}
@@ -95,7 +106,7 @@ export function MasterStrip({
         />
       </div>
 
-      {/* Stereo Width — 0..150%. 100 = AI's setting (gold tick aligned). */}
+      {/* Stereo Width */}
       <div className="flex flex-col items-center gap-1 w-full">
         <input
           type="range"
@@ -108,17 +119,17 @@ export function MasterStrip({
           aria-label="Stereo width"
           className="w-full appearance-none cursor-pointer"
           style={{
-            height: 4,
-            background: `linear-gradient(to right, #2A2824 0%, ${GOLD} ${(master.stereoWidth / 150) * 100}%, #2A2824 ${(master.stereoWidth / 150) * 100}%, #2A2824 100%)`,
+            height:       4,
+            background:   `linear-gradient(to right, #2A2824 0%, ${GOLD} ${(master.stereoWidth / 150) * 100}%, #2A2824 ${(master.stereoWidth / 150) * 100}%, #2A2824 100%)`,
             borderRadius: 2,
           }}
         />
-        <span className="text-[8px] uppercase tracking-wider" style={{ color: "#888" }}>
+        <span className="text-[8px] uppercase tracking-wider" style={{ color: "#999" }}>
           Width {Math.round(master.stereoWidth)}%
         </span>
       </div>
 
-      {/* Master volume fader — WIRED to master.setGainDb. */}
+      {/* Master volume fader */}
       <div className="flex flex-col items-center gap-1 mt-1">
         <VolumeFader
           valueDb={master.volumeDb}
@@ -127,12 +138,12 @@ export function MasterStrip({
           color={GOLD}
           label="Master volume"
         />
-        <span className="text-[8px] uppercase tracking-wider" style={{ color: "#888" }}>
+        <span className="text-[8px] uppercase tracking-wider" style={{ color: "#999" }}>
           {master.volumeDb >= 0 ? "+" : ""}{master.volumeDb.toFixed(1)} dB
         </span>
       </div>
 
-      {/* Footer label */}
+      {/* Footer */}
       <span
         className="text-[8px] font-mono uppercase tracking-wider mt-auto"
         style={{ color: "#666" }}

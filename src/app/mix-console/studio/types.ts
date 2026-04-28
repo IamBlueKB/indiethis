@@ -117,6 +117,12 @@ export interface StemHandle {
   /** Per-stem AnalyserNode for the mini frequency visualizer. */
   analyser: AnalyserNode;
   /**
+   * Compute a downsampled max-abs peak array for the loaded source buffer.
+   * Returns null while the buffer is still decoding. Result is cached per
+   * (role, bins) inside the hook so repeated calls are cheap.
+   */
+  getPeaks(bins: number): Float32Array | null;
+  /**
    * Render this stem's full effect chain offline at the current settings
    * and return the rendered AudioBuffer. Used by stem export (step 24).
    * Mute/solo are ignored (export always reflects the audible chain).
@@ -168,4 +174,10 @@ export interface UseStudioAudioReturn {
   setMuted(role: StemRole, muted: boolean): void;
   /** Toggle solo on a stem (respects solo logic). */
   setSoloed(role: StemRole, soloed: boolean): void;
+  /**
+   * Combined peak envelope across all decoded stems (max-abs per bin).
+   * Used by the section timeline as a song-wide waveform under the section
+   * buttons. Returns null until at least one stem has decoded.
+   */
+  getCombinedPeaks(bins: number): Float32Array | null;
 }

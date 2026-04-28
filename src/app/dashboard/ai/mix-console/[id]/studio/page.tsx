@@ -70,6 +70,31 @@ interface InputFile {
   url:    string;
   label:  string;
   role?:  string;
+  name?:  string;
+}
+
+// Derive a clean, human-readable track title. Priority:
+//   1) Job-level metadata if present (referenceFileName is reference, skip).
+//   2) Filename from the first input file's URL (strip extension, replace
+//      underscores/dashes with spaces, title-case words).
+//   3) Fallback: "Your track".
+function prettifyFilename(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  // Pull the basename out of a URL or path.
+  let s = raw.split("?")[0].split("#")[0];
+  s = s.substring(s.lastIndexOf("/") + 1);
+  // Drop common audio extensions.
+  s = s.replace(/\.(wav|mp3|flac|aiff?|m4a|ogg|opus)$/i, "");
+  // Drop a trailing _vocals/_beat/_stem token if present.
+  s = s.replace(/[ _-]*(vocals?|beat|instrumental|stems?|main|lead)$/i, "");
+  // Replace separators with spaces.
+  s = s.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  // Title-case each word but preserve all-caps tokens (acronyms).
+  return s
+    .split(" ")
+    .map((w) => (w.length > 1 && w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
 }
 
 export default async function StudioPage({
@@ -228,9 +253,14 @@ export default async function StudioPage({
     reverbTypes[role] = reverbType;
   }
 
-  const trackTitle = inputFiles[0]?.label
-    ? (inputFiles[0].label.includes("vocal") ? "Your track" : inputFiles[0].label)
-    : "Your track";
+  // Best source for a track title: the original filename of the first input.
+  // `inputFiles[].name` is set if the upload pipeline preserves it; otherwise
+  // we derive it from the URL pathname.
+  const firstFile  = inputFiles[0];
+  const trackTitle =
+    prettifyFilename(firstFile?.name) ??
+    prettifyFilename(firstFile?.url)  ??
+    "Your track";
 
   // Restore prior studio state if it exists (step 18 will populate it).
   type StudioStateShape = NonNullable<Parameters<typeof StudioClient>[0]["initialState"]>;
@@ -249,7 +279,9 @@ export default async function StudioPage({
     : [];
 
   return (
-    <StudioClient
+    <div style={{ backgroundColor: "#0D0B09", minHeight: "100vh" }}>
+      <ResultsHeader isGuest={false} kind="mix" />
+      <StudioClient
       jobId={job.id}
       trackTitle={trackTitle}
       stems={stems}
@@ -268,5 +300,6 @@ export default async function StudioPage({
       bpm={bpm}
       sections={sections}
     />
+    </div>
   );
 }

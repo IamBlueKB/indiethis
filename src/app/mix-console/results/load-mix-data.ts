@@ -206,17 +206,32 @@ function extractRecommendedVersion(mixParameters: unknown): string | null {
 
 // ─── Track name (best-effort from inputFiles) ─────────────────────────────────
 
+// Stem labels (e.g., "Main Vocal", "Beat") describe the *role*, not the song,
+// so we always prefer the original filename from the URL or the optional
+// `name` field set by the upload pipeline.
+function prettifyFilename(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  let s = raw.split("?")[0].split("#")[0];
+  s = decodeURIComponent(s.substring(s.lastIndexOf("/") + 1));
+  s = s.replace(/\.(wav|mp3|flac|aiff?|m4a|ogg|opus)$/i, "");
+  s = s.replace(/[ _-]*(vocals?|beat|instrumental|stems?|main|lead)$/i, "");
+  s = s.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  return s
+    .split(" ")
+    .map((w) => (w.length > 1 && w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
 function extractTrackName(inputFiles: unknown): string | null {
   if (!Array.isArray(inputFiles)) return null;
   for (const f of inputFiles) {
     if (f && typeof f === "object") {
-      const ff = f as { label?: string; url?: string };
-      if (typeof ff.label === "string" && ff.label.length > 0) return ff.label;
-      if (typeof ff.url === "string") {
-        const tail = ff.url.split("/").pop() ?? "";
-        const name = decodeURIComponent(tail.split("?")[0]);
-        if (name) return name.replace(/\.[a-z0-9]+$/i, "");
-      }
+      const ff = f as { label?: string; url?: string; name?: string };
+      const fromName = prettifyFilename(ff.name);
+      if (fromName) return fromName;
+      const fromUrl  = prettifyFilename(ff.url);
+      if (fromUrl)  return fromUrl;
     }
   }
   return null;

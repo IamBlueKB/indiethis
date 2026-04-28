@@ -30,8 +30,8 @@ const BANDS = [
 ] as const;
 
 const GOLD       = "#D4A843";
-const SLIDER_H   = 70;        // px — track height
-const SLIDER_W   = 18;        // px — column width per band
+const SLIDER_H   = 64;        // px — track height (slightly shorter to free vertical space for AI knob)
+const SLIDER_W   = 24;        // px — column width per band (was 18 — bumped so band labels don't crowd)
 const THUMB_H    = 8;
 const THUMB_W    = 14;
 const MIN_DB     = -6;
@@ -179,10 +179,11 @@ function Band({ name, freq, db, onChange }: BandProps) {
           }}
         />
       </div>
-      {/* Band name (full word, plain English) */}
+      {/* Band name (full word, plain English). Wider column means we can
+          show the full word at a readable size without clipping into neighbors. */}
       <span
-        className="text-[7px] uppercase tracking-wider leading-none text-center"
-        style={{ color: "#888", marginTop: 1 }}
+        className="text-[8px] uppercase tracking-wide leading-none text-center"
+        style={{ color: "#9A9590", marginTop: 2, maxWidth: SLIDER_W + 6 }}
       >
         {name}
       </span>

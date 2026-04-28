@@ -20,9 +20,9 @@
 
 import { useRef, useState } from "react";
 
-const SIZE      = 36;
+const SIZE      = 42;       // bumped from 36 — easier touch target on tablet
 const RADIUS    = SIZE / 2 - 3;
-const STROKE    = 2.5;
+const STROKE    = 3;        // thicker arc to match the larger knob
 const ARC_START = 135;   // degrees, bottom-left
 const ARC_END   = 45;    // degrees, bottom-right (sweeping clockwise = 270deg total)
 const ARC_SWEEP = 270;
