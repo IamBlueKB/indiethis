@@ -27,6 +27,10 @@ interface MixNotesPanelProps {
   roles:        StemRole[];
   aiOriginals?: Record<StemRole, AiOriginal>;
   reverbTypes?: Record<StemRole, ReverbType>;
+  /** When true, opening the panel removes the maxHeight cap and inner scroll —
+   *  the box expands to show every note and the master strip grows with it.
+   *  Still defaults to closed; user clicks the arrow to open. */
+  fillHeight?:  boolean;
 }
 
 // ─── Plain-English description per stem ─────────────────────────────────────
@@ -81,7 +85,7 @@ function formatStemNote(
   return parts.join(" · ");
 }
 
-export function MixNotesPanel({ roles, aiOriginals, reverbTypes }: MixNotesPanelProps) {
+export function MixNotesPanel({ roles, aiOriginals, reverbTypes, fillHeight = false }: MixNotesPanelProps) {
   const [open, setOpen] = useState(false);
 
   // Build note rows. Skip stems with no AI data at all.
@@ -126,19 +130,20 @@ export function MixNotesPanel({ roles, aiOriginals, reverbTypes }: MixNotesPanel
         />
       </button>
 
-      {/* Body — collapsible, scrollable. Two rows ≈ 44px shows ~2–3 lines. */}
+      {/* Body — collapsible. In fillHeight mode, opening removes the height
+          cap and inner scroll so every note is visible at once. */}
       <div
         style={{
-          maxHeight:  open ? 84 : 0,
+          maxHeight:  open ? (fillHeight ? 9999 : 84) : 0,
           opacity:    open ? 1 : 0,
           overflow:   "hidden",
           transition: "max-height 220ms ease, opacity 220ms ease",
         }}
       >
         <div
-          className="overflow-y-auto"
+          className={fillHeight ? "" : "overflow-y-auto"}
           style={{
-            maxHeight:  84,
+            maxHeight:  fillHeight ? undefined : 84,
             paddingRight: 2,
             scrollbarWidth: "thin",
           }}

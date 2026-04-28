@@ -1200,7 +1200,7 @@ export function StudioClient(props: StudioClientProps) {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="flex flex-col"
       style={{
         // Warm dark base with a faint top vignette to match the rest of the
         // IndieThis dashboard surfaces (#0D0B09 + 4% gold haze).
@@ -1671,10 +1671,15 @@ export function StudioClient(props: StudioClientProps) {
           </div>
 
           {/* Master strip — wired in step 12 (volume audible; AI intensity +
-              stereo width visual until re-render bakes them in step 26). */}
+              stereo width visual until re-render bakes them in step 26).
+              `lanesTotalHeight` makes the master bus end at the same vertical
+              point as the last channel strip's bottom edge (sum of all lane
+              heights), so the right column lines up with the lane stack. */}
           <MasterStrip
             master={state.master}
             onChange={updateMaster}
+            advanced={advanced}
+            lanesTotalHeight={lanesOrder.reduce((sum, role) => sum + laneHeightFor(role), 0)}
             analyser={audio.master?.analyser ?? null}
             topSlot={
               <MiniSpectrum
@@ -1694,6 +1699,7 @@ export function StudioClient(props: StudioClientProps) {
                 roles={roles}
                 aiOriginals={aiOriginals}
                 reverbTypes={reverbTypes}
+                fillHeight={advanced}
               />
             }
           />

@@ -35,6 +35,14 @@ interface MasterStripProps {
    *  space between the master fader and the footer. Caller owns the
    *  collapsed-state UI; this just allocates the space. */
   notesSlot?:    React.ReactNode;
+  /** Sum of all channel-strip lane heights. When provided, the master strip
+   *  is sized to exactly that height so its bottom edge aligns with the
+   *  bottom of the last channel strip's waveform. */
+  lanesTotalHeight?: number;
+  /** Advanced view — when true, the strip's lanesTotalHeight is treated as a
+   *  minimum so the strip can grow taller when the Mix Notes panel is opened,
+   *  instead of forcing the notes content to scroll inside a fixed box. */
+  advanced?: boolean;
 }
 
 const GOLD = "#D4A843";
@@ -46,6 +54,8 @@ export function MasterStrip({
   topSlot,
   eqSlot,
   notesSlot,
+  lanesTotalHeight,
+  advanced = false,
 }: MasterStripProps) {
   function onWidthChange(e: React.ChangeEvent<HTMLInputElement>) {
     onChange({ stereoWidth: Number(e.target.value) });
@@ -56,9 +66,11 @@ export function MasterStrip({
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col items-center py-3 px-3 ml-2 mr-3 my-4 gap-3"
+      className="flex-shrink-0 self-start flex flex-col items-center py-2 px-3 ml-2 mr-3 gap-2"
       style={{
         width:           160,
+        height:          advanced ? undefined : lanesTotalHeight,
+        minHeight:       advanced ? lanesTotalHeight : undefined,
         backgroundColor: "#1A1816",
         border:          "1px solid rgba(212,168,67,0.18)",
         borderTopWidth:  3,
