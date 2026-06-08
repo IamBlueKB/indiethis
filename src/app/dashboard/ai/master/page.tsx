@@ -3,7 +3,7 @@ import { db }             from "@/lib/db";
 import { redirect }       from "next/navigation";
 import { MasterPageClient } from "./MasterPageClient";
 
-export const metadata = { title: "AI Mix & Master — IndieThis" };
+export const metadata = { title: "AI Mastering — IndieThis" };
 
 export default async function MasterPage() {
   const session = await auth();

@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { Music, Disc3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MasterWizardClient } from "./MasterWizardClient";
@@ -28,15 +29,26 @@ export function MasterPageClient({
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A", color: "#fff" }}>
+      {/* Top-left logo → Explore */}
+      <div className="px-4 pt-5">
+        <Link href="/explore" className="inline-block">
+          <img
+            src="/images/brand/indiethis-logo-dark-bg.svg"
+            alt="IndieThis"
+            style={{ height: 36, width: "auto" }}
+          />
+        </Link>
+      </div>
+
       <div className="max-w-2xl mx-auto px-4 py-12">
 
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="font-display text-3xl font-bold tracking-tight" style={{ color: "#D4A843" }}>
-            AI Mix &amp; Master
+            AI Mastering
           </h1>
           <p className="text-sm mt-2" style={{ color: "#777" }}>
-            Professional-grade mixing and mastering — no plug-ins, no engineers
+            Professional-grade mastering — no plug-ins, no engineers
           </p>
           {creditsLimit > 0 && (
             <p className="text-xs mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full"
