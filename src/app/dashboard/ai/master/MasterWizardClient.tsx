@@ -491,20 +491,20 @@ export function MasterWizardClient({ userId }: { userId: string }) {
           {/* Upload-type selector (same backend; just chooses input format) */}
           {[
             {
-              value:       "MIX_AND_MASTER" as Mode,
-              label:       "Stems (2–16 files)",
-              sub:         "Upload your stems and we'll master them into a release-ready track",
-              detail:      "Upload 2–16 individual stems (vocals, bass, drums, etc.)",
-              bestFor:     "Producers with separated tracks",
-              Icon:        SlidersHorizontal,
-            },
-            {
               value:       "MASTER_ONLY" as Mode,
               label:       "Stereo file (already mixed)",
               sub:         "Upload your finished mix and we'll master it",
               detail:      "Upload a single stereo mix file",
               bestFor:     "Artists with a finished mix",
               Icon:        Activity,
+            },
+            {
+              value:       "MIX_AND_MASTER" as Mode,
+              label:       "Stems (2–16 files)",
+              sub:         "Upload your stems and we'll master them into a release-ready track",
+              detail:      "Upload 2–16 individual stems (vocals, bass, drums, etc.)",
+              bestFor:     "Producers with separated tracks",
+              Icon:        SlidersHorizontal,
             },
           ].map((opt) => (
             <button
