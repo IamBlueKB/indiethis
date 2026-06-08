@@ -1059,8 +1059,8 @@ function AIShowcase({ loggedIn, isSubscriber, showMixConsole }: { loggedIn: bool
     },
     {
       icon: <Sliders size={20} style={{ color: "#D4A843" }} />,
-      title: "Mix & Master Studio",
-      desc: "Professional mixing and mastering with AI. Upload your mix, download a release-ready master.",
+      title: "Mastering Studio",
+      desc: "Professional AI mastering. Upload your mix, download a release-ready master.",
       cta: "Master your track",
       price: "from $7.99",
       link: link("/dashboard/ai/master", "/master"),

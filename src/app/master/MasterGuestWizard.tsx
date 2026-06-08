@@ -561,10 +561,10 @@ export function MasterGuestWizard({
         {/* ── STEP: Mode ────────────────────────────────────────────────── */}
         {step === "mode" && (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold mb-6">What are you starting with?</h2>
+            <h2 className="text-lg font-bold mb-6">How are you uploading?</h2>
             {[
-              { value: "MASTER_ONLY" as Mode, label: "Master a Stereo Mix", description: "Upload a finished WAV or MP3", icon: <Music size={20} style={{ color: "#D4A843" }} /> },
-              { value: "MIX_AND_MASTER" as Mode, label: "Mix + Master from Stems", description: "Upload 2–16 individual stems", icon: <Wand2 size={20} style={{ color: "#D4A843" }} /> },
+              { value: "MASTER_ONLY" as Mode, label: "Stereo file (already mixed)", description: "Upload a finished WAV or MP3", icon: <Music size={20} style={{ color: "#D4A843" }} /> },
+              { value: "MIX_AND_MASTER" as Mode, label: "Stems (2–16 files)", description: "Upload your stems and we'll master them into a release-ready track", icon: <Wand2 size={20} style={{ color: "#D4A843" }} /> },
             ].map((opt) => (
               <button
                 key={opt.value}

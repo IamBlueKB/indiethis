@@ -4,11 +4,11 @@ import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { MasterLandingClient } from "./MasterLandingClient";
 
 export const metadata = {
-  title:       "AI Mix & Master — IndieThis",
-  description: "Professional AI mixing and mastering. Upload stems or a stereo mix. Four versions in minutes. Free 30-second preview.",
+  title:       "AI Mastering — IndieThis",
+  description: "Professional AI mastering. Upload your mix, download a release-ready master. Four versions in minutes.",
   openGraph: {
-    title:       "AI Mix & Master — IndieThis",
-    description: "Professional AI mixing and mastering. Free 30-second preview. No plug-ins, no engineers.",
+    title:       "AI Mastering — IndieThis",
+    description: "Professional AI mastering. Upload your mix, download a release-ready master. No plug-ins, no engineers.",
     images:      [{ url: "/images/og/master.jpg", width: 1200, height: 630 }],
   },
 };

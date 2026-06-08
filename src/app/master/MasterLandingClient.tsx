@@ -113,7 +113,7 @@ export function MasterLandingClient({
             style={{ backgroundColor: "rgba(212,168,67,0.15)" }}>
             <Sliders size={14} style={{ color: "#D4A843" }} />
           </div>
-          <span className="text-sm font-bold text-white">Mix &amp; Master Studio</span>
+          <span className="text-sm font-bold text-white">Mastering Studio</span>
           <span className="text-xs px-2 py-0.5 rounded-full font-semibold hidden sm:block"
             style={{ backgroundColor: "rgba(212,168,67,0.1)", color: "#D4A843" }}>
             by IndieThis
@@ -142,7 +142,7 @@ export function MasterLandingClient({
 
         <h1 className="text-5xl font-display font-black tracking-tight leading-tight mb-6">
           Professional AI<br />
-          <span style={{ color: "#D4A843" }}>Mix &amp; Master</span>
+          <span style={{ color: "#D4A843" }}>Mastering</span>
         </h1>
 
         <p className="text-lg max-w-xl mx-auto mb-10 leading-relaxed" style={{ color: "#999" }}>
