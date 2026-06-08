@@ -1025,7 +1025,7 @@ function DigitalProductCard({ product, onBuy }: { product: DigitalProductItem; o
 
 // ── AI Tools Showcase ──────────────────────────────────────────────────────
 
-function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscriber: boolean }) {
+function AIShowcase({ loggedIn, isSubscriber, showMixConsole }: { loggedIn: boolean; isSubscriber: boolean; showMixConsole: boolean }) {
   // Subscribers → dashboard route. Everyone else (logged-in non-sub or guest) → public route.
   const link = (dashPath: string, pubPath: string) => (loggedIn && isSubscriber) ? dashPath : pubPath;
 
@@ -1066,7 +1066,7 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       link: link("/dashboard/ai/master", "/master"),
       gradient: "linear-gradient(135deg, #1a0a00, #0a0a0a)",
     },
-    {
+    ...(showMixConsole ? [{
       icon: <Mic2 size={20} style={{ color: "#D4A843" }} />,
       title: "AI Mix Console",
       desc: "Full mixing engine with vocal chain, breath editing, delay throws, and section-aware processing.",
@@ -1074,7 +1074,7 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
       price: "from $59.99",
       link: link("/dashboard/ai/mix-console", "/mix-console"),
       gradient: "linear-gradient(135deg, #001a0a, #0a0a0a)",
-    },
+    }] : []),
   ];
 
   return (
@@ -1107,7 +1107,7 @@ function AIShowcase({ loggedIn, isSubscriber }: { loggedIn: boolean; isSubscribe
 
 // ── Main Explore Client ────────────────────────────────────────────────────
 
-export default function ExploreClient({ isSubscriber = false }: { isSubscriber?: boolean }) {
+export default function ExploreClient({ isSubscriber = false, showMixConsole = false }: { isSubscriber?: boolean; showMixConsole?: boolean }) {
   const { data: session } = useSession();
   const { play, currentTrack, isPlaying: storeIsPlaying } = useAudioStore();
   const { OverlayComponent } = useTrackOverlay();
@@ -2115,7 +2115,7 @@ export default function ExploreClient({ isSubscriber = false }: { isSubscriber?:
         {showSection("ai") && (
           <section ref={sectionRefs.ai as React.RefObject<HTMLElement>}>
             <SectionHeader label="CREATE" title="Make something with AI" />
-            <AIShowcase loggedIn={loggedIn} isSubscriber={isSubscriber} />
+            <AIShowcase loggedIn={loggedIn} isSubscriber={isSubscriber} showMixConsole={showMixConsole} />
           </section>
         )}
 

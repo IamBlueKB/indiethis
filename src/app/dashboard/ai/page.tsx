@@ -5,6 +5,7 @@ import {
   BarChart3, FileText, Scissors, Sparkles, Shield, Users, ShieldCheck,
   ChevronRight,
 } from "lucide-react";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const metadata: Metadata = {
   title: "AI Tools — IndieThis",
@@ -66,7 +67,12 @@ const UTILITY_TOOLS = [
   { label: "Track Shield",      href: "/dashboard/ai/track-shield",     icon: ShieldCheck  },
 ];
 
-export default function AIToolsHubPage() {
+export default async function AIToolsHubPage() {
+  const showMixConsole = await userCanAccessMixConsole();
+  const premiumTools = showMixConsole
+    ? PREMIUM_TOOLS
+    : PREMIUM_TOOLS.filter((t) => t.href !== "/dashboard/ai/mix-console");
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
 
@@ -80,7 +86,7 @@ export default function AIToolsHubPage() {
 
       {/* Premium tools grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-        {PREMIUM_TOOLS.map((tool) => {
+        {premiumTools.map((tool) => {
           const Icon = tool.icon;
           return (
             <Link

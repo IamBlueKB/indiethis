@@ -1,6 +1,7 @@
 import { Suspense }  from "react";
 import { auth }      from "@/lib/auth";
 import { db }        from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import ExploreClient from "./ExploreClient";
 
 import type { Metadata } from "next";
@@ -33,9 +34,11 @@ export default async function ExplorePage() {
     isSubscriber = !!sub;
   }
 
+  const showMixConsole = await userCanAccessMixConsole();
+
   return (
     <Suspense>
-      <ExploreClient isSubscriber={isSubscriber} />
+      <ExploreClient isSubscriber={isSubscriber} showMixConsole={showMixConsole} />
     </Suspense>
   );
 }

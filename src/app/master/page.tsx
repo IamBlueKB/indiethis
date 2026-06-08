@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { MasterLandingClient } from "./MasterLandingClient";
 
 export const metadata = {
@@ -25,6 +26,7 @@ export default async function MasterPage(
   const sp       = await searchParams;
   const autoStart = sp.start === "1";
   const resumeJobId = sp.resume ?? null;
+  const showMixConsole = await userCanAccessMixConsole();
 
-  return <MasterLandingClient autoStart={autoStart} resumeJobId={resumeJobId} />;
+  return <MasterLandingClient autoStart={autoStart} resumeJobId={resumeJobId} showMixConsole={showMixConsole} />;
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { linkGuestVideosByEmail }            from "@/lib/video-studio/link-guest";
 import { linkGuestLyricVideosByEmail }       from "@/lib/lyric-video/link-guest";
 import { linkGuestMasteringJobsByEmail }     from "@/lib/agents/mastering-conversion";
+import { userCanAccessMixConsole }           from "@/lib/feature-flags-server";
 import Link from "next/link";
 import ReleaseTimingCard from "@/components/dashboard/ReleaseTimingCard";
 import {
@@ -112,6 +113,7 @@ export default async function DashboardPage(
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const showMixConsole = await userCanAccessMixConsole();
 
   const sp         = await searchParams;
   const showWelcome = sp.welcome === "1";
@@ -316,7 +318,7 @@ export default async function DashboardPage(
       )}
 
       {/* ── Mix Console link banner — shown when a guest mix was just linked ── */}
-      {linkedMixCount > 0 && (
+      {linkedMixCount > 0 && showMixConsole && (
         <Link
           href="/mix-console"
           className="flex items-center justify-between rounded-xl border px-4 py-3 no-underline transition-colors hover:border-accent/40"

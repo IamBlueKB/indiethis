@@ -48,11 +48,13 @@ const PRICING = [
 ];
 
 export function MasterLandingClient({
-  autoStart   = false,
-  resumeJobId = null,
+  autoStart       = false,
+  resumeJobId     = null,
+  showMixConsole  = false,
 }: {
-  autoStart?:   boolean;
-  resumeJobId?: string | null;
+  autoStart?:      boolean;
+  resumeJobId?:    string | null;
+  showMixConsole?: boolean;
 } = {}) {
   const [view,         setView]         = useState<View>(autoStart ? "wizard" : "landing");
   const [selectedTier, setSelectedTier] = useState<string>("PREMIUM");
@@ -428,24 +430,26 @@ export function MasterLandingClient({
         </div>
       </section>
 
-      {/* ── Mix Console cross-sell ──────────────────────────────────────── */}
-      <section className="border-t border-[#1A1A1A] py-12 text-center">
-        <p className="text-xs uppercase tracking-widest mb-3" style={{ color: "#555" }}>
-          Got raw vocals over a beat?
-        </p>
-        <h2 className="text-xl font-bold mb-3">Mix first. Then master.</h2>
-        <p className="text-sm mb-6" style={{ color: "#666" }}>
-          Our AI Mix Console cleans your vocal, places tempo-synced delays on key words, and
-          balances everything — then you can master the result right here.
-        </p>
-        <Link
-          href="/mix-console"
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold border transition-all hover:bg-[rgba(212,168,67,0.08)]"
-          style={{ borderColor: "rgba(212,168,67,0.4)", color: "#D4A843" }}
-        >
-          Try the AI Mix Console <ChevronRight size={14} />
-        </Link>
-      </section>
+      {/* ── Mix Console cross-sell — only when gating allows ───────────── */}
+      {showMixConsole && (
+        <section className="border-t border-[#1A1A1A] py-12 text-center">
+          <p className="text-xs uppercase tracking-widest mb-3" style={{ color: "#555" }}>
+            Got raw vocals over a beat?
+          </p>
+          <h2 className="text-xl font-bold mb-3">Mix first. Then master.</h2>
+          <p className="text-sm mb-6" style={{ color: "#666" }}>
+            Our AI Mix Console cleans your vocal, places tempo-synced delays on key words, and
+            balances everything — then you can master the result right here.
+          </p>
+          <Link
+            href="/mix-console"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold border transition-all hover:bg-[rgba(212,168,67,0.08)]"
+            style={{ borderColor: "rgba(212,168,67,0.4)", color: "#D4A843" }}
+          >
+            Try the AI Mix Console <ChevronRight size={14} />
+          </Link>
+        </section>
+      )}
 
       {/* ── Footer CTA ──────────────────────────────────────────────────── */}
       <section className="border-t border-[#1A1A1A] py-16 text-center">
