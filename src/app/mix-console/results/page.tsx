@@ -7,7 +7,9 @@
  * route at /dashboard/ai/mix-console/[id].
  */
 
+import { notFound }           from "next/navigation";
 import { db as prisma }       from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { MixResultsClient }   from "./MixResultsClient";
 import { ProcessingState }    from "./ProcessingState";
 import { mixJobToResultsData } from "./load-mix-data";
@@ -25,6 +27,8 @@ export default async function MixResultsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
+  if (!(await userCanAccessMixConsole())) notFound();
+
   const sp    = await searchParams;
   const token = sp.token ?? null;
 

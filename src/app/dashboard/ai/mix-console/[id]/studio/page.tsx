@@ -18,6 +18,7 @@
 import { redirect, notFound } from "next/navigation";
 import { auth }               from "@/lib/auth";
 import { db as prisma }       from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { ResultsHeader }      from "@/components/layout/ResultsHeader";
 import { StudioClient }       from "@/app/mix-console/studio/StudioClient";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
@@ -106,6 +107,8 @@ export default async function StudioPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await userCanAccessMixConsole())) notFound();
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login?next=/dashboard/ai/mix-console");

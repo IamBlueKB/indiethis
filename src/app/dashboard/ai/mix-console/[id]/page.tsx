@@ -9,6 +9,7 @@
 import { redirect, notFound } from "next/navigation";
 import { auth }               from "@/lib/auth";
 import { db as prisma }       from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { MixResultsClient }   from "@/app/mix-console/results/MixResultsClient";
 import { ProcessingState }    from "@/app/mix-console/results/ProcessingState";
 import { mixJobToResultsData } from "@/app/mix-console/results/load-mix-data";
@@ -26,6 +27,8 @@ export default async function SubscriberMixResultsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await userCanAccessMixConsole())) notFound();
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login?next=/dashboard/ai/mix-console");

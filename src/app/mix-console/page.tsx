@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import SignalFlowGraphic from "./SignalFlowGraphic";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const metadata: Metadata = {
   title: "AI Mix Console — IndieThis",
@@ -64,7 +66,8 @@ const PRICING = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function MixConsolePage() {
+export default async function MixConsolePage() {
+  if (!(await userCanAccessMixConsole())) notFound();
   return (
     <div style={{ backgroundColor: "#0A0A0A", color: "#fff", minHeight: "100vh" }}>
 

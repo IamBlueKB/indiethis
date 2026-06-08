@@ -6,10 +6,11 @@
  */
 
 import type { Metadata } from "next";
-import { redirect }      from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link              from "next/link";
 import { auth }          from "@/lib/auth";
 import { db as prisma }  from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 import { Sliders, ChevronRight, Download, Clock } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -34,6 +35,8 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function MixConsoleDashboardPage() {
+  if (!(await userCanAccessMixConsole())) notFound();
+
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
