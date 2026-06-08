@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const maxDuration = 60;
 
@@ -43,6 +44,7 @@ const TIER_PRICES: Record<string, number> = {
 };
 
 export async function POST(req: NextRequest) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
     const session = await auth();
     const body = await req.json() as {

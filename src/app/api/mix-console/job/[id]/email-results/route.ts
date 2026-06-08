@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { sendMixCompleteEmail } from "@/lib/brevo/email";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://indiethis.com";
 
@@ -17,6 +18,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await params;
 
   try {

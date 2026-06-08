@@ -19,6 +19,7 @@ import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { generateFreshSignedUrl } from "@/lib/mix-console/engine";
 import { logDownloadOutcome } from "@/lib/reference-library/log-outcome";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const maxDuration = 300;
 
@@ -47,6 +48,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await params;
   const { searchParams } = req.nextUrl;
 

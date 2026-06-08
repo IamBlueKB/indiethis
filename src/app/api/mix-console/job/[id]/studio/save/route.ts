@@ -14,6 +14,7 @@
 import { NextResponse }   from "next/server";
 import { auth }           from "@/lib/auth";
 import { db as prisma }   from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

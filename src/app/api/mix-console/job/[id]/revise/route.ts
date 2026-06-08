@@ -21,6 +21,7 @@ import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
 import { reviseParameters } from "@/lib/mix-console/decisions";
 import { logRevisionOutcome } from "@/lib/reference-library/log-outcome";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const maxDuration = 300;
 
@@ -28,6 +29,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await params;
 
   try {

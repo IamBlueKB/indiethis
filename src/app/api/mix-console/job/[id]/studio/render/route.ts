@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
 import { startMixAction } from "@/lib/mix-console/engine";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 export const runtime     = "nodejs";
 export const dynamic     = "force-dynamic";
@@ -39,6 +40,7 @@ export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await ctx.params;
 
   try {

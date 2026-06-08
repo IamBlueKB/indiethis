@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/db";
+import { userCanAccessMixConsole } from "@/lib/feature-flags-server";
 
 const VALID_VERSIONS = ["clean", "polished", "aggressive", "mix"] as const;
 type ValidVersion = typeof VALID_VERSIONS[number];
@@ -18,6 +19,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!(await userCanAccessMixConsole())) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await params;
 
   try {
