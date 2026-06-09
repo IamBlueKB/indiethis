@@ -30,6 +30,13 @@ export async function GET(
 
   if (!split) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // P1.2 token entropy fix — reject if the review link has expired.
+  // Legacy rows (created before the field existed) have a null expiry and
+  // are treated as still-valid, preserving backwards compatibility.
+  if (split.reviewTokenExpiresAt && split.reviewTokenExpiresAt < new Date()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   // Don't expose sensitive fields
   return NextResponse.json({
     sheet: {

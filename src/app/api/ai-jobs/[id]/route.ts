@@ -81,7 +81,9 @@ export async function GET(
     job.triggeredById !== session.user.id &&
     session.user.role !== "PLATFORM_ADMIN"
   ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // P1.2 IDOR hardening: collapse "exists but not yours" to 404 so the
+    // response leaks no information about whether the resource exists.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const output = (job.outputData ?? {}) as Record<string, unknown>;

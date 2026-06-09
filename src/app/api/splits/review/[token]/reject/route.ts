@@ -28,6 +28,10 @@ export async function POST(
   });
 
   if (!split) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // P1.2 token entropy fix — reject if review link has expired.
+  if (split.reviewTokenExpiresAt && split.reviewTokenExpiresAt < new Date()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   if (split.splitSheet.status !== "PENDING") {
     return NextResponse.json({ error: "Split sheet is no longer pending" }, { status: 409 });
   }

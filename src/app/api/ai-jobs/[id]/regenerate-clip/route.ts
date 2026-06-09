@@ -54,7 +54,8 @@ export async function POST(
     job.triggeredById !== session.user.id &&
     session.user.role !== "PLATFORM_ADMIN"
   ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // P1.2 IDOR hardening: collapse "not yours" → 404, no info leak.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   if (job.type !== "VIDEO") {

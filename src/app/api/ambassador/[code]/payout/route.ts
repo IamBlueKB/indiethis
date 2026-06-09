@@ -2,10 +2,16 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { sendAmbassadorPayoutEmail } from "@/lib/brevo/email";
+import { requireAmbassadorBySessionAndCode } from "@/lib/auth/ownership";
 
 /**
  * POST /api/ambassador/[code]/payout
- * Self-service payout request for ambassadors (authenticated by code).
+ * Self-service payout request.
+ *
+ * Auth: ambassador code MUST resolve to an ambassador whose linked userId
+ * matches the current session, OR caller is PLATFORM_ADMIN. Code alone is
+ * NOT sufficient — Phase 1.2 IDOR fix (the code is 32 bits of entropy and
+ * was previously the only gate on a Stripe transfer).
  */
 export async function POST(
   req: NextRequest,
@@ -13,16 +19,9 @@ export async function POST(
 ) {
   const { code } = await params;
 
-  const promoCode = await db.promoCode.findUnique({
-    where: { code: code.toUpperCase() },
-    include: { ambassador: true },
-  });
-
-  if (!promoCode?.ambassador || !promoCode.ambassador.isActive) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const ambassador = promoCode.ambassador;
+  const guard = await requireAmbassadorBySessionAndCode(code);
+  if (!guard.ok) return guard.response;
+  const ambassador = guard.ambassador;
 
   if (ambassador.creditBalance < 25) {
     return NextResponse.json(

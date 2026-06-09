@@ -1646,7 +1646,8 @@ model Split {
   email           String
   role            SplitRole
   percentage      Float
-  reviewToken     String         @unique @default(cuid())
+  reviewToken          String         @unique @default(cuid())
+  reviewTokenExpiresAt DateTime?      // P1.2: 30-day expiry; null for legacy rows
   agreedAt        DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
@@ -3247,7 +3248,10 @@ model MasteringAccessToken {
   id        String       @id @default(cuid())
   jobId     String       @unique
   job       MasteringJob @relation(fields: [jobId], references: [id])
-  token     String       @unique @default(cuid())
+  // P1.2: default dropped — callers must explicitly supply a strong token
+  // generated via randomBytes(32).toString("hex") (256 bits). Was @default(cuid())
+  // which is sortable + only ~64 bits of true randomness.
+  token     String       @unique
   email     String
   expiresAt DateTime
   createdAt DateTime     @default(now())
@@ -3364,7 +3368,9 @@ model MixAccessToken {
   id        String   @id @default(cuid())
   jobId     String   @unique
   job       MixJob   @relation(fields: [jobId], references: [id])
-  token     String   @unique @default(cuid())
+  // P1.2: default dropped — callers must explicitly supply a strong token
+  // generated via randomBytes(32).toString("hex") (256 bits).
+  token     String   @unique
   email     String
   expiresAt DateTime
   createdAt DateTime @default(now())

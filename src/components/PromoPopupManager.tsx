@@ -67,7 +67,7 @@ function recordSession(id: string) {
 
 async function trackEvent(id: string, event: "impression" | "dismissal" | "ctaClick") {
   try {
-    await fetch(`/api/admin/promo-popups/${id}/analytics`, {
+    await fetch(`/api/public/promo-popups/${id}/analytics`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ event }),

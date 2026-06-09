@@ -20,13 +20,23 @@ type InvoiceData = {
   createdAt: string;
   studio: {
     name: string;
-    email: string | null;
-    phone: string | null;
     logo: string | null;
-    cashAppHandle: string | null;
-    zelleHandle: string | null;
-    paypalHandle: string | null;
-    venmoHandle: string | null;
+    stripePaymentsEnabled: boolean;
+  };
+  contact: { name: string };
+};
+
+// Sensitive payment details — fetched on-demand from POST /api/invoice/[id]/payment-options
+// after the customer confirms the email the invoice was sent to.
+type PaymentOptions = {
+  studio: {
+    name:                  string;
+    email:                 string | null;
+    phone:                 string | null;
+    cashAppHandle:         string | null;
+    zelleHandle:           string | null;
+    paypalHandle:          string | null;
+    venmoHandle:           string | null;
     stripePaymentsEnabled: boolean;
   };
   contact: { name: string; email: string | null; phone: string | null };
@@ -49,6 +59,12 @@ export default function InvoicePage() {
   const [notified, setNotified] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+  // Phase 1.2 PII scrub: payment handles are fetched on demand after the
+  // customer enters the email the invoice was sent to.
+  const [paymentOptions, setPaymentOptions] = useState<PaymentOptions | null>(null);
+  const [emailInput, setEmailInput] = useState("");
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   // If returning from Stripe success, show confirmed state
   const stripeSuccess = searchParams.get("paid") === "stripe";
@@ -62,6 +78,30 @@ export default function InvoicePage() {
       })
       .catch(() => setError("Could not reach the server. Please check the link and try again."));
   }, [id]);
+
+  async function handleRevealPaymentOptions(e: React.FormEvent) {
+    e.preventDefault();
+    setOptionsError(null);
+    setLoadingOptions(true);
+    try {
+      const res = await fetch(`/api/invoice/${id}/payment-options`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ email: emailInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.studio) {
+        setPaymentOptions(data as PaymentOptions);
+      } else {
+        // Generic message — we don't confirm whether the email matches.
+        setOptionsError("That email doesn't match the invoice. Check the email this invoice was sent to.");
+      }
+    } catch {
+      setOptionsError("Network error. Please try again.");
+    } finally {
+      setLoadingOptions(false);
+    }
+  }
 
   async function handleStripeCheckout() {
     setPaying(true);
@@ -132,13 +172,14 @@ export default function InvoicePage() {
   });
   const isPaid = invoice.status === "PAID" || stripeSuccess;
 
-  // Build available payment handles
-  const handles = [
-    invoice.studio.cashAppHandle && { label: "Cash App", handle: invoice.studio.cashAppHandle, method: "Cash App" },
-    invoice.studio.zelleHandle   && { label: "Zelle",    handle: invoice.studio.zelleHandle,   method: "Zelle" },
-    invoice.studio.paypalHandle  && { label: "PayPal",   handle: invoice.studio.paypalHandle,  method: "PayPal" },
-    invoice.studio.venmoHandle   && { label: "Venmo",    handle: invoice.studio.venmoHandle,   method: "Venmo" },
-  ].filter(Boolean) as { label: string; handle: string; method: string }[];
+  // Build available payment handles from the unlocked paymentOptions response.
+  // Until the customer authenticates via email, handles are empty by design.
+  const handles = paymentOptions ? [
+    paymentOptions.studio.cashAppHandle && { label: "Cash App", handle: paymentOptions.studio.cashAppHandle, method: "Cash App" },
+    paymentOptions.studio.zelleHandle   && { label: "Zelle",    handle: paymentOptions.studio.zelleHandle,   method: "Zelle" },
+    paymentOptions.studio.paypalHandle  && { label: "PayPal",   handle: paymentOptions.studio.paypalHandle,  method: "PayPal" },
+    paymentOptions.studio.venmoHandle   && { label: "Venmo",    handle: paymentOptions.studio.venmoHandle,   method: "Venmo" },
+  ].filter(Boolean) as { label: string; handle: string; method: string }[] : [];
 
   return (
     <div className="min-h-screen py-10 px-4" style={{ backgroundColor: "var(--background)" }}>
@@ -158,8 +199,8 @@ export default function InvoicePage() {
                 #{String(invoice.invoiceNumber).padStart(4, "0")}
               </p>
             </div>
-            {invoice.studio.email && (
-              <p className="text-sm text-muted-foreground mt-0.5">{invoice.studio.email}</p>
+            {paymentOptions?.studio.email && (
+              <p className="text-sm text-muted-foreground mt-0.5">{paymentOptions.studio.email}</p>
             )}
             <div className={`flex items-center gap-1.5 mt-2 ${status.color}`}>
               <StatusIcon size={14} />
@@ -171,7 +212,7 @@ export default function InvoicePage() {
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Bill To</p>
               <p className="text-foreground font-medium">{invoice.contact.name}</p>
-              {invoice.contact.email && <p className="text-muted-foreground text-xs">{invoice.contact.email}</p>}
+              {paymentOptions?.contact.email && <p className="text-muted-foreground text-xs">{paymentOptions.contact.email}</p>}
             </div>
             <div className="text-right">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Due Date</p>
@@ -263,6 +304,38 @@ export default function InvoicePage() {
                 <CreditCard size={16} />
                 {paying && selectedMethod === null ? "Redirecting…" : `Pay $${invoice.total.toFixed(2)} with Card`}
               </button>
+            )}
+
+            {/* Alternative payment options — gated reveal (Phase 1.2 PII scrub) */}
+            {!paymentOptions && (
+              <form onSubmit={handleRevealPaymentOptions} className="space-y-3 pt-2" style={{ borderTop: invoice.studio.stripePaymentsEnabled ? "1px solid var(--border)" : undefined, marginTop: invoice.studio.stripePaymentsEnabled ? 16 : 0, paddingTop: invoice.studio.stripePaymentsEnabled ? 16 : 0 }}>
+                <p className="text-xs text-muted-foreground">
+                  See Cash App / Zelle / PayPal / Venmo options — confirm the email this invoice was sent to:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="your-email@example.com"
+                    required
+                    className="flex-1 px-3 py-2 rounded-lg text-sm border bg-transparent text-foreground"
+                    style={{ borderColor: "var(--border)" }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loadingOptions || emailInput.trim().length === 0}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold border disabled:opacity-50"
+                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  >
+                    {loadingOptions ? "…" : "Show"}
+                  </button>
+                </div>
+                {optionsError && (
+                  <p className="text-xs text-red-400">{optionsError}</p>
+                )}
+              </form>
             )}
 
             {/* Manual payment handles */}

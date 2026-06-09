@@ -98,6 +98,23 @@ export async function POST(req: NextRequest) {
     select: { name: true, email: true },
   });
 
+  // P1.2 token entropy fix: explicit strong reviewToken (256 bits) instead of
+  // the previous @default(cuid()), with a 30-day expiry. Generated fresh per
+  // split row at create time using crypto.randomBytes.
+  const { randomBytes } = await import("node:crypto");
+  const REVIEW_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  const reviewExpiresAt = new Date(Date.now() + REVIEW_TOKEN_TTL_MS);
+  const buildSplit = (s: typeof body.splits[number]) => ({
+    userId:               s.userId ?? null,
+    name:                 s.name,
+    email:                s.email,
+    role:                 s.role as import("@prisma/client").SplitRole,
+    percentage:           s.percentage,
+    reviewToken:          randomBytes(32).toString("hex"),
+    reviewTokenExpiresAt: reviewExpiresAt,
+    agreedAt:             s.userId === userId ? new Date() : null,
+  });
+
   // Create or replace split sheet
   const sheet = await db.splitSheet.upsert({
     where: { trackId: body.trackId },
@@ -106,29 +123,14 @@ export async function POST(req: NextRequest) {
       createdById: userId,
       status: "PENDING",
       splits: {
-        create: body.splits.map((s) => ({
-          userId: s.userId ?? null,
-          name: s.name,
-          email: s.email,
-          role: s.role as import("@prisma/client").SplitRole,
-          percentage: s.percentage,
-          // Auto-agree creator's own split
-          agreedAt: s.userId === userId ? new Date() : null,
-        })),
+        create: body.splits.map(buildSplit),
       },
     },
     update: {
       status: "PENDING",
       splits: {
         deleteMany: {},
-        create: body.splits.map((s) => ({
-          userId: s.userId ?? null,
-          name: s.name,
-          email: s.email,
-          role: s.role as import("@prisma/client").SplitRole,
-          percentage: s.percentage,
-          agreedAt: s.userId === userId ? new Date() : null,
-        })),
+        create: body.splits.map(buildSplit),
       },
     },
     include: {

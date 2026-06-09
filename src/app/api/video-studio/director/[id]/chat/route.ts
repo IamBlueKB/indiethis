@@ -17,6 +17,7 @@
 import { db }                  from "@/lib/db";
 import { claude, SONNET }      from "@/lib/claude";
 import { NextRequest, NextResponse } from "next/server";
+import { requireOwnedMusicVideo } from "@/lib/auth/ownership";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,11 @@ export async function POST(
     const userMsg   = body.message?.trim();
 
     if (!userMsg) return NextResponse.json({ error: "Message required" }, { status: 400 });
+
+    // Phase 1.2 IDOR fix — was reachable by anyone with the cuid and ran
+    // Claude Sonnet on someone else's video, billing the platform per call.
+    const guard = await requireOwnedMusicVideo(id);
+    if (!guard.ok) return guard.response;
 
     const video = await db.musicVideo.findUnique({
       where:  { id },

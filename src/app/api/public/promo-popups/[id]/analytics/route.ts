@@ -1,9 +1,13 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
-// POST /api/admin/promo-popups/[id]/analytics
+// POST /api/public/promo-popups/[id]/analytics
 // Body: { event: "impression" | "dismissal" | "ctaClick" }
-// No auth required — public analytics tracking endpoint
+//
+// Public analytics tracking endpoint. Moved from /api/admin/* in Phase 1.2
+// because the namespace was misleading — this is intended to be called from
+// the public site by anonymous visitors, not by admin. Rate-limiting against
+// inflation abuse is wired in Phase 1.3.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

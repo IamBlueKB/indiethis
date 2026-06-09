@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db }                        from "@/lib/db";
 import { fal }                       from "@fal-ai/client";
 import { generateSceneKeyframe }     from "@/lib/video-studio/generator";
+import { requireOwnedMusicVideo }    from "@/lib/auth/ownership";
 
 export const maxDuration = 130; // FLUX Kontext Pro can take up to 120s; give it headroom
 
@@ -31,6 +32,11 @@ export async function POST(
     if (typeof sceneIndex !== "number") {
       return NextResponse.json({ error: "sceneIndex required" }, { status: 400 });
     }
+
+    // Phase 1.2 IDOR fix — was reachable by anyone with the cuid and triggered
+    // paid fal.ai keyframe generation on someone else's job.
+    const guard = await requireOwnedMusicVideo(id);
+    if (!guard.ok) return guard.response;
 
     const video = await db.musicVideo.findUnique({
       where:  { id },

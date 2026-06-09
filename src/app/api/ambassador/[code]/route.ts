@@ -1,9 +1,14 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAmbassadorBySessionAndCode } from "@/lib/auth/ownership";
 
 /**
  * GET /api/ambassador/[code]
- * Public endpoint — returns ambassador stats by promo code (code is the auth token).
+ * Returns ambassador stats. Phase 1.2 PII scrub: requires the caller's
+ * session to match the ambassador's linked userId (or PLATFORM_ADMIN).
+ * Previously the promo code alone unlocked the entire stats payload —
+ * balance, payouts, list of every redemption — which is sensitive
+ * financial data that should not be public.
  */
 export async function GET(
   _req: NextRequest,
@@ -11,6 +16,11 @@ export async function GET(
 ) {
   const { code } = await params;
 
+  const guard = await requireAmbassadorBySessionAndCode(code);
+  if (!guard.ok) return guard.response;
+
+  // Re-fetch with the deeper include shape required by the response.
+  // (The guard already verified ownership via the parent PromoCode.)
   const promoCode = await db.promoCode.findUnique({
     where: { code: code.toUpperCase() },
     include: {
@@ -30,10 +40,9 @@ export async function GET(
     },
   });
 
-  if (!promoCode?.ambassador || !promoCode.ambassador.isActive) {
+  if (!promoCode?.ambassador) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
   const ambassador = promoCode.ambassador;
 
   // Aggregate stats

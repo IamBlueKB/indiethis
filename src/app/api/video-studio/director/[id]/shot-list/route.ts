@@ -10,6 +10,7 @@
 import { db }                  from "@/lib/db";
 import { claude, SONNET }      from "@/lib/claude";
 import { NextRequest, NextResponse } from "next/server";
+import { requireOwnedMusicVideo } from "@/lib/auth/ownership";
 import {
   inferSceneType,
   selectModel,
@@ -71,6 +72,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+
+    // Phase 1.2 IDOR fix — anyone with cuid could run Claude shot-list generation
+    // on someone else's video, billing platform per call.
+    const guard = await requireOwnedMusicVideo(id);
+    if (!guard.ok) return guard.response;
 
     const video = await db.musicVideo.findUnique({
       where:  { id },

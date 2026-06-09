@@ -3,11 +3,15 @@
  *
  * Returns the download URL for a completed music video.
  * Optionally accepts a format query param to select from finalVideoUrls.
- * Public — anyone with the video ID can download.
+ *
+ * Auth: video owner (session userId match OR guestEmail cookie match) OR
+ * PLATFORM_ADMIN. Phase 1.2 IDOR fix — previously was "public, anyone with
+ * the video ID" which let anyone hot-link someone else's finished video.
  */
 
 import { db }                    from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { requireOwnedMusicVideo } from "@/lib/auth/ownership";
 
 export async function GET(
   req: NextRequest,
@@ -16,6 +20,9 @@ export async function GET(
   try {
     const { id }   = await params;
     const format   = req.nextUrl.searchParams.get("format") ?? null;
+
+    const guard = await requireOwnedMusicVideo(id);
+    if (!guard.ok) return guard.response;
 
     const video = await db.musicVideo.findUnique({
       where:  { id },

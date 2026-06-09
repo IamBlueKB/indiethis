@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/invoice/[id] — public invoice page data (marks as VIEWED)
+// GET /api/invoice/[id]
+//
+// Returns invoice header data + Stripe-payments-enabled flag.
+//
+// Phase 1.2 PII scrub: does NOT return the studio's Cash App / Zelle / PayPal
+// / Venmo handles, customer email, or customer phone. Those are sensitive
+// fields that previously leaked to anyone with the invoice ID. The invoice
+// page now fetches payment handles separately via POST /api/invoice/[id]/payment-options
+// after the customer authenticates by entering the email the invoice was
+// sent to.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,12 +21,12 @@ export async function GET(
     const invoice = await db.invoice.findUnique({
       where: { id },
       include: {
-        contact: { select: { name: true, email: true, phone: true } },
-        studio: { select: { name: true, email: true, phone: true, logo: true, cashAppHandle: true, zelleHandle: true, paypalHandle: true, venmoHandle: true, stripePaymentsEnabled: true, ownerId: true } },
+        contact: { select: { name: true } },
+        studio:  { select: { name: true, logo: true, stripePaymentsEnabled: true } },
       },
     });
 
-    if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     // Mark as VIEWED on first open (fire-and-forget — don't block response)
     if (invoice.status === "SENT") {
@@ -25,29 +34,23 @@ export async function GET(
     }
 
     return NextResponse.json({
-      id: invoice.id,
+      id:            invoice.id,
       invoiceNumber: invoice.invoiceNumber,
-      lineItems: invoice.lineItems,
-      subtotal: invoice.subtotal,
-      tax: invoice.tax,
-      taxRate: invoice.taxRate,
-      total: invoice.total,
-      dueDate: invoice.dueDate,
-      status: invoice.status,
-      notes: invoice.notes,
-      createdAt: invoice.createdAt,
+      lineItems:     invoice.lineItems,
+      subtotal:      invoice.subtotal,
+      tax:           invoice.tax,
+      taxRate:       invoice.taxRate,
+      total:         invoice.total,
+      dueDate:       invoice.dueDate,
+      status:        invoice.status,
+      notes:         invoice.notes,
+      createdAt:     invoice.createdAt,
       studio: {
-        name: invoice.studio.name,
-        email: invoice.studio.email,
-        phone: invoice.studio.phone,
-        logo: invoice.studio.logo,
-        cashAppHandle: invoice.studio.cashAppHandle,
-        zelleHandle: invoice.studio.zelleHandle,
-        paypalHandle: invoice.studio.paypalHandle,
-        venmoHandle: invoice.studio.venmoHandle,
+        name:                  invoice.studio.name,
+        logo:                  invoice.studio.logo,
         stripePaymentsEnabled: invoice.studio.stripePaymentsEnabled,
       },
-      contact: invoice.contact,
+      contact: { name: invoice.contact.name },
     });
   } catch (err) {
     console.error("[invoice/GET]", err);

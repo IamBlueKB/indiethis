@@ -9,10 +9,10 @@
  * Returns: { url } — Stripe Checkout redirect URL
  */
 
-import { auth }                  from "@/lib/auth";
 import { db }                    from "@/lib/db";
 import { stripe }                from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
+import { requireOwnedMusicVideo } from "@/lib/auth/ownership";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3456";
 
@@ -24,14 +24,22 @@ export async function POST(
     if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
 
     const { id } = await params;
-    const session = await auth();
-    const userId  = session?.user?.id ?? null;
+
+    // Ownership guard (Phase 1.2 IDOR fix): only the video's owner (session
+    // user OR guest-email cookie match) OR PLATFORM_ADMIN may initiate
+    // checkout. Without this, anyone with a video id could launch Stripe
+    // checkout sessions against someone else's job and pollute their flow.
+    const guard = await requireOwnedMusicVideo(id);
+    if (!guard.ok) return guard.response;
+    const { resource: ownedVideo, session } = guard;
+    const userId = session?.user?.id ?? null;
 
     const body  = await req.json() as { email?: string };
     const email = body.email ?? null;
 
+    // Reload with the narrow select shape used by the checkout body.
     const video = await db.musicVideo.findUnique({
-      where:  { id },
+      where:  { id: ownedVideo.id },
       select: { id: true, amount: true, trackTitle: true, mode: true, videoLength: true, status: true },
     });
 

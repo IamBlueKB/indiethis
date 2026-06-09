@@ -48,7 +48,8 @@ export async function GET(
     job.triggeredById !== session.user.id &&
     session.user.role !== "PLATFORM_ADMIN"
   ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // P1.2 IDOR hardening: collapse "not yours" → 404, no info leak.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const toolName  = TOOL_NAMES[job.type] ?? `IndieThis AI — ${job.type}`;

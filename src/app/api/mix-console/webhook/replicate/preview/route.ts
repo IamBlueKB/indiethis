@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { db as prisma } from "@/lib/db";
 import { sendMixCompleteEmail } from "@/lib/brevo/email";
 
@@ -88,6 +89,9 @@ export async function POST(req: NextRequest) {
       const token = await prisma.mixAccessToken.create({
         data: {
           jobId,
+          // P1.2 token entropy fix: explicit strong token (256 bits) instead
+          // of the previous @default(cuid()) — cuids are sortable.
+          token:     randomBytes(32).toString("hex"),
           email:     job.guestEmail,
           expiresAt,
         },

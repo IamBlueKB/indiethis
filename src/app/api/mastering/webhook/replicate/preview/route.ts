@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { db as prisma } from "@/lib/db";
 import { sendMasteringCompleteEmail } from "@/lib/email/mastering";
 import type { PreviewResult } from "@/lib/mastering/engine";
@@ -99,6 +100,9 @@ export async function POST(req: NextRequest) {
           const accessToken = await prisma.masteringAccessToken.create({
             data: {
               jobId:     jobId,
+              // P1.2 token entropy fix: explicit strong token (256 bits)
+              // instead of the previous @default(cuid()).
+              token:     randomBytes(32).toString("hex"),
               email:     job.guestEmail!,
               expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
