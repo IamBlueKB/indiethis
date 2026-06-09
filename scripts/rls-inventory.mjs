@@ -192,6 +192,6 @@ for (const c of classified) {
   md += `| \`${c.name}\` | ${c.pattern} | ${c.owner} |\n`;
 }
 
-fs.writeFileSync(path.resolve("prisma/migrations/manual/rls_inventory.md"), md);
-console.log(`Wrote ${classified.length} tables → prisma/migrations/manual/rls_inventory.md`);
+fs.writeFileSync(path.resolve("prisma/manual/rls_inventory.md"), md);
+console.log(`Wrote ${classified.length} tables → prisma/manual/rls_inventory.md`);
 console.log("Summary:", summary);

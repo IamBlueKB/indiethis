@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const recon = fs.readFileSync(path.resolve("prisma/migrations/manual/idor_recon.md"), "utf8");
+const recon = fs.readFileSync(path.resolve("prisma/manual/idor_recon.md"), "utf8");
 
 // Parse out the RISKY + REVIEW route paths from the report
 function extractBucket(name) {
@@ -166,8 +166,8 @@ for (const t of ["S0_CRITICAL","S1_HIGH","S2_MEDIUM","S3_LOW","S4_LIKELY_OK","UN
   md += "\n";
 }
 
-fs.writeFileSync(path.resolve("prisma/migrations/manual/idor_severity.md"), md);
-console.log("Wrote prisma/migrations/manual/idor_severity.md");
+fs.writeFileSync(path.resolve("prisma/manual/idor_severity.md"), md);
+console.log("Wrote prisma/manual/idor_severity.md");
 for (const t of ["S0_CRITICAL","S1_HIGH","S2_MEDIUM","S3_LOW","S4_LIKELY_OK","UNKNOWN"]) {
   console.log(`  ${t}: ${(bySev[t]||[]).length}`);
 }

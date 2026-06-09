@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const md = fs.readFileSync(path.resolve("prisma/migrations/manual/rls_inventory.md"), "utf8");
+const md = fs.readFileSync(path.resolve("prisma/manual/rls_inventory.md"), "utf8");
 
 // Parse the per-table table — lines look like: | `TableName` | PATTERN | ... |
 const lines = md.split("\n");
@@ -60,7 +60,7 @@ sql += "--       - an anon key leaking and being used against the PostgREST endp
 sql += "--       - someone enabling Realtime on a table by accident\n";
 sql += "--       - future migration to Supabase Auth without revisiting permissions\n";
 sql += "--\n";
-sql += "-- Pattern legend (see prisma/migrations/manual/rls_inventory.md):\n";
+sql += "-- Pattern legend (see prisma/manual/rls_inventory.md):\n";
 sql += "--   A-USER-OWNED   — direct user-ownership column\n";
 sql += "--   B-PUBLIC-READ  — platform-managed style/preset library\n";
 sql += "--   C-INDIRECT     — ownership via FK to a parent row\n";
@@ -154,8 +154,8 @@ sql += "-- =====================================================================
 
 sql += "COMMIT;\n";
 
-fs.writeFileSync(path.resolve("prisma/migrations/manual/enable_rls.sql"), sql);
-console.log(`Wrote SQL → prisma/migrations/manual/enable_rls.sql`);
+fs.writeFileSync(path.resolve("prisma/manual/enable_rls.sql"), sql);
+console.log(`Wrote SQL → prisma/manual/enable_rls.sql`);
 console.log(`  A-USER-OWNED:  ${byPattern["A-USER-OWNED"].length}`);
 console.log(`  B-PUBLIC-READ: ${byPattern["B-PUBLIC-READ"].length}  (with SELECT policy for anon)`);
 console.log(`  C-INDIRECT:    ${byPattern["C-INDIRECT"].length}`);

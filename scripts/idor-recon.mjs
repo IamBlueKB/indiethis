@@ -143,6 +143,6 @@ for (const b of order) {
   md += "\n";
 }
 
-fs.writeFileSync(path.resolve("prisma/migrations/manual/idor_recon.md"), md);
-console.log("Wrote prisma/migrations/manual/idor_recon.md");
+fs.writeFileSync(path.resolve("prisma/manual/idor_recon.md"), md);
+console.log("Wrote prisma/manual/idor_recon.md");
 for (const b of order) console.log(`  ${b}: ${(byBucket[b]||[]).length}`);
